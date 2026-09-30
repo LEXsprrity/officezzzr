@@ -1,0 +1,43 @@
+{
+  "name": "StealASeed",
+  "tree": {
+    "$className": "DataModel",
+    "ReplicatedStorage": {
+      "Shared": { "$path": "src/shared" }
+    },
+    "ServerScriptService": {
+      "Server": { "$path": "src/server" }
+    },
+    "StarterPlayer": {
+      "StarterPlayerScripts": {
+        "Client": { "$path": "src/client" }
+      }
+    },
+    "Workspace": {
+      "$properties": {
+        "StreamingEnabled": true,
+        "StreamingMinRadius": 256,
+        "StreamingTargetRadius": 2048
+      },
+      "SpawnLocation": {
+        "$className": "SpawnLocation",
+        "$properties": {
+          "Anchored": true,
+          "Locked": true,
+          "Neutral": true,
+          "Size": [12, 1, 12],
+          "Position": [20, 0.5, 0],
+          "Duration": 0,
+          "Color": [0.4, 0.8, 1.0]
+        }
+      }
+    },
+    "Lighting": {
+      "$properties": {
+        "ClockTime": 14,
+        "Brightness": 2.5,
+        "OutdoorAmbient": [0.55, 0.55, 0.6]
+      }
+    }
+  }
+}
