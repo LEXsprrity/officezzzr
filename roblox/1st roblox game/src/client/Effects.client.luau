@@ -178,7 +178,13 @@ local function consider(inst: Instance)
 	if inst:IsA("Model") and inst:GetAttribute("RestPivot") ~= nil then
 		watchCreature(inst)
 	elseif inst:IsA("BasePart") and inst.Parent and creatures[inst.Parent :: Model] then
-		creatures[inst.Parent :: Model].dirty = true -- a part arrived after its creature
+		local c = creatures[inst.Parent :: Model]
+		c.dirty = true -- a part arrived after its creature
+		-- A server rescale resizes every part. Re-measure when the new Size lands too, in case the Scale
+		-- attribute was processed before the rescaled CFrames arrived.
+		inst:GetPropertyChangedSignal("Size"):Connect(function()
+			c.dirty = true
+		end)
 	end
 	-- Pods re-roll in place, so their mutation can change after they stream in.
 	if inst:IsA("BasePart") and string.sub(inst.Name, 1, 7) == "SeedPod" then

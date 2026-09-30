@@ -133,4 +133,34 @@ H.test("creatures: the biggest creatures fit their slots and the plot", function
 	end
 end)
 
+H.test("creatures: applyScale keeps an uploaded template's fit (BaseScale)", function()
+	-- Lune has no Model:ScaleTo, so this mock follows Roblox: ScaleTo sets an absolute scale factor
+	-- relative to the original asset, and a clone of a fitted template keeps that factor.
+	local function mockModel(attrs)
+		local m = { scale = attrs.BaseScale or 1, attrs = attrs }
+		function m:ScaleTo(s)
+			self.scale = s
+		end
+		function m:GetAttribute(k)
+			return self.attrs[k]
+		end
+		function m:SetAttribute(k, v)
+			self.attrs[k] = v
+		end
+		function m:GetDescendants()
+			return {}
+		end
+		return m
+	end
+	local template = mockModel({ BaseScale = 0.12 }) -- e.g. a 50-stud asset fitted down to ~6 studs
+	CreatureModels.applyScale(template, 1.9)
+	H.near(template.scale, 0.12 * 1.9, 1e-9, "scale is relative to the fitted size")
+	H.eq(template.attrs.Scale, 1.9, "Scale attribute stays the logical scale")
+	CreatureModels.applyScale(template, 2.5)
+	H.near(template.scale, 0.12 * 2.5, 1e-9, "rescaling stays relative to the fit")
+	local procedural = mockModel({})
+	CreatureModels.applyScale(procedural, 1.9)
+	H.near(procedural.scale, 1.9, 1e-9, "procedural creatures have no BaseScale")
+end)
+
 return nil

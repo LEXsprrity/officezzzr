@@ -596,7 +596,11 @@ function CreatureModels.preload()
 			primary.PivotOffset = primary.CFrame:Inverse() * (box * CFrame.new(0, -size.Y / 2, 0))
 			model:PivotTo(CFrame.identity)
 			local targetHeight = 4.5 + 0.5 * zoneIndex
-			model:ScaleTo(math.min(targetHeight / size.Y, Config.CREATURE_FOOTPRINT / math.max(size.X, size.Z)))
+			-- ScaleTo is absolute (relative to the asset's original size) and clones keep the scale factor,
+			-- so the fit is stored as BaseScale and applyScale multiplies the plant's scale onto it.
+			local base = model:GetScale() * math.min(targetHeight / size.Y, Config.CREATURE_FOOTPRINT / math.max(size.X, size.Z))
+			model:ScaleTo(base)
+			model:SetAttribute("BaseScale", base)
 			templates[zoneIndex] = model
 		end
 	end
@@ -635,11 +639,13 @@ function CreatureModels.build(zoneIndex: number, rarityIndex: number, mutation: 
 	return model
 end
 
--- Scales a placed creature (around its soil pivot) and records the scale for the client's idle sway.
+-- Scales a placed creature (around its soil pivot) to `scale` times its build size, and records `scale`
+-- (the logical scale) for the client's idle sway. Uploaded templates were already fitted with ScaleTo,
+-- which is absolute, so their BaseScale is multiplied in; procedural creatures have none (1).
 -- Built-in Sphere meshes already follow their part's Size. ScaleTo may also scale SpecialMesh.Scale, which
 -- would grow them twice, so those are reset to 1 afterwards.
 function CreatureModels.applyScale(model: Model, scale: number)
-	model:ScaleTo(scale)
+	model:ScaleTo((model:GetAttribute("BaseScale") or 1) * scale)
 	for _, d in model:GetDescendants() do
 		if d:IsA("SpecialMesh") and d.MeshType ~= Enum.MeshType.FileMesh then
 			d.Scale = Vector3.one
