@@ -18,8 +18,9 @@ Config.PLOT_SIZE = 84
 Config.PLOT_SPACING_X = 100
 Config.PLOT_FIRST_X = -70
 Config.PLOT_OFFSET_Z = 80 -- plots sit at z = +/-80, the walkway runs down z = 0
-Config.SLOT_SPACING = 8
+Config.SLOT_SPACING = 8 -- creature sizes (CREATURE_* below) are budgeted against this
 Config.SLOT_COLUMNS = 8
+Config.SOIL_HEIGHT = 0.4 -- soil patch under each slot; creatures stand on top of it
 
 ----------------------------------------------------------------------------------------------------
 -- Speed stat -> WalkSpeed
@@ -259,6 +260,18 @@ function Config.plantIncome(k: number, rarity: number, weight: number, mutation:
 	local base = Config.seedIncome(k) * Config.RARITIES[rarity].income * (if mut then mut.income else 1)
 	return base * math.sqrt(weight / Config.sproutWeight(k, rarity))
 end
+
+-- Plant-creature models (CreatureModels). Sizes are studs at scale 1, and PlotService scales each creature
+-- by weight. CREATURE_FOOTPRINT * CREATURE_MAX_SCALE (8.8) keeps the biggest within about one slot spacing,
+-- and the back row (46 + 4 * SLOT_SPACING = 78 studs in) still clears the 84-stud plot's back fence.
+Config.CREATURE_FOOTPRINT = 3.4 -- widest a creature (incl. its aura ring) may be at scale 1
+Config.CREATURE_GROWTH_EXPONENT = 0.4 -- scale ~ (weight / sprout weight) ^ this: sprout ~1x, full-grown ~1.9x
+Config.CREATURE_RARITY_SCALE = 0.07 -- +7% size per rarity step
+Config.CREATURE_MIN_SCALE = 0.85
+Config.CREATURE_MAX_SCALE = 2.6
+-- Optional uploaded models: zone index -> asset id (0 or missing = procedural). Loaded once through
+-- InsertService, so the asset must be owned by the game's creator. Rarity/mutation flair still applies.
+Config.CREATURE_ASSETS = {} :: { [number]: number }
 
 Config.OFFLINE_CAP_SECONDS = 3600
 Config.SELL_SECONDS = 30 -- removing a plant refunds this many seconds of its income

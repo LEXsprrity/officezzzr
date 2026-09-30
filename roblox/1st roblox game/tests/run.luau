@@ -3,6 +3,7 @@ local process = require("@lune/process")
 local H = require("./harness")
 
 require("./guard.spec")
+require("./creatures.spec")
 require("./speed.spec")
 require("./data.spec")
 require("./economy.spec")

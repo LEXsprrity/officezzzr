@@ -82,6 +82,26 @@ The 0.9 factor applies to *WalkSpeed*, which is logarithmic in Speed, so the Spe
 
 At the top end, the previous zone's recommended Speed is already (almost) enough. The tests print this table. For tighter gates, raise `Config.GUARD_SPEED_FACTOR`. At 0.95 you need about 56% of the sign in the Desert and 32% in the Spirit Garden. Keep it below 1, or players at exactly the recommended Speed get caught.
 
+## Plant-creatures
+Each planted seed grows into its zone's creature (`CreatureModels`). The creatures are 20–32 parts (up to 39 with Legendary flair) built from Parts, WedgeParts and built-in Sphere `SpecialMesh`es, so nothing needs uploading. Each one hatches from a seed husk and has a leaf or flower motif. Later zones stand taller and glow more.
+
+| Zone | Creature |
+|---|---|
+| Meadow | **Sproutling**: round green bulb with a two-leaf sprout and yellow bud, leaf arms, rosy cheeks |
+| Desert | **Cactopod**: barrel cactus on four stubby legs, saguaro arms, spines, pink flower crown |
+| Jungle | **Fernosaur**: long-necked leaf dino, fern fronds down its back, fiddlehead tail, drifting spores |
+| Lava Fields | **Magmabloom**: magma-rock body with Neon lava seams and fists, sunflower head of Neon flame petals, embers |
+| Snow Peaks | **Frostbulb**: icy teardrop bulb in a red scarf, Neon ice-crystal crown, falling snow |
+| Deep Space | **Starpetal**: floating cyclops star-flower on a Neon stem, five star petals, glowing antennae, two moons |
+| Spirit Garden | **Lotus Wyrm**: coral dragon coiling out of a lotus on a lily pad, gold horns/whiskers/fins, spirit pearl, petals |
+
+- **Rarity**: Uncommon adds a Neon aura ring and recolours the trims in the rarity colour. Rare makes the trims Neon and adds a light. Epic adds sparkles. Legendary adds a halo of orbs.
+- **Mutations**: Gold turns the creature to gold foil. Rainbow cycles its skin on the client and gives the leaves rainbow hues. Night gives it a deep-blue tint. Every mutation adds sparkles and a light, and the model keeps its `Mutation` attribute.
+- **Size**: `CreatureModels.scaleFor` gives about 1× at sprout and about 1.9× full-grown, +7% per rarity step, clamped to `CREATURE_MAX_SCALE`. The largest creature is about 20 studs tall and fits its slot (tested against the slot grid).
+- **Idle sway**: `Effects.client` runs one loop that bobs and sways every creature within 160 studs of the camera, using one `BulkMoveTo`. It runs on the client only, so nothing replicates.
+- **Uploaded models**: put asset ids in `Config.CREATURE_ASSETS` (zone index → id). They are loaded once, fitted to the footprint, and decorated like the procedural creatures. The procedural creature is the fallback.
+- `lune run tests/creature_view.luau [zone] [rarity] [mutation]` prints ASCII front and side views, so you can check silhouettes without Studio. `tests/creatures.spec.luau` checks part budgets, footprint, heights, flair and scaling.
+
 ## Layout
 | Path | Roblox location | What |
 |---|---|---|
@@ -97,12 +117,13 @@ At the top end, the previous zone's recommended Speed is already (almost) enough
 | `src/server/GuardService.luau` | 〃 | Builds the giants, 10 Hz MoveTo loop, catches, bat, Sleep Dust |
 | `src/server/SeedService.luau` | 〃 | Nests, pods, steal prompts, carry weld, return/regrow |
 | `src/server/PlotService.luau` | 〃 | Plot assignment, planting, plant-creatures, growth, payouts, offline income |
+| `src/server/CreatureModels.luau` | 〃 | Builds the seven plant-creatures from primitives, plus rarity/mutation flair and scale-by-weight |
 | `src/server/Shop.luau` | 〃 | *Pure*: purchase rules |
 | `src/server/ShopService.luau` | 〃 | `RequestBuy` / `RequestUseItem`, potions, gamepass stubs |
 | `src/server/ProfileStore.luau` | 〃 | Save format, validation, DataStore wrapper |
 | `src/server/AmbientService.luau` | 〃 | Day/night lighting, "Fastest here" board |
 | `src/client/HUD.client.luau` | `StarterPlayerScripts.Client` | All UI, Slow Mode |
-| `src/client/Effects.client.luau` | 〃 | Income popups, sounds, shake, belt scroll, rainbow mutation, owner-only prompts |
+| `src/client/Effects.client.luau` | 〃 | Income popups, sounds, shake, belt scroll, rainbow mutation, creature idle sway, owner-only prompts |
 | `tests/` | — | Lune harness + specs (guard, speed, data, economy) |
 
 ## Networking
