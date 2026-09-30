@@ -1,10 +1,11 @@
 -- Generates the whole map from primitives: base area with 8 fenced plots (each with a treadmill),
--- the walled corridor split into themed zones with signs, a mother-plant nest per zone, and the End.
--- Base and plot decoration is anchored and non-colliding (see Props).
+-- the walled corridor split into themed zones (ZoneThemes) with entry arches, a mother-plant nest
+-- per zone, and the End. Decoration is anchored and non-colliding (see Props).
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Config = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("Config"))
 local Format = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("Format"))
 local Props = require(script.Parent:WaitForChild("Props"))
+local ZoneThemes = require(script.Parent:WaitForChild("ZoneThemes"))
 
 local WorldBuilder = {}
 
@@ -367,61 +368,43 @@ end
 ----------------------------------------------------------------------------------------------------
 -- Corridor & zones
 ----------------------------------------------------------------------------------------------------
-local function decorate(folder: Folder, k: number, rng: Random)
+-- The zone's entry arch: two pillars flush with the walls, a beam over the top, the name sign
+-- (name + recommended Speed + guardian) and a glowing threshold line on the floor.
+local function buildArch(folder: Instance, k: number)
 	local zone = Config.ZONES[k]
+	local theme = ZoneThemes.theme(k)
 	local x0 = Config.zoneStartX(k)
-	local count = math.floor(zone.length / 70)
-	for _ = 1, count do
-		local x = x0 + rng:NextNumber(20, zone.length - 20)
-		local z = (if rng:NextNumber() < 0.5 then -1 else 1) * rng:NextNumber(HALF_W - 12, HALF_W - 3)
-		local p = Vector3.new(x, GROUND, z)
-		if zone.id == "Meadow" then
-			cylinder(folder, "Stem", 3, 0.4, p + Vector3.new(0, 1.5, 0), Color3.fromRGB(60, 150, 50))
-			ball(folder, "Flower", 2, p + Vector3.new(0, 3.3, 0), Color3.fromHSV(rng:NextNumber(), 0.6, 1))
-			ball(folder, "Bush", 5, p + Vector3.new(rng:NextNumber(-3, 3), 1.5, 0), Color3.fromRGB(70, 170, 60), Enum.Material.Grass)
-		elseif zone.id == "Desert" then
-			local h = rng:NextNumber(6, 12)
-			cylinder(folder, "Cactus", h, 3, p + Vector3.new(0, h / 2, 0), Color3.fromRGB(60, 150, 70), Enum.Material.Grass)
-			cylinder(folder, "Arm", 4, 1.6, p + Vector3.new(1.5, h * 0.6, 0), Color3.fromRGB(60, 150, 70), Enum.Material.Grass)
-			ball(folder, "Rock", rng:NextNumber(3, 6), p + Vector3.new(rng:NextNumber(-4, 4), 0.5, 0), Color3.fromRGB(190, 140, 90), Enum.Material.Sandstone)
-		elseif zone.id == "Jungle" then
-			local h = rng:NextNumber(14, 26)
-			cylinder(folder, "Trunk", h, 2.5, p + Vector3.new(0, h / 2, 0), Color3.fromRGB(110, 75, 45), Enum.Material.Wood)
-			ball(folder, "Canopy", rng:NextNumber(10, 16), p + Vector3.new(0, h, 0), Color3.fromRGB(40, 140, 50), Enum.Material.LeafyGrass)
-		elseif zone.id == "Lava" then
-			local pool = cylinder(folder, "LavaPool", 0.3, rng:NextNumber(6, 12), p + Vector3.new(0, 0.1, 0), Color3.fromRGB(255, 100, 20), Enum.Material.Neon)
-			pool.CanTouch = false
-			ball(folder, "Rock", rng:NextNumber(4, 8), p + Vector3.new(rng:NextNumber(-5, 5), 1, 0), Color3.fromRGB(50, 35, 35), Enum.Material.Basalt)
-		elseif zone.id == "Snow" then
-			for i = 0, 2 do
-				local s = 8 - i * 2.5
-				box(folder, "Pine", Vector3.new(s, 3, s), CFrame.new(p + Vector3.new(0, 3 + i * 3, 0)) * CFrame.Angles(0, math.rad(45), 0),
-					Color3.fromRGB(40, 110, 70), Enum.Material.Grass).CanCollide = false
-			end
-			ball(folder, "Snowball", rng:NextNumber(3, 6), p + Vector3.new(rng:NextNumber(-4, 4), 1, 0), Color3.fromRGB(250, 250, 255), Enum.Material.Snow)
-		elseif zone.id == "Space" then
-			ball(folder, "Orb", rng:NextNumber(2, 5), p + Vector3.new(0, rng:NextNumber(8, 30), 0), Color3.fromHSV(rng:NextNumber(0.55, 0.85), 0.7, 1), Enum.Material.Neon)
-			box(folder, "Crystal", Vector3.new(2, rng:NextNumber(4, 9), 2), CFrame.new(p + Vector3.new(0, 3, 0)) * CFrame.Angles(0.3, rng:NextNumber(0, 6), 0.2),
-				Color3.fromRGB(150, 120, 255), Enum.Material.Glass).CanCollide = false
-		else -- Spirit Garden
-			cylinder(folder, "Trunk", 10, 1.5, p + Vector3.new(0, 5, 0), Color3.fromRGB(90, 50, 40), Enum.Material.Wood)
-			ball(folder, "Blossom", rng:NextNumber(8, 12), p + Vector3.new(0, 11, 0), Color3.fromRGB(255, 170, 200), Enum.Material.Grass)
-			local lantern = box(folder, "Lantern", Vector3.new(1.5, 2, 1.5), CFrame.new(p + Vector3.new(3, 2, 0)), Color3.fromRGB(255, 200, 90), Enum.Material.Neon)
-			lantern.CanCollide = false
-		end
+	local h = Config.WALL_HEIGHT
+	local x = x0 + 3
+	for _, s in { -1, 1 } do
+		box(folder, "GatePillar", Vector3.new(6, h + 10, 6), CFrame.new(x, GROUND + (h + 10) / 2, s * (HALF_W - 1)), theme.arch, theme.archMaterial)
+		ball(folder, "PillarCap", 8, Vector3.new(x, GROUND + h + 12, s * (HALF_W - 1)), theme.accent, Enum.Material.Neon)
 	end
+	deco(folder, "ArchBeam", Vector3.new(7, 5, Config.CORRIDOR_WIDTH + 10), CFrame.new(x, GROUND + h + 6, 0), theme.arch, theme.archMaterial)
+	deco(folder, "ArchTrim", Vector3.new(7.4, 1, Config.CORRIDOR_WIDTH + 10.4), CFrame.new(x, GROUND + h + 3.2, 0), theme.accent, Enum.Material.Neon)
+	sign(folder, Vector3.new(x - 3.6, GROUND + h - 4, 0), Vector2.new(Config.CORRIDOR_WIDTH - 12, 13), {
+		{ text = `{zone.icon} {string.upper(zone.name)} {zone.icon}`, color = Color3.new(1, 1, 1), scale = 1.5 },
+		{ text = `⚡ Recommended Speed: {Format.short(zone.req)}`, color = Color3.fromRGB(255, 232, 90) },
+		{ text = `Guardian: {zone.guard}`, color = theme.signText },
+	} :: any, theme.sign, Enum.Material.SmoothPlastic)
+	flat(folder, "Threshold", 3, Config.CORRIDOR_WIDTH, Vector3.new(x0 + 1.5, GROUND, 0), theme.accent, Enum.Material.Neon, nil, 0.1)
+	ZoneThemes.archOrnament(folder, k, x)
 end
 
 local function torii(folder: Instance, x: number, color: Color3, height: number)
 	for _, s in { -1, 1 } do
-		box(folder, "ToriiPillar", Vector3.new(3, height, 3), CFrame.new(x, GROUND + height / 2, s * (HALF_W - 6)), color)
+		deco(folder, "ToriiPillar", Vector3.new(3, height, 3), CFrame.new(x, GROUND + height / 2, s * (HALF_W - 6)), color, Enum.Material.SmoothPlastic)
+		deco(folder, "ToriiFoot", Vector3.new(4, 2, 4), CFrame.new(x, GROUND + 1, s * (HALF_W - 6)), Color3.fromRGB(35, 30, 35))
 	end
-	box(folder, "ToriiBeam", Vector3.new(4, 2.5, Config.CORRIDOR_WIDTH), CFrame.new(x, GROUND + height, 0), color)
-	box(folder, "ToriiBeam", Vector3.new(3, 1.5, Config.CORRIDOR_WIDTH - 12), CFrame.new(x, GROUND + height - 5, 0), color)
+	deco(folder, "ToriiBeam", Vector3.new(4, 2.5, Config.CORRIDOR_WIDTH), CFrame.new(x, GROUND + height, 0), color)
+	deco(folder, "ToriiCap", Vector3.new(5, 1.2, Config.CORRIDOR_WIDTH + 4), CFrame.new(x, GROUND + height + 1.8, 0), Color3.fromRGB(35, 30, 35))
+	deco(folder, "ToriiBeam", Vector3.new(3, 1.5, Config.CORRIDOR_WIDTH - 12), CFrame.new(x, GROUND + height - 5, 0), color)
 end
+WorldBuilder.torii = torii
 
 local function buildNest(folder: Folder, k: number): NestInfo
 	local zone = Config.ZONES[k]
+	local theme = ZoneThemes.theme(k)
 	local x = Config.nestX(k)
 	local center = Vector3.new(x, GROUND, 0)
 	local model = Instance.new("Model")
@@ -430,9 +413,14 @@ local function buildNest(folder: Folder, k: number): NestInfo
 	model.Parent = folder
 
 	-- Non-colliding so neither runners nor the giant snag on it.
-	local mound = cylinder(model, "Mound", 1, 22, center + Vector3.new(0, 0.2, 0), Color3.fromRGB(110, 75, 45), Enum.Material.Ground)
+	local mound = cylinder(model, "Mound", 1, 22, center + Vector3.new(0, 0.2, 0), theme.mound, Enum.Material.Ground)
 	model.PrimaryPart = mound
-	cylinder(model, "Stem", 14, 2, center + Vector3.new(0, 8, 0), Color3.fromRGB(60, 160, 60), Enum.Material.Grass)
+	Props.disc(model, "GlowRing", 26, center, zone.seedColor, Enum.Material.Neon, 0.15)
+	for i = 1, 8 do
+		local a = i / 8 * math.pi * 2
+		Props.rock(model, center + Vector3.new(math.cos(a) * 12.5, 0, math.sin(a) * 12.5), Vector3.new(3, 2.2, 2.6), theme.nestStone, theme.nestStoneMaterial, a)
+	end
+	cylinder(model, "Stem", 14, 2, center + Vector3.new(0, 8, 0), Color3.fromRGB(60, 170, 60), Enum.Material.Grass)
 	local bulb = ball(model, "MotherBulb", 8, center + Vector3.new(0, 16, 0), zone.seedColor, Enum.Material.Neon)
 	local light = Instance.new("PointLight")
 	light.Color = zone.seedColor
@@ -441,11 +429,14 @@ local function buildNest(folder: Folder, k: number): NestInfo
 	light.Parent = bulb
 	for i = 0, 3 do
 		local a = i * math.pi / 2 + math.pi / 4
-		local leaf = box(model, "Leaf", Vector3.new(9, 0.6, 4),
+		Props.blob(model, "Leaf", Vector3.new(10, 0.8, 4.5),
 			CFrame.new(center + Vector3.new(math.cos(a) * 5, 9, math.sin(a) * 5)) * CFrame.Angles(0, -a, math.rad(20)),
-			Color3.fromRGB(70, 190, 70), Enum.Material.Grass)
-		leaf.CanCollide = false
+			theme.leaf, Enum.Material.Grass)
 	end
+	Props.emitOn(bulb, {
+		color = zone.seedColor, rate = 6, lifetime = NumberRange.new(1.5, 2.5), speed = NumberRange.new(2, 4),
+		size = NumberSequence.new(0.6), spread = Vector2.new(180, 180), lightEmission = 1,
+	})
 	billboard(bulb, `{zone.icon} {zone.seed} Mother Plant`, UDim2.fromOffset(300, 40), Vector3.new(0, 8, 0), 250)
 
 	-- Pods ring the mound on the -X half, so thieves grab and run home with the guard behind them.
@@ -476,32 +467,8 @@ local function buildCorridor(world: Folder): { NestInfo }
 		local zoneFolder = Instance.new("Folder")
 		zoneFolder.Name = string.format("%d_%s", k, zone.id)
 		zoneFolder.Parent = corridor
-		local x0 = Config.zoneStartX(k)
-		local mid = x0 + zone.length / 2
-		box(zoneFolder, "Floor", Vector3.new(zone.length, 4, Config.CORRIDOR_WIDTH), CFrame.new(mid, GROUND - 2, 0),
-			zone.floor, (Enum.Material :: any)[zone.material])
-		for _, s in { -1, 1 } do
-			box(zoneFolder, "Wall", Vector3.new(zone.length, h, 4), CFrame.new(mid, GROUND + h / 2, s * (HALF_W + 2)),
-				zone.wall, Enum.Material.SmoothPlastic)
-		end
-
-		-- Gate arch + sign with the recommended Speed
-		local gateColor = zone.guardColor
-		for _, s in { -1, 1 } do
-			box(zoneFolder, "GatePillar", Vector3.new(4, h, 4), CFrame.new(x0 + 2, GROUND + h / 2, s * (HALF_W - 2)), gateColor)
-		end
-		sign(zoneFolder, Vector3.new(x0 + 2, GROUND + h - 7, 0), Vector2.new(Config.CORRIDOR_WIDTH - 8, 12), {
-			{ text = `{zone.icon} {string.upper(zone.name)}`, color = Color3.new(1, 1, 1) },
-			{ text = `Recommended Speed: {Format.short(zone.req)}`, color = Color3.fromRGB(255, 230, 90) },
-			{ text = `Guardian: {zone.guard}`, color = Color3.fromRGB(255, 170, 170) },
-		}, gateColor:Lerp(Color3.new(0, 0, 0), 0.35))
-
-		if zone.id == "Spirit" then
-			for i = 1, 5 do
-				torii(zoneFolder, x0 + i * zone.length / 6, Color3.fromRGB(210, 40, 45), 26)
-			end
-		end
-		decorate(zoneFolder, k, rng)
+		ZoneThemes.build(zoneFolder, k, rng, { torii = torii })
+		buildArch(zoneFolder, k)
 		nests[k] = buildNest(zoneFolder, k)
 	end
 
@@ -514,6 +481,15 @@ local function buildCorridor(world: Folder): { NestInfo }
 	local pad = box(endFolder, "EndPad", Vector3.new(30, 1, Config.CORRIDOR_WIDTH - 8), CFrame.new(Config.END_X - 18, GROUND + 0.5, 0),
 		Color3.fromRGB(255, 215, 0), Enum.Material.Neon)
 	pad.CanCollide = false
+	Props.emitter(endFolder, "EndConfetti", Vector3.new(30, 1, Config.CORRIDOR_WIDTH - 8), Vector3.new(Config.END_X - 18, GROUND + 30, 0), {
+		color = ColorSequence.new({
+			ColorSequenceKeypoint.new(0, Color3.fromRGB(255, 80, 120)),
+			ColorSequenceKeypoint.new(0.5, Color3.fromRGB(255, 220, 60)),
+			ColorSequenceKeypoint.new(1, Color3.fromRGB(90, 200, 255)),
+		}),
+		rate = 20, lifetime = NumberRange.new(4, 6), speed = NumberRange.new(2, 5), size = NumberSequence.new(0.5),
+		direction = Enum.NormalId.Bottom, acceleration = Vector3.new(0, -3, 0), rotSpeed = NumberRange.new(-180, 180), lightEmission = 0.6,
+	})
 	sign(endFolder, Vector3.new(Config.END_X - 1, GROUND + h - 12, 0), Vector2.new(Config.CORRIDOR_WIDTH - 8, 14), {
 		{ text = "⛩️ END OF THE LINE ⛩️", color = Color3.fromRGB(255, 230, 90) },
 		{ text = "You made it!", color = Color3.new(1, 1, 1) },

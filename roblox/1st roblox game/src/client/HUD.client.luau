@@ -350,7 +350,7 @@ local function renderSeeds()
 	})
 	for k, zone in Config.ZONES do
 		local ok = stats.speed >= zone.req
-		local f = card(k, if ok then zone.floor:Lerp(Color3.new(0, 0, 0), 0.25) else COLORS.disabled, 58)
+		local f = card(k, if ok then zone.ui else COLORS.disabled, 58)
 		text(f, { Text = `{zone.icon} {zone.seed} · {zone.name}`, Size = UDim2.new(1, -12, 0.5, -2), Position = UDim2.fromOffset(6, 3), TextXAlignment = Enum.TextXAlignment.Left })
 		text(f, {
 			Text = `{if ok then "✅" else "🔒"} Rec. Speed {Format.short(zone.req)} · {Format.money(Config.seedIncome(k))}/s base`,
@@ -531,7 +531,7 @@ local function renderIndex()
 	modalBody:ClearAllChildren()
 	new("UIListLayout", { Padding = UDim.new(0, 8), SortOrder = Enum.SortOrder.LayoutOrder, Parent = modalBody })
 	for k, zone in Config.ZONES do
-		local row = new("Frame", { Size = UDim2.new(1, -8, 0, 96), BackgroundColor3 = zone.floor:Lerp(Color3.new(0, 0, 0), 0.3), LayoutOrder = k, Parent = modalBody }, deco(12))
+		local row = new("Frame", { Size = UDim2.new(1, -8, 0, 96), BackgroundColor3 = zone.ui, LayoutOrder = k, Parent = modalBody }, deco(12))
 		local mutText = ""
 		for _, m in Config.MUTATIONS do
 			if stats.index[`{k}:{m.id}`] then

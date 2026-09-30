@@ -78,6 +78,24 @@ H.test("world: everything is anchored", function()
 	end
 end)
 
+-- Inside the corridor only the floor, walls, the zone arches' wall-flush pillars and the end wall
+-- may collide, so props never block runners or the guards' MoveTo line.
+H.test("world: corridor props never collide (only floor/walls/pillars)", function()
+	local allowed = { Floor = true, Wall = true, GatePillar = true, EndWall = true }
+	local corridor = world:FindFirstChild("Corridor")
+	for _, p in parts(corridor) do
+		if p.CanCollide and not allowed[p.Name] then
+			error(`{p:GetFullName()} collides`)
+		end
+	end
+	-- Pillars stay flush with the walls: at least 56 of the 64 studs stay open.
+	for _, p in parts(corridor) do
+		if p.Name == "GatePillar" then
+			H.ok(math.abs(p.CFrame.Position.Z) - p.Size.Z / 2 >= Config.CORRIDOR_WIDTH / 2 - 4, "pillar intrudes into the corridor")
+		end
+	end
+end)
+
 H.test("world: part budget (corridor < 6k, whole map < 8k)", function()
 	local corridor = world:FindFirstChild("Corridor")
 	local total = 0
@@ -94,3 +112,30 @@ H.test("world: part budget (corridor < 6k, whole map < 8k)", function()
 	H.ok(all < 8000, `map has {all} parts`)
 end)
 
+H.test("world: every zone has an entry sign with its name and recommended Speed", function()
+	local Format = H.shared("Format")
+	for k, zone in Config.ZONES do
+		local folder = world.Corridor:FindFirstChild(string.format("%d_%s", k, zone.id))
+		H.ok(folder ~= nil, "zone folder " .. zone.id)
+		local found = false
+		for _, d in folder:GetDescendants() do
+			if d:IsA("TextLabel") and string.find(d.Text, string.upper(zone.name), 1, true) then
+				local speedLine = false
+				for _, sib in d.Parent:GetChildren() do
+					if sib:IsA("TextLabel") and string.find(sib.Text, Format.short(zone.req), 1, true) and string.find(sib.Text, "Speed", 1, true) then
+						speedLine = true
+					end
+				end
+				found = found or speedLine
+			end
+		end
+		H.ok(found, "sign for " .. zone.id)
+		local emitters = 0
+		for _, d in folder:GetDescendants() do
+			if d:IsA("ParticleEmitter") then
+				emitters += 1
+			end
+		end
+		H.ok(emitters >= 2, `{zone.id} has particle ambience ({emitters})`)
+	end
+end)
