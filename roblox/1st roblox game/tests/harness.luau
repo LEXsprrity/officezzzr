@@ -78,6 +78,30 @@ local taskMock = {
 	delay = function(_n, _fn) end,
 }
 
+-- Roblox's Random isn't in Lune: a small seeded stand-in (same API shape, different sequence).
+local RandomMock = {}
+RandomMock.__index = RandomMock
+function RandomMock.new(seed: number?)
+	return setmetatable({ state = math.floor(seed or os.clock() * 1e6) % 2147483647 + 1 }, RandomMock)
+end
+function RandomMock:NextNumber(lo: number?, hi: number?): number
+	self.state = (self.state * 48271) % 2147483647
+	local u = (self.state - 1) / 2147483646
+	if lo == nil then
+		return u
+	end
+	return (lo :: number) + u * ((hi :: number) - (lo :: number))
+end
+function RandomMock:NextInteger(lo: number, hi: number): number
+	return math.min(hi, lo + math.floor(self:NextNumber() * (hi - lo + 1)))
+end
+Harness.Random = RandomMock
+
+-- A real (Lune) DataModel so instance-building modules like WorldBuilder can run; Lune checks
+-- every property name and value type against the Roblox reflection database.
+local dataModel = roblox.Instance.new("DataModel")
+Harness.workspace = dataModel:GetService("Workspace")
+
 local cache: { [string]: any } = {}
 local requireModule
 
@@ -97,6 +121,19 @@ local function envFor(node: Node)
 		Vector3 = roblox.Vector3,
 		CFrame = roblox.CFrame,
 		Color3 = roblox.Color3,
+		Vector2 = roblox.Vector2,
+		UDim = roblox.UDim,
+		UDim2 = roblox.UDim2,
+		ColorSequence = roblox.ColorSequence,
+		ColorSequenceKeypoint = roblox.ColorSequenceKeypoint,
+		NumberSequence = roblox.NumberSequence,
+		NumberSequenceKeypoint = roblox.NumberSequenceKeypoint,
+		NumberRange = roblox.NumberRange,
+		Instance = roblox.Instance,
+		Enum = roblox.Enum,
+		Random = RandomMock,
+		workspace = Harness.workspace,
+		typeof = typeof,
 	}
 end
 

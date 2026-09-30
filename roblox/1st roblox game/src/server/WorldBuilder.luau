@@ -1,8 +1,10 @@
 -- Generates the whole map from primitives: base area with 8 fenced plots (each with a treadmill),
 -- the walled corridor split into themed zones with signs, a mother-plant nest per zone, and the End.
+-- Base and plot decoration is anchored and non-colliding (see Props).
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Config = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("Config"))
 local Format = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("Format"))
+local Props = require(script.Parent:WaitForChild("Props"))
 
 local WorldBuilder = {}
 
@@ -32,55 +34,12 @@ local HALF_W = Config.CORRIDOR_WIDTH / 2
 local BASE_MIN_X = Config.PLOT_FIRST_X - Config.PLOT_SPACING_X * 3 - Config.PLOT_SIZE / 2 - 40
 local BASE_HALF_Z = Config.PLOT_OFFSET_Z + Config.PLOT_SIZE / 2 + 20
 
-local function part(props: { [string]: any }): Part
-	local p = Instance.new("Part")
-	p.Anchored = true
-	p.TopSurface = Enum.SurfaceType.Smooth
-	p.BottomSurface = Enum.SurfaceType.Smooth
-	p.Material = Enum.Material.SmoothPlastic
-	for k, v in props do
-		if k ~= "Parent" then
-			(p :: any)[k] = v
-		end
-	end
-	p.Parent = props.Parent
-	return p
-end
-
-local function box(parent: Instance, name: string, size: Vector3, cf: CFrame, color: Color3, material: Enum.Material?): Part
-	return part({ Name = name, Size = size, CFrame = cf, Color = color, Material = material or Enum.Material.SmoothPlastic, Parent = parent })
-end
-
-local function ball(parent: Instance, name: string, diameter: number, pos: Vector3, color: Color3, material: Enum.Material?): Part
-	return part({
-		Name = name,
-		Shape = Enum.PartType.Ball,
-		Size = Vector3.one * diameter,
-		CFrame = CFrame.new(pos),
-		Color = color,
-		Material = material or Enum.Material.SmoothPlastic,
-		CanCollide = false,
-		Parent = parent,
-	})
-end
-
-local function cylinder(parent: Instance, name: string, height: number, diameter: number, pos: Vector3, color: Color3, material: Enum.Material?): Part
-	-- Cylinders run along local X, so rotate them upright.
-	return part({
-		Name = name,
-		Shape = Enum.PartType.Cylinder,
-		Size = Vector3.new(height, diameter, diameter),
-		CFrame = CFrame.new(pos) * CFrame.Angles(0, 0, math.rad(90)),
-		Color = color,
-		Material = material or Enum.Material.SmoothPlastic,
-		CanCollide = false,
-		Parent = parent,
-	})
-end
+local box, deco, ball, cylinder, flat = Props.box, Props.deco, Props.ball, Props.cylinder, Props.flat
 
 -- A board facing -X (toward players coming from base) with big text lines.
-local function sign(parent: Instance, pos: Vector3, size: Vector2, lines: { { text: string, color: Color3 } }, boardColor: Color3)
-	local board = box(parent, "Sign", Vector3.new(size.X, size.Y, 1), CFrame.lookAt(pos, pos - Vector3.xAxis), boardColor)
+local function sign(parent: Instance, pos: Vector3, size: Vector2, lines: { { text: string, color: Color3 } }, boardColor: Color3, material: Enum.Material?)
+	local board = box(parent, "Sign", Vector3.new(size.X, size.Y, 1), CFrame.lookAt(pos, pos - Vector3.xAxis), boardColor, material)
+	board.CanCollide = false
 	local gui = Instance.new("SurfaceGui")
 	gui.Face = Enum.NormalId.Front
 	gui.SizingMode = Enum.SurfaceGuiSizingMode.PixelsPerStud
@@ -90,18 +49,24 @@ local function sign(parent: Instance, pos: Vector3, size: Vector2, lines: { { te
 	local list = Instance.new("UIListLayout")
 	list.HorizontalAlignment = Enum.HorizontalAlignment.Center
 	list.VerticalAlignment = Enum.VerticalAlignment.Center
+	list.SortOrder = Enum.SortOrder.LayoutOrder
 	list.Parent = gui
+	local total = 0
+	for _, line in lines do
+		total += (line :: any).scale or 1
+	end
 	for i, line in lines do
 		local label = Instance.new("TextLabel")
 		label.BackgroundTransparency = 1
-		label.Size = UDim2.fromScale(1, 1 / #lines)
+		label.Size = UDim2.fromScale(0.94, ((line :: any).scale or 1) / total)
 		label.Font = Enum.Font.FredokaOne
 		label.TextScaled = true
 		label.Text = line.text
 		label.TextColor3 = line.color
 		label.LayoutOrder = i
 		local stroke = Instance.new("UIStroke")
-		stroke.Thickness = 3
+		stroke.Thickness = 4
+		stroke.Color = Color3.fromRGB(25, 20, 30)
 		stroke.Parent = label
 		label.Parent = gui
 	end
@@ -133,41 +98,132 @@ end
 WorldBuilder.billboard = billboard
 
 ----------------------------------------------------------------------------------------------------
--- Base area
+-- Base area: a bright lawn with mowing stripes, a stone walkway, patterned orange walls and props.
 ----------------------------------------------------------------------------------------------------
+local GRASS = Color3.fromRGB(92, 204, 70)
+local GRASS_LIGHT = Color3.fromRGB(122, 224, 88)
+local STONE = Color3.fromRGB(242, 216, 164)
+local EDGE = Color3.fromRGB(214, 112, 68)
+local WALL = Color3.fromRGB(240, 148, 76)
+local WALL_PANELS = { Color3.fromRGB(255, 214, 140), Color3.fromRGB(255, 176, 84) }
+local WALL_CAP = Color3.fromRGB(150, 92, 52)
+local FLOWER_COLORS = {
+	Color3.fromRGB(255, 90, 120), Color3.fromRGB(255, 215, 60), Color3.fromRGB(170, 110, 255),
+	Color3.fromRGB(255, 150, 60), Color3.fromRGB(90, 190, 255), Color3.fromRGB(255, 255, 255),
+}
+
+-- A wall with a warm brick body, a wooden cap, a stripe and a row of alternating diamonds on its
+-- inner face. `inward` points into the base.
+local function patternWall(parent: Instance, center: Vector3, along: Vector3, inward: Vector3, len: number)
+	local h = Config.WALL_HEIGHT
+	local rot = CFrame.lookAt(Vector3.zero, along) -- local Z along the wall, X across it
+	box(parent, "Wall", Vector3.new(4, h, len), CFrame.new(center + Vector3.new(0, h / 2, 0)) * rot, WALL, Enum.Material.Brick)
+	deco(parent, "WallCap", Vector3.new(6, 2, len + 2), CFrame.new(center + Vector3.new(0, h + 1, 0)) * rot, WALL_CAP, Enum.Material.WoodPlanks)
+	local face = center + inward * 2.3
+	deco(parent, "WallStripe", Vector3.new(0.6, 3, len), CFrame.new(face + Vector3.new(0, 8, 0)) * rot, WALL_PANELS[1], Enum.Material.SmoothPlastic)
+	deco(parent, "WallStripe", Vector3.new(0.6, 1.5, len), CFrame.new(face + Vector3.new(0, h - 4, 0)) * rot, WALL_CAP, Enum.Material.SmoothPlastic)
+	local n = math.floor(len / 14)
+	for i = 0, n - 1 do
+		local offset = (i - (n - 1) / 2) * 14
+		local cf = CFrame.new(face + along * offset + Vector3.new(0, 22, 0)) * rot * CFrame.Angles(math.rad(45), 0, 0)
+		deco(parent, "WallDiamond", Vector3.new(0.6, 7, 7), cf, WALL_PANELS[i % 2 + 1], Enum.Material.SmoothPlastic).CastShadow = false
+	end
+end
+
 local function buildBase(world: Folder)
 	local base = Instance.new("Folder")
 	base.Name = "Base"
 	base.Parent = world
+	local rng = Random.new(4242)
 
 	local len = Config.CORRIDOR_START_X - BASE_MIN_X
-	box(base, "Ground", Vector3.new(len, 4, BASE_HALF_Z * 2),
-		CFrame.new(BASE_MIN_X + len / 2, GROUND - 2, 0), Color3.fromRGB(110, 200, 90), Enum.Material.Grass)
-	box(base, "Walkway", Vector3.new(len, 0.2, 36),
-		CFrame.new(BASE_MIN_X + len / 2, GROUND + 0.1, 0), Color3.fromRGB(235, 220, 180), Enum.Material.Pebble)
+	local midX = BASE_MIN_X + len / 2
+	box(base, "Ground", Vector3.new(len, 4, BASE_HALF_Z * 2), CFrame.new(midX, GROUND - 2, 0), GRASS, Enum.Material.Grass)
+	-- Mowing stripes (the walkway, plots and paths sit on top of them)
+	for x = BASE_MIN_X + 16, Config.CORRIDOR_START_X - 16, 64 do
+		flat(base, "LawnStripe", 32, BASE_HALF_Z * 2, Vector3.new(x, GROUND, 0), GRASS_LIGHT, Enum.Material.Grass, nil, 0.1)
+	end
+	flat(base, "Walkway", len, 36, Vector3.new(midX, GROUND, 0), STONE, Enum.Material.Pebble, nil, 0.3)
+	for _, s in { -1, 1 } do
+		flat(base, "WalkwayEdge", len, 2, Vector3.new(midX, GROUND, s * 19), EDGE, Enum.Material.Brick, nil, 0.4)
+	end
 
 	-- Perimeter walls, leaving the corridor mouth open at +X.
-	local wallColor = Color3.fromRGB(255, 255, 255)
-	local h = Config.WALL_HEIGHT
-	box(base, "WallBack", Vector3.new(4, h, BASE_HALF_Z * 2), CFrame.new(BASE_MIN_X - 2, GROUND + h / 2, 0), wallColor)
+	patternWall(base, Vector3.new(BASE_MIN_X - 2, GROUND, 0), Vector3.zAxis, Vector3.xAxis, BASE_HALF_Z * 2 + 8)
 	for _, s in { -1, 1 } do
-		box(base, "WallSide", Vector3.new(len, h, 4), CFrame.new(BASE_MIN_X + len / 2, GROUND + h / 2, s * (BASE_HALF_Z + 2)), wallColor)
-		local frontLen = BASE_HALF_Z - HALF_W
-		box(base, "WallFront", Vector3.new(4, h, frontLen),
-			CFrame.new(Config.CORRIDOR_START_X + 2, GROUND + h / 2, s * (HALF_W + frontLen / 2)), wallColor)
+		patternWall(base, Vector3.new(midX, GROUND, s * (BASE_HALF_Z + 2)), Vector3.xAxis, Vector3.new(0, 0, -s), len)
+		-- Front walls run on to the outer edge of the side walls, closing the corner.
+		local frontLen = BASE_HALF_Z + 4 - HALF_W
+		patternWall(base, Vector3.new(Config.CORRIDOR_START_X + 2, GROUND, s * (HALF_W + frontLen / 2)), Vector3.zAxis, -Vector3.xAxis, frontLen)
 	end
-	for _, w in base:GetChildren() do
-		if w.Name:sub(1, 4) == "Wall" then
-			(w :: BasePart).Transparency = 0.6
+
+	sign(base, Vector3.new(Config.CORRIDOR_START_X - 6, GROUND + 22, 0), Vector2.new(44, 12), {
+		{ text = "🌱 STEAL A SEED 🌱", color = Color3.fromRGB(255, 240, 120), scale = 1.4 },
+		{ text = "Grab a seed. Run. Plant it. Get faster.", color = Color3.new(1, 1, 1) },
+	} :: any, Color3.fromRGB(70, 170, 80))
+
+	local props = Instance.new("Folder")
+	props.Name = "Props"
+	props.Parent = base
+
+	-- Street lamps along the walkway, between the plot paths
+	for col = 0, 4 do
+		local x = Config.PLOT_FIRST_X + Config.PLOT_SPACING_X / 2 - col * Config.PLOT_SPACING_X
+		for _, s in { -1, 1 } do
+			Props.lamp(props, Vector3.new(x, GROUND, s * 22), Color3.fromRGB(255, 225, 150))
 		end
 	end
 
-	sign(base, Vector3.new(Config.CORRIDOR_START_X - 6, GROUND + 20, 0), Vector2.new(40, 10), {
-		{ text = "🌱 STEAL A SEED 🌱", color = Color3.fromRGB(255, 240, 120) },
-		{ text = "Grab a seed. Run. Plant it. Get faster.", color = Color3.new(1, 1, 1) },
-	}, Color3.fromRGB(60, 150, 70))
+	-- A row of trees behind the plots and at the far end
+	local backZ = Config.PLOT_OFFSET_Z + Config.PLOT_SIZE / 2 + 10
+	for x = BASE_MIN_X + 20, Config.CORRIDOR_START_X - 20, 40 do
+		for _, s in { -1, 1 } do
+			Props.roundTree(props, Vector3.new(x + rng:NextNumber(-6, 6), GROUND, s * (backZ + rng:NextNumber(-1, 3))), rng,
+				Color3.fromHSV(rng:NextNumber(0.26, 0.36), 0.7, 0.78))
+		end
+	end
+	for z = -BASE_HALF_Z + 40, BASE_HALF_Z - 40, 36 do
+		if math.abs(z) < 26 then
+			continue -- keep the walkway clear
+		end
+		Props.roundTree(props, Vector3.new(BASE_MIN_X + 16, GROUND, z), rng, Color3.fromHSV(rng:NextNumber(0.26, 0.36), 0.7, 0.8))
+	end
+
+	-- Bushes and flowers in the gaps between plots
+	for col = 0, 2 do
+		local x = Config.PLOT_FIRST_X - Config.PLOT_SPACING_X / 2 - col * Config.PLOT_SPACING_X
+		for _, s in { -1, 1 } do
+			for _, z in { 50, 80, 110 } do
+				Props.bush(props, Vector3.new(x, GROUND, s * z), rng:NextNumber(4, 6), Color3.fromRGB(60, 170, 70))
+				Props.flower(props, Vector3.new(x + rng:NextNumber(-4, 4), GROUND, s * (z + 12)), FLOWER_COLORS[rng:NextInteger(1, #FLOWER_COLORS)])
+			end
+		end
+	end
+
+	-- Spawn plaza (between the first plots and the corridor): flower beds, trees and rocks
+	for _, s in { -1, 1 } do
+		local bed = Vector3.new(14, GROUND, s * 62)
+		Props.disc(props, "FlowerBed", 22, bed, Color3.fromRGB(120, 80, 50), Enum.Material.Ground, 0.4)
+		Props.disc(props, "FlowerBedRim", 24, bed, EDGE, Enum.Material.Brick, 0.3)
+		for i = 1, 9 do
+			local a = i / 9 * math.pi * 2
+			local r = if i % 3 == 0 then 3 else 7
+			Props.flower(props, bed + Vector3.new(math.cos(a) * r, 0.4, math.sin(a) * r), FLOWER_COLORS[i % #FLOWER_COLORS + 1], 2)
+		end
+		Props.roundTree(props, Vector3.new(40, GROUND, s * 100), rng, Color3.fromRGB(80, 190, 70), 14)
+		Props.roundTree(props, Vector3.new(-12, GROUND, s * 118), rng, Color3.fromRGB(255, 150, 190), 12) -- a blossom tree
+		Props.rock(props, Vector3.new(38, GROUND, s * 60), Vector3.new(6, 4, 5), Color3.fromRGB(150, 150, 160))
+		Props.rock(props, Vector3.new(44, GROUND, s * 66), Vector3.new(3, 2, 3), Color3.fromRGB(170, 170, 180))
+	end
+	for _ = 1, 14 do
+		local z = (if rng:NextNumber() < 0.5 then -1 else 1) * rng:NextNumber(26, 34)
+		Props.flower(props, Vector3.new(rng:NextNumber(BASE_MIN_X + 10, Config.CORRIDOR_START_X - 10), GROUND, z), FLOWER_COLORS[rng:NextInteger(1, #FLOWER_COLORS)])
+	end
 end
 
+----------------------------------------------------------------------------------------------------
+-- Plots
+----------------------------------------------------------------------------------------------------
 local function slotLocal(i: number): (number, number)
 	local row = (i - 1) // Config.SLOT_COLUMNS
 	local col = (i - 1) % Config.SLOT_COLUMNS
@@ -176,9 +232,11 @@ local function slotLocal(i: number): (number, number)
 end
 
 local PLOT_COLORS = {
-	Color3.fromRGB(255, 120, 120), Color3.fromRGB(120, 170, 255), Color3.fromRGB(255, 210, 90), Color3.fromRGB(160, 110, 255),
-	Color3.fromRGB(110, 225, 160), Color3.fromRGB(255, 150, 210), Color3.fromRGB(255, 160, 80), Color3.fromRGB(110, 220, 230),
+	Color3.fromRGB(255, 96, 96), Color3.fromRGB(80, 150, 255), Color3.fromRGB(255, 200, 50), Color3.fromRGB(160, 100, 255),
+	Color3.fromRGB(60, 215, 140), Color3.fromRGB(255, 120, 200), Color3.fromRGB(255, 145, 50), Color3.fromRGB(70, 210, 225),
 }
+local PLOT_GRASS = Color3.fromRGB(104, 212, 78)
+local PLOT_GRASS_LIGHT = Color3.fromRGB(136, 230, 96)
 
 local function buildPlot(world: Folder, index: number): PlotInfo
 	local col = (index - 1) // 2
@@ -191,6 +249,7 @@ local function buildPlot(world: Folder, index: number): PlotInfo
 		return entrance + Vector3.new(u, y, -toWalk * w)
 	end
 	local facingIn = CFrame.lookAt(Vector3.zero, Vector3.new(0, 0, -toWalk)) -- rotation looking into the plot
+	local rng = Random.new(1000 + index)
 
 	local model = Instance.new("Model")
 	model.Name = "Plot" .. index
@@ -198,19 +257,40 @@ local function buildPlot(world: Folder, index: number): PlotInfo
 	model.Parent = world
 	local color = PLOT_COLORS[index]
 
+	-- Checkered lawn with a border in the plot's colour
 	local floor = box(model, "Floor", Vector3.new(Config.PLOT_SIZE, 1, Config.PLOT_SIZE), CFrame.new(center + Vector3.new(0, 0.5, 0)),
-		color:Lerp(Color3.new(1, 1, 1), 0.55), Enum.Material.SmoothPlastic)
+		PLOT_GRASS, Enum.Material.Grass)
 	model.PrimaryPart = floor
-
-	-- Fence with a 20-stud gate on the walkway side
-	local fenceH, fenceColor = 5, Color3.fromRGB(255, 255, 255)
-	box(model, "Fence", Vector3.new(Config.PLOT_SIZE, fenceH, 1), CFrame.new(center + Vector3.new(0, fenceH / 2 + 1, -toWalk * half)), fenceColor)
-	for _, sx in { -1, 1 } do
-		box(model, "Fence", Vector3.new(1, fenceH, Config.PLOT_SIZE), CFrame.new(center + Vector3.new(sx * half, fenceH / 2 + 1, 0)), fenceColor)
-		local seg = (Config.PLOT_SIZE - 20) / 2
-		box(model, "Fence", Vector3.new(seg, fenceH, 1), CFrame.new(entrance + Vector3.new(sx * (10 + seg / 2), fenceH / 2 + 1, 0)), fenceColor)
-		box(model, "GatePost", Vector3.new(2, 9, 2), CFrame.new(entrance + Vector3.new(sx * 10, 5.5, 0)), color)
+	local tile = Config.PLOT_SIZE / 7
+	for i = 0, 6 do
+		for j = 0, 6 do
+			if (i + j) % 2 == 0 then
+				local p = center + Vector3.new((i - 3) * tile, 1, (j - 3) * tile)
+				flat(model, "Lawn", tile, tile, p, PLOT_GRASS_LIGHT, Enum.Material.Grass, nil, 0.05)
+			end
+		end
 	end
+	for _, s in { -1, 1 } do
+		flat(model, "Trim", Config.PLOT_SIZE, 2, center + Vector3.new(0, 1, s * (half - 1)), color, Enum.Material.SmoothPlastic, nil, 0.08)
+		flat(model, "Trim", 2, Config.PLOT_SIZE, center + Vector3.new(s * (half - 1), 1, 0), color, Enum.Material.SmoothPlastic, nil, 0.08)
+	end
+
+	-- Wooden fence (posts + rails) with a 20-stud gate on the walkway side
+	local fenceH = 5
+	local y1 = Vector3.new(0, 1, 0)
+	Props.fence(model, center + y1 + Vector3.new(-half, 0, -toWalk * half), center + y1 + Vector3.new(half, 0, -toWalk * half), fenceH, 7)
+	for _, sx in { -1, 1 } do
+		Props.fence(model, center + y1 + Vector3.new(sx * half, 0, toWalk * half), center + y1 + Vector3.new(sx * half, 0, -toWalk * half), fenceH, 7)
+		Props.fence(model, entrance + y1 + Vector3.new(sx * 11, 0, 0), entrance + y1 + Vector3.new(sx * half, 0, 0), fenceH, 7)
+		box(model, "GatePost", Vector3.new(2, 9, 2), CFrame.new(entrance + Vector3.new(sx * 10, 5.5, 0)), color, Enum.Material.WoodPlanks)
+		ball(model, "GateFinial", 2.6, entrance + Vector3.new(sx * 10, 10.6, 0), color:Lerp(Color3.new(1, 1, 1), 0.35))
+	end
+	deco(model, "GateArch", Vector3.new(22, 1.6, 1.6), CFrame.new(entrance + Vector3.new(0, 9.6, 0)), color, Enum.Material.WoodPlanks)
+
+	-- Stone path from the gate to the walkway, and on to the pad
+	local toWalkway = math.abs(entrance.Z) - 19
+	flat(model, "Path", 14, toWalkway, Vector3.new(center.X, GROUND, entrance.Z + toWalk * toWalkway / 2), STONE, Enum.Material.Pebble, nil, 0.3)
+	flat(model, "Path", 10, 5, at(0, 2.5, 1), STONE, Enum.Material.Pebble, nil, 0.1)
 
 	-- House-icon sign over the gate
 	local signPart = box(model, "SignPost", Vector3.new(1, 1, 1), CFrame.new(entrance + Vector3.new(0, 12, 0)), color)
@@ -218,8 +298,9 @@ local function buildPlot(world: Folder, index: number): PlotInfo
 	signPart.CanCollide = false
 	local signLabel = billboard(signPart, "🏠 Empty Plot", UDim2.fromOffset(260, 60), Vector3.zero, 400)
 
-	-- Planting pad just inside the gate
+	-- Planting pad just inside the gate, on a rim in the plot's colour
 	local pad = box(model, "PlantPad", Vector3.new(10, 1, 10), CFrame.new(at(0, 10, 1.2)), Color3.fromRGB(120, 80, 50), Enum.Material.Ground)
+	flat(model, "PadRim", 12, 12, at(0, 10, 1), color, Enum.Material.SmoothPlastic, nil, 0.3)
 
 	-- Treadmill: a conveyor that pushes toward a stop rail, so standing on it (AFK) keeps you on it.
 	local tmU, tmW0, tmLen = 30, 12, 28
@@ -244,6 +325,17 @@ local function buildPlot(world: Folder, index: number): PlotInfo
 	tmSignPart.Transparency = 1
 	tmSignPart.CanCollide = false
 	billboard(tmSignPart, "🏃 TREADMILL", UDim2.fromOffset(160, 36), Vector3.zero, 120)
+
+	-- A few props in the corners, clear of the slots, pad, treadmill and spawn point
+	Props.roundTree(model, at(-35, 30, 1), rng, Color3.fromRGB(70, 185, 70), 10)
+	for _, u in { -37, 37 } do
+		Props.bush(model, at(u, 80, 1), 4.5, Color3.fromRGB(60, 165, 65))
+	end
+	for i = 1, 4 do
+		for _, s in { -1, 1 } do
+			Props.flower(model, at(s * (14 + i * 5), 2, 1), FLOWER_COLORS[(index + i) % #FLOWER_COLORS + 1], 1.4)
+		end
+	end
 
 	local slotCFrames = {}
 	for i = 1, Config.SLOTS_MAX + Config.PASS_EXTRA_SLOTS do

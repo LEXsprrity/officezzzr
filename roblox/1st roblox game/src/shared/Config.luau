@@ -372,6 +372,20 @@ function Config.dayPhase(now: number): (boolean, number)
 	return true, cycle - t
 end
 
+-- How "night" the lighting is, 0..1: eases in over the first NIGHT_FADE_SECONDS of the night and back
+-- out over its last ones, so dusk and dawn are gradual. AmbientService blends day/night looks by it.
+Config.NIGHT_FADE_SECONDS = 20
+
+function Config.nightBlend(now: number): number
+	local night, left = Config.dayPhase(now)
+	if not night then
+		return 0
+	end
+	local elapsed = Config.NIGHT_SECONDS - left
+	local t = math.clamp(math.min(elapsed, left) / Config.NIGHT_FADE_SECONDS, 0, 1)
+	return t * t * (3 - 2 * t)
+end
+
 ----------------------------------------------------------------------------------------------------
 -- Data
 ----------------------------------------------------------------------------------------------------
