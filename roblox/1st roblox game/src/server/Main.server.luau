@@ -45,13 +45,15 @@ do
 	end
 end
 
-local function save(s: Sessions.Session)
+-- Returns whether the profile reached the DataStore (Robux receipts are only confirmed after that).
+local function save(s: Sessions.Session): boolean
 	if not store or not s.canSave then
-		return
+		return false
 	end
 	s.profile.lastSeen = os.time()
-	store:save(s.player.UserId, s.profile)
+	return store:save(s.player.UserId, s.profile)
 end
+ShopService.save = save
 
 ----------------------------------------------------------------------------------------------------
 -- Characters

@@ -7,6 +7,7 @@ require("./speed.spec")
 require("./data.spec")
 require("./economy.spec")
 require("./world.spec")
+require("./packs.spec")
 
 print("Steal a Seed: mocked server tests\n")
 local failed = H.run()

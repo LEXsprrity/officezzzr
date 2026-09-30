@@ -166,11 +166,13 @@ function Config.rarityWeights(k: number, luck: number): { number }
 	return out
 end
 
-export type Mutation = { id: string, color: Color3, income: number, chance: number, nightOnly: boolean }
+-- `exclusive` mutations never roll from pods (chance 0); only the featured seed pack can give them.
+export type Mutation = { id: string, color: Color3, income: number, chance: number, nightOnly: boolean, exclusive: boolean? }
 Config.MUTATIONS = {
 	{ id = "Gold", color = Color3.fromRGB(255, 215, 0), income = 3, chance = 0.04, nightOnly = false },
 	{ id = "Rainbow", color = Color3.fromRGB(255, 80, 200), income = 8, chance = 0.01, nightOnly = false },
 	{ id = "Night", color = Color3.fromRGB(90, 90, 255), income = 2, chance = 0.12, nightOnly = true },
+	{ id = "Celestial", color = Color3.fromRGB(120, 240, 255), income = 12, chance = 0, nightOnly = false, exclusive = true },
 } :: { Mutation }
 
 function Config.mutationById(id: string?): Mutation?
@@ -312,6 +314,35 @@ Config.GAMEPASSES = {
 	ExtraSlots = { id = 0, label = "+10 Plant Slots" },
 } :: { [string]: Gamepass }
 Config.PASS_EXTRA_SLOTS = 10 -- the ExtraSlots pass adds this many slots
+
+----------------------------------------------------------------------------------------------------
+-- Seed packs: our "eggs with odds". Bought with money, each rolls one seed into the player's seed
+-- bag, which they plant from the Seeds menu at their pad. Logic lives in Shared/SeedPacks.
+----------------------------------------------------------------------------------------------------
+Config.PACK_INCOME_SECONDS = 240 -- a zone-k pack costs this many seconds of a Common zone-k plant's income
+Config.PACK_LUCK = 1 -- packs roll rarities like a daytime pod in their zone...
+Config.PACK_MUTATION_MULT = 1 -- ...with the same Gold/Rainbow chances (Night never rolls from packs)
+Config.PACK_COOLDOWN = 0.6 -- seconds between pack purchases per player
+Config.SEED_BAG_MAX = 50 -- buying packs with money stops at this many bagged seeds
+Config.SEED_BAG_HARD_MAX = 250 -- Robux grants may go past SEED_BAG_MAX; saves are clamped here
+Config.RECEIPT_HISTORY = 100 -- processed Robux PurchaseIds kept per profile, so a grant never repeats
+
+-- The featured pack rotates on a clock every server shares (os.time), so all servers agree.
+Config.FEATURED_ROTATION_SECONDS = 3 * 3600
+Config.FEATURED_SEED = 7331 -- salts the rotation order
+Config.FEATURED_PRICE_MULT = 1.5
+Config.FEATURED_LUCK = 2 -- rolls like a night pod
+Config.FEATURED_MUTATION_MULT = 2
+Config.FEATURED_EXCLUSIVE = "Celestial"
+Config.FEATURED_EXCLUSIVE_CHANCE = 0.005
+
+-- Robux bundles of featured packs. Stubs: set real developer product ids to enable. 0 = not configured.
+export type DevProduct = { id: number, label: string, packs: number }
+Config.DEVELOPER_PRODUCTS = {
+	PackBundle1 = { id = 0, label = "1 Featured Pack", packs = 1 },
+	PackBundle3 = { id = 0, label = "3 Featured Packs", packs = 3 },
+	PackBundle10 = { id = 0, label = "10 Featured Packs", packs = 10 },
+} :: { [string]: DevProduct }
 
 -- What the shop needs to know about a player (profile or client stats snapshot).
 export type ShopView = {

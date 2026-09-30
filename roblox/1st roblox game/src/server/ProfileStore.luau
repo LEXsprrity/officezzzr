@@ -2,12 +2,15 @@
 -- Player save data: defaults, (de)serialization with validation, and a DataStore wrapper that
 -- uses UpdateAsync with retries. The DataStore is injected so tests can pass a mock.
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
-local Config = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("Config"))
+local Shared = ReplicatedStorage:WaitForChild("Shared")
+local Config = require(Shared:WaitForChild("Config"))
+local SeedPacks = require(Shared:WaitForChild("SeedPacks"))
 
 local ProfileStore = {}
 ProfileStore.__index = ProfileStore
 
-ProfileStore.VERSION = 1
+-- v2 adds the seed bag and Robux receipt history; v1 saves load with both empty.
+ProfileStore.VERSION = 2
 
 export type Plant = {
 	slot: number,
@@ -27,6 +30,8 @@ export type Profile = {
 	index: { [string]: boolean }, -- "zone:rarity" and "zone:Mutation" keys
 	items: { [string]: number },
 	potions: { [string]: number }, -- stat -> expiry (unix seconds)
+	seedBag: { [string]: number }, -- seeds from packs, "zone:rarity[:Mutation]" -> count
+	receipts: { string }, -- last Config.RECEIPT_HISTORY processed Robux PurchaseIds
 	reachedEnd: boolean,
 	lastSeen: number,
 }
@@ -46,6 +51,8 @@ function ProfileStore.defaultProfile(): Profile
 		index = {},
 		items = items,
 		potions = {},
+		seedBag = {},
+		receipts = {},
 		reachedEnd = false,
 		lastSeen = 0,
 	}
@@ -86,6 +93,8 @@ function ProfileStore.serialize(p: Profile): { [string]: any }
 		index = index,
 		items = table.clone(p.items),
 		potions = table.clone(p.potions),
+		bag = table.clone(p.seedBag),
+		receipts = table.clone(p.receipts),
 		reachedEnd = p.reachedEnd,
 		lastSeen = p.lastSeen,
 	}
@@ -140,6 +149,34 @@ function ProfileStore.deserialize(data: any): Profile
 			if type(stat) == "string" and type(expiry) == "number" then
 				p.potions[stat] = expiry
 			end
+		end
+	end
+	-- v2 fields (absent in v1 saves, which keep the empty defaults)
+	if type(data.bag) == "table" then
+		local keys = {}
+		for key, n in data.bag do
+			if SeedPacks.parseBagKey(key) and type(n) == "number" and n >= 1 and n == n then
+				table.insert(keys, key)
+			end
+		end
+		table.sort(keys) -- deterministic clamping below
+		local total = 0
+		for _, key in keys do
+			local take = math.min(math.floor(data.bag[key]), Config.SEED_BAG_HARD_MAX - total)
+			if take > 0 then
+				p.seedBag[key] = take
+				total += take
+			end
+		end
+	end
+	if type(data.receipts) == "table" then
+		for _, id in data.receipts do
+			if type(id) == "string" and #id <= 64 then
+				table.insert(p.receipts, id)
+			end
+		end
+		while #p.receipts > Config.RECEIPT_HISTORY do
+			table.remove(p.receipts, 1)
 		end
 	end
 	return p
