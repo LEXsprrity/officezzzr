@@ -101,7 +101,7 @@ end)
 
 local SOUND_FOR = {
 	Pickup = "Pickup", Planted = "Plant", Caught = "Caught", GuardWake = "Wake",
-	Bat = "Bat", Bought = "Buy", End = "Pickup", Dusted = "Click", Potion = "Buy",
+	Bat = "Bat", Bought = "Buy", End = "Pickup", Dusted = "Click", Potion = "Buy", PackRoll = "Buy",
 }
 
 LootEvent.OnClientEvent:Connect(function(kind: string, data: any)
@@ -296,5 +296,51 @@ RunService.Heartbeat:Connect(function(dt)
 	end
 	if #swayParts > 0 then
 		workspace:BulkMoveTo(swayParts, swayCFrames, Enum.BulkMoveMode.FireCFrameChanged)
+	end
+end)
+
+----------------------------------------------------------------------------------------------------
+-- Per-zone colour grading: a local ColorCorrectionEffect on the camera sets each zone's mood
+-- (warm desert, hot lava, cold snow, purple space). It stacks with the server's day/night grade.
+----------------------------------------------------------------------------------------------------
+type Grade = { TintColor: Color3, Saturation: number, Brightness: number, Contrast: number }
+local NEUTRAL: Grade = { TintColor = Color3.new(1, 1, 1), Saturation = 0, Brightness = 0, Contrast = 0 }
+local ZONE_GRADE: { [string]: Grade } = {
+	Meadow = { TintColor = Color3.fromRGB(255, 255, 240), Saturation = 0.1, Brightness = 0.02, Contrast = 0 },
+	Desert = { TintColor = Color3.fromRGB(255, 238, 208), Saturation = 0.08, Brightness = 0.03, Contrast = 0.04 },
+	Jungle = { TintColor = Color3.fromRGB(228, 255, 222), Saturation = 0.12, Brightness = 0, Contrast = 0.04 },
+	Lava = { TintColor = Color3.fromRGB(255, 214, 196), Saturation = 0.15, Brightness = 0, Contrast = 0.1 },
+	Snow = { TintColor = Color3.fromRGB(232, 244, 255), Saturation = -0.05, Brightness = 0.04, Contrast = 0.02 },
+	Space = { TintColor = Color3.fromRGB(218, 204, 255), Saturation = 0.18, Brightness = -0.03, Contrast = 0.1 },
+	Spirit = { TintColor = Color3.fromRGB(255, 232, 242), Saturation = 0.1, Brightness = 0.02, Contrast = 0 },
+}
+
+local grade = Instance.new("ColorCorrectionEffect")
+grade.Name = "ZoneGrade"
+local gradeZone: string? = "?"
+local lastGradeCheck = 0
+
+local function attachGrade()
+	local camera = workspace.CurrentCamera
+	if camera then
+		grade.Parent = camera
+	end
+end
+attachGrade()
+workspace:GetPropertyChangedSignal("CurrentCamera"):Connect(attachGrade)
+
+RunService.Heartbeat:Connect(function()
+	if os.clock() - lastGradeCheck < 0.3 then
+		return
+	end
+	lastGradeCheck = os.clock()
+	local char = player.Character
+	local root = char and char:FindFirstChild("HumanoidRootPart") :: BasePart?
+	local k = if root then Config.zoneAtX(root.Position.X) else nil
+	local id = if k then Config.ZONES[k].id else nil
+	if id ~= gradeZone then
+		gradeZone = id
+		local target = if id then ZONE_GRADE[id] or NEUTRAL else NEUTRAL
+		TweenService:Create(grade, TweenInfo.new(1.5, Enum.EasingStyle.Sine), target :: any):Play()
 	end
 end)

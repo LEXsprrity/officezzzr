@@ -50,8 +50,9 @@ export type Zone = {
 	name: string,
 	req: number, -- recommended Speed stat
 	length: number,
-	floor: Color3,
+	floor: Color3, -- corridor floor (WorldBuilder/ZoneThemes)
 	wall: Color3,
+	ui: Color3, -- saturated card colour for the HUD
 	material: string, -- Enum.Material name
 	guard: string,
 	guardColor: Color3,
@@ -63,31 +64,31 @@ export type Zone = {
 
 Config.ZONES = {
 	{ id = "Meadow", name = "Meadow", req = 0, length = 600, icon = "🌼",
-		floor = Color3.fromRGB(106, 190, 70), wall = Color3.fromRGB(70, 140, 60), material = "Grass",
+		floor = Color3.fromRGB(104, 214, 70), wall = Color3.fromRGB(56, 152, 58), material = "Grass", ui = Color3.fromRGB(70, 180, 70),
 		guard = "Giant Mole", guardColor = Color3.fromRGB(110, 80, 60),
 		seed = "Sproutling", seedColor = Color3.fromRGB(120, 230, 90), baseWeight = 12 },
 	{ id = "Desert", name = "Desert", req = 10e3, length = 1000, icon = "🦂",
-		floor = Color3.fromRGB(235, 200, 120), wall = Color3.fromRGB(200, 150, 90), material = "Sand",
+		floor = Color3.fromRGB(240, 204, 124), wall = Color3.fromRGB(226, 164, 98), material = "Sand", ui = Color3.fromRGB(225, 145, 55),
 		guard = "Giant Scorpion", guardColor = Color3.fromRGB(190, 90, 40),
 		seed = "Cactopod", seedColor = Color3.fromRGB(60, 170, 90), baseWeight = 340 },
 	{ id = "Jungle", name = "Jungle", req = 500e3, length = 1400, icon = "🦖",
-		floor = Color3.fromRGB(50, 120, 50), wall = Color3.fromRGB(30, 85, 40), material = "LeafyGrass",
+		floor = Color3.fromRGB(66, 162, 60), wall = Color3.fromRGB(98, 126, 88), material = "LeafyGrass", ui = Color3.fromRGB(35, 140, 75),
 		guard = "Giant Dino", guardColor = Color3.fromRGB(70, 150, 70),
 		seed = "Fernosaur", seedColor = Color3.fromRGB(40, 200, 120), baseWeight = 9_500 },
 	{ id = "Lava", name = "Lava Fields", req = 5e6, length = 1600, icon = "🌋",
-		floor = Color3.fromRGB(60, 40, 40), wall = Color3.fromRGB(90, 40, 30), material = "Basalt",
+		floor = Color3.fromRGB(58, 44, 48), wall = Color3.fromRGB(80, 44, 40), material = "Basalt", ui = Color3.fromRGB(225, 85, 30),
 		guard = "Lava Golem", guardColor = Color3.fromRGB(240, 100, 30),
 		seed = "Magmabloom", seedColor = Color3.fromRGB(255, 120, 40), baseWeight = 180_000 },
 	{ id = "Snow", name = "Snow Peaks", req = 50e6, length = 1800, icon = "❄️",
-		floor = Color3.fromRGB(235, 245, 255), wall = Color3.fromRGB(170, 200, 230), material = "Snow",
+		floor = Color3.fromRGB(238, 246, 255), wall = Color3.fromRGB(160, 206, 242), material = "Snow", ui = Color3.fromRGB(65, 150, 225),
 		guard = "Giant Yeti", guardColor = Color3.fromRGB(220, 230, 245),
 		seed = "Frostbulb", seedColor = Color3.fromRGB(120, 200, 255), baseWeight = 2_000_000 },
 	{ id = "Space", name = "Deep Space", req = 500e6, length = 2100, icon = "👽",
-		floor = Color3.fromRGB(30, 25, 60), wall = Color3.fromRGB(50, 40, 100), material = "Glass",
+		floor = Color3.fromRGB(30, 24, 70), wall = Color3.fromRGB(46, 36, 100), material = "Glass", ui = Color3.fromRGB(115, 75, 225),
 		guard = "Big Alien", guardColor = Color3.fromRGB(120, 255, 120),
 		seed = "Starpetal", seedColor = Color3.fromRGB(200, 120, 255), baseWeight = 45_000_000 },
 	{ id = "Spirit", name = "Spirit Garden", req = 5e9, length = 2400, icon = "⛩️",
-		floor = Color3.fromRGB(250, 205, 220), wall = Color3.fromRGB(200, 40, 50), material = "SmoothPlastic",
+		floor = Color3.fromRGB(238, 232, 220), wall = Color3.fromRGB(250, 240, 224), material = "Pebble", ui = Color3.fromRGB(225, 75, 130),
 		guard = "Spirit Dragon", guardColor = Color3.fromRGB(230, 50, 60),
 		seed = "Lotus Wyrm", seedColor = Color3.fromRGB(255, 150, 200), baseWeight = 900_000_000 },
 } :: { Zone }
@@ -166,11 +167,13 @@ function Config.rarityWeights(k: number, luck: number): { number }
 	return out
 end
 
-export type Mutation = { id: string, color: Color3, income: number, chance: number, nightOnly: boolean }
+-- `exclusive` mutations never roll from pods (chance 0); only the featured seed pack can give them.
+export type Mutation = { id: string, color: Color3, income: number, chance: number, nightOnly: boolean, exclusive: boolean? }
 Config.MUTATIONS = {
 	{ id = "Gold", color = Color3.fromRGB(255, 215, 0), income = 3, chance = 0.04, nightOnly = false },
 	{ id = "Rainbow", color = Color3.fromRGB(255, 80, 200), income = 8, chance = 0.01, nightOnly = false },
 	{ id = "Night", color = Color3.fromRGB(90, 90, 255), income = 2, chance = 0.12, nightOnly = true },
+	{ id = "Celestial", color = Color3.fromRGB(120, 240, 255), income = 12, chance = 0, nightOnly = false, exclusive = true },
 } :: { Mutation }
 
 function Config.mutationById(id: string?): Mutation?
@@ -325,6 +328,35 @@ Config.GAMEPASSES = {
 } :: { [string]: Gamepass }
 Config.PASS_EXTRA_SLOTS = 10 -- the ExtraSlots pass adds this many slots
 
+----------------------------------------------------------------------------------------------------
+-- Seed packs: our "eggs with odds". Bought with money, each rolls one seed into the player's seed
+-- bag, which they plant from the Seeds menu at their pad. Logic lives in Shared/SeedPacks.
+----------------------------------------------------------------------------------------------------
+Config.PACK_INCOME_SECONDS = 240 -- a zone-k pack costs this many seconds of a Common zone-k plant's income
+Config.PACK_LUCK = 1 -- packs roll rarities like a daytime pod in their zone...
+Config.PACK_MUTATION_MULT = 1 -- ...with the same Gold/Rainbow chances (Night never rolls from packs)
+Config.PACK_COOLDOWN = 0.6 -- seconds between pack purchases per player
+Config.SEED_BAG_MAX = 50 -- buying packs with money stops at this many bagged seeds
+Config.SEED_BAG_HARD_MAX = 250 -- Robux grants may go past SEED_BAG_MAX; saves are clamped here
+Config.RECEIPT_HISTORY = 100 -- processed Robux PurchaseIds kept per profile, so a grant never repeats
+
+-- The featured pack rotates on a clock every server shares (os.time), so all servers agree.
+Config.FEATURED_ROTATION_SECONDS = 3 * 3600
+Config.FEATURED_SEED = 7331 -- salts the rotation order
+Config.FEATURED_PRICE_MULT = 1.5
+Config.FEATURED_LUCK = 2 -- rolls like a night pod
+Config.FEATURED_MUTATION_MULT = 2
+Config.FEATURED_EXCLUSIVE = "Celestial"
+Config.FEATURED_EXCLUSIVE_CHANCE = 0.005
+
+-- Robux bundles of featured packs. Stubs: set real developer product ids to enable. 0 = not configured.
+export type DevProduct = { id: number, label: string, packs: number }
+Config.DEVELOPER_PRODUCTS = {
+	PackBundle1 = { id = 0, label = "1 Featured Pack", packs = 1 },
+	PackBundle3 = { id = 0, label = "3 Featured Packs", packs = 3 },
+	PackBundle10 = { id = 0, label = "10 Featured Packs", packs = 10 },
+} :: { [string]: DevProduct }
+
 -- What the shop needs to know about a player (profile or client stats snapshot).
 export type ShopView = {
 	money: number,
@@ -383,6 +415,20 @@ function Config.dayPhase(now: number): (boolean, number)
 		return false, Config.DAY_SECONDS - t -- isNight, seconds until it flips
 	end
 	return true, cycle - t
+end
+
+-- How "night" the lighting is, 0..1: eases in over the first NIGHT_FADE_SECONDS of the night and back
+-- out over its last ones, so dusk and dawn are gradual. AmbientService blends day/night looks by it.
+Config.NIGHT_FADE_SECONDS = 20
+
+function Config.nightBlend(now: number): number
+	local night, left = Config.dayPhase(now)
+	if not night then
+		return 0
+	end
+	local elapsed = Config.NIGHT_SECONDS - left
+	local t = math.clamp(math.min(elapsed, left) / Config.NIGHT_FADE_SECONDS, 0, 1)
+	return t * t * (3 - 2 * t)
 end
 
 ----------------------------------------------------------------------------------------------------

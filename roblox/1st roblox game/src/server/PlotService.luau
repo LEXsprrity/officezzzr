@@ -4,6 +4,7 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Shared = ReplicatedStorage:WaitForChild("Shared")
 local Config = require(Shared:WaitForChild("Config"))
 local Format = require(Shared:WaitForChild("Format"))
+local SeedPacks = require(Shared:WaitForChild("SeedPacks"))
 local Net = require(script.Parent:WaitForChild("Net"))
 local Sessions = require(script.Parent:WaitForChild("Sessions"))
 local SeedService = require(script.Parent:WaitForChild("SeedService"))
@@ -180,50 +181,42 @@ local function plotOf(player: Player): PlotState?
 	return nil
 end
 
-local function tryPlant(player: Player, state: PlotState)
-	local s = Sessions.get(player)
-	if not s or state.owner ~= player then
-		return
-	end
-	if not s.carry then
-		Net.toast(player, "Steal a seed from the corridor first!", "red")
-		return
-	end
+-- The first free slot if `player` stands at their own pad with room left, else nil (toasting why;
+-- being too far is silent unless `farMessage` is given).
+local function freeSlotAtPad(player: Player, s: Sessions.Session, state: PlotState, farMessage: string?): number?
 	local char = player.Character
 	local root = char and char:FindFirstChild("HumanoidRootPart") :: BasePart?
 	if not root or (root.Position - state.info.pad.Position).Magnitude > Config.PLANT_DISTANCE then
-		return
+		if farMessage then
+			Net.toast(player, farMessage, "red")
+		end
+		return nil
 	end
 	local used = {}
 	for _, plant in s.profile.plants do
 		used[plant.slot] = true
 	end
-	local slot: number? = nil
 	for i = 1, Sessions.maxSlots(s) do
 		if not used[i] then
-			slot = i
-			break
+			return i
 		end
 	end
-	if not slot then
-		Net.toast(player, "Your plot is full! Remove a plant or buy more slots.", "red")
-		return
-	end
-	local carry = SeedService.consumeCarry(player)
-	if not carry then
-		return
-	end
+	Net.toast(player, "Your plot is full! Remove a plant or buy more slots.", "red")
+	return nil
+end
 
+-- Plants a seed (carried or from the seed bag) into `slot`: model, Index, income and client updates.
+local function plantSeed(player: Player, s: Sessions.Session, state: PlotState, slot: number, zone: number, rarity: number, mutation: string?)
 	local now = os.time()
-	local plant: ProfileStore.Plant = { slot = slot, zone = carry.zone, rarity = carry.rarity, mutation = carry.mutation, plantedAt = now }
+	local plant: ProfileStore.Plant = { slot = slot, zone = zone, rarity = rarity, mutation = mutation, plantedAt = now }
 	table.insert(s.profile.plants, plant)
 	spawnPlant(state, plant, now)
 
 	-- Index (collection book)
 	local newEntries = {}
-	local keys = { `{carry.zone}:{carry.rarity}` }
-	if carry.mutation then
-		table.insert(keys, `{carry.zone}:{carry.mutation}`)
+	local keys = { `{zone}:{rarity}` }
+	if mutation then
+		table.insert(keys, `{zone}:{mutation}`)
 	end
 	for _, key in keys do
 		if not s.profile.index[key] then
@@ -237,11 +230,48 @@ local function tryPlant(player: Player, state: PlotState)
 	Sessions.pushFull(s)
 	local weight = PlotService.plantStats(plant, now)
 	Net.LootEvent:FireClient(player, "Planted", {
-		name = SeedService.seedName(carry.zone, carry.rarity, carry.mutation),
+		name = SeedService.seedName(zone, rarity, mutation),
 		weight = weight,
-		rarity = carry.rarity,
+		rarity = rarity,
 		newIndex = newEntries,
 	})
+end
+
+local function tryPlant(player: Player, state: PlotState)
+	local s = Sessions.get(player)
+	if not s or state.owner ~= player then
+		return
+	end
+	if not s.carry then
+		local hasBag = SeedPacks.bagCount(s.profile.seedBag) > 0
+		Net.toast(player, if hasBag then "Steal a seed, or plant one from your 🌱 Seeds bag!" else "Steal a seed from the corridor first!", "red")
+		return
+	end
+	local slot = freeSlotAtPad(player, s, state, nil)
+	if not slot then
+		return
+	end
+	local carry = SeedService.consumeCarry(player)
+	if not carry then
+		return
+	end
+	plantSeed(player, s, state, slot, carry.zone, carry.rarity, carry.mutation)
+end
+
+-- Plants one seed of kind `key` from the player's seed bag (seeds bought in packs), from the Seeds
+-- menu. Same rules as the pad prompt: own plot, standing at the pad, a free slot.
+function PlotService.plantFromBag(player: Player, key: string)
+	local s = Sessions.get(player)
+	local state = plotOf(player)
+	local zone, rarity, mutation = SeedPacks.parseBagKey(key)
+	if not s or not state or not zone or not rarity or (s.profile.seedBag[key] or 0) <= 0 then
+		return
+	end
+	local slot = freeSlotAtPad(player, s, state, "Stand on your plot's planting pad to plant seeds from your bag.")
+	if not slot or not SeedPacks.takeFromBag(s.profile.seedBag, key) then
+		return
+	end
+	plantSeed(player, s, state, slot, zone, rarity, mutation)
 end
 
 function PlotService.removePlant(player: Player, slot: number)

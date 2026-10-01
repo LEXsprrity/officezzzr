@@ -452,6 +452,16 @@ local RAINBOW = ColorSequence.new({
 	ColorSequenceKeypoint.new(1, rgb(220, 90, 255)),
 })
 
+-- Celestial (exclusive, featured packs only) is the rarest look: a deep-violet starry body, white Neon
+-- leaves and petals, cyan glow, a soft star halo and slow drifting stars.
+local CELESTIAL_VIOLET = rgb(55, 25, 140)
+local CELESTIAL_WHITE = rgb(240, 242, 255)
+local CELESTIAL_STARS = ColorSequence.new({
+	ColorSequenceKeypoint.new(0, WHITE),
+	ColorSequenceKeypoint.new(0.5, rgb(190, 150, 255)),
+	ColorSequenceKeypoint.new(1, rgb(120, 240, 255)),
+})
+
 local TINTED = { skin = 1, accent = 1, leaf = 0.8, flower = 0.8, husk = 0.45, asset = 0.5 }
 
 local function applyMutation(b: Builder, mut: Config.Mutation)
@@ -474,6 +484,15 @@ local function applyMutation(b: Builder, mut: Config.Mutation)
 				end
 			elseif mut.id == "Night" then
 				p.Color = p.Color:Lerp(rgb(45, 45, 130), 0.6 * weight)
+			elseif mut.id == "Celestial" then
+				if role == "leaf" or role == "flower" then
+					p.Color = CELESTIAL_WHITE
+					p.Material = NEON
+				else
+					p.Color = p.Color:Lerp(CELESTIAL_VIOLET, 0.85 * weight)
+					p.Material = SMOOTH
+					p.Reflectance = 0.2 -- a starry sheen under the lights
+				end
 			else
 				p.Color = p.Color:Lerp(mut.color, 0.55 * weight)
 			end
@@ -507,11 +526,14 @@ local function decorate(b: Builder, zoneIndex: number, rarityIndex: number, mut:
 		ring.Transparency = if rarityIndex >= 4 then 0.25 else 0.5
 		ring.CastShadow = false
 	end
-	-- Legendary halo: a ring of glowing orbs above the head
-	if rarityIndex >= 5 then
+	-- Halo of glowing orbs above the head: Legendary (rarity colour) and/or Celestial (white stars).
+	-- A Legendary Celestial alternates the two, so it stays within the part budget.
+	local celestial = mut ~= nil and mut.id == "Celestial"
+	if rarityIndex >= 5 or celestial then
 		for k = 0, 5 do
 			local a = k * math.pi / 3
-			local orb = ball(b, "fx", "HaloOrb", 0.3, V(math.cos(a) * 0.8, top + 0.35, math.sin(a) * 0.8), rarity.color, NEON)
+			local color = if not celestial then rarity.color elseif rarityIndex >= 5 and k % 2 == 0 then rarity.color else CELESTIAL_WHITE
+			local orb = ball(b, "fx", "HaloOrb", if celestial then 0.36 else 0.3, V(math.cos(a) * 0.8, top + 0.35, math.sin(a) * 0.8), color, NEON)
 			orb.CastShadow = false
 		end
 		top += 0.5
@@ -537,7 +559,14 @@ local function decorate(b: Builder, zoneIndex: number, rarityIndex: number, mut:
 	end
 	if mut then
 		b.model:SetAttribute("Mutation", mut.id)
-		particles(body, "MutationSparkles", if mut.id == "Rainbow" then RAINBOW else ColorSequence.new(mut.color), 7, 0.5, 1.2, 2.5, Vector3.zero)
+		if celestial then
+			-- Slow, long-lived stars that drift around the creature
+			local stars = particles(body, "MutationSparkles", CELESTIAL_STARS, 5, 0.6, 4, 0.4, V(0, 0.15, 0))
+			stars.LightEmission = 1
+			stars.RotSpeed = NumberRange.new(-30, 30)
+		else
+			particles(body, "MutationSparkles", if mut.id == "Rainbow" then RAINBOW else ColorSequence.new(mut.color), 7, 0.5, 1.2, 2.5, Vector3.zero)
+		end
 	end
 
 	-- Anchors PlotService hangs the Info billboard and the Remove prompt on (they scale with the model).

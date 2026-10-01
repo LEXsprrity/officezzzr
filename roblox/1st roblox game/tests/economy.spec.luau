@@ -171,4 +171,20 @@ H.test("day/night: phase is derived from the clock", function()
 	H.eq(night, true)
 end)
 
+H.test("day/night: lighting blend fades in at dusk, holds, fades out at dawn", function()
+	local D, N, F = Config.DAY_SECONDS, Config.NIGHT_SECONDS, Config.NIGHT_FADE_SECONDS
+	H.eq(Config.nightBlend(D / 2), 0, "midday")
+	H.near(Config.nightBlend(D + 0.001), 0, 1e-3, "dusk starts dark-free")
+	local mid = Config.nightBlend(D + F / 2)
+	H.ok(mid > 0.3 and mid < 0.7, "halfway through the fade " .. mid)
+	H.eq(Config.nightBlend(D + N / 2), 1, "midnight")
+	H.near(Config.nightBlend(D + N - 0.001), 0, 1e-3, "dawn")
+	local last = -1
+	for t = D, D + F, 1 do -- monotonic fade-in
+		local b = Config.nightBlend(t)
+		H.ok(b >= last, "fade-in is monotonic")
+		last = b
+	end
+end)
+
 return nil

@@ -91,6 +91,14 @@ H.test("creatures: mutations tint, swap materials and add particles", function()
 			H.eq(model.PrimaryPart.Material, roblox.Enum.Material.Foil, "gold is foil")
 		elseif m.id == "Rainbow" then
 			H.eq(model.PrimaryPart:GetAttribute("Mutation"), "Rainbow", "rainbow body cycles on the client")
+		elseif m.id == "Celestial" then
+			H.ok(model.PrimaryPart.Color ~= plain.PrimaryPart.Color, "celestial tints the body")
+			H.ok(model.PrimaryPart.Reflectance > 0, "celestial body has a sheen")
+			for _, petal in find(model, "Petal") do
+				H.eq(petal.Material, roblox.Enum.Material.Neon, "celestial petals glow")
+			end
+			H.eq(#find(model, "HaloOrb"), 6, "celestial halo even on a Common")
+			H.eq(find(model, "MutationSparkles")[1].LightEmission, 1, "celestial stars glow")
 		else
 			H.ok(model.PrimaryPart.Color ~= plain.PrimaryPart.Color, m.id .. " tints the body")
 		end
