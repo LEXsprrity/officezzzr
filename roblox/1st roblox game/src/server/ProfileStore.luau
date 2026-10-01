@@ -12,6 +12,10 @@ ProfileStore.__index = ProfileStore
 -- v2 adds the seed bag and Robux receipt history; v1 saves load with both empty.
 ProfileStore.VERSION = 2
 
+-- Potions were removed from the game. Saves of any version may still hold potion timers
+-- (`potions`, ignored) and potion items, which are dropped from the inventory on load.
+local RETIRED_ITEMS = { PotionSpeed = true, PotionMoney = true, PotionLuck = true }
+
 export type Plant = {
 	slot: number,
 	zone: number,
@@ -29,7 +33,6 @@ export type Profile = {
 	plants: { Plant },
 	index: { [string]: boolean }, -- "zone:rarity" and "zone:Mutation" keys
 	items: { [string]: number },
-	potions: { [string]: number }, -- stat -> expiry (unix seconds)
 	seedBag: { [string]: number }, -- seeds from packs, "zone:rarity[:Mutation]" -> count
 	receipts: { string }, -- last Config.RECEIPT_HISTORY processed Robux PurchaseIds
 	reachedEnd: boolean,
@@ -50,7 +53,6 @@ function ProfileStore.defaultProfile(): Profile
 		plants = {},
 		index = {},
 		items = items,
-		potions = {},
 		seedBag = {},
 		receipts = {},
 		reachedEnd = false,
@@ -92,7 +94,6 @@ function ProfileStore.serialize(p: Profile): { [string]: any }
 		plants = plants,
 		index = index,
 		items = table.clone(p.items),
-		potions = table.clone(p.potions),
 		bag = table.clone(p.seedBag),
 		receipts = table.clone(p.receipts),
 		reachedEnd = p.reachedEnd,
@@ -139,18 +140,12 @@ function ProfileStore.deserialize(data: any): Profile
 	end
 	if type(data.items) == "table" then
 		for id, n in data.items do
-			if type(id) == "string" and type(n) == "number" then
+			if type(id) == "string" and type(n) == "number" and not RETIRED_ITEMS[id] then
 				p.items[id] = math.max(0, math.floor(n))
 			end
 		end
 	end
-	if type(data.potions) == "table" then
-		for stat, expiry in data.potions do
-			if type(stat) == "string" and type(expiry) == "number" then
-				p.potions[stat] = expiry
-			end
-		end
-	end
+	-- data.potions (timers of the removed potions) is deliberately ignored.
 	-- v2 fields (absent in v1 saves, which keep the empty defaults)
 	if type(data.bag) == "table" then
 		local keys = {}

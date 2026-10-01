@@ -160,7 +160,7 @@ Config.RARITIES = {
 	{ id = "Legendary", color = Color3.fromRGB(255, 190, 30), income = 15, weight = 8, spawn = 1 },
 } :: { Rarity }
 
--- Deeper zones and luck (night, potions) tilt the odds toward the rare end.
+-- Deeper zones and luck (night, featured packs) tilt the odds toward the rare end.
 Config.ZONE_RARITY_BONUS = 0.1
 
 function Config.rarityWeights(k: number, luck: number): { number }
@@ -318,16 +318,6 @@ Config.BAT_RANGE = 14
 Config.BAT_STUN = 2
 Config.BAT_COOLDOWN = 4
 
--- Potions (P3)
-export type Potion = { stat: string, mult: number, seconds: number, label: string, icon: string }
-Config.POTIONS = {
-	PotionSpeed = { stat = "Speed", mult = 2, seconds = 300, label = "Speed Potion", icon = "⚡" },
-	PotionMoney = { stat = "Money", mult = 2, seconds = 300, label = "Money Potion", icon = "💰" },
-	PotionLuck = { stat = "Luck", mult = 2, seconds = 300, label = "Luck Potion", icon = "🍀" },
-} :: { [string]: Potion }
-Config.POTION_MIN_PRICE = 5e3
-Config.POTION_INCOME_SECONDS = 90 -- a potion costs this many seconds of your income
-
 -- Gamepass stubs: set real ids to enable. 0 = not configured.
 export type Gamepass = { id: number, label: string }
 Config.GAMEPASSES = {
@@ -337,32 +327,46 @@ Config.GAMEPASSES = {
 Config.PASS_EXTRA_SLOTS = 10 -- the ExtraSlots pass adds this many slots
 
 ----------------------------------------------------------------------------------------------------
--- Seed packs: our "eggs with odds". Bought with money, each rolls one seed into the player's seed
--- bag, which they plant from the Seeds menu at their pad. Logic lives in Shared/SeedPacks.
+-- Seed packs: our "eggs with odds". Robux only: every pack is a developer product, never in-game
+-- money. Each pack rolls one seed into the player's seed bag, which they plant from the Seeds menu at
+-- their pad. Rolls live in Shared/SeedPacks, purchase rules in Server/Shop.
 ----------------------------------------------------------------------------------------------------
-Config.PACK_INCOME_SECONDS = 240 -- a zone-k pack costs this many seconds of a Common zone-k plant's income
-Config.PACK_LUCK = 1 -- packs roll rarities like a daytime pod in their zone...
+Config.PACK_LUCK = 1 -- zone packs roll rarities like a daytime pod in their zone...
 Config.PACK_MUTATION_MULT = 1 -- ...with the same Gold/Rainbow chances (Night never rolls from packs)
-Config.PACK_COOLDOWN = 0.6 -- seconds between pack purchases per player
-Config.SEED_BAG_MAX = 50 -- buying packs with money stops at this many bagged seeds
-Config.SEED_BAG_HARD_MAX = 250 -- Robux grants may go past SEED_BAG_MAX; saves are clamped here
+Config.SEED_BAG_MAX = 50 -- soft cap: the Shop won't *prompt* a pack purchase once the bag holds this many
+Config.SEED_BAG_HARD_MAX = 250 -- paid grants may go past SEED_BAG_MAX up to here; saves are clamped here
+-- A paid pack whose seed can't fit (bag at SEED_BAG_HARD_MAX) pays this many seconds of the player's
+-- income instead (at least this many seconds of a Common plant from the pack's zone), so a paid
+-- purchase is never lost.
+Config.PACK_FULL_BAG_INCOME_SECONDS = 300
 Config.RECEIPT_HISTORY = 100 -- processed Robux PurchaseIds kept per profile, so a grant never repeats
 
 -- The featured pack rotates on a clock every server shares (os.time), so all servers agree.
 Config.FEATURED_ROTATION_SECONDS = 3 * 3600
 Config.FEATURED_SEED = 7331 -- salts the rotation order
-Config.FEATURED_PRICE_MULT = 1.5
 Config.FEATURED_LUCK = 2 -- rolls like a night pod
 Config.FEATURED_MUTATION_MULT = 2
 Config.FEATURED_EXCLUSIVE = "Celestial"
 Config.FEATURED_EXCLUSIVE_CHANCE = 0.005
+Config.FEATURED_PROMPT_GRACE = 600 -- a receipt this soon after Buy opens the pack shown at the click
 
--- Robux bundles of featured packs. Stubs: set real developer product ids to enable. 0 = not configured.
-export type DevProduct = { id: number, label: string, packs: number }
+-- Developer products: one per zone pack, plus 1/3/10 featured-pack bundles. Create each one on the
+-- Creator Dashboard and paste its id here; id = 0 means "not set up yet" (the Shop says "coming soon").
+-- `robux` is only the placeholder shown while the real price can't be fetched: the real price is set
+-- on the Dashboard and read with MarketplaceService:GetProductInfo. `zone` is the zone pack's zone
+-- index; nil means featured packs (whichever pack is featured when the receipt is granted).
+export type DevProduct = { id: number, label: string, robux: number, packs: number, zone: number? }
 Config.DEVELOPER_PRODUCTS = {
-	PackBundle1 = { id = 0, label = "1 Featured Pack", packs = 1 },
-	PackBundle3 = { id = 0, label = "3 Featured Packs", packs = 3 },
-	PackBundle10 = { id = 0, label = "10 Featured Packs", packs = 10 },
+	PackMeadow = { id = 0, label = "Sproutling Pack", robux = 25, packs = 1, zone = 1 },
+	PackDesert = { id = 0, label = "Cactopod Pack", robux = 30, packs = 1, zone = 2 },
+	PackJungle = { id = 0, label = "Fernosaur Pack", robux = 35, packs = 1, zone = 3 },
+	PackLava = { id = 0, label = "Magmabloom Pack", robux = 45, packs = 1, zone = 4 },
+	PackSnow = { id = 0, label = "Frostbulb Pack", robux = 55, packs = 1, zone = 5 },
+	PackSpace = { id = 0, label = "Starpetal Pack", robux = 65, packs = 1, zone = 6 },
+	PackSpirit = { id = 0, label = "Lotus Wyrm Pack", robux = 75, packs = 1, zone = 7 },
+	PackBundle1 = { id = 0, label = "1 Featured Pack", robux = 80, packs = 1 },
+	PackBundle3 = { id = 0, label = "3 Featured Packs", robux = 200, packs = 3 },
+	PackBundle10 = { id = 0, label = "10 Featured Packs", robux = 600, packs = 10 },
 } :: { [string]: DevProduct }
 
 -- What the shop needs to know about a player (profile or client stats snapshot).
@@ -372,7 +376,6 @@ export type ShopView = {
 	speedMultTier: number,
 	treadmillTier: number,
 	slots: number,
-	income: number?,
 }
 
 -- Returns price and a short label, or nil if the item is sold out / unknown.
@@ -402,9 +405,6 @@ function Config.priceOf(itemId: string, v: ShopView): (number?, string?)
 		return math.floor(Config.SLOT_BASE_PRICE * Config.SLOT_PRICE_GROWTH ^ (v.slots - Config.SLOTS_START)), "+1 Plant Slot"
 	elseif itemId == "SleepDust" then
 		return Config.SLEEP_DUST_PRICE, "Sleep Dust"
-	elseif Config.POTIONS[itemId] then
-		local income = v.income or 0
-		return math.max(Config.POTION_MIN_PRICE, math.floor(income * Config.POTION_INCOME_SECONDS)), Config.POTIONS[itemId].label
 	end
 	return nil, nil
 end
