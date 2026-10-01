@@ -128,10 +128,11 @@ end
 -- Guards (soft gates)
 ----------------------------------------------------------------------------------------------------
 -- The guard runs exactly as fast as a player at the zone's recommended Speed, so that player escapes on
--- the head start alone: the wake-up delay (plus the ~24 studs between pods and guard). It also absorbs
--- the thief's reaction time and network lag (the server sees the runner late).
+-- the head start alone: the ~28 studs between the pods and the sleeping guard (GUARD_HOME_OFFSET), plus
+-- GUARD_WAKE_DELAY. Every second of delay also lets slower players escape (at 0.1 s the Desert opens at
+-- 50% of its recommended Speed instead of 57%), so it is 0: the gate is meaningful in Speed terms.
 Config.GUARD_SPEED_FACTOR = 1 -- chase WalkSpeed = walkSpeedFor(zone.req) * this
-Config.GUARD_WAKE_DELAY = 1.25 -- seconds between a steal and the chase (the "❗" state)
+Config.GUARD_WAKE_DELAY = 0 -- seconds between a steal and the chase (the "❗" state)
 Config.GUARD_RETURN_FACTOR = 0.6 -- walking home is slower than chasing
 Config.CATCH_DISTANCE = 6 -- horizontal studs, root to root
 Config.CHASE_TIMEOUT = 45

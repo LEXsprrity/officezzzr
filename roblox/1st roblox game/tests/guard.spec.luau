@@ -1,4 +1,4 @@
--- Soft gates: the guard waits GUARD_WAKE_DELAY, then chases at walkSpeedFor(zone.req) * GUARD_SPEED_FACTOR (1)
+-- Soft gates: the guard wakes after GUARD_WAKE_DELAY (0), then chases at walkSpeedFor(zone.req) * GUARD_SPEED_FACTOR (1)
 -- and catches within CATCH_DISTANCE.
 local H = require("./harness")
 local Vector3 = H.Vector3
@@ -15,24 +15,17 @@ local function awakeBrain(k: number, home: any): any
 	return brain
 end
 
--- WalkSpeed(stat) = w  =>  stat = 10^((w - 16) / a) - 1
-local function statFor(walk: number): number
-	return 10 ^ ((walk - Config.BASE_WALKSPEED) / Config.WALKSPEED_LOG_SCALE) - 1
-end
-
 type SimOpts = {
-	headStart: number?, -- thief stands this many studs further toward the guard
 	standStill: boolean?,
 	dust: boolean?,
 	walk: number?, -- raw WalkSpeed instead of walkSpeedFor(speedStat)
-	reaction: number?, -- seconds the thief stands still after the steal before running
 	wakeDelay: number?, -- override the guard's wake-up delay
 }
 
 -- Simulates one steal: the thief grabs a pod and runs straight back toward base at the WalkSpeed
 -- of `speedStat`; the guard's MoveTo is integrated at its WalkSpeed. Returns outcome, time and the
--- thief's final X.
-local function simulate(k: number, speedStat: number, opts: SimOpts?): (string, number, number)
+-- thief's final X and the closest the guard got while the thief was in the corridor.
+local function simulate(k: number, speedStat: number, opts: SimOpts?): (string, number, number, number)
 	local o: SimOpts = opts or {}
 	local nestX = Config.nestX(k)
 	local home = Vector3.new(nestX + Config.GUARD_HOME_OFFSET, 0, 0)
@@ -41,10 +34,10 @@ local function simulate(k: number, speedStat: number, opts: SimOpts?): (string, 
 		brain.wakeDelay = o.wakeDelay
 	end
 	local guardPos = home
-	-- The pod closest to the guard (worst case), optionally with the thief standing further toward it.
+	-- The pod closest to the guard (worst case).
 	local a = math.pi / 2 + 0.5 * math.pi / Config.PODS_PER_NEST
 	local pod = Vector3.new(nestX + math.cos(a) * 8, 0, math.sin(a) * 8)
-	local playerPos = pod + Vector3.new(o.headStart or 0, 0, 0)
+	local playerPos = pod
 	local walk = o.walk or Config.walkSpeedFor(speedStat)
 
 	local t = 1000
@@ -53,21 +46,26 @@ local function simulate(k: number, speedStat: number, opts: SimOpts?): (string, 
 	end
 	GuardBrain.alert(brain, t)
 	local chased = false
+	local closest = math.huge
 	while t < 1000 + 180 do
-		local running = not o.standStill and t - 1000 >= (o.reaction or 0)
+		local running = not o.standStill
 		if running and playerPos.X >= Config.CORRIDOR_START_X then
 			playerPos -= Vector3.new(walk * DT, 0, 0)
 		end
 		local safe = playerPos.X < Config.CORRIDOR_START_X
+		if not safe then
+			local gap = playerPos - guardPos
+			closest = math.min(closest, Vector3.new(gap.X, 0, gap.Z).Magnitude)
+		end
 		local cmd = GuardBrain.step(brain, t, guardPos, { { id = "thief", pos = playerPos, safe = safe } })
 		if cmd.caughtId then
-			return "caught", t - 1000, playerPos.X
+			return "caught", t - 1000, playerPos.X, closest
 		end
 		if brain.state == "Chasing" then
 			chased = true
 		end
 		if chased and (brain.state == "Returning" or brain.state == "Sleeping") then
-			return "escaped", t - 1000, playerPos.X
+			return "escaped", t - 1000, playerPos.X, closest
 		end
 		if cmd.moveTo then
 			local delta = cmd.moveTo - guardPos
@@ -77,16 +75,16 @@ local function simulate(k: number, speedStat: number, opts: SimOpts?): (string, 
 		end
 		t += DT
 	end
-	return "timeout", t - 1000, playerPos.X
+	return "timeout", t - 1000, playerPos.X, closest
 end
 
--- Lowest WalkSpeed (as a fraction of the zone's recommended WalkSpeed) that still escapes.
-local function escapeFraction(k: number): number
-	local rec = Config.walkSpeedFor(Config.ZONES[k].req)
-	local lo, hi = 0.3, 1.0
+-- Lowest Speed stat (as a share of the zone's recommended Speed) that still escapes, by bisection.
+local function escapeShare(k: number): number
+	local req = Config.ZONES[k].req
+	local lo, hi = 0, 1
 	for _ = 1, 30 do
 		local mid = (lo + hi) / 2
-		if simulate(k, 0, { walk = rec * mid }) == "escaped" then
+		if simulate(k, req * mid) == "escaped" then
 			hi = mid
 		else
 			lo = mid
@@ -103,16 +101,26 @@ H.test("guard: chase speed is walkSpeedFor(req) * 1.0 for every zone", function(
 	end
 end)
 
-H.test("guard: wakes GUARD_WAKE_DELAY after a seed is taken, standing still until then", function()
-	H.ok(Config.GUARD_WAKE_DELAY > 0, "there is a head start")
+H.test("guard: wakes the moment a seed is taken (GUARD_WAKE_DELAY = 0)", function()
+	H.eq(Config.GUARD_WAKE_DELAY, 0)
 	local brain = GuardBrain.new(2, Vector3.new(0, 0, 0))
 	GuardBrain.alert(brain, 10)
 	local target = { { id = 1, pos = Vector3.new(-40, 0, 0), safe = false } }
-	local cmd = GuardBrain.step(brain, 10 + Config.GUARD_WAKE_DELAY - 0.05, Vector3.new(0, 0, 0), target)
+	local cmd = GuardBrain.step(brain, 10, Vector3.new(0, 0, 0), target)
+	H.eq(brain.state, "Chasing", "first tick after the steal is a chase")
+	H.ok(cmd.woke, "woke flag")
+end)
+
+H.test("guard: a wake-up delay holds the guard still until it has passed", function()
+	local brain = GuardBrain.new(2, Vector3.new(0, 0, 0))
+	brain.wakeDelay = 0.5
+	GuardBrain.alert(brain, 10)
+	local target = { { id = 1, pos = Vector3.new(-40, 0, 0), safe = false } }
+	local cmd = GuardBrain.step(brain, 10.45, Vector3.new(0, 0, 0), target)
 	H.eq(brain.state, "Waking")
 	H.eq(cmd.walkSpeed, 0)
 	H.eq(cmd.moveTo, nil)
-	cmd = GuardBrain.step(brain, 10 + Config.GUARD_WAKE_DELAY, Vector3.new(0, 0, 0), target)
+	cmd = GuardBrain.step(brain, 10.5, Vector3.new(0, 0, 0), target)
 	H.eq(brain.state, "Chasing")
 	H.ok(cmd.woke, "woke flag")
 	H.ok(cmd.moveTo ~= nil, "moving toward the thief")
@@ -130,20 +138,27 @@ H.test("guard: a faster guard catches a fast runner despite 10 Hz MoveTo samplin
 	end
 end)
 
-H.test("guard: a player AT the recommended speed reaches the base before being caught, in every zone", function()
+H.test("guard: a player AT the recommended speed who runs at once reaches the base with margin, in every zone", function()
 	for k, zone in Config.ZONES do
-		local outcome, _, x = simulate(k, zone.req)
+		local outcome, _, x, closest = simulate(k, zone.req)
 		H.eq(outcome, "escaped", `{zone.id} at req {zone.req}`)
 		H.ok(x < Config.CORRIDOR_START_X, `{zone.id}: reached the base (x = {x})`)
+		-- margin: the guard never got within 20 studs of a catch (~0.2-0.4 s of running)
+		H.ok(closest >= Config.CATCH_DISTANCE + 20, `{zone.id}: guard got within {closest} studs`)
 	end
 end)
 
-H.test("guard: at the recommended speed you escape standing 12 studs toward the guard and reacting 0.5 s late", function()
-	for k, zone in Config.ZONES do
-		local outcome, _, x = simulate(k, zone.req, { headStart = Config.PICKUP_DISTANCE, reaction = 0.5 })
-		H.eq(outcome, "escaped", zone.id)
-		H.ok(x < Config.CORRIDOR_START_X, `{zone.id}: reached the base`)
+H.test("guard: the lowest Speed that escapes is at least 50% of the recommended Speed (zones 2-7)", function()
+	local lines = {}
+	for k = 2, #Config.ZONES do
+		local zone = Config.ZONES[k]
+		local share = escapeShare(k)
+		H.ok(share >= 0.5, `{zone.id}: escapes from {math.floor(share * 100)}% of the recommended Speed`)
+		H.ok(share < 1, `{zone.id}: the recommended Speed itself escapes`)
+		table.insert(lines, string.format("%s: rec %s, escape from Speed %.3g (%.0f%% of rec, WalkSpeed %.1f vs guard %.1f)",
+			zone.id, tostring(zone.req), zone.req * share, 100 * share, Config.walkSpeedFor(zone.req * share), Config.guardChaseSpeed(k)))
 	end
+	print("        escape thresholds  " .. table.concat(lines, "\n                           "))
 end)
 
 H.test("guard: at ~70% of the recommended WalkSpeed you get caught, in every zone", function()
@@ -170,15 +185,6 @@ H.test("guard: a player at the previous zone's recommended speed gets caught (zo
 		local outcome = simulate(k, Config.ZONES[k - 1].req)
 		H.eq(outcome, "caught", Config.ZONES[k].id)
 	end
-	local lines = {}
-	for k = 2, #Config.ZONES do
-		local zone = Config.ZONES[k]
-		local f = escapeFraction(k)
-		local stat = statFor(Config.walkSpeedFor(zone.req) * f)
-		table.insert(lines, string.format("%s: rec %.3g, escape from WalkSpeed %.0f%% of rec = Speed %.3g (%.0f%% of rec)",
-			zone.id, zone.req, 100 * f, stat, 100 * stat / zone.req))
-	end
-	print("        escape thresholds  " .. table.concat(lines, "\n                           "))
 end)
 
 H.test("guard: Meadow (req 0) lets anyone escape", function()
