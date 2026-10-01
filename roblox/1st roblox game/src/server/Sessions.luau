@@ -66,20 +66,22 @@ function Sessions.all(): { [Player]: Session }
 	return byPlayer
 end
 
+-- Speed gain multiplier: the equipped trail.
 function Sessions.speedMult(s: Session): number
-	return Config.SPEED_MULT_TIERS[s.profile.speedMultTier].mult
+	return Config.trailMult(s.profile.equippedTrail)
 end
 
 function Sessions.treadmillMult(s: Session): number
 	return Config.TREADMILL_TIERS[s.profile.treadmillTier].mult
 end
 
+-- Plant income multiplier besides day/night: plot level x the 2x Money pass.
 function Sessions.moneyMult(s: Session): number
-	return if s.passes.DoubleMoney then 2 else 1
+	return Config.moneyMult(s.profile.plotLevel, s.passes.DoubleMoney == true)
 end
 
 function Sessions.maxSlots(s: Session): number
-	return s.profile.slots + (if s.passes.ExtraSlots then Config.PASS_EXTRA_SLOTS else 0)
+	return Config.plotSlots(s.profile.plotLevel) + (if s.passes.ExtraSlots then Config.PASS_EXTRA_SLOTS else 0)
 end
 
 -- Simple per-player request budget for remotes: at most `perSecond` calls in any 1 s window.
@@ -141,8 +143,9 @@ function Sessions.pushFull(s: Session)
 		walkSpeed = s.walkSpeed,
 		income = s.income * Sessions.moneyMult(s),
 		slots = Sessions.maxSlots(s),
-		baseSlots = p.slots,
-		speedMultTier = p.speedMultTier,
+		plotLevel = p.plotLevel,
+		trails = table.clone(p.trails),
+		equippedTrail = p.equippedTrail,
 		treadmillTier = p.treadmillTier,
 		speedMult = Sessions.speedMult(s),
 		treadmillMult = Sessions.treadmillMult(s),

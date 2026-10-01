@@ -20,6 +20,8 @@ export type PlotInfo = {
 	belt: BasePart,
 	soil: Folder,
 	plants: Folder,
+	upgradeBoard: BasePart, -- the "Upgrade Plot" sign at the gate; PlotService adds its prompt and text
+	upgradeLabels: { level: TextLabel, perk: TextLabel, price: TextLabel },
 }
 
 export type NestInfo = {
@@ -340,6 +342,52 @@ local function buildPlot(world: Folder, index: number): PlotInfo
 		end
 	end
 
+	-- "Upgrade Plot" board just outside the gate, beside the path (like an "Upgrade Pen" sign). Small and
+	-- sized in studs, so it reads only up close. PlotService writes the owner's level and price on it and
+	-- owns its prompt.
+	local boardPos = at(-17, -4, 3.4)
+	local boardCF = CFrame.lookAt(boardPos, boardPos + Vector3.new(0, 0, toWalk)) -- front face toward the walkway
+	for _, s in { -1, 1 } do
+		deco(model, "UpgradePost", Vector3.new(0.6, 3.4, 0.6), boardCF * CFrame.new(s * 2.4, -2.3, 0.3), Color3.fromRGB(110, 70, 40), Enum.Material.Wood)
+	end
+	local upgradeBoard = deco(model, "UpgradeBoard", Vector3.new(6, 3.6, 0.4), boardCF, Color3.fromRGB(70, 46, 28), Enum.Material.WoodPlanks)
+	deco(model, "UpgradeBoardTrim", Vector3.new(6.4, 0.4, 0.5), boardCF * CFrame.new(0, 1.9, 0), color, Enum.Material.SmoothPlastic)
+	local boardGui = Instance.new("SurfaceGui")
+	boardGui.Face = Enum.NormalId.Front
+	boardGui.SizingMode = Enum.SurfaceGuiSizingMode.PixelsPerStud
+	boardGui.PixelsPerStud = 50
+	boardGui.LightInfluence = 0
+	boardGui.MaxDistance = 45
+	boardGui.Parent = upgradeBoard
+	local boardList = Instance.new("UIListLayout")
+	boardList.HorizontalAlignment = Enum.HorizontalAlignment.Center
+	boardList.VerticalAlignment = Enum.VerticalAlignment.Center
+	boardList.SortOrder = Enum.SortOrder.LayoutOrder
+	boardList.Parent = boardGui
+	local function boardLine(name: string, text: string, textColor: Color3, height: number, order: number): TextLabel
+		local label = Instance.new("TextLabel")
+		label.Name = name
+		label.BackgroundTransparency = 1
+		label.Size = UDim2.fromScale(0.92, height)
+		label.Font = Enum.Font.FredokaOne
+		label.TextScaled = true
+		label.Text = text
+		label.TextColor3 = textColor
+		label.LayoutOrder = order
+		local stroke = Instance.new("UIStroke")
+		stroke.Thickness = 3
+		stroke.Color = Color3.fromRGB(25, 20, 30)
+		stroke.Parent = label
+		label.Parent = boardGui
+		return label
+	end
+	boardLine("Title", "⬆️ UPGRADE PLOT", Color3.fromRGB(255, 225, 90), 0.3, 1)
+	local upgradeLabels = {
+		level = boardLine("Level", "Level 1 → 2", Color3.new(1, 1, 1), 0.24, 2),
+		perk = boardLine("Perk", "", Color3.fromRGB(200, 240, 255), 0.16, 3),
+		price = boardLine("Price", "", Color3.fromRGB(120, 255, 120), 0.26, 4),
+	}
+
 	local slotCFrames = {}
 	for i = 1, Config.SLOTS_MAX + Config.PASS_EXTRA_SLOTS do
 		local u, w = slotLocal(i)
@@ -364,6 +412,8 @@ local function buildPlot(world: Folder, index: number): PlotInfo
 		belt = belt,
 		soil = soil,
 		plants = plants,
+		upgradeBoard = upgradeBoard,
+		upgradeLabels = upgradeLabels,
 	}
 end
 
@@ -505,8 +555,8 @@ end
 -- "OpensShop" attribute; the HUD opens that menu when the local player triggers it.
 ----------------------------------------------------------------------------------------------------
 local STALLS = {
-	{ opens = "Packs", label = "🎁 SEED PACKS", color = Color3.fromRGB(255, 90, 160), stripe = Color3.fromRGB(255, 235, 245) },
-	{ opens = "Upgrades", label = "⚡ SPEED & UPGRADES", color = Color3.fromRGB(60, 160, 255), stripe = Color3.fromRGB(235, 245, 255) },
+	{ opens = "Shop", label = "🛒 SHOP", color = Color3.fromRGB(255, 90, 160), stripe = Color3.fromRGB(255, 235, 245) },
+	{ opens = "Trails", label = "🏃 TRAIL SHOP", color = Color3.fromRGB(60, 160, 255), stripe = Color3.fromRGB(235, 245, 255) },
 	{ opens = "Index", label = "📖 INDEX", color = Color3.fromRGB(160, 100, 255), stripe = Color3.fromRGB(245, 235, 255) },
 }
 

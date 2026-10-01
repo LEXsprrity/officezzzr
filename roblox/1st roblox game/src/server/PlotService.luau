@@ -11,6 +11,7 @@ local SeedService = require(script.Parent:WaitForChild("SeedService"))
 local WorldBuilder = require(script.Parent:WaitForChild("WorldBuilder"))
 local ProfileStore = require(script.Parent:WaitForChild("ProfileStore"))
 local CreatureModels = require(script.Parent:WaitForChild("CreatureModels"))
+local Shop = require(script.Parent:WaitForChild("Shop"))
 
 local PlotService = {}
 
@@ -236,7 +237,7 @@ local function freeSlotAtPad(player: Player, s: Sessions.Session, state: PlotSta
 			return i
 		end
 	end
-	Net.toast(player, "Your plot is full! Remove a plant or buy more slots.", "red")
+	Net.toast(player, "Your plot is full! Remove a plant or upgrade your plot (sign at your gate).", "red")
 	return nil
 end
 
@@ -343,12 +344,93 @@ function PlotService.removePlant(player: Player, slot: number)
 end
 
 ----------------------------------------------------------------------------------------------------
+-- Plot upgrades (money only): the board at each plot's gate, and the Shop's "PlotUpgrade"
+----------------------------------------------------------------------------------------------------
+local function upgradePrompt(state: PlotState): ProximityPrompt?
+	return state.info.upgradeBoard:FindFirstChildOfClass("ProximityPrompt")
+end
+
+-- Writes the owner's level, perk and price on the board (and the prompt's text).
+local function renderUpgradeSign(state: PlotState)
+	local labels = state.info.upgradeLabels
+	local prompt = upgradePrompt(state)
+	local s = state.owner and Sessions.get(state.owner)
+	if not s then
+		labels.level.Text = "Level 1"
+		labels.perk.Text = "Claim this plot to upgrade it"
+		labels.price.Text = ""
+		return
+	end
+	local level = s.profile.plotLevel
+	local price = Config.priceOf("PlotUpgrade", s.profile)
+	if not price then
+		labels.level.Text = `Level {level} · MAX`
+		labels.perk.Text = `{Config.plotSlots(level)} slots · cash x{Config.plotMoneyMult(level)}`
+		labels.price.Text = "Fully upgraded!"
+		if prompt then
+			prompt.ActionText = "Maxed"
+			prompt.ObjectText = `Plot Level {level}`
+		end
+		return
+	end
+	labels.level.Text = `Level {level} → {level + 1}`
+	labels.perk.Text = `+1 slot · cash x{Config.plotMoneyMult(level)} → x{Config.plotMoneyMult(level + 1)}`
+	labels.price.Text = Format.money(price)
+	if prompt then
+		prompt.ActionText = `Upgrade · {Format.money(price)}`
+		prompt.ObjectText = `Plot Level {level} → {level + 1}`
+	end
+end
+
+-- Buys the next plot level for money (from the board's prompt or the Shop). The ExtraSlots pass stacks
+-- on top of the level's slots.
+function PlotService.upgrade(player: Player)
+	local s = Sessions.get(player)
+	local state = plotOf(player)
+	if not s or not state then
+		return
+	end
+	local ok, msg = Shop.buy(s.profile, "PlotUpgrade")
+	if not ok then
+		Net.toast(player, if msg == "Maxed" then "Your plot is fully upgraded!" else msg, "red")
+		return
+	end
+	PlotService.refreshSlots(s)
+	renderUpgradeSign(state)
+	Sessions.pushFull(s)
+	local level = s.profile.plotLevel
+	Net.LootEvent:FireClient(player, "Bought", {
+		itemId = "PlotUpgrade",
+		label = `{msg}: {Config.plotSlots(level)} slots, cash x{Config.plotMoneyMult(level)}`,
+	})
+end
+
+----------------------------------------------------------------------------------------------------
 -- Assignment
 ----------------------------------------------------------------------------------------------------
 function PlotService.init(infos: { WorldBuilder.PlotInfo })
 	for i, info in infos do
 		local state: PlotState = { info = info, owner = nil, models = {}, scales = {} }
 		plots[i] = state
+		-- Owner-only "Upgrade" prompt on the gate's board (the client hides other players' prompts).
+		local upgrade = Instance.new("ProximityPrompt")
+		upgrade.ActionText = "Upgrade"
+		upgrade.ObjectText = "Plot"
+		upgrade.HoldDuration = 0.3
+		upgrade.MaxActivationDistance = 9
+		upgrade.RequiresLineOfSight = false
+		upgrade.KeyboardKeyCode = Enum.KeyCode.E
+		upgrade:SetAttribute("OwnerUserId", 0)
+		upgrade.Parent = info.upgradeBoard
+		upgrade.Triggered:Connect(function(player: Player)
+			local char = player.Character
+			local root = char and char:FindFirstChild("HumanoidRootPart") :: BasePart?
+			if state.owner == player and root and (root.Position - info.upgradeBoard.Position).Magnitude <= 14 then
+				PlotService.upgrade(player)
+			end
+		end)
+		renderUpgradeSign(state)
+
 		local prompt = Instance.new("ProximityPrompt")
 		prompt.ActionText = "Plant Seed"
 		prompt.ObjectText = "Your plot"
@@ -375,6 +457,11 @@ function PlotService.assign(s: Sessions.Session): WorldBuilder.PlotInfo?
 			if padPrompt then
 				padPrompt:SetAttribute("OwnerUserId", s.player.UserId)
 			end
+			local boardPrompt = upgradePrompt(state)
+			if boardPrompt then
+				boardPrompt:SetAttribute("OwnerUserId", s.player.UserId)
+			end
+			renderUpgradeSign(state)
 			state.info.model:SetAttribute("OwnerUserId", s.player.UserId)
 			renderSoil(state, Sessions.maxSlots(s))
 			local now = os.time()
@@ -405,9 +492,14 @@ function PlotService.release(player: Player)
 	if padPrompt then
 		padPrompt:SetAttribute("OwnerUserId", 0)
 	end
+	local boardPrompt = upgradePrompt(state)
+	if boardPrompt then
+		boardPrompt:SetAttribute("OwnerUserId", 0)
+	end
+	renderUpgradeSign(state)
 end
 
--- After buying slots or a slots gamepass.
+-- After a plot upgrade or the slots gamepass.
 function PlotService.refreshSlots(s: Sessions.Session)
 	local state = plotOf(s.player)
 	if state then
@@ -417,7 +509,7 @@ function PlotService.refreshSlots(s: Sessions.Session)
 end
 
 -- Offline earnings (capped): income of the plants as they are now, with the day/night multiplier
--- averaged over a cycle, times time away.
+-- averaged over a cycle and the plot level / 2x Money multiplier, times time away.
 function PlotService.grantOffline(s: Sessions.Session): number
 	local last = s.profile.lastSeen
 	if last <= 0 then
@@ -425,7 +517,7 @@ function PlotService.grantOffline(s: Sessions.Session): number
 	end
 	local now = os.time()
 	local away = math.clamp(now - last, 0, Config.OFFLINE_CAP_SECONDS)
-	local amount = PlotService.offlineIncomeOf(s.profile, now) * away * (if s.passes.DoubleMoney then 2 else 1)
+	local amount = PlotService.offlineIncomeOf(s.profile, now) * away * Sessions.moneyMult(s)
 	if amount > 0 then
 		s.profile.money += amount
 		Net.LootEvent:FireClient(s.player, "Offline", { amount = amount, seconds = away })
