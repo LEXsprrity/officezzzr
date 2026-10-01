@@ -133,7 +133,7 @@ Each planted seed grows into its zone's creature (`CreatureModels`). The creatur
 | `src/server/Main.server.luau` | `ServerScriptService.Server` | Bootstrap: collision groups, world, services, join/leave, autosave, BindToClose |
 | `src/server/Net.luau` | 〃 | Creates the fixed remotes |
 | `src/server/Sessions.luau` | 〃 | Per-player runtime state, multipliers, StatsUpdate + leaderstats |
-| `src/server/WorldBuilder.luau` | 〃 | Builds the map from primitives: base, 5 plots + treadmills, zone arches + signs, nests, the End |
+| `src/server/WorldBuilder.luau` | 〃 | Builds the map from primitives: base, 5 plots + treadmills, the shop plaza (walk-up stalls for Seed Packs, Speed & Upgrades, Index), zone arches + signs, nests, the End |
 | `src/server/ZoneThemes.luau` | 〃 | Per-zone floor, walls, props and particle ambience for the 7 zones |
 | `src/server/Props.luau` | 〃 | Primitive kit (blocks, ellipsoids, overlays, lights, emitters) and reusable props |
 | `src/server/SpeedLogic.luau` | 〃 | *Pure*: per-tick gain, cap, treadmill, sanity check |

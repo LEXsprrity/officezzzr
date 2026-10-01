@@ -139,3 +139,17 @@ H.test("world: every zone has an entry sign with its name and recommended Speed"
 		H.ok(emitters >= 2, `{zone.id} has particle ambience ({emitters})`)
 	end
 end)
+
+H.test("world: shop plaza has a walk-up stall for packs, upgrades and the index", function()
+	local plaza = world:FindFirstChild("ShopPlaza")
+	H.ok(plaza ~= nil, "ShopPlaza model")
+	local opens = {}
+	for _, d in plaza:GetDescendants() do
+		if d:IsA("ProximityPrompt") then
+			opens[d:GetAttribute("OpensShop")] = true
+		end
+	end
+	for _, id in { "Packs", "Upgrades", "Index" } do
+		H.ok(opens[id], `stall opens {id}`)
+	end
+end)

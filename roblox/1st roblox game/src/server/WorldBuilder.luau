@@ -501,6 +501,72 @@ local function buildCorridor(world: Folder): { NestInfo }
 end
 
 ----------------------------------------------------------------------------------------------------
+-- Shop plaza: walk-up stalls in the spot after the last plot. Each stall's prompt carries an
+-- "OpensShop" attribute; the HUD opens that menu when the local player triggers it.
+----------------------------------------------------------------------------------------------------
+local STALLS = {
+	{ opens = "Packs", label = "🎁 SEED PACKS", color = Color3.fromRGB(255, 90, 160), stripe = Color3.fromRGB(255, 235, 245) },
+	{ opens = "Upgrades", label = "⚡ SPEED & UPGRADES", color = Color3.fromRGB(60, 160, 255), stripe = Color3.fromRGB(235, 245, 255) },
+	{ opens = "Index", label = "📖 INDEX", color = Color3.fromRGB(160, 100, 255), stripe = Color3.fromRGB(245, 235, 255) },
+}
+
+local function buildShops(world: Folder)
+	local spot = Config.MAX_PLAYERS + 1 -- laid out like one more plot
+	local col = (spot - 1) // 2
+	local side = if spot % 2 == 1 then 1 else -1
+	local center = Vector3.new(Config.PLOT_FIRST_X - col * Config.PLOT_SPACING_X, GROUND, side * Config.PLOT_OFFSET_Z)
+	local front = center + Vector3.new(0, 0, -side * Config.PLOT_SIZE / 2)
+	local function at(u: number, w: number, y: number): Vector3
+		return front + Vector3.new(u, y, side * w)
+	end
+
+	local model = Instance.new("Model")
+	model.Name = "ShopPlaza"
+	model.Parent = world
+	flat(model, "Plaza", Config.PLOT_SIZE, Config.PLOT_SIZE, center, STONE, Enum.Material.Pebble, nil, 0.3)
+	flat(model, "PlazaPath", 14, math.abs(front.Z) - 19, Vector3.new(center.X, GROUND, side * (19 + (math.abs(front.Z) - 19) / 2)), STONE, Enum.Material.Pebble, nil, 0.3)
+
+	local spacing = 26
+	for i, stall in STALLS do
+		local u = (i - (#STALLS + 1) / 2) * spacing
+		local w0 = 18 -- counter's distance in from the plaza's front edge
+		local counter = box(model, "Counter", Vector3.new(16, 4, 3), CFrame.new(at(u, w0, 2)), stall.color, Enum.Material.WoodPlanks)
+		deco(model, "CounterTop", Vector3.new(17, 0.6, 4), CFrame.new(at(u, w0, 4.3)), Color3.fromRGB(250, 245, 235), Enum.Material.SmoothPlastic)
+		box(model, "Back", Vector3.new(16, 12, 1), CFrame.new(at(u, w0 + 8, 6)), stall.color, Enum.Material.WoodPlanks)
+		for _, du in { -7.5, 7.5 } do
+			for _, dw in { -1, 8 } do
+				box(model, "Post", Vector3.new(1, 12, 1), CFrame.new(at(u + du, w0 + dw, 6)), Color3.fromRGB(110, 70, 40), Enum.Material.Wood)
+			end
+		end
+		-- Striped awning sloping down toward the walkway
+		local tilt = CFrame.Angles(math.rad(-side * 14), 0, 0)
+		for s = 0, 7 do
+			deco(model, "Awning", Vector3.new(2.25, 0.5, 12), CFrame.new(at(u - 7.875 + s * 2.25, w0 + 2.5, 12.5)) * tilt,
+				if s % 2 == 0 then stall.color else stall.stripe, Enum.Material.Fabric)
+		end
+		local signPart = deco(model, "StallSign", Vector3.new(1, 1, 1), CFrame.new(at(u, w0, 17)), stall.color)
+		signPart.Transparency = 1
+		billboard(signPart, stall.label, UDim2.fromScale(15, 3), Vector3.zero, 90)
+
+		local prompt = Instance.new("ProximityPrompt")
+		prompt.ActionText = "Open"
+		prompt.ObjectText = stall.label
+		prompt.KeyboardKeyCode = Enum.KeyCode.E
+		prompt.HoldDuration = 0
+		prompt.MaxActivationDistance = 12
+		prompt.RequiresLineOfSight = false
+		prompt:SetAttribute("OpensShop", stall.opens)
+		prompt.Parent = counter
+
+		Props.lamp(model, at(u + spacing / 2, 4, 0), Color3.fromRGB(255, 225, 150))
+	end
+	for _, s in { -1, 1 } do
+		Props.flower(model, at(s * 36, 6, 0), FLOWER_COLORS[(s + 2) % #FLOWER_COLORS + 1], 1.6)
+		Props.bush(model, at(s * 38, 30, 0), 5, Color3.fromRGB(60, 170, 70))
+	end
+end
+
+----------------------------------------------------------------------------------------------------
 
 function WorldBuilder.build(): ({ PlotInfo }, { NestInfo })
 	local world = Instance.new("Folder")
@@ -510,6 +576,7 @@ function WorldBuilder.build(): ({ PlotInfo }, { NestInfo })
 	for i = 1, Config.MAX_PLAYERS do
 		plots[i] = buildPlot(world, i)
 	end
+	buildShops(world)
 	local nests = buildCorridor(world)
 	world.Parent = workspace
 	return plots, nests

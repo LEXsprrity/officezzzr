@@ -495,6 +495,22 @@ openModal = function(name: string)
 	renderModal()
 end
 
+-- Walk-up stalls in the base's shop plaza: their prompts say which menu to open ("Packs",
+-- "Upgrades" or "Index"). Always opens (never toggles shut), on the right Shop tab.
+game:GetService("ProximityPromptService").PromptTriggered:Connect(function(prompt: ProximityPrompt)
+	local opens = prompt:GetAttribute("OpensShop")
+	if opens == "Packs" or opens == "Upgrades" then
+		shopTab = opens
+		if modalName == "Shop" then
+			renderModal()
+		else
+			openModal("Shop")
+		end
+	elseif opens == "Index" and modalName ~= "Index" then
+		openModal("Index")
+	end
+end)
+
 local function clearModal(): UIGridLayout
 	modalBody:ClearAllChildren()
 	return new("UIGridLayout", { CellSize = UDim2.fromOffset(160, 150), CellPadding = UDim2.fromOffset(10, 10), SortOrder = Enum.SortOrder.LayoutOrder, Parent = modalBody })
