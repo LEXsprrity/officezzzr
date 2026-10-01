@@ -75,21 +75,17 @@ local function onBuy(player: Player, itemId: any)
 		return
 	end
 
-	-- Seed packs are Robux only: "Product:<name>", or "Product:<name>:<slot>" for featured packs (the
-	-- featured slot the menu showed). We only open the Robux prompt here; ProcessReceipt grants.
+	-- Seed packs are Robux only: "Product:<name>". We only open the Robux prompt here; ProcessReceipt
+	-- grants.
 	if string.sub(itemId, 1, 8) == "Product:" then
-		local name, slotText = string.match(itemId, "^Product:(%a%w*):?(%d*)$")
+		local name = string.match(itemId, "^Product:(%a%w*)$")
 		if not name then
 			return
 		end
-		local now = os.time()
-		local product, why = Shop.canPrompt(s.profile, name, now, tonumber(slotText))
+		local product, why = Shop.canPrompt(s.profile, name)
 		if not product then
 			Net.toast(player, why or "Unknown pack", "red")
 			return
-		end
-		if product.zone == nil then
-			s.featuredPrompt = { slot = SeedPacks.featuredSlot(now), at = now }
 		end
 		MarketplaceService:PromptProductPurchase(player, product.id)
 		return
@@ -150,7 +146,7 @@ local function onUse(player: Player, itemId: any)
 end
 
 ----------------------------------------------------------------------------------------------------
--- Robux: developer products (zone packs and featured pack bundles)
+-- Robux: developer products (the two premium seed packs)
 ----------------------------------------------------------------------------------------------------
 -- Pending receipts are delivered as the player joins, often before their profile has loaded.
 local function waitForSession(userId: number, seconds: number): Sessions.Session?
@@ -170,30 +166,26 @@ local function waitForSession(userId: number, seconds: number): Sessions.Session
 end
 
 -- Grant once per PurchaseId (the id is stored in the profile), save, and only then confirm.
--- Anything else returns NotProcessedYet and Roblox delivers the receipt again later. A receipt is
--- granted even for a zone pack the player hasn't unlocked: only the prompt is Speed-gated.
+-- Anything else returns NotProcessedYet and Roblox delivers the receipt again later. A receipt that
+-- arrives is always granted (even past the bag's soft cap): the player paid.
 local function processReceipt(receiptInfo: { [string]: any }): Enum.ProductPurchaseDecision
 	local name = SeedPacks.productById(receiptInfo.ProductId)
 	if not name then
 		warn(`[ShopService] receipt for unknown developer product {receiptInfo.ProductId}`)
 	end
 	local s = waitForSession(receiptInfo.PlayerId, 15)
-	local now = os.time()
-	local prompt = if s then s.featuredPrompt else nil
-	local slot = SeedPacks.receiptSlot(if prompt then prompt.slot else nil, if prompt then prompt.at else nil, now)
-	local income = if s then PlotService.incomeOf(s.profile, now) * Sessions.moneyMult(s) else 0
-	local confirm, status, grant = Shop.processReceipt(if s then s.profile else nil, name, tostring(receiptInfo.PurchaseId), slot, income, roll01, function()
+	local income = if s then PlotService.incomeOf(s.profile, os.time()) * Sessions.moneyMult(s) else 0
+	local confirm, status, grant = Shop.processReceipt(if s then s.profile else nil, name, tostring(receiptInfo.PurchaseId), income, roll01, function()
 		local save = ShopService.save
 		return s ~= nil and save ~= nil and save(s)
 	end)
 	if s and status == "granted" and grant and s.player.Parent then
 		local pack = grant.pack
 		Sessions.pushFull(s)
-		if #grant.rolls > 0 then
-			Net.LootEvent:FireClient(s.player, "PackRoll", { packId = pack.id, name = pack.name, zone = pack.zone, featured = pack.featured, results = grant.rolls })
-		end
-		if grant.compensated > 0 then
-			Net.toast(s.player, `🎒 Your seed bag is full, so {grant.compensated} {pack.name}{if grant.compensated > 1 then "s" else ""} paid {Format.money(grant.compensation)} instead.`, "gold")
+		if grant.roll then
+			Net.LootEvent:FireClient(s.player, "PackRoll", { packId = pack.id, name = pack.name, zone = pack.zone, result = grant.roll })
+		else
+			Net.toast(s.player, `🎒 Your seed bag is full, so your {pack.name} paid {Format.money(grant.compensation)} instead.`, "gold")
 		end
 	end
 	return if confirm then Enum.ProductPurchaseDecision.PurchaseGranted else Enum.ProductPurchaseDecision.NotProcessedYet

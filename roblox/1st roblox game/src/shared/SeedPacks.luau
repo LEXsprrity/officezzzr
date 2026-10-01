@@ -1,22 +1,19 @@
 --!strict
--- Seed packs ("eggs with odds"): the visible odds table, rolls, the server-wide featured rotation,
--- the developer products that sell packs (Robux only) and the seed-bag key format. Pure and shared,
--- so the Shop UI shows exactly the odds the server rolls with, and the featured countdown needs no
--- remote.
+-- Seed packs ("eggs with odds"): the two premium packs, their visible odds table, rolls, the
+-- developer products that sell them (Robux only) and the seed-bag key format. Pure and shared, so the
+-- Shop UI shows exactly the odds the server rolls with.
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Config = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("Config"))
 
 local SeedPacks = {}
 
 export type Pack = {
-	id: string, -- reveal id: "Pack:<zoneId>" or "Pack:Featured:<slot>"
+	id: string, -- reveal id: "Pack:<zoneId>"
 	zone: number,
-	featured: boolean,
-	slot: number?, -- featured rotation slot
 	name: string,
 	luck: number,
 	mutationMult: number,
-	exclusive: string?, -- featured-only mutation id
+	exclusive: string?, -- pack-only mutation id (never from pods)
 	exclusiveChance: number,
 }
 
@@ -26,105 +23,35 @@ export type Odds = {
 	noMutation: number, -- percent; mutations + noMutation sum to 100
 }
 
+-- The pack that rolls zone k's seed.
 function SeedPacks.zonePack(k: number): Pack
 	local zone = Config.ZONES[k]
 	return {
 		id = "Pack:" .. zone.id,
 		zone = k,
-		featured = false,
-		slot = nil,
 		name = `{zone.seed} Pack`,
 		luck = Config.PACK_LUCK,
 		mutationMult = Config.PACK_MUTATION_MULT,
-		exclusive = nil,
-		exclusiveChance = 0,
+		exclusive = Config.PACK_EXCLUSIVE,
+		exclusiveChance = Config.PACK_EXCLUSIVE_CHANCE,
 	}
 end
 
 ----------------------------------------------------------------------------------------------------
--- Featured rotation: slot = floor(os.time / period). Zones come in shuffled cycles of #ZONES slots
--- (each zone once per cycle, never the same zone twice in a row), from a fixed-seed PRNG, so every
--- server computes the same pack without talking to each other.
+-- Developer products (Robux): Config.DEVELOPER_PRODUCTS[name] = { id, label, robux, zone }
 ----------------------------------------------------------------------------------------------------
-function SeedPacks.featuredSlot(now: number): number
-	return math.floor(now / Config.FEATURED_ROTATION_SECONDS)
+-- Every product, by zone (the Shop's card order).
+function SeedPacks.products(): { { name: string, product: Config.DevProduct } }
+	local list = {}
+	for name, product in Config.DEVELOPER_PRODUCTS do
+		table.insert(list, { name = name, product = product })
+	end
+	table.sort(list, function(a, b)
+		return a.product.zone < b.product.zone
+	end)
+	return list
 end
 
-function SeedPacks.slotEndsAt(slot: number): number
-	return (slot + 1) * Config.FEATURED_ROTATION_SECONDS
-end
-
-local function cycleOrder(cycle: number): { number }
-	-- MINSTD (Park-Miller): products stay below 2^53, so it's exact on every platform.
-	local state = (cycle * 7919 + Config.FEATURED_SEED) % 2147483646 + 1
-	local function nextInt(n: number): number
-		state = (state * 48271) % 2147483647
-		return state % n
-	end
-	for _ = 1, 3 do
-		nextInt(2)
-	end
-	local order = {}
-	for k = 1, #Config.ZONES do
-		order[k] = k
-	end
-	for i = #order, 2, -1 do
-		local j = nextInt(i) + 1
-		order[i], order[j] = order[j], order[i]
-	end
-	return order
-end
-
-function SeedPacks.featuredZone(slot: number): number
-	local n = #Config.ZONES
-	local cycle = slot // n
-	local i = slot % n + 1
-	local order = cycleOrder(cycle)
-	-- The last zone of the previous cycle must not open this one.
-	if order[1] == cycleOrder(cycle - 1)[n] then
-		order[1], order[2] = order[2], order[1]
-	end
-	return order[i]
-end
-
-function SeedPacks.featuredPackForSlot(slot: number): Pack
-	local k = SeedPacks.featuredZone(slot)
-	local zone = Config.ZONES[k]
-	return {
-		id = `Pack:Featured:{slot}`,
-		zone = k,
-		featured = true,
-		slot = slot,
-		name = `Featured {zone.seed} Pack`,
-		luck = Config.FEATURED_LUCK,
-		mutationMult = Config.FEATURED_MUTATION_MULT,
-		exclusive = Config.FEATURED_EXCLUSIVE,
-		exclusiveChance = Config.FEATURED_EXCLUSIVE_CHANCE,
-	}
-end
-
-function SeedPacks.featuredPack(now: number): Pack
-	return SeedPacks.featuredPackForSlot(SeedPacks.featuredSlot(now))
-end
-
--- Any pack by id, without checking that a featured slot is current (for displaying results).
-function SeedPacks.lookup(id: string): Pack?
-	local slot = tonumber(string.match(id, "^Pack:Featured:(%d+)$"))
-	if slot then
-		return SeedPacks.featuredPackForSlot(slot)
-	end
-	local zoneId = string.match(id, "^Pack:(%a+)$")
-	for k, zone in Config.ZONES do
-		if zone.id == zoneId then
-			return SeedPacks.zonePack(k)
-		end
-	end
-	return nil
-end
-
-----------------------------------------------------------------------------------------------------
--- Developer products (Robux): Config.DEVELOPER_PRODUCTS[name] = { id, label, robux, packs, zone? }
-----------------------------------------------------------------------------------------------------
 -- The product with this (non-zero) developer product id, as (name, product).
 function SeedPacks.productById(productId: number): (string?, Config.DevProduct?)
 	if productId == 0 then
@@ -138,49 +65,20 @@ function SeedPacks.productById(productId: number): (string?, Config.DevProduct?)
 	return nil, nil
 end
 
--- The product that sells zone k's pack, as (name, product).
-function SeedPacks.zoneProduct(k: number): (string?, Config.DevProduct?)
-	for name, product in Config.DEVELOPER_PRODUCTS do
-		if product.zone == k then
-			return name, product
+-- The pack a product opens.
+function SeedPacks.packForProduct(product: Config.DevProduct): Pack
+	return SeedPacks.zonePack(product.zone)
+end
+
+-- A sold pack by its reveal id ("Pack:Space"), or nil.
+function SeedPacks.lookup(id: string): Pack?
+	for _, product in Config.DEVELOPER_PRODUCTS do
+		local pack = SeedPacks.packForProduct(product)
+		if pack.id == id then
+			return pack
 		end
 	end
-	return nil, nil
-end
-
--- Featured-pack products, smallest bundle first.
-function SeedPacks.featuredProducts(): { { name: string, product: Config.DevProduct } }
-	local list = {}
-	for name, product in Config.DEVELOPER_PRODUCTS do
-		if product.zone == nil then
-			table.insert(list, { name = name, product = product })
-		end
-	end
-	table.sort(list, function(a, b)
-		return a.product.packs < b.product.packs
-	end)
-	return list
-end
-
--- The pack a product opens: its zone pack, or the featured pack of `featuredSlot`.
-function SeedPacks.packForProduct(product: Config.DevProduct, featuredSlot: number): Pack
-	if product.zone then
-		return SeedPacks.zonePack(product.zone)
-	end
-	return SeedPacks.featuredPackForSlot(featuredSlot)
-end
-
--- Which featured slot a receipt opens. The player gets the pack they were shown when they clicked
--- Buy (`promptedSlot`, recorded by the server at `promptedAt`), even if it rotated while the Robux
--- dialog was open, as long as the receipt arrives within FEATURED_PROMPT_GRACE seconds. Otherwise
--- (receipt replayed on a later join, or on another server) it's the current featured pack.
-function SeedPacks.receiptSlot(promptedSlot: number?, promptedAt: number?, now: number): number
-	local current = SeedPacks.featuredSlot(now)
-	if promptedSlot and promptedAt and now - promptedAt >= 0 and now - promptedAt <= Config.FEATURED_PROMPT_GRACE
-		and promptedSlot <= current and promptedSlot >= current - 1 then
-		return promptedSlot
-	end
-	return current
+	return nil
 end
 
 ----------------------------------------------------------------------------------------------------

@@ -164,7 +164,7 @@ Config.RARITIES = {
 	{ id = "Legendary", color = Color3.fromRGB(255, 190, 30), income = 15, weight = 8, spawn = 1 },
 } :: { Rarity }
 
--- Deeper zones and luck (night, featured packs) tilt the odds toward the rare end.
+-- Deeper zones and luck (night) tilt the odds toward the rare end.
 Config.ZONE_RARITY_BONUS = 0.1
 
 function Config.rarityWeights(k: number, luck: number): { number }
@@ -176,7 +176,8 @@ function Config.rarityWeights(k: number, luck: number): { number }
 	return out
 end
 
--- `exclusive` mutations never roll from pods (chance 0); only the featured seed pack can give them.
+-- `exclusive` mutations never roll from pods (chance 0); only the premium seed packs can give them
+-- (PACK_EXCLUSIVE).
 export type Mutation = { id: string, color: Color3, income: number, chance: number, nightOnly: boolean, exclusive: boolean? }
 Config.MUTATIONS = {
 	{ id = "Gold", color = Color3.fromRGB(255, 215, 0), income = 3, chance = 0.04, nightOnly = false },
@@ -331,12 +332,15 @@ Config.GAMEPASSES = {
 Config.PASS_EXTRA_SLOTS = 10 -- the ExtraSlots pass adds this many slots
 
 ----------------------------------------------------------------------------------------------------
--- Seed packs: our "eggs with odds". Robux only: every pack is a developer product, never in-game
--- money. Each pack rolls one seed into the player's seed bag, which they plant from the Seeds menu at
--- their pad. Rolls live in Shared/SeedPacks, purchase rules in Server/Shop.
+-- Seed packs: our "eggs with odds". Two premium, late-game packs, Robux only: each is a developer
+-- product, never sold for in-game money, with no Speed gate (a premium shortcut). A pack rolls one
+-- seed of its zone into the player's seed bag, which they plant from the Seeds menu at their pad.
+-- Rolls live in Shared/SeedPacks, purchase rules in Server/Shop.
 ----------------------------------------------------------------------------------------------------
-Config.PACK_LUCK = 1 -- zone packs roll rarities like a daytime pod in their zone...
-Config.PACK_MUTATION_MULT = 1 -- ...with the same Gold/Rainbow chances (Night never rolls from packs)
+Config.PACK_LUCK = 1 -- packs roll rarities like a daytime pod in their zone...
+Config.PACK_MUTATION_MULT = 1 -- ...with the same Gold/Rainbow chances (Night never rolls from packs)...
+Config.PACK_EXCLUSIVE = "Celestial" -- ...plus the pack-only mutation, which pods never roll
+Config.PACK_EXCLUSIVE_CHANCE = 0.005
 Config.SEED_BAG_MAX = 50 -- soft cap: the Shop won't *prompt* a pack purchase once the bag holds this many
 Config.SEED_BAG_HARD_MAX = 250 -- paid grants may go past SEED_BAG_MAX up to here; saves are clamped here
 -- A paid pack whose seed can't fit (bag at SEED_BAG_HARD_MAX) pays this many seconds of the player's
@@ -345,32 +349,14 @@ Config.SEED_BAG_HARD_MAX = 250 -- paid grants may go past SEED_BAG_MAX up to her
 Config.PACK_FULL_BAG_INCOME_SECONDS = 300
 Config.RECEIPT_HISTORY = 100 -- processed Robux PurchaseIds kept per profile, so a grant never repeats
 
--- The featured pack rotates on a clock every server shares (os.time), so all servers agree.
-Config.FEATURED_ROTATION_SECONDS = 3 * 3600
-Config.FEATURED_SEED = 7331 -- salts the rotation order
-Config.FEATURED_LUCK = 2 -- rolls like a night pod
-Config.FEATURED_MUTATION_MULT = 2
-Config.FEATURED_EXCLUSIVE = "Celestial"
-Config.FEATURED_EXCLUSIVE_CHANCE = 0.005
-Config.FEATURED_PROMPT_GRACE = 600 -- a receipt this soon after Buy opens the pack shown at the click
-
--- Developer products: one per zone pack, plus 1/3/10 featured-pack bundles. Create each one on the
+-- Developer products: one per pack, each opening one pack of its `zone`. Create each one on the
 -- Creator Dashboard and paste its id here; id = 0 means "not set up yet" (the Shop says "coming soon").
 -- `robux` is only the placeholder shown while the real price can't be fetched: the real price is set
--- on the Dashboard and read with MarketplaceService:GetProductInfo. `zone` is the zone pack's zone
--- index; nil means featured packs (whichever pack is featured when the receipt is granted).
-export type DevProduct = { id: number, label: string, robux: number, packs: number, zone: number? }
+-- on the Dashboard and read with MarketplaceService:GetProductInfo.
+export type DevProduct = { id: number, label: string, robux: number, zone: number }
 Config.DEVELOPER_PRODUCTS = {
-	PackMeadow = { id = 0, label = "Sproutling Pack", robux = 25, packs = 1, zone = 1 },
-	PackDesert = { id = 0, label = "Cactopod Pack", robux = 30, packs = 1, zone = 2 },
-	PackJungle = { id = 0, label = "Fernosaur Pack", robux = 35, packs = 1, zone = 3 },
-	PackLava = { id = 0, label = "Magmabloom Pack", robux = 45, packs = 1, zone = 4 },
-	PackSnow = { id = 0, label = "Frostbulb Pack", robux = 55, packs = 1, zone = 5 },
-	PackSpace = { id = 0, label = "Starpetal Pack", robux = 65, packs = 1, zone = 6 },
-	PackSpirit = { id = 0, label = "Lotus Wyrm Pack", robux = 75, packs = 1, zone = 7 },
-	PackBundle1 = { id = 0, label = "1 Featured Pack", robux = 80, packs = 1 },
-	PackBundle3 = { id = 0, label = "3 Featured Packs", robux = 200, packs = 3 },
-	PackBundle10 = { id = 0, label = "10 Featured Packs", robux = 600, packs = 10 },
+	PackSpace = { id = 0, label = "Starpetal Pack", robux = 2000, zone = 6 },
+	PackSpirit = { id = 0, label = "Lotus Wyrm Pack", robux = 3000, zone = 7 },
 } :: { [string]: DevProduct }
 
 -- What the shop needs to know about a player (profile or client stats snapshot).

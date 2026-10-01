@@ -5,7 +5,6 @@
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Shared = ReplicatedStorage:WaitForChild("Shared")
 local Config = require(Shared:WaitForChild("Config"))
-local Format = require(Shared:WaitForChild("Format"))
 local SeedPacks = require(Shared:WaitForChild("SeedPacks"))
 
 local Shop = {}
@@ -48,12 +47,11 @@ function Shop.buy(p: Profile, itemId: string): (boolean, string)
 end
 
 ----------------------------------------------------------------------------------------------------
--- Seed packs: Robux only. Every pack is a developer product (Config.DEVELOPER_PRODUCTS); there is no
+-- Seed packs: Robux only. Each pack is a developer product (Config.DEVELOPER_PRODUCTS); there is no
 -- money price and no money purchase path.
 ----------------------------------------------------------------------------------------------------
 type PackProfile = {
 	money: number,
-	speed: number,
 	seedBag: { [string]: number },
 	receipts: { string },
 }
@@ -61,17 +59,15 @@ type PackProfile = {
 export type Roll = { zone: number, rarity: number, mutation: string?, name: string }
 export type Grant = {
 	pack: SeedPacks.Pack,
-	rolls: { Roll }, -- seeds that went into the bag
-	compensated: number, -- packs that didn't fit (bag at SEED_BAG_HARD_MAX)...
-	compensation: number, -- ...and the money paid for them instead
+	roll: Roll?, -- the seed that went into the bag, or nil if it didn't fit (bag at SEED_BAG_HARD_MAX)...
+	compensation: number, -- ...and the money paid instead
 }
 
 -- Whether the server may open the Robux prompt for `productName`. Returns (product, nil) or
--- (nil, message). A product without an id is "coming soon"; zone packs stay locked until the zone's
--- recommended Speed; a featured click from a menu showing another slot (`shownSlot`) is refused; and
--- no new prompts once the bag holds SEED_BAG_MAX seeds. Only the *prompt* is gated: a receipt that
--- arrives is always granted (Shop.grantProduct).
-function Shop.canPrompt(p: PackProfile, productName: string, now: number, shownSlot: number?): (Config.DevProduct?, string?)
+-- (nil, message). A product without an id is "coming soon", and there are no new prompts once the
+-- bag holds SEED_BAG_MAX seeds. There is no Speed gate: the packs are a premium shortcut. Only the
+-- *prompt* is gated: a receipt that arrives is always granted (Shop.grantProduct).
+function Shop.canPrompt(p: PackProfile, productName: string): (Config.DevProduct?, string?)
 	local product = Config.DEVELOPER_PRODUCTS[productName]
 	if not product then
 		return nil, "Unknown pack"
@@ -79,39 +75,24 @@ function Shop.canPrompt(p: PackProfile, productName: string, now: number, shownS
 	if product.id == 0 then
 		return nil, `{product.label}: coming soon!`
 	end
-	if product.zone then
-		local zone = Config.ZONES[product.zone]
-		if p.speed < zone.req then
-			return nil, `Reach {Format.short(zone.req)} Speed to unlock the {product.label}!`
-		end
-	elseif shownSlot ~= nil and shownSlot ~= SeedPacks.featuredSlot(now) then
-		return nil, "The featured pack just rotated! Check out the new one."
-	end
 	if SeedPacks.bagCount(p.seedBag) >= Config.SEED_BAG_MAX then
 		return nil, "Your seed bag is full! Plant some seeds first."
 	end
 	return product, nil
 end
 
--- Money paid for one pack whose seed can't fit: PACK_FULL_BAG_INCOME_SECONDS of the player's income
+-- Money paid for a pack whose seed can't fit: PACK_FULL_BAG_INCOME_SECONDS of the player's income
 -- (`income` = $/s with multipliers), but at least that long of a Common plant from the pack's zone,
 -- so a player with no plants yet still gets something worth having.
 function Shop.fullBagCompensation(pack: SeedPacks.Pack, income: number): number
 	return math.floor(math.max(income, Config.seedIncome(pack.zone)) * Config.PACK_FULL_BAG_INCOME_SECONDS)
 end
 
-local function openPack(p: PackProfile, pack: SeedPacks.Pack, rng: () -> number): Roll
-	local rarity, mutation = SeedPacks.roll(pack, rng)
-	SeedPacks.addToBag(p.seedBag, pack.zone, rarity, mutation)
-	return { zone = pack.zone, rarity = rarity, mutation = mutation, name = SeedPacks.seedName(pack.zone, rarity, mutation) }
-end
-
--- Grants a developer product at most once per PurchaseId: a zone pack, or `packs` featured packs of
--- `featuredSlot` (see SeedPacks.receiptSlot). Returns "granted" with the grant, "duplicate" (already
--- granted: just confirm again) or "unknown". There is no Speed gate here: the player paid. Seeds may
--- push the bag past SEED_BAG_MAX up to SEED_BAG_HARD_MAX; a pack that can't fit pays
+-- Grants a developer product at most once per PurchaseId: one pack of its zone. Returns "granted"
+-- with the grant, "duplicate" (already granted: just confirm again) or "unknown". The seed may push
+-- the bag past SEED_BAG_MAX up to SEED_BAG_HARD_MAX; if it can't fit, the pack pays
 -- Shop.fullBagCompensation instead, so a paid purchase is never lost.
-function Shop.grantProduct(p: PackProfile, productName: string, purchaseId: string, featuredSlot: number, income: number, rng: () -> number): (string, Grant?)
+function Shop.grantProduct(p: PackProfile, productName: string, purchaseId: string, income: number, rng: () -> number): (string, Grant?)
 	for _, id in p.receipts do
 		if id == purchaseId then
 			return "duplicate", nil
@@ -121,17 +102,15 @@ function Shop.grantProduct(p: PackProfile, productName: string, purchaseId: stri
 	if not product then
 		return "unknown", nil
 	end
-	local pack = SeedPacks.packForProduct(product, featuredSlot)
-	local grant: Grant = { pack = pack, rolls = {}, compensated = 0, compensation = 0 }
-	for _ = 1, product.packs do
-		if SeedPacks.bagCount(p.seedBag) < Config.SEED_BAG_HARD_MAX then
-			table.insert(grant.rolls, openPack(p, pack, rng))
-		else
-			local money = Shop.fullBagCompensation(pack, income)
-			p.money += money
-			grant.compensated += 1
-			grant.compensation += money
-		end
+	local pack = SeedPacks.packForProduct(product)
+	local grant: Grant = { pack = pack, roll = nil, compensation = 0 }
+	if SeedPacks.bagCount(p.seedBag) < Config.SEED_BAG_HARD_MAX then
+		local rarity, mutation = SeedPacks.roll(pack, rng)
+		SeedPacks.addToBag(p.seedBag, pack.zone, rarity, mutation)
+		grant.roll = { zone = pack.zone, rarity = rarity, mutation = mutation, name = SeedPacks.seedName(pack.zone, rarity, mutation) }
+	else
+		grant.compensation = Shop.fullBagCompensation(pack, income)
+		p.money += grant.compensation
 	end
 	table.insert(p.receipts, purchaseId)
 	while #p.receipts > Config.RECEIPT_HISTORY do
@@ -145,11 +124,11 @@ end
 -- Returns (confirm, status, grant); confirm = false means "NotProcessedYet" (Roblox retries).
 -- A retry in the same session finds the id and doesn't grant twice; if the server died before the
 -- save, neither the grant nor the id persisted, so the retry elsewhere grants exactly once.
-function Shop.processReceipt(p: PackProfile?, productName: string?, purchaseId: string, featuredSlot: number, income: number, rng: () -> number, save: () -> boolean): (boolean, string, Grant?)
+function Shop.processReceipt(p: PackProfile?, productName: string?, purchaseId: string, income: number, rng: () -> number, save: () -> boolean): (boolean, string, Grant?)
 	if not p or not productName then
 		return false, "unavailable", nil
 	end
-	local status, grant = Shop.grantProduct(p, productName, purchaseId, featuredSlot, income, rng)
+	local status, grant = Shop.grantProduct(p, productName, purchaseId, income, rng)
 	if status == "unknown" then
 		return false, status, nil
 	end
