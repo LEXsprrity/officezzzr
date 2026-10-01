@@ -10,6 +10,7 @@ local Sessions = require(script.Parent:WaitForChild("Sessions"))
 local SeedService = require(script.Parent:WaitForChild("SeedService"))
 local WorldBuilder = require(script.Parent:WaitForChild("WorldBuilder"))
 local ProfileStore = require(script.Parent:WaitForChild("ProfileStore"))
+local CreatureModels = require(script.Parent:WaitForChild("CreatureModels"))
 
 local PlotService = {}
 
@@ -45,9 +46,7 @@ end
 -- Models
 ----------------------------------------------------------------------------------------------------
 local function plantScale(plant: ProfileStore.Plant, weight: number): number
-	-- Grows up to ~1.7x as weight approaches GROW_MAX_FACTOR x sprout weight.
-	local ratio = weight / Config.sproutWeight(plant.zone, plant.rarity)
-	return math.clamp(ratio ^ (1 / 3), 0.8, 2) * (0.9 + 0.1 * plant.rarity)
+	return CreatureModels.scaleFor(plant.zone, plant.rarity, weight)
 end
 
 local function labelsFor(model: Model): (TextLabel?, TextLabel?)
@@ -58,66 +57,22 @@ local function labelsFor(model: Model): (TextLabel?, TextLabel?)
 	return gui:FindFirstChild("Weight") :: TextLabel?, gui:FindFirstChild("Income") :: TextLabel?
 end
 
-local function buildPlantModel(state: PlotState, plant: ProfileStore.Plant, weight: number, income: number): Model
-	local zone = Config.ZONES[plant.zone]
+local function buildPlantModel(state: PlotState, plant: ProfileStore.Plant, weight: number, income: number, scale: number): Model
 	local rarity = Config.RARITIES[plant.rarity]
 	local mut = Config.mutationById(plant.mutation)
-	local cf = state.info.slotCFrames[plant.slot]
-	local model = Instance.new("Model")
+	-- The creature (with its rarity/mutation flair and "Mutation" attribute) comes from CreatureModels,
+	-- built at the origin; it is pivoted onto the slot below.
+	local model = CreatureModels.build(plant.zone, plant.rarity, plant.mutation)
 	model.Name = "Plant_" .. plant.slot
+	local body = model.PrimaryPart :: BasePart
 
-	local function add(name: string, shape: Enum.PartType, size: Vector3, offset: CFrame, color: Color3, material: Enum.Material?): Part
-		local p = Instance.new("Part")
-		p.Name = name
-		p.Shape = shape
-		p.Size = size
-		p.CFrame = cf * offset
-		p.Color = color
-		p.Material = material or Enum.Material.SmoothPlastic
-		p.Anchored = true
-		p.CanCollide = false
-		p.Parent = model
-		return p
-	end
-
-	local bodyColor = if mut then mut.color else zone.seedColor
-	local body = add("Body", Enum.PartType.Ball, Vector3.one * 3.4, CFrame.new(0, 2.2, 0), bodyColor, if mut then Enum.Material.Neon else Enum.Material.SmoothPlastic)
-	model.PrimaryPart = body
-	add("Pot", Enum.PartType.Block, Vector3.new(3, 1.2, 3), CFrame.new(0, 0.6, 0), Color3.fromRGB(190, 100, 60))
-	for _, x in { -0.6, 0.6 } do
-		add("Eye", Enum.PartType.Ball, Vector3.one * 0.8, CFrame.new(x, 2.7, -1.35), Color3.new(1, 1, 1))
-		add("Pupil", Enum.PartType.Ball, Vector3.one * 0.4, CFrame.new(x, 2.7, -1.7), Color3.new(0, 0, 0))
-	end
-	for i = 0, 2 do
-		local a = i * 2 * math.pi / 3
-		add("Leaf", Enum.PartType.Block, Vector3.new(0.3, 1.8, 1.1),
-			CFrame.new(math.cos(a) * 0.5, 4.2, math.sin(a) * 0.5) * CFrame.Angles(0, a, math.rad(25)),
-			rarity.color, if plant.rarity >= 3 then Enum.Material.Neon else Enum.Material.Grass)
-	end
-	if plant.rarity >= 3 or mut then
-		local light = Instance.new("PointLight")
-		light.Color = if mut then mut.color else rarity.color
-		light.Range = 8 + plant.rarity * 2
-		light.Brightness = 2
-		light.Parent = body
-	end
-	if mut then
-		model:SetAttribute("Mutation", mut.id)
-		local sparkles = Instance.new("ParticleEmitter")
-		sparkles.Texture = "rbxasset://textures/particles/sparkles_main.dds"
-		sparkles.Color = ColorSequence.new(mut.color)
-		sparkles.Rate = 6
-		sparkles.Lifetime = NumberRange.new(0.6, 1.2)
-		sparkles.Speed = NumberRange.new(1, 3)
-		sparkles.Size = NumberSequence.new(0.5)
-		sparkles.Parent = body
-	end
-
-	-- Info billboard (text refreshed by the payout loop)
+	-- Info billboard (text refreshed by the payout loop). It hangs on an attachment at the creature's top,
+	-- which ScaleTo moves as the creature grows; SizeOffset puts the billboard's bottom edge there.
 	local gui = Instance.new("BillboardGui")
 	gui.Name = "Info"
 	gui.Size = UDim2.fromOffset(170, 66)
-	gui.StudsOffsetWorldSpace = Vector3.new(0, 4.5, 0)
+	gui.Adornee = body:FindFirstChild("InfoAnchor") :: Attachment
+	gui.SizeOffset = Vector2.new(0, 0.5)
 	gui.MaxDistance = 90
 	gui.LightInfluence = 0
 	gui.Parent = body
@@ -152,12 +107,17 @@ local function buildPlantModel(state: PlotState, plant: ProfileStore.Plant, weig
 	prompt.RequiresLineOfSight = false
 	prompt.KeyboardKeyCode = Enum.KeyCode.R
 	prompt:SetAttribute("OwnerUserId", if state.owner then state.owner.UserId else 0)
-	prompt.Parent = body
+	prompt.Parent = body:FindFirstChild("PromptAnchor") -- low on the creature, so it stays reachable when huge
 	prompt.Triggered:Connect(function(player: Player)
 		PlotService.removePlant(player, plant.slot)
 	end)
 
-	model.WorldPivot = cf -- scale from the ground, not the body's centre
+	-- Stand on the soil facing the gate (slot CFrames look into the plot). The pivot is on the soil, so
+	-- ScaleTo grows the creature from the ground up. Scale before parenting: one replication, not two.
+	local rest = state.info.slotCFrames[plant.slot] * CFrame.new(0, Config.SOIL_HEIGHT, 0) * CFrame.Angles(0, math.pi, 0)
+	model:PivotTo(rest)
+	CreatureModels.applyScale(model, scale)
+	model:SetAttribute("RestPivot", rest) -- the client's idle sway (Effects.client) animates around this
 	model.Parent = state.info.plants
 	return model
 end
@@ -168,9 +128,9 @@ local function renderSoil(state: PlotState, count: number)
 		local p = Instance.new("Part")
 		p.Name = "Soil" .. i
 		p.Anchored = true
-		p.Size = Vector3.new(6, 0.4, 6)
+		p.Size = Vector3.new(6, Config.SOIL_HEIGHT, 6)
 		p.CanCollide = false
-		p.CFrame = state.info.slotCFrames[i] * CFrame.new(0, 0.2, 0) -- slot CFrames sit on the floor's top surface
+		p.CFrame = state.info.slotCFrames[i] * CFrame.new(0, Config.SOIL_HEIGHT / 2, 0) -- slot CFrames sit on the floor's top surface
 		p.Color = Color3.fromRGB(120, 80, 50)
 		p.Material = Enum.Material.Ground
 		p.Parent = state.info.soil
@@ -179,11 +139,8 @@ end
 
 local function spawnPlant(state: PlotState, plant: ProfileStore.Plant, now: number)
 	local weight, income = PlotService.plantStats(plant, now)
-	local model = buildPlantModel(state, plant, weight, income)
-	state.models[plant.slot] = model
-	state.scales[plant.slot] = 1
 	local scale = plantScale(plant, weight)
-	model:ScaleTo(scale)
+	state.models[plant.slot] = buildPlantModel(state, plant, weight, income, scale)
 	state.scales[plant.slot] = scale
 end
 
@@ -326,7 +283,9 @@ function PlotService.removePlant(player: Player, slot: number)
 	local char = player.Character
 	local root = char and char:FindFirstChild("HumanoidRootPart") :: BasePart?
 	local model = state.models[slot]
-	if not root or not model or not model.PrimaryPart or (root.Position - model.PrimaryPart.Position).Magnitude > 14 then
+	-- Measure from the prompt's anchor, not the body: a big creature's body can be 10+ studs up.
+	local anchor = model and model.PrimaryPart and model.PrimaryPart:FindFirstChild("PromptAnchor")
+	if not root or not anchor or not anchor:IsA("Attachment") or (root.Position - anchor.WorldPosition).Magnitude > 14 then
 		return
 	end
 	for i, plant in s.profile.plants do
@@ -337,6 +296,7 @@ function PlotService.removePlant(player: Player, slot: number)
 			table.remove(s.profile.plants, i)
 			model:Destroy()
 			state.models[slot] = nil
+			state.scales[slot] = nil
 			s.profile.money += refund
 			refreshIncome(s, now)
 			pushPlants(s, now)
@@ -458,7 +418,7 @@ local function payout(s: Sessions.Session, state: PlotState, now: number)
 			end
 			local scale = plantScale(plant, weight)
 			if math.abs(scale - (state.scales[plant.slot] or 1)) > 0.03 then
-				model:ScaleTo(scale)
+				CreatureModels.applyScale(model, scale) -- its Scale attribute makes the client re-read the rest pose
 				state.scales[plant.slot] = scale
 			end
 			Net.IncomePopup:FireClient(s.player, earned, model.PrimaryPart.Position + Vector3.new(0, 3, 0))
@@ -471,6 +431,7 @@ local function payout(s: Sessions.Session, state: PlotState, now: number)
 end
 
 function PlotService.start()
+	task.spawn(CreatureModels.preload) -- uploaded creature models, if any are configured (yields)
 	task.spawn(function()
 		while true do
 			task.wait(Config.PAYOUT_INTERVAL)
