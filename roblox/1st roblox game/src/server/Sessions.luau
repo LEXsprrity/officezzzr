@@ -166,6 +166,7 @@ function Sessions.pushFull(s: Session)
 		treadmillMult = Sessions.treadmillMult(s),
 		items = table.clone(p.items),
 		potions = table.clone(p.potions),
+		seedBag = table.clone(p.seedBag),
 		index = table.clone(p.index),
 		reachedEnd = p.reachedEnd,
 		passes = table.clone(s.passes),
