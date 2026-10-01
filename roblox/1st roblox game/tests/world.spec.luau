@@ -6,6 +6,7 @@ local Config = H.shared("Config")
 local WorldBuilder = H.server("WorldBuilder")
 local Vector3 = H.Vector3
 local CFrame = require("@lune/roblox").CFrame
+local Enum = require("@lune/roblox").Enum
 
 local plots, nests = WorldBuilder.build()
 local world = H.workspace:FindFirstChild("World")
@@ -52,6 +53,7 @@ H.test("world: plot layout contract is unchanged (slots, pad, spawn, belt)", fun
 		H.eq(plot.model.PrimaryPart.Name, "Floor")
 		H.ok(plot.soil:IsA("Folder") and plot.plants:IsA("Folder"), "soil/plants folders")
 		H.ok(plot.signLabel:IsA("TextLabel"), "sign label")
+		H.ok(plot.treadmillLabel:IsA("TextLabel"), "treadmill sign label (PlotService writes the owner's Speed/s on it)")
 	end
 end)
 
@@ -140,7 +142,7 @@ H.test("world: every zone has an entry sign with its name and recommended Speed"
 	end
 end)
 
-H.test("world: shop plaza has a walk-up stall for packs, upgrades and the index", function()
+H.test("world: shop plaza has a walk-up stall for the Shop, the Trail Shop and the Index", function()
 	local plaza = world:FindFirstChild("ShopPlaza")
 	H.ok(plaza ~= nil, "ShopPlaza model")
 	local opens = {}
@@ -149,7 +151,33 @@ H.test("world: shop plaza has a walk-up stall for packs, upgrades and the index"
 			opens[d:GetAttribute("OpensShop")] = true
 		end
 	end
-	for _, id in { "Packs", "Upgrades", "Index" } do
+	for _, id in { "Shop", "Trails", "Index" } do
 		H.ok(opens[id], `stall opens {id}`)
+	end
+end)
+
+H.test("world: each plot has a small, non-colliding Upgrade Plot board just outside its gate", function()
+	for i, plot in plots do
+		local board = plot.upgradeBoard
+		H.ok(board ~= nil and board:IsA("BasePart"), `plot {i} board`)
+		H.eq(board.Parent, plot.model)
+		H.eq(board.CanCollide, false, "the board never blocks the path")
+		H.ok(board.Size.X <= 8 and board.Size.Y <= 5, "stud-sized, read up close")
+		-- outside the fence (walkway side), beside the 14-stud path, near the gate
+		local side = if i % 2 == 1 then 1 else -1
+		local entranceZ = plot.center.Z - side * Config.PLOT_SIZE / 2
+		local p = board.CFrame.Position
+		H.ok(math.abs(p.Z) < math.abs(entranceZ), `plot {i} board is outside the plot`)
+		H.ok(math.abs(p.Z - entranceZ) <= 8, "near the gate")
+		H.ok(math.abs(p.X - plot.center.X) > 7 + board.Size.X / 2, "clear of the path")
+		-- Built with lookAt toward the walkway (compared the same way, since Lune's CFrame.lookAt mirrors Z:
+		-- in Lune, lookAt(0, +Z).LookVector is -Z; Roblox gives +Z).
+		local facing = CFrame.lookAt(Vector3.zero, Vector3.new(0, 0, -side))
+		H.ok(board.CFrame.LookVector:Dot(facing.LookVector) > 0.99, "its front faces the walkway")
+		local gui = board:FindFirstChildOfClass("SurfaceGui")
+		H.ok(gui ~= nil and gui.Face == Enum.NormalId.Front, "text on the front face")
+		for _, key in { "level", "perk", "price" } do
+			H.ok(plot.upgradeLabels[key]:IsA("TextLabel") and plot.upgradeLabels[key]:IsDescendantOf(gui), key .. " label")
+		end
 	end
 end)

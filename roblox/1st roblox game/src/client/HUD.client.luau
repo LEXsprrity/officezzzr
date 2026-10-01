@@ -25,8 +25,9 @@ pcall(StarterGui.SetCoreGuiEnabled, StarterGui, Enum.CoreGuiType.Backpack, false
 
 -- Latest server stats (merged from partial updates)
 local stats: { [string]: any } = {
-	money = 0, speed = 0, walkSpeed = 16, income = 0, slots = Config.SLOTS_START, baseSlots = Config.SLOTS_START,
-	speedMultTier = 1, treadmillTier = 1, speedMult = 1, treadmillMult = 2,
+	money = 0, speed = 0, walkSpeed = 16, income = 0, slots = Config.SLOTS_START, plotLevel = 1,
+	trails = { [Config.DEFAULT_TRAIL] = true }, equippedTrail = Config.DEFAULT_TRAIL, speedMult = Config.trailMult(Config.DEFAULT_TRAIL),
+	treadmillTier = 1, treadmillMult = 2,
 	items = {}, index = {}, plants = {}, passes = {}, carrying = false, reachedEnd = false, seedBag = {},
 }
 
@@ -47,6 +48,9 @@ local COLORS = {
 	red = Color3.fromRGB(240, 70, 70),
 	gold = Color3.fromRGB(255, 205, 50),
 	disabled = Color3.fromRGB(170, 170, 170),
+	buy = Color3.fromRGB(60, 200, 80), -- green: money and R$ buy buttons
+	robux = Color3.fromRGB(150, 80, 230), -- purple: R$ on trail cards, the gift button
+	equip = Color3.fromRGB(60, 160, 255),
 }
 
 local function new(className: string, props: { [string]: any }, children: { Instance }?): any
@@ -183,38 +187,28 @@ local speedPanel = new("Frame", {
 	BackgroundColor3 = COLORS.speed, Parent = bottomLeft,
 }, deco(12))
 local speedLabel = text(speedPanel, { Text = "⚡ 0", Size = UDim2.new(0.6, -10, 0.72, 0), Position = UDim2.fromOffset(10, 4), TextXAlignment = Enum.TextXAlignment.Left })
-local walkLabel = text(speedPanel, { Text = "WalkSpeed 16", Size = UDim2.new(0.6, -10, 0.26, 0), Position = UDim2.new(0, 10, 0.72, -3),
+local walkLabel = text(speedPanel, { Text = "WalkSpeed 16", Size = UDim2.new(0.8, -10, 0.26, 0), Position = UDim2.new(0, 10, 0.72, -3),
 	TextXAlignment = Enum.TextXAlignment.Left, TextColor3 = Color3.fromRGB(215, 235, 255) })
+-- "+0.5", "+12.3", "+1.2K": the Speed one step (stud) pays right now (Config.speedPerStud)
+local function perStepText(): string
+	local x = Config.speedPerStud(stats.speed or 0, stats.equippedTrail)
+	return "+" .. (if x < 100 then string.format("%.1f", x) else Format.short(x))
+end
+
 local multLabel = text(speedPanel, { Text = "x1", Size = UDim2.new(0.18, 0, 0.5, 0), Position = UDim2.new(0.6, 0, 0.25, 0), TextColor3 = COLORS.gold })
 
--- "+" opens a small buy menu above the panel
-local buyMenu = new("Frame", {
-	AnchorPoint = Vector2.new(0, 1), Position = UDim2.new(0, 0, 1, -190), Size = UDim2.fromOffset(330, 150),
-	BackgroundColor3 = COLORS.panel, Visible = false, Parent = bottomLeft,
-}, {
-	new("UIListLayout", { Padding = UDim.new(0, 6), HorizontalAlignment = Enum.HorizontalAlignment.Center, VerticalAlignment = Enum.VerticalAlignment.Center }),
-	table.unpack(deco(12)),
-})
-local buySmall = button(buyMenu, "", COLORS.speed, UDim2.fromOffset(310, 40), function()
-	RequestBuy:FireServer("Speed25")
-end)
-local buyMax = button(buyMenu, "", COLORS.speed, UDim2.fromOffset(310, 40), function()
-	RequestBuy:FireServer("SpeedMax")
-end)
-local buyMult = button(buyMenu, "", COLORS.index, UDim2.fromOffset(310, 40), function()
-	RequestBuy:FireServer("SpeedMult")
-end)
-button(speedPanel, "+", COLORS.gold, UDim2.fromOffset(52, 52), function()
-	buyMenu.Visible = not buyMenu.Visible
+-- The 🏃 button opens the Trail Shop (trails multiply the Speed you gain; money can't buy Speed itself)
+local openModal: (name: string) -> ()
+button(speedPanel, "🏃", COLORS.index, UDim2.fromOffset(52, 52), function()
+	openModal("Trails")
 end).Position = UDim2.new(1, -57, 0, 5)
 
--- Shop / Index / Slow Mode row, between the speed panel and the buy menu
+-- Shop / Index / Slow Mode row, above the speed panel
 local rowButtons = new("Frame", {
 	AnchorPoint = Vector2.new(0, 1), Position = UDim2.new(0, 0, 1, -134), Size = UDim2.fromOffset(330, 48),
 	BackgroundTransparency = 1, Parent = bottomLeft,
 }, { new("UIListLayout", { FillDirection = Enum.FillDirection.Horizontal, Padding = UDim.new(0, 8) }) })
 
-local openModal: (name: string) -> ()
 button(rowButtons, "🛒 Shop", COLORS.shop, UDim2.fromOffset(100, 48), function()
 	openModal("Shop")
 end)
@@ -446,7 +440,7 @@ for _, tab in { { "Seeds", "🌱" }, { "Plants", "🪴" } } do
 end
 
 ----------------------------------------------------------------------------------------------------
--- Modals: Shop and Index
+-- Modals: Shop, Trail Shop and Index
 ----------------------------------------------------------------------------------------------------
 local modal = new("Frame", {
 	AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.5), Size = UDim2.fromOffset(780, 560),
@@ -460,23 +454,11 @@ local modalBody = new("ScrollingFrame", {
 })
 local modalName: string? = nil
 local renderModal: () -> ()
+local trailScrollX = 0 -- the Trail Shop strip's scroll: money ticks re-render the modal, the strip stays put
 button(modal, "✖", COLORS.red, UDim2.fromOffset(44, 44), function()
 	modal.Visible = false
 	modalName = nil
 end).Position = UDim2.new(1, -56, 0, 10)
-
--- Shop tabs: Seed Packs (default) and Upgrades
-local shopTab = "Packs"
-local shopTabs = new("Frame", {
-	BackgroundTransparency = 1, Position = UDim2.fromOffset(170, 12), Size = UDim2.fromOffset(420, 40), Visible = false, Parent = modal,
-}, { new("UIListLayout", { FillDirection = Enum.FillDirection.Horizontal, Padding = UDim.new(0, 8) }) })
-local tabButtons: { [string]: TextButton } = {}
-for _, t in { { "Packs", "🎁 Seed Packs" }, { "Upgrades", "⚡ Upgrades" } } do
-	tabButtons[t[1]] = button(shopTabs, t[2], COLORS.disabled, UDim2.fromOffset(180, 40), function()
-		shopTab = t[1]
-		renderModal()
-	end)
-end
 
 openModal = function(name: string)
 	if modalName == name then
@@ -486,80 +468,48 @@ openModal = function(name: string)
 	end
 	modalName = name
 	modal.Visible = true
+	modalBody.CanvasPosition = Vector2.zero
+	trailScrollX = 0
 	renderModal()
 end
 
--- Walk-up stalls in the base's shop plaza: their prompts say which menu to open ("Packs",
--- "Upgrades" or "Index"). Always opens (never toggles shut), on the right Shop tab.
+-- Walk-up stalls in the base's shop plaza: their prompts say which menu to open ("Shop", "Trails" or
+-- "Index"). Always opens (never toggles shut).
 game:GetService("ProximityPromptService").PromptTriggered:Connect(function(prompt: ProximityPrompt)
 	local opens = prompt:GetAttribute("OpensShop")
-	if opens == "Packs" or opens == "Upgrades" then
-		shopTab = opens
-		if modalName == "Shop" then
-			renderModal()
-		else
-			openModal("Shop")
-		end
-	elseif opens == "Index" and modalName ~= "Index" then
-		openModal("Index")
+	if (opens == "Shop" or opens == "Trails" or opens == "Index") and modalName ~= opens then
+		openModal(opens)
 	end
 end)
 
-local function clearModal(): UIGridLayout
+-- A vertical list in the modal body.
+local function clearModal(padding: number?)
 	modalBody:ClearAllChildren()
-	return new("UIGridLayout", { CellSize = UDim2.fromOffset(160, 150), CellPadding = UDim2.fromOffset(10, 10), SortOrder = Enum.SortOrder.LayoutOrder, Parent = modalBody })
+	new("UIListLayout", {
+		Padding = UDim.new(0, padding or 10), SortOrder = Enum.SortOrder.LayoutOrder, HorizontalAlignment = Enum.HorizontalAlignment.Center, Parent = modalBody,
+	})
 end
 
-local SHOP_ITEMS = {
-	{ id = "Speed25", title = "⚡ Speed Pack", color = COLORS.speed },
-	{ id = "SpeedMax", title = "⚡ Max Speed", color = COLORS.speed },
-	{ id = "SpeedMult", title = "🚀 Speed Gain", color = COLORS.index },
-	{ id = "Treadmill", title = "🏃 Treadmill", color = Color3.fromRGB(240, 90, 90) },
-	{ id = "Slot", title = "🪴 Plant Slot", color = COLORS.money },
-	{ id = "SleepDust", title = "💤 Sleep Dust", color = Color3.fromRGB(120, 130, 255) },
-	{ id = "Pass:DoubleMoney", title = "💎 2x Money", color = Color3.fromRGB(0, 180, 200) },
-	{ id = "Pass:ExtraSlots", title = "💎 +10 Slots", color = Color3.fromRGB(0, 180, 200) },
-}
-
-local function renderUpgrades()
-	clearModal()
-	for i, item in SHOP_ITEMS do
-		local f = new("Frame", { BackgroundColor3 = item.color, LayoutOrder = i, Parent = modalBody }, deco(12))
-		text(f, { Text = item.title, Size = UDim2.new(1, -12, 0, 32), Position = UDim2.fromOffset(6, 6) })
-		local price, label
-		local owned = false
-		if string.sub(item.id, 1, 5) == "Pass:" then
-			local pass = (Config.GAMEPASSES :: any)[string.sub(item.id, 6)]
-			label = pass.label
-			owned = stats.passes[string.sub(item.id, 6)] == true
-		else
-			price, label = Config.priceOf(item.id, stats :: any)
-		end
-		local extra = ""
-		if item.id == "SleepDust" then
-			extra = ` (own {(stats.items or {}).SleepDust or 0})`
-		elseif item.id == "Slot" then
-			extra = ` ({stats.slots} now)`
-		end
-		text(f, { Text = (label or "") .. extra, Size = UDim2.new(1, -12, 0, 44), Position = UDim2.fromOffset(6, 40), TextColor3 = Color3.fromRGB(255, 255, 220) })
-		local affordable = price ~= nil and stats.money >= price
-		local caption = if owned then "Owned" elseif string.sub(item.id, 1, 5) == "Pass:" then "Robux" elseif price then Format.money(price) else "Maxed"
-		local b = button(f, caption, if affordable or (string.sub(item.id, 1, 5) == "Pass:" and not owned) then COLORS.gold else COLORS.disabled,
-			UDim2.new(1, -16, 0, 44), function()
-				RequestBuy:FireServer(item.id)
-			end)
-		b.Position = UDim2.new(0, 8, 1, -52)
+-- Dark text line inside the modal body
+local function heading(label: string, order: number, centered: boolean?, height: number?)
+	local h = text(modalBody, {
+		Text = label, Size = UDim2.new(1, -12, 0, height or 30), TextColor3 = INK, LayoutOrder = order, TextWrapped = true,
+		TextXAlignment = if centered then Enum.TextXAlignment.Center else Enum.TextXAlignment.Left,
+	})
+	local stroke = h:FindFirstChildOfClass("UIStroke")
+	if stroke then
+		stroke:Destroy()
 	end
 end
 
-----------------------------------------------------------------------------------------------------
--- Shop: Seed Packs tab (the two premium packs, with loot tables showing the exact server odds)
-----------------------------------------------------------------------------------------------------
-local packShines: { Frame } = {} -- swept across the premium cards every frame while they're shown
+-- "-- SPEED --" style section title
+local function section(label: string, order: number)
+	heading(`-- {label} --`, order, true, 36)
+end
 
--- Robux prices. Packs are developer products; the real price is set on the Creator Dashboard, so it
--- is fetched once per id with GetProductInfo (pcall'd, cached). Until then, or with no id yet, the
--- placeholder from Config is shown.
+-- Robux prices. Developer products' real prices are set on the Creator Dashboard, so each is fetched
+-- once per id with GetProductInfo (pcall'd, cached). Until then, or with no id yet, the placeholder
+-- from Config is shown.
 local robuxPrices: { [number]: number } = {}
 local priceFetching: { [number]: boolean } = {}
 local priceRerender = false
@@ -578,7 +528,7 @@ local function robuxPrice(product: Config.DevProduct): number
 					priceRerender = true
 					task.delay(0.3, function()
 						priceRerender = false
-						if modal.Visible and modalName == "Shop" and shopTab == "Packs" then
+						if modal.Visible and (modalName == "Shop" or modalName == "Trails") then
 							renderModal()
 						end
 					end)
@@ -592,6 +542,27 @@ local function robuxPrice(product: Config.DevProduct): number
 	end
 	return product.robux
 end
+
+-- "R$ 64", or "R$ 64 soon" while the product has no id yet (the server answers "coming soon").
+local function robuxCaption(product: Config.DevProduct): string
+	if product.id == 0 then
+		return `{Format.robux(product.robux)} soon`
+	end
+	return Format.robux(robuxPrice(product))
+end
+
+local function giftButton(parent: Instance): TextButton
+	-- Gifting needs extra work (choosing a player, granting to them): shown, but not live yet.
+	return button(parent, "🎁", COLORS.robux, UDim2.fromOffset(46, 44), function()
+		toast("🎁 Gifting is coming soon!", "blue")
+	end)
+end
+
+----------------------------------------------------------------------------------------------------
+-- Shop: seed packs (premium cards with loot tables showing the exact server odds), then every other
+-- Robux item as a card with a green R$ button, plus the money plot upgrade
+----------------------------------------------------------------------------------------------------
+local packShines: { Frame } = {} -- swept across the premium cards every frame while they're shown
 
 -- Loot table: one row per rarity with a bar as wide as its chance.
 local function lootTable(parent: Instance, pack: SeedPacks.Pack, pos: UDim2, size: UDim2)
@@ -619,15 +590,6 @@ local function mutationLine(pack: SeedPacks.Pack): string
 		table.insert(parts, `{icon} {m.id} {SeedPacks.percent(m.pct)}`)
 	end
 	return table.concat(parts, "  ·  ")
-end
-
--- Dark section heading inside the modal body
-local function heading(label: string, order: number)
-	local h = text(modalBody, { Text = label, Size = UDim2.new(1, -12, 0, 30), TextColor3 = INK, TextXAlignment = Enum.TextXAlignment.Left, LayoutOrder = order })
-	local stroke = h:FindFirstChildOfClass("UIStroke")
-	if stroke then
-		stroke:Destroy()
-	end
 end
 
 -- One big premium card per pack: zone colours, a gold frame, a sweeping shine, the loot table with
@@ -665,39 +627,211 @@ local function packCard(parent: Instance, order: number, productName: string, pr
 	})
 	-- Robux only. With id = 0 the server answers "coming soon"; with a full bag it won't prompt.
 	local live = product.id ~= 0
-	local price = Format.robux(if live then robuxPrice(product) else product.robux)
-	local caption = if not live then `Coming soon · {price}` elseif bagFull then `🎒 Bag full · {price}` else `Buy · {price}`
-	button(c, caption, if live and not bagFull then COLORS.money else COLORS.disabled, UDim2.new(1, -24, 0, 58), function()
+	local price = robuxCaption(product)
+	local caption = if not live then `Coming soon · {Format.robux(product.robux)}` elseif bagFull then `🎒 Bag full · {price}` else `Buy · {price}`
+	button(c, caption, if live and not bagFull then COLORS.buy else COLORS.disabled, UDim2.new(1, -82, 0, 58), function()
 		RequestBuy:FireServer("Product:" .. productName)
 	end).Position = UDim2.new(0, 12, 1, -70)
+	local gift = giftButton(c)
+	gift.Size = UDim2.fromOffset(58, 58)
+	gift.Position = UDim2.new(1, -70, 1, -70)
 end
 
-local function renderPacks()
-	modalBody:ClearAllChildren()
-	new("UIListLayout", { Padding = UDim.new(0, 12), SortOrder = Enum.SortOrder.LayoutOrder, HorizontalAlignment = Enum.HorizontalAlignment.Center, Parent = modalBody })
-	local bagCount = SeedPacks.bagCount(stats.seedBag or {})
-	local bagFull = bagCount >= Config.SEED_BAG_MAX
+-- A grid of shop cards (4 per row), auto-sized to its contents.
+local function cardGrid(order: number): Frame
+	return new("Frame", {
+		BackgroundTransparency = 1, Size = UDim2.new(1, -12, 0, 0), AutomaticSize = Enum.AutomaticSize.Y, LayoutOrder = order, Parent = modalBody,
+	}, {
+		new("UIGridLayout", {
+			CellSize = UDim2.fromOffset(176, 168), CellPadding = UDim2.fromOffset(10, 10), SortOrder = Enum.SortOrder.LayoutOrder,
+			HorizontalAlignment = Enum.HorizontalAlignment.Center,
+		}),
+	})
+end
 
-	heading("💎 Premium Seed Packs: skip the run! Each pack rolls one late-game seed into your 🎒 bag.", 1)
-	local row = new("Frame", { BackgroundTransparency = 1, Size = UDim2.new(1, -12, 0, 400), LayoutOrder = 2, Parent = modalBody },
-		{ new("UIListLayout", { FillDirection = Enum.FillDirection.Horizontal, HorizontalAlignment = Enum.HorizontalAlignment.Center, Padding = UDim.new(0, 12), SortOrder = Enum.SortOrder.LayoutOrder }) })
-	for i, entry in SeedPacks.products() do
-		packCard(row, i, entry.name, entry.product, bagFull)
-	end
+-- A shop card: big title, a smaller line, and the buy button (+ the gift button for Robux items).
+local function shopCard(grid: Instance, order: number, color: Color3, title: string, sub: string): Frame
+	local c = new("Frame", { BackgroundColor3 = color, LayoutOrder = order, Parent = grid }, deco(12))
+	new("UIGradient", { Rotation = 90, Color = ColorSequence.new(WHITE, Color3.fromRGB(190, 190, 190)), Parent = c })
+	text(c, { Text = title, Size = UDim2.new(1, -12, 0, 46), Position = UDim2.fromOffset(6, 8) })
+	text(c, { Text = sub, Size = UDim2.new(1, -12, 0, 44), Position = UDim2.fromOffset(6, 58), TextColor3 = Color3.fromRGB(255, 255, 225), TextWrapped = true })
+	return c
+end
 
-	heading(`🎒 Seed bag {bagCount}/{Config.SEED_BAG_MAX}{if bagFull then " (full: plant some first!)" else ""} · plant bagged seeds from the 🌱 Seeds menu at your plot's pad`, 3)
+-- A Robux card for developer product `name`; `owned` replaces the price (e.g. a treadmill tier you have).
+local function productCard(grid: Instance, order: number, name: string, product: Config.DevProduct, color: Color3, title: string, sub: string, owned: string?)
+	local c = shopCard(grid, order, color, title, sub)
+	button(c, owned or robuxCaption(product), if owned or product.id == 0 then COLORS.disabled else COLORS.buy, UDim2.new(1, -66, 0, 44), function()
+		RequestBuy:FireServer("Product:" .. name)
+	end).Position = UDim2.new(0, 8, 1, -52)
+	giftButton(c).Position = UDim2.new(1, -54, 1, -52)
 end
 
 local function renderShop()
 	modalTitle.Text = "🛒 Shop"
-	for name, b in tabButtons do
-		b.BackgroundColor3 = if name == shopTab then COLORS.shop else COLORS.disabled
+	clearModal(8)
+	local order = 0
+	local function nextOrder(): number
+		order += 1
+		return order
 	end
-	if shopTab == "Packs" then
-		renderPacks()
+
+	-- Seed packs (Robux)
+	section("SEED PACKS", nextOrder())
+	local bagCount = SeedPacks.bagCount(stats.seedBag or {})
+	local bagFull = bagCount >= Config.SEED_BAG_MAX
+	local row = new("Frame", { BackgroundTransparency = 1, Size = UDim2.new(1, -12, 0, 400), LayoutOrder = nextOrder(), Parent = modalBody },
+		{ new("UIListLayout", { FillDirection = Enum.FillDirection.Horizontal, HorizontalAlignment = Enum.HorizontalAlignment.Center, Padding = UDim.new(0, 12), SortOrder = Enum.SortOrder.LayoutOrder }) })
+	for i, entry in Config.products("Pack") do
+		packCard(row, i, entry.name, entry.product, bagFull)
+	end
+	heading(`🎒 Seed bag {bagCount}/{Config.SEED_BAG_MAX}{if bagFull then " (full: plant some first!)" else ""} · plant bagged seeds from the 🌱 Seeds menu at your plot's pad`, nextOrder())
+
+	-- Plot upgrade (money; also on the board at your plot's gate)
+	section("PLOT UPGRADE", nextOrder())
+	local plotGrid = cardGrid(nextOrder())
+	local level = stats.plotLevel or 1
+	local price = Config.priceOf("PlotUpgrade", stats :: any)
+	local plotCard = shopCard(plotGrid, 1, Color3.fromRGB(90, 190, 90),
+		if price then `🏡 Level {level} → {level + 1}` else `🏡 Level {level} · MAX`,
+		if price then `+1 slot · cash x{Config.plotMoneyMult(level)} → x{Config.plotMoneyMult(level + 1)}` else `{Config.plotSlots(level)} slots · cash x{Config.plotMoneyMult(level)}`)
+	button(plotCard, if price then Format.money(price) else "Maxed", if price and stats.money >= price then COLORS.buy else COLORS.disabled,
+		UDim2.new(1, -16, 0, 44), function()
+			RequestBuy:FireServer("PlotUpgrade")
+		end).Position = UDim2.new(0, 8, 1, -52)
+
+	-- Speed (Robux)
+	section("SPEED", nextOrder())
+	local grid = cardGrid(nextOrder())
+	for i, entry in Config.products("Speed") do
+		productCard(grid, i, entry.name, entry.product, COLORS.speed, `⚡ {entry.product.label}`, "Added to your Speed right away")
+	end
+
+	-- Money (Robux): the card shows what you'd get right now (fixed, or minutes of your income)
+	section("MONEY", nextOrder())
+	grid = cardGrid(nextOrder())
+	for i, entry in Config.products("Money") do
+		local amount = Config.moneyPackAmount(entry.product, stats.income or 0)
+		productCard(grid, i, entry.name, entry.product, COLORS.money, `💰 {Format.money(amount)}`,
+			`{entry.product.label} · at least {entry.product.minutes} min of income`)
+	end
+
+	-- Treadmill (Robux)
+	section("TREADMILL", nextOrder())
+	grid = cardGrid(nextOrder())
+	for i, entry in Config.products("Treadmill") do
+		local tier = entry.product.tier :: number
+		local owned = (stats.treadmillTier or 1) >= tier
+		productCard(grid, i, entry.name, entry.product, Color3.fromRGB(240, 90, 90), `🏃 Treadmill x{Config.TREADMILL_TIERS[tier].mult}`,
+			`Your treadmill: x{Config.TREADMILL_TIERS[stats.treadmillTier or 1].mult}`, if owned then "Owned" else nil)
+	end
+
+	-- Items (Robux)
+	section("ITEMS", nextOrder())
+	grid = cardGrid(nextOrder())
+	for i, entry in Config.products("Dust") do
+		productCard(grid, i, entry.name, entry.product, Color3.fromRGB(120, 130, 255), `💤 {entry.product.label}`,
+			`You have {(stats.items or {}).SleepDust or 0} · press 2 near a sleeping guard`)
+	end
+
+	-- Gamepasses (Robux)
+	section("PASSES", nextOrder())
+	grid = cardGrid(nextOrder())
+	for i, name in { "DoubleMoney", "ExtraSlots" } do
+		local pass = Config.GAMEPASSES[name]
+		local owned = stats.passes[name] == true
+		local c = shopCard(grid, i, Color3.fromRGB(0, 180, 200), `💎 {pass.label}`, if name == "DoubleMoney" then "Doubles all plant income" else "On top of your plot level's slots")
+		button(c, if owned then "Owned" else "Buy · R$", if owned or pass.id == 0 then COLORS.disabled else COLORS.buy, UDim2.new(1, -66, 0, 44), function()
+			RequestBuy:FireServer("Pass:" .. name)
+		end).Position = UDim2.new(0, 8, 1, -52)
+		giftButton(c).Position = UDim2.new(1, -54, 1, -52)
+	end
+end
+
+----------------------------------------------------------------------------------------------------
+-- Trail Shop: one card per trail, scrolling sideways, in the trail's colour. Money ($) or Robux (R$),
+-- or Equip / Equipped once owned.
+----------------------------------------------------------------------------------------------------
+local function trailFill(f: GuiObject, t: Config.Trail)
+	if t.rainbow then
+		f.BackgroundColor3 = WHITE
+		new("UIGradient", { Rotation = 25, Color = Config.trailColors(t), Parent = f })
 	else
-		renderUpgrades()
+		f.BackgroundColor3 = t.color
+		new("UIGradient", { Rotation = 90, Color = ColorSequence.new(WHITE, Color3.fromRGB(150, 150, 150)), Parent = f })
 	end
+end
+
+local function trailCard(parent: Instance, order: number, t: Config.Trail)
+	local owned = stats.trails[t.id] == true
+	local equipped = stats.equippedTrail == t.id
+	local c = new("Frame", { Size = UDim2.fromOffset(200, 360), LayoutOrder = order, Parent = parent }, deco(16, if equipped then 5 else 3))
+	trailFill(c, t)
+	if equipped then
+		local stroke = c:FindFirstChildOfClass("UIStroke")
+		if stroke then
+			stroke.Color = COLORS.gold
+		end
+	end
+	text(c, { Text = string.upper(t.rarity), Size = UDim2.new(1, -16, 0, 26), Position = UDim2.fromOffset(8, 10), TextColor3 = Color3.fromRGB(255, 250, 220) })
+	text(c, { Text = t.name, Size = UDim2.new(1, -16, 0, 44), Position = UDim2.fromOffset(8, 38) })
+	-- A ribbon preview: the trail's colours fading out
+	local ribbon = new("Frame", {
+		AnchorPoint = Vector2.new(0.5, 0), Position = UDim2.new(0.5, 0, 0, 96), Size = UDim2.new(1, -36, 0, 34), BackgroundColor3 = WHITE,
+	}, { new("UICorner", { CornerRadius = UDim.new(1, 0) }), new("UIStroke", { Thickness = 2, Color = INK }) })
+	new("UIGradient", {
+		Color = Config.trailColors(t),
+		Transparency = NumberSequence.new({ NumberSequenceKeypoint.new(0, 0), NumberSequenceKeypoint.new(1, 0.7) }),
+		Parent = ribbon,
+	})
+	ribbon.Parent = c
+	text(c, { Text = `x{t.mult} Speed`, Size = UDim2.new(1, -16, 0, 50), Position = UDim2.fromOffset(8, 146), TextColor3 = COLORS.gold })
+	text(c, { Text = "on Speed you gain walking and on the treadmill", Size = UDim2.new(1, -16, 0, 36), Position = UDim2.fromOffset(8, 198), TextWrapped = true })
+
+	if owned then
+		local b = button(c, if equipped then "Equipped" else "Equip", if equipped then COLORS.disabled else COLORS.equip, UDim2.new(1, -20, 0, 50), function()
+			if not equipped then
+				RequestUseItem:FireServer("Equip:" .. t.id)
+			end
+		end)
+		b.Position = UDim2.new(0, 10, 1, -64)
+		return
+	end
+	local affordable = stats.money >= t.price
+	button(c, Format.money(t.price), if affordable then COLORS.buy else COLORS.disabled, UDim2.new(1, -20, 0, 50), function()
+		RequestBuy:FireServer("Trail:" .. t.id)
+	end).Position = UDim2.new(0, 10, 1, -120)
+	local product = t.product and Config.DEVELOPER_PRODUCTS[t.product]
+	if product then
+		button(c, robuxCaption(product), if product.id == 0 then COLORS.disabled else COLORS.robux, UDim2.new(1, -20, 0, 50), function()
+			RequestBuy:FireServer("Product:" .. (t.product :: string))
+		end).Position = UDim2.new(0, 10, 1, -64)
+	end
+end
+
+local function renderTrails()
+	local current = Config.trailById(stats.equippedTrail) or Config.TRAILS[1]
+	modalTitle.Text = "🏃 Trail Shop"
+	clearModal(10)
+	heading(`Trails multiply the Speed you gain: you get {perStepText()} Speed per step now, more as your Speed grows. Equipped: {current.name} (x{current.mult}). Any trail can be bought directly.`, 1, false, 44)
+	local strip = new("ScrollingFrame", {
+		BackgroundTransparency = 1, Size = UDim2.new(1, -12, 0, 390), LayoutOrder = 2, BorderSizePixel = 0,
+		CanvasSize = UDim2.new(), AutomaticCanvasSize = Enum.AutomaticSize.X, ScrollingDirection = Enum.ScrollingDirection.X,
+		ScrollBarThickness = 8, Parent = modalBody,
+	}, {
+		new("UIListLayout", { FillDirection = Enum.FillDirection.Horizontal, Padding = UDim.new(0, 12), SortOrder = Enum.SortOrder.LayoutOrder, VerticalAlignment = Enum.VerticalAlignment.Center }),
+		new("UIPadding", { PaddingLeft = UDim.new(0, 6), PaddingRight = UDim.new(0, 6) }),
+	})
+	for i, t in Config.TRAILS do
+		trailCard(strip, i, t)
+	end
+	task.defer(function() -- once the layout has sized the canvas
+		strip.CanvasPosition = Vector2.new(trailScrollX, 0)
+		strip:GetPropertyChangedSignal("CanvasPosition"):Connect(function()
+			trailScrollX = strip.CanvasPosition.X
+		end)
+	end)
+	heading("Your trail streams behind you for everyone to see. Money can't buy Speed itself: walk, run the treadmill, or grab a Speed pack in the 🛒 Shop.", 3, false, 44)
 end
 
 local function renderIndex()
@@ -733,10 +867,11 @@ local function renderIndex()
 end
 
 renderModal = function()
-	shopTabs.Visible = modalName == "Shop"
-	table.clear(packShines) -- renderPacks adds the current cards' shines back
+	table.clear(packShines) -- renderShop adds the current pack cards' shines back
 	if modalName == "Shop" then
 		renderShop()
+	elseif modalName == "Trails" then
+		renderTrails()
 	elseif modalName == "Index" then
 		renderIndex()
 	end
@@ -938,18 +1073,10 @@ local function refresh(changed: { [string]: any })
 	moneyLabel.Text = Format.money(stats.money)
 	incomeLabel.Text = "+" .. Format.money(stats.income) .. "/s"
 	speedLabel.Text = "⚡ " .. Format.short(stats.speed)
-	walkLabel.Text = `WalkSpeed {math.floor(stats.walkSpeed)}`
+	walkLabel.Text = `WalkSpeed {math.floor(stats.walkSpeed)} · {perStepText()} Speed/step`
+	local trail = Config.trailById(stats.equippedTrail)
 	multLabel.Text = `x{stats.speedMult or 1}`
-
-	local p1, l1 = Config.priceOf("Speed25", stats :: any)
-	setLabel(buySmall, `{l1} · {Format.money(p1 or 0)}`)
-	local amount = math.floor(stats.money / Config.PRICE_PER_SPEED)
-	setLabel(buyMax, `Max: +{Format.short(amount)} Speed · {Format.money(amount * Config.PRICE_PER_SPEED)}`)
-	local p3, l3 = Config.priceOf("SpeedMult", stats :: any)
-	setLabel(buyMult, if p3 then `{l3} · {Format.money(p3)}` else "Speed Gain maxed!")
-	buySmall.BackgroundColor3 = if p1 and stats.money >= p1 then COLORS.speed else COLORS.disabled
-	buyMax.BackgroundColor3 = if amount >= 1 then COLORS.speed else COLORS.disabled
-	buyMult.BackgroundColor3 = if p3 and stats.money >= p3 then COLORS.index else COLORS.disabled
+	multLabel.TextColor3 = if trail and not trail.rainbow then trail.color:Lerp(WHITE, 0.3) else COLORS.gold
 
 	setLabel(dustSlot, `💤\nDust x{(stats.items or {}).SleepDust or 0}`)
 
@@ -975,8 +1102,8 @@ local function refresh(changed: { [string]: any })
 	if sidePanel.Visible and (changed.plants or changed.carrying or changed.items or changed.seedBag or sideTab == "Seeds" and unlockChanged) then
 		renderSide()
 	end
-	if modal.Visible and (changed.index or changed.items or changed.slots or changed.speedMultTier or changed.treadmillTier or changed.passes or changed.money
-		or changed.seedBag or modalName == "Shop" and unlockChanged) then
+	if modal.Visible and (changed.index or changed.items or changed.slots or changed.plotLevel or changed.trails or changed.equippedTrail
+		or changed.treadmillTier or changed.passes or changed.money or changed.seedBag) then
 		renderModal()
 	end
 end

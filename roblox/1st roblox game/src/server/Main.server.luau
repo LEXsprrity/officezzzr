@@ -17,6 +17,7 @@ local SeedService = require(Server:WaitForChild("SeedService"))
 local GuardService = require(Server:WaitForChild("GuardService"))
 local PlotService = require(Server:WaitForChild("PlotService"))
 local ShopService = require(Server:WaitForChild("ShopService"))
+local TrailService = require(Server:WaitForChild("TrailService"))
 local AmbientService = require(Server:WaitForChild("AmbientService"))
 
 -- Guards pass through players (the catch is a distance check) and each other.
@@ -75,6 +76,7 @@ local function onCharacter(player: Player, char: Model)
 	if s then
 		s.tracker = SpeedLogic.newState()
 		hum.WalkSpeed = s.walkSpeed
+		TrailService.apply(char, s.profile.equippedTrail) -- a respawned character needs its trail again
 		if s.plot then
 			task.defer(SpeedService.teleport, player, s.plot.spawnCFrame + Vector3.new(0, 3, 0))
 		end

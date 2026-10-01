@@ -1,19 +1,20 @@
 -- RequestBuy / RequestUseItem handlers. Every request is rate-limited, type-checked and validated
--- against server state; the client only says what it wants. Also seed packs, which are Robux only:
--- the Robux prompt (gated) and ProcessReceipt (always grants what was paid for).
+-- against server state; the client only says what it wants. Money buys trails and plot upgrades;
+-- everything else is Robux: the developer product prompt (gated) and ProcessReceipt (always grants what
+-- was paid for), plus the gamepasses.
 local MarketplaceService = game:GetService("MarketplaceService")
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Shared = ReplicatedStorage:WaitForChild("Shared")
 local Config = require(Shared:WaitForChild("Config"))
 local Format = require(Shared:WaitForChild("Format"))
-local SeedPacks = require(Shared:WaitForChild("SeedPacks"))
 local Net = require(script.Parent:WaitForChild("Net"))
 local Sessions = require(script.Parent:WaitForChild("Sessions"))
 local Shop = require(script.Parent:WaitForChild("Shop"))
 local SpeedService = require(script.Parent:WaitForChild("SpeedService"))
 local GuardService = require(script.Parent:WaitForChild("GuardService"))
 local PlotService = require(script.Parent:WaitForChild("PlotService"))
+local TrailService = require(script.Parent:WaitForChild("TrailService"))
 
 local ShopService = {}
 
@@ -56,6 +57,12 @@ function ShopService.checkPasses(s: Sessions.Session)
 	end
 end
 
+-- The equipped trail changed: rebuild the visual and tell the client.
+local function trailChanged(s: Sessions.Session)
+	TrailService.apply(s.player.Character, s.profile.equippedTrail)
+	Sessions.pushFull(s)
+end
+
 local function onBuy(player: Player, itemId: any)
 	local s = Sessions.get(player)
 	if not s or not validId(itemId) or not Sessions.allowRequest(s, REQUESTS_PER_SECOND) then
@@ -75,8 +82,7 @@ local function onBuy(player: Player, itemId: any)
 		return
 	end
 
-	-- Seed packs are Robux only: "Product:<name>". We only open the Robux prompt here; ProcessReceipt
-	-- grants.
+	-- Robux: "Product:<name>". We only open the Robux prompt here; ProcessReceipt grants.
 	if string.sub(itemId, 1, 8) == "Product:" then
 		local name = string.match(itemId, "^Product:(%a%w*)$")
 		if not name then
@@ -84,25 +90,25 @@ local function onBuy(player: Player, itemId: any)
 		end
 		local product, why = Shop.canPrompt(s.profile, name)
 		if not product then
-			Net.toast(player, why or "Unknown pack", "red")
+			Net.toast(player, why or "Unknown product", "red")
 			return
 		end
 		MarketplaceService:PromptProductPurchase(player, product.id)
 		return
 	end
 
+	-- Money: the plot upgrade and "Trail:<id>". Anything else is refused by Shop.buy (Robux only).
+	if itemId == "PlotUpgrade" then
+		PlotService.upgrade(player)
+		return
+	end
 	local ok, msg = Shop.buy(s.profile, itemId)
 	if not ok then
 		Net.toast(player, msg, "red")
 		return
 	end
-	if itemId == "Speed25" or itemId == "SpeedMax" then
-		SpeedService.refresh(s)
-	elseif itemId == "Slot" then
-		PlotService.refreshSlots(s)
-	end
-	Sessions.pushFull(s)
-	Net.LootEvent:FireClient(player, "Bought", { itemId = itemId, label = msg })
+	trailChanged(s) -- a trail is the only other money item; buying one equips it
+	Net.LootEvent:FireClient(player, "Bought", { itemId = itemId, label = `{msg} (x{Sessions.speedMult(s)} Speed gain)` })
 end
 
 local function onUse(player: Player, itemId: any)
@@ -127,6 +133,17 @@ local function onUse(player: Player, itemId: any)
 		return
 	end
 
+	if string.sub(itemId, 1, 6) == "Equip:" then -- equip an owned trail
+		local ok, msg = Shop.equipTrail(s.profile, string.sub(itemId, 7))
+		if not ok then
+			Net.toast(player, msg, "red")
+			return
+		end
+		trailChanged(s)
+		Net.toast(player, `🏃 {msg} equipped: x{Sessions.speedMult(s)} Speed gain`, "blue")
+		return
+	end
+
 	if itemId ~= "SleepDust" then -- the only consumable
 		return
 	end
@@ -146,7 +163,7 @@ local function onUse(player: Player, itemId: any)
 end
 
 ----------------------------------------------------------------------------------------------------
--- Robux: developer products (the two premium seed packs)
+-- Robux: developer products (Config.DEVELOPER_PRODUCTS)
 ----------------------------------------------------------------------------------------------------
 -- Pending receipts are delivered as the player joins, often before their profile has loaded.
 local function waitForSession(userId: number, seconds: number): Sessions.Session?
@@ -169,23 +186,33 @@ end
 -- Anything else returns NotProcessedYet and Roblox delivers the receipt again later. A receipt that
 -- arrives is always granted (even past the bag's soft cap): the player paid.
 local function processReceipt(receiptInfo: { [string]: any }): Enum.ProductPurchaseDecision
-	local name = SeedPacks.productById(receiptInfo.ProductId)
+	local name = Config.productById(receiptInfo.ProductId)
 	if not name then
 		warn(`[ShopService] receipt for unknown developer product {receiptInfo.ProductId}`)
 	end
 	local s = waitForSession(receiptInfo.PlayerId, 15)
-	local income = if s then PlotService.incomeOf(s.profile, os.time()) * Sessions.moneyMult(s) else 0
+	-- The income the HUD shows (live, with day/night, plot level and 2x Money): Money products pay
+	-- minutes of it, and a pack that can't fit the bag pays seconds of it.
+	local income = if s then s.income * Sessions.moneyMult(s) else 0
 	local confirm, status, grant = Shop.processReceipt(if s then s.profile else nil, name, tostring(receiptInfo.PurchaseId), income, roll01, function()
 		local save = ShopService.save
 		return s ~= nil and save ~= nil and save(s)
 	end)
 	if s and status == "granted" and grant and s.player.Parent then
-		local pack = grant.pack
+		local kind = grant.product.kind
+		if kind == "Speed" then
+			SpeedService.refresh(s)
+		elseif kind == "Trail" then
+			TrailService.apply(s.player.Character, s.profile.equippedTrail)
+		end
 		Sessions.pushFull(s)
-		if grant.roll then
+		local pack = grant.pack
+		if pack and grant.roll then
 			Net.LootEvent:FireClient(s.player, "PackRoll", { packId = pack.id, name = pack.name, zone = pack.zone, result = grant.roll })
-		else
+		elseif pack then
 			Net.toast(s.player, `🎒 Your seed bag is full, so your {pack.name} paid {Format.money(grant.compensation)} instead.`, "gold")
+		else
+			Net.LootEvent:FireClient(s.player, "Bought", { itemId = "Product:" .. grant.name, label = grant.label })
 		end
 	end
 	return if confirm then Enum.ProductPurchaseDecision.PurchaseGranted else Enum.ProductPurchaseDecision.NotProcessedYet

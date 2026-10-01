@@ -51,7 +51,7 @@ H.test("robux only: packs have no money price and there is no money purchase pat
 	H.eq(Shop.buyPack, nil, "Shop.buyPack is gone")
 	H.eq(SeedPacks.fromId, nil, "the money-buy lookup is gone")
 	H.eq(Config.PACK_INCOME_SECONDS, nil)
-	local view = { money = 1e15, speed = 1e15, speedMultTier = 1, treadmillTier = 1, slots = 10 }
+	local view = { money = 1e15, plotLevel = 1, trails = {} }
 	for _, pack in packs() do
 		H.eq((pack :: any).price, nil, pack.id .. " has no money price")
 		H.eq((Config.priceOf(pack.id, view)), nil, "not a money shop item")
@@ -84,14 +84,15 @@ end)
 ----------------------------------------------------------------------------------------------------
 -- Developer products
 ----------------------------------------------------------------------------------------------------
-H.test("products: exactly two, Deep Space and Spirit Garden, id = 0 stubs with premium placeholders", function()
+H.test("products: exactly two packs, Deep Space and Spirit Garden, id = 0 stubs with premium placeholders", function()
 	local names = {}
-	for name, product in Config.DEVELOPER_PRODUCTS do
+	for _, entry in Config.products("Pack") do
+		local name, product = entry.name, entry.product
 		table.insert(names, name)
 		H.eq(product.id, 0, name .. " ships as a stub")
 		H.eq((product :: any).packs, nil, name .. ": one pack per product, no bundles")
 	end
-	H.eq(#names, 2, "two products")
+	H.eq(#names, 2, "two pack products")
 	local P = Config.DEVELOPER_PRODUCTS
 	H.eq(P.PackSpace.zone, SPACE)
 	H.eq(P.PackSpace.label, "Starpetal Pack")
@@ -99,10 +100,10 @@ H.test("products: exactly two, Deep Space and Spirit Garden, id = 0 stubs with p
 	H.eq(P.PackSpirit.zone, SPIRIT)
 	H.eq(P.PackSpirit.label, "Lotus Wyrm Pack")
 	H.eq(P.PackSpirit.robux, 3000)
-	for name, product in P do
-		H.eq(product.label, SeedPacks.packForProduct(product).name, name .. " label matches the pack")
+	for _, entry in Config.products("Pack") do
+		H.eq(entry.product.label, SeedPacks.packForProduct(entry.product).name, entry.name .. " label matches the pack")
 	end
-	local list = SeedPacks.products()
+	local list = Config.products("Pack")
 	H.eq(#list, 2)
 	H.eq(list[1].name, "PackSpace", "Shop order: by zone")
 	H.eq(list[2].name, "PackSpirit")
@@ -111,18 +112,18 @@ H.test("products: exactly two, Deep Space and Spirit Garden, id = 0 stubs with p
 end)
 
 H.test("products: lookup by developer product id", function()
-	H.eq((SeedPacks.productById(0)), nil, "0 is never a product, even with stubs")
-	H.eq((SeedPacks.productById(106)), nil, "stubs match nothing")
+	H.eq((Config.productById(0)), nil, "0 is never a product, even with stubs")
+	H.eq((Config.productById(106)), nil, "stubs match nothing")
 	withIds(ALL_IDS, function()
 		for name, id in ALL_IDS do
-			local found, product = SeedPacks.productById(id)
+			local found, product = Config.productById(id)
 			H.eq(found, name)
 			H.eq(product, Config.DEVELOPER_PRODUCTS[name])
 		end
-		H.eq((SeedPacks.productById(999)), nil, "unknown id")
-		H.eq((SeedPacks.productById(0)), nil)
+		H.eq((Config.productById(999)), nil, "unknown id")
+		H.eq((Config.productById(0)), nil)
 	end)
-	H.eq((SeedPacks.productById(106)), nil, "ids restored")
+	H.eq((Config.productById(106)), nil, "ids restored")
 end)
 
 H.test("products: each opens its zone's pack, and reveal ids look up the same pack", function()
@@ -164,7 +165,9 @@ H.test("odds: rarity odds sum to 100% and mutations + none sum to 100% for both 
 	end
 end)
 
-H.test("odds: packs show Celestial 0.5%, Gold and Rainbow, never Night; Spirit is luckier than Space", function()
+H.test("odds: packs roll with night luck and double Gold/Rainbow (8%, 2%), Celestial 0.5%, never Night", function()
+	H.eq(Config.PACK_LUCK, Config.NIGHT_LUCK, "packs roll rarities like a night pod")
+	H.eq(Config.PACK_MUTATION_MULT, 2)
 	H.eq(Config.PACK_EXCLUSIVE, "Celestial")
 	H.eq(Config.PACK_EXCLUSIVE_CHANCE, 0.005)
 	for _, pack in packs() do
@@ -175,8 +178,8 @@ H.test("odds: packs show Celestial 0.5%, Gold and Rainbow, never Night; Spirit i
 		end
 		H.eq(table.concat(ids, ","), "Celestial,Gold,Rainbow", pack.id)
 		H.near(odds.mutations[1].pct, 0.5, 1e-12, "Celestial 0.5%")
-		H.near(odds.mutations[2].pct, 4, 1e-12, "Gold 4%")
-		H.near(odds.mutations[3].pct, 1, 1e-12, "Rainbow 1%")
+		H.near(odds.mutations[2].pct, 8, 1e-12, "Gold 8%")
+		H.near(odds.mutations[3].pct, 2, 1e-12, "Rainbow 2%")
 		H.eq(SeedPacks.percent(odds.mutations[1].pct), "0.5%")
 	end
 	local space, spirit = SeedPacks.odds(packs()[1]), SeedPacks.odds(packs()[2])
@@ -281,7 +284,7 @@ H.test("prompt: unknown products are refused and id = 0 stubs say coming soon", 
 	for _, old in { "PackMeadow", "PackBundle1" } do
 		product, why = Shop.canPrompt(p, old)
 		H.eq(product, nil, old)
-		H.eq(why, "Unknown pack")
+		H.eq(why, "Unknown product")
 	end
 end)
 
@@ -289,7 +292,8 @@ H.test("prompt: no Speed gate, both packs open to a brand-new player", function(
 	withIds(ALL_IDS, function()
 		local p = ProfileStore.defaultProfile()
 		H.eq(p.speed, 0)
-		for name, product in Config.DEVELOPER_PRODUCTS do
+		for _, entry in Config.products("Pack") do
+			local name, product = entry.name, entry.product
 			local got, why = Shop.canPrompt(p, name)
 			H.eq(got, product, name .. " open at 0 Speed")
 			H.eq(why, nil)

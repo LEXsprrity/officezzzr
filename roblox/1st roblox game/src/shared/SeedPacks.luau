@@ -38,42 +38,17 @@ function SeedPacks.zonePack(k: number): Pack
 end
 
 ----------------------------------------------------------------------------------------------------
--- Developer products (Robux): Config.DEVELOPER_PRODUCTS[name] = { id, label, robux, zone }
+-- Developer products (Robux): the Config.DEVELOPER_PRODUCTS of kind "Pack" ({ id, label, robux, zone })
 ----------------------------------------------------------------------------------------------------
--- Every product, by zone (the Shop's card order).
-function SeedPacks.products(): { { name: string, product: Config.DevProduct } }
-	local list = {}
-	for name, product in Config.DEVELOPER_PRODUCTS do
-		table.insert(list, { name = name, product = product })
-	end
-	table.sort(list, function(a, b)
-		return a.product.zone < b.product.zone
-	end)
-	return list
-end
-
--- The product with this (non-zero) developer product id, as (name, product).
-function SeedPacks.productById(productId: number): (string?, Config.DevProduct?)
-	if productId == 0 then
-		return nil, nil
-	end
-	for name, product in Config.DEVELOPER_PRODUCTS do
-		if product.id == productId then
-			return name, product
-		end
-	end
-	return nil, nil
-end
-
--- The pack a product opens.
+-- The pack a "Pack" product opens.
 function SeedPacks.packForProduct(product: Config.DevProduct): Pack
-	return SeedPacks.zonePack(product.zone)
+	return SeedPacks.zonePack(product.zone :: number)
 end
 
 -- A sold pack by its reveal id ("Pack:Space"), or nil.
 function SeedPacks.lookup(id: string): Pack?
-	for _, product in Config.DEVELOPER_PRODUCTS do
-		local pack = SeedPacks.packForProduct(product)
+	for _, entry in Config.products("Pack") do
+		local pack = SeedPacks.packForProduct(entry.product)
 		if pack.id == id then
 			return pack
 		end
