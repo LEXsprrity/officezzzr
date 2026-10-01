@@ -350,6 +350,19 @@ local function upgradePrompt(state: PlotState): ProximityPrompt?
 	return state.info.upgradeBoard:FindFirstChildOfClass("ProximityPrompt")
 end
 
+-- The treadmill sign shows what standing on it pays its owner right now (WalkSpeed x Speed per stud x
+-- the treadmill tier, per second), like the HUD's "+X Speed/step". Refreshed with every payout.
+local function renderTreadmillSign(state: PlotState)
+	local s = state.owner and Sessions.get(state.owner)
+	if not s then
+		state.info.treadmillLabel.Text = "🏃 TREADMILL"
+		return
+	end
+	local tier = Sessions.treadmillMult(s)
+	local perSecond = math.min(s.walkSpeed, Config.GAIN_CAP_STUDS_PER_TICK / Config.TICK) * Sessions.speedPerStud(s) * tier
+	state.info.treadmillLabel.Text = `🏃 TREADMILL x{tier}\n+{Format.short(perSecond)} Speed/s`
+end
+
 -- Writes the owner's level, perk and price on the board (and the prompt's text).
 local function renderUpgradeSign(state: PlotState)
 	local labels = state.info.upgradeLabels
@@ -461,6 +474,7 @@ function PlotService.assign(s: Sessions.Session): WorldBuilder.PlotInfo?
 			if boardPrompt then
 				boardPrompt:SetAttribute("OwnerUserId", s.player.UserId)
 			end
+			renderTreadmillSign(state)
 			renderUpgradeSign(state)
 			state.info.model:SetAttribute("OwnerUserId", s.player.UserId)
 			renderSoil(state, Sessions.maxSlots(s))
@@ -497,6 +511,7 @@ function PlotService.release(player: Player)
 		boardPrompt:SetAttribute("OwnerUserId", 0)
 	end
 	renderUpgradeSign(state)
+	renderTreadmillSign(state)
 end
 
 -- After a plot upgrade or the slots gamepass.
@@ -556,6 +571,7 @@ local function payout(s: Sessions.Session, state: PlotState, now: number)
 	end
 	s.profile.money += total
 	s.income = total / (mult * Config.PAYOUT_INTERVAL)
+	renderTreadmillSign(state)
 	Sessions.pushCore(s)
 	pushPlants(s, now)
 end

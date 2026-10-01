@@ -53,6 +53,7 @@ H.test("world: plot layout contract is unchanged (slots, pad, spawn, belt)", fun
 		H.eq(plot.model.PrimaryPart.Name, "Floor")
 		H.ok(plot.soil:IsA("Folder") and plot.plants:IsA("Folder"), "soil/plants folders")
 		H.ok(plot.signLabel:IsA("TextLabel"), "sign label")
+		H.ok(plot.treadmillLabel:IsA("TextLabel"), "treadmill sign label (PlotService writes the owner's Speed/s on it)")
 	end
 end)
 

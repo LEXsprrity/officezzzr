@@ -187,8 +187,14 @@ local speedPanel = new("Frame", {
 	BackgroundColor3 = COLORS.speed, Parent = bottomLeft,
 }, deco(12))
 local speedLabel = text(speedPanel, { Text = "⚡ 0", Size = UDim2.new(0.6, -10, 0.72, 0), Position = UDim2.fromOffset(10, 4), TextXAlignment = Enum.TextXAlignment.Left })
-local walkLabel = text(speedPanel, { Text = "WalkSpeed 16", Size = UDim2.new(0.6, -10, 0.26, 0), Position = UDim2.new(0, 10, 0.72, -3),
+local walkLabel = text(speedPanel, { Text = "WalkSpeed 16", Size = UDim2.new(0.8, -10, 0.26, 0), Position = UDim2.new(0, 10, 0.72, -3),
 	TextXAlignment = Enum.TextXAlignment.Left, TextColor3 = Color3.fromRGB(215, 235, 255) })
+-- "+0.5", "+12.3", "+1.2K": the Speed one step (stud) pays right now (Config.speedPerStud)
+local function perStepText(): string
+	local x = Config.speedPerStud(stats.speed or 0, stats.equippedTrail)
+	return "+" .. (if x < 100 then string.format("%.1f", x) else Format.short(x))
+end
+
 local multLabel = text(speedPanel, { Text = "x1", Size = UDim2.new(0.18, 0, 0.5, 0), Position = UDim2.new(0.6, 0, 0.25, 0), TextColor3 = COLORS.gold })
 
 -- The 🏃 button opens the Trail Shop (trails multiply the Speed you gain; money can't buy Speed itself)
@@ -807,7 +813,7 @@ local function renderTrails()
 	local current = Config.trailById(stats.equippedTrail) or Config.TRAILS[1]
 	modalTitle.Text = "🏃 Trail Shop"
 	clearModal(10)
-	heading(`Trails multiply the Speed you gain. Equipped: {current.name} (x{current.mult}). Any trail can be bought directly.`, 1, false, 44)
+	heading(`Trails multiply the Speed you gain: you get {perStepText()} Speed per step now, more as your Speed grows. Equipped: {current.name} (x{current.mult}). Any trail can be bought directly.`, 1, false, 44)
 	local strip = new("ScrollingFrame", {
 		BackgroundTransparency = 1, Size = UDim2.new(1, -12, 0, 390), LayoutOrder = 2, BorderSizePixel = 0,
 		CanvasSize = UDim2.new(), AutomaticCanvasSize = Enum.AutomaticSize.X, ScrollingDirection = Enum.ScrollingDirection.X,
@@ -1067,7 +1073,7 @@ local function refresh(changed: { [string]: any })
 	moneyLabel.Text = Format.money(stats.money)
 	incomeLabel.Text = "+" .. Format.money(stats.income) .. "/s"
 	speedLabel.Text = "⚡ " .. Format.short(stats.speed)
-	walkLabel.Text = `WalkSpeed {math.floor(stats.walkSpeed)}`
+	walkLabel.Text = `WalkSpeed {math.floor(stats.walkSpeed)} · {perStepText()} Speed/step`
 	local trail = Config.trailById(stats.equippedTrail)
 	multLabel.Text = `x{stats.speedMult or 1}`
 	multLabel.TextColor3 = if trail and not trail.rainbow then trail.color:Lerp(WHITE, 0.3) else COLORS.gold

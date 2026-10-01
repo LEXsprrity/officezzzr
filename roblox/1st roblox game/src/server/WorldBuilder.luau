@@ -18,6 +18,7 @@ export type PlotInfo = {
 	spawnCFrame: CFrame,
 	slotCFrames: { CFrame },
 	belt: BasePart,
+	treadmillLabel: TextLabel, -- the sign over the belt
 	soil: Folder,
 	plants: Folder,
 	upgradeBoard: BasePart, -- the "Upgrade Plot" sign at the gate; PlotService adds its prompt and text
@@ -329,7 +330,8 @@ local function buildPlot(world: Folder, index: number): PlotInfo
 	local tmSignPart = box(model, "TreadmillSign", Vector3.new(1, 1, 1), CFrame.new(beltCenter + Vector3.new(0, 8, 0)), color)
 	tmSignPart.Transparency = 1
 	tmSignPart.CanCollide = false
-	billboard(tmSignPart, "🏃 TREADMILL", UDim2.fromScale(10, 2.2), Vector3.zero, 60)
+	-- PlotService writes the owner's live rate on it ("+X Speed/s").
+	local treadmillLabel = billboard(tmSignPart, "🏃 TREADMILL", UDim2.fromScale(10, 3.6), Vector3.zero, 60)
 
 	-- A few props in the corners, clear of the slots, pad, treadmill and spawn point
 	Props.roundTree(model, at(-35, 30, 1), rng, Color3.fromRGB(70, 185, 70), 10)
@@ -410,6 +412,7 @@ local function buildPlot(world: Folder, index: number): PlotInfo
 		spawnCFrame = CFrame.new(at(-24, 12, 4)) * facingIn,
 		slotCFrames = slotCFrames,
 		belt = belt,
+		treadmillLabel = treadmillLabel,
 		soil = soil,
 		plants = plants,
 		upgradeBoard = upgradeBoard,
