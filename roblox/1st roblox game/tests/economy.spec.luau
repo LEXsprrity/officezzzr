@@ -34,8 +34,9 @@ H.test("zones: zoneAtX maps corridor positions to zones, base to nil", function(
 end)
 
 H.test("economy: a full plot of zone-k seeds pays for zone k+1 in PAYBACK_SECONDS", function()
+	H.eq(Config.ECONOMY_SLOTS, 10, "income is balanced for 10 plants, whatever SLOTS_START is")
 	for k = 1, #Config.ZONES - 1 do
-		local perSecond = Config.seedIncome(k) * Config.SLOTS_START
+		local perSecond = Config.seedIncome(k) * Config.ECONOMY_SLOTS
 		H.near(perSecond * Config.PAYBACK_SECONDS * Config.PRICE_PER_SPEED, Config.speedCost(Config.ZONES[k + 1].req), 1e-3, Config.ZONES[k].id)
 	end
 end)
@@ -134,8 +135,27 @@ H.test("shop: tiered upgrades advance, get pricier, and max out", function()
 	H.eq(Shop.buy(p, "Treadmill", 0), false)
 	local s1 = Config.priceOf("Slot", p)
 	H.ok(Shop.buy(p, "Slot", 0))
-	H.eq(p.slots, 11)
+	H.eq(p.slots, Config.SLOTS_START + 1)
 	H.ok(Config.priceOf("Slot", p) > s1)
+end)
+
+H.test("shop: slots start at 5, slot 6 costs $500 and every slot costs more than the last", function()
+	H.eq(Config.SLOTS_START, 5)
+	local function priceOfSlot(n: number): number -- price of buying slot n
+		return (Config.priceOf("Slot", { money = 0, speed = 0, speedMultTier = 1, treadmillTier = 1, slots = n - 1 }))
+	end
+	H.eq(priceOfSlot(6), 500)
+	H.eq(priceOfSlot(7), 1250)
+	H.near(priceOfSlot(10), 19.5e3, 0.1e3)
+	H.near(priceOfSlot(15), 1.9e6, 0.01e6)
+	H.near(priceOfSlot(30), 1.8e12, 0.03e12)
+	local last = 0
+	for n = Config.SLOTS_START + 1, Config.SLOTS_MAX do
+		local price = priceOfSlot(n)
+		H.ok(price > last, `slot {n} costs {price}, slot {n - 1} cost {last}`)
+		last = price
+	end
+	H.eq(Config.priceOf("Slot", { money = 0, speed = 0, speedMultTier = 1, treadmillTier = 1, slots = Config.SLOTS_MAX }), nil, "maxed")
 end)
 
 H.test("shop: Sleep Dust and potions are consumables; potion price scales with income", function()

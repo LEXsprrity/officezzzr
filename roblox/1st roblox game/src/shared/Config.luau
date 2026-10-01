@@ -222,9 +222,10 @@ end
 -- Economy (formulas)
 ----------------------------------------------------------------------------------------------------
 Config.PRICE_PER_SPEED = 1 -- $ per point of Speed
-Config.SLOTS_START = 10
+Config.SLOTS_START = 5 -- plant slots a new player starts with (older saves keep what they have)
 Config.SLOTS_MAX = 30
-Config.PAYBACK_SECONDS = 300 -- a full plot of zone-k plants pays for zone k+1 in about this long
+Config.ECONOMY_SLOTS = 10 -- the plot size income is balanced for; independent of SLOTS_START
+Config.PAYBACK_SECONDS = 300 -- a full plot (ECONOMY_SLOTS) of zone-k plants pays for zone k+1 in about this long
 Config.PAYOUT_INTERVAL = 3
 
 function Config.speedCost(amount: number): number
@@ -235,7 +236,7 @@ end
 function Config.seedIncome(k: number): number
 	local nextZone = Config.ZONES[k + 1]
 	local nextReq = if nextZone then nextZone.req else Config.ZONES[k].req * 10
-	return nextReq * Config.PRICE_PER_SPEED / (Config.SLOTS_START * Config.PAYBACK_SECONDS)
+	return nextReq * Config.PRICE_PER_SPEED / (Config.ECONOMY_SLOTS * Config.PAYBACK_SECONDS)
 end
 
 -- Growth (P2): closed form from plantedAt, never simulated per tick.
@@ -298,8 +299,10 @@ Config.TREADMILL_TIERS = {
 }
 Config.SPEED_BUY_FRACTION = 0.25 -- the "+" button's small pack: +25% of current Speed...
 Config.SPEED_BUY_MIN = 1000 -- ...but at least this much
-Config.SLOT_BASE_PRICE = 25e3
-Config.SLOT_PRICE_GROWTH = 2.2
+-- Slot n+1 costs SLOT_BASE_PRICE * SLOT_PRICE_GROWTH ^ (n - SLOTS_START): slot 6 $500, 7 $1.25K,
+-- 10 ~$19.5K, 15 ~$1.9M, 30 ~$1.8T.
+Config.SLOT_BASE_PRICE = 500
+Config.SLOT_PRICE_GROWTH = 2.5
 Config.SLEEP_DUST_PRICE = 5e3
 Config.SLEEP_DUST_EXTRA = 5 -- guard stays asleep this much longer
 Config.SLEEP_DUST_RANGE = 60

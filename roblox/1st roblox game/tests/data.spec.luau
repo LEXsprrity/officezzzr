@@ -71,15 +71,21 @@ H.test("data: only the plant timestamp is stored, not weight or income", functio
 	end
 end)
 
-H.test("data: a new player gets defaults (10 slots, 3 Sleep Dust, 2x treadmill)", function()
+H.test("data: a new player gets defaults (5 slots, 3 Sleep Dust, 2x treadmill)", function()
 	local p, ok = ProfileStore.new(mockDataStore()):load(7)
 	H.ok(ok)
 	H.eq(p.slots, Config.SLOTS_START)
-	H.eq(p.slots, 10)
+	H.eq(p.slots, 5)
 	H.eq(p.items.SleepDust, 3)
 	H.eq(Config.TREADMILL_TIERS[p.treadmillTier].mult, 2)
 	H.eq(p.money, 0)
 	H.eq(#p.plants, 0)
+end)
+
+H.test("data: saves from before 5 starting slots keep their 10+ slots", function()
+	H.eq(ProfileStore.deserialize({ slots = 10 }).slots, 10)
+	H.eq(ProfileStore.deserialize({ slots = 17 }).slots, 17)
+	H.eq(ProfileStore.deserialize({}).slots, Config.SLOTS_START, "missing -> default")
 end)
 
 H.test("data: UpdateAsync is retried on failure", function()
