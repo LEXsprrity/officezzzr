@@ -297,18 +297,20 @@ local function buildPlot(world: Folder, index: number): PlotInfo
 	local signPart = box(model, "SignPost", Vector3.new(1, 1, 1), CFrame.new(entrance + Vector3.new(0, 12, 0)), color)
 	signPart.Transparency = 1
 	signPart.CanCollide = false
-	local signLabel = billboard(signPart, "🏠 Empty Plot", UDim2.fromOffset(260, 60), Vector3.zero, 400)
+	-- Sized in studs (not pixels) so it shrinks with distance, and only shown up close: from the
+	-- walkway you read the nearby plots' names, not a wall of labels down the whole row.
+	local signLabel = billboard(signPart, "🏠 Empty Plot", UDim2.fromScale(16, 3.6), Vector3.zero, 75)
 
 	-- Planting pad just inside the gate, on a rim in the plot's colour
 	local pad = box(model, "PlantPad", Vector3.new(10, 1, 10), CFrame.new(at(0, 10, 1.2)), Color3.fromRGB(120, 80, 50), Enum.Material.Ground)
 	flat(model, "PadRim", 12, 12, at(0, 10, 1), color, Enum.Material.SmoothPlastic, nil, 0.3)
 
-	-- Treadmill: a conveyor that pushes toward a stop rail, so standing on it (AFK) keeps you on it.
+	-- Treadmill: stand on it to gain Speed (AFK works). It doesn't move you: the client plays the run
+	-- animation in place and scrolls the belt texture.
 	local tmU, tmW0, tmLen = 30, 12, 28
 	local beltCenter = at(tmU, tmW0 + tmLen / 2, 1.5)
 	local belt = box(model, "TreadmillBelt", Vector3.new(8, 1, tmLen), CFrame.new(beltCenter) * facingIn,
 		Color3.fromRGB(40, 40, 45), Enum.Material.DiamondPlate)
-	belt.AssemblyLinearVelocity = Vector3.new(0, 0, toWalk * 6) -- pushes toward the gate end
 	local tex = Instance.new("Texture")
 	tex.Name = "Stripes"
 	tex.Texture = "rbxasset://textures/SurfaceTextures/DiamondPlate.png"
@@ -325,7 +327,7 @@ local function buildPlot(world: Folder, index: number): PlotInfo
 	local tmSignPart = box(model, "TreadmillSign", Vector3.new(1, 1, 1), CFrame.new(beltCenter + Vector3.new(0, 8, 0)), color)
 	tmSignPart.Transparency = 1
 	tmSignPart.CanCollide = false
-	billboard(tmSignPart, "🏃 TREADMILL", UDim2.fromOffset(160, 36), Vector3.zero, 120)
+	billboard(tmSignPart, "🏃 TREADMILL", UDim2.fromScale(10, 2.2), Vector3.zero, 60)
 
 	-- A few props in the corners, clear of the slots, pad, treadmill and spawn point
 	Props.roundTree(model, at(-35, 30, 1), rng, Color3.fromRGB(70, 185, 70), 10)

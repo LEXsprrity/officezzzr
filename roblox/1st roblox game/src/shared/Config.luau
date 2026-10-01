@@ -43,7 +43,7 @@ Config.MOVE_EPSILON = 2
 Config.MOVE_BUCKET_SECONDS = 1 -- sustained over-speed beyond this much budget -> rubber-band
 
 ----------------------------------------------------------------------------------------------------
--- Zones. The corridor is the concatenation of zone lengths (10,900 studs).
+-- Zones. The corridor is the concatenation of zone lengths (10,900 studs). The Meadow is short so a first seed is a quick grab.
 ----------------------------------------------------------------------------------------------------
 export type Zone = {
 	id: string,
@@ -63,7 +63,7 @@ export type Zone = {
 }
 
 Config.ZONES = {
-	{ id = "Meadow", name = "Meadow", req = 0, length = 600, icon = "🌼",
+	{ id = "Meadow", name = "Meadow", req = 0, length = 200, icon = "🌼",
 		floor = Color3.fromRGB(104, 214, 70), wall = Color3.fromRGB(56, 152, 58), material = "Grass", ui = Color3.fromRGB(70, 180, 70),
 		guard = "Giant Mole", guardColor = Color3.fromRGB(110, 80, 60),
 		seed = "Sproutling", seedColor = Color3.fromRGB(120, 230, 90), baseWeight = 12 },
@@ -87,7 +87,7 @@ Config.ZONES = {
 		floor = Color3.fromRGB(30, 24, 70), wall = Color3.fromRGB(46, 36, 100), material = "Glass", ui = Color3.fromRGB(115, 75, 225),
 		guard = "Big Alien", guardColor = Color3.fromRGB(120, 255, 120),
 		seed = "Starpetal", seedColor = Color3.fromRGB(200, 120, 255), baseWeight = 45_000_000 },
-	{ id = "Spirit", name = "Spirit Garden", req = 5e9, length = 2400, icon = "⛩️",
+	{ id = "Spirit", name = "Spirit Garden", req = 5e9, length = 2800, icon = "⛩️",
 		floor = Color3.fromRGB(238, 232, 220), wall = Color3.fromRGB(250, 240, 224), material = "Pebble", ui = Color3.fromRGB(225, 75, 130),
 		guard = "Spirit Dragon", guardColor = Color3.fromRGB(230, 50, 60),
 		seed = "Lotus Wyrm", seedColor = Color3.fromRGB(255, 150, 200), baseWeight = 900_000_000 },

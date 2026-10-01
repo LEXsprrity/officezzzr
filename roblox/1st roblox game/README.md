@@ -14,7 +14,7 @@ Players get a fenced plot. From spawn, one long walled corridor runs through sev
 | 6 | 👽 Deep Space | Big Alien | Starpetal | 500M |
 | 7 | ⛩️ Spirit Garden (END) | Spirit Dragon | Lotus Wyrm | 5B |
 
-The corridor is 10,900 studs long, so a run to the end takes about 64 s at the Spirit Garden's recommended Speed (WalkSpeed 172).
+The Meadow is deliberately short (200 studs) so a new player grabs a first seed within seconds. The corridor is 10,900 studs long (the Spirit Garden got the length the Meadow gave up), so a run to the end takes about 64 s at the Spirit Garden's recommended Speed (WalkSpeed 172).
 
 ## Controls
 | Key / button | What |
@@ -62,7 +62,7 @@ luau-lsp analyze --definitions=globalTypes.d.luau --sourcemap=sourcemap.json src
 ### Manual acceptance test (Studio → Test → Local Server, 2 players)
 1. Both players spawn on their own plot. The sign shows "🏠 Name's Plot".
 2. Each player walks into the corridor, steals a Meadow seed (E), gets chased, gets home and plants it on the pad. `+$` popups appear.
-3. Stand on the treadmill: Speed climbs even when AFK.
+3. Stand on the treadmill: you run in place without being pushed, and Speed climbs even when AFK.
 4. Buy Speed with **+**, then try the Desert both below and above 10K Speed. Below: caught, seed back at the nest, knocked back. Above: you escape.
 5. Both players leave, then rejoin: money, Speed, plants and Index are intact (API access must be on).
 6. Shop → 🎁 Seed Packs: buy a Meadow pack. The reel spins and lands, and the seed shows up in 🌱 Seeds → 🎒 bag. Stand on your pad and press Plant. Rejoin: the bag is intact.
@@ -72,7 +72,7 @@ luau-lsp analyze --definitions=globalTypes.d.luau --sourcemap=sourcemap.json src
 - **Speed stat vs WalkSpeed.** `WalkSpeed = clamp(16 + 16*log10(1+Speed), 16, 180)`. Zones compare the *stat*.
 - **Speed from moving** (`SpeedService` + `SpeedLogic`). Every 0.25 s the server measures horizontal HumanoidRootPart movement and grants `distance × gainRate × multipliers`, capped per tick.
 - **Movement sanity check.** A tick that moves more than `WalkSpeed × dt × 1.5 + 2` earns nothing. Sustained over-speed that drains a one-second movement budget, or any teleport-sized jump, is rubber-banded to the last valid position. Server-side moves (spawn, knockback) reset the tracker.
-- **Treadmill.** The server checks whether the root part is inside the belt's bounds and grants the full walking rate for the tick × the tier (2×, or 3×/5× from the shop). The belt is a conveyor that pushes you against a stop rail, so AFK works. It has the same per-tick cap. There is no client remote.
+- **Treadmill.** The server checks whether the root part is inside the belt's bounds and grants the full walking rate for the tick × the tier (2×, or 3×/5× from the shop). The belt does not move you: you just stand on it (AFK works) and the client loops your run animation in place. It has the same per-tick cap. There is no client remote.
 - **Guards** (`GuardService` + `GuardBrain`). A guard wakes the moment a seed is taken and chases at `walkSpeedFor(zone.req) × 0.9`. A server loop calls `Humanoid:MoveTo` along the corridor at 10 Hz, with no pathfinding. A catch is horizontal distance < 6 studs, never `Touched`. The seed goes back to its pod, and the player is knocked 30 studs away and frozen for 1 s. The chase ends when the thief reaches the base, after a catch, or after 45 s, and then the guard walks home and sleeps.
 - **Carry.** One seed at a time, a server-made part welded to your back. Dying or leaving returns it to its pod.
 - **Growth.** Only `plantedAt` is saved. `weight = sprout × variance × (1 + 4·ease(age/20 min))` grows to 5× and stops. `income = seedIncome(zone) × rarity × mutation × sqrt(weight/sprout)`. A single 3 s payout loop evaluates the formula. There is no per-plant tick.

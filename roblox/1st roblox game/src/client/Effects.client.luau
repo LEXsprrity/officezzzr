@@ -344,3 +344,63 @@ RunService.Heartbeat:Connect(function()
 		TweenService:Create(grade, TweenInfo.new(1.5, Enum.EasingStyle.Sine), target :: any):Play()
 	end
 end)
+
+----------------------------------------------------------------------------------------------------
+-- Treadmill run-in-place: belts no longer push, so standing still on one would just idle. While the
+-- local character stands on a belt (the Stripes texture's part) without walking, loop the character's
+-- own run animation from its Animate script. Speed is granted by the server either way.
+----------------------------------------------------------------------------------------------------
+local runTrack: AnimationTrack? = nil
+local runHumanoid: Humanoid? = nil
+local lastBeltCheck = 0
+
+local function onAnyBelt(pos: Vector3): boolean
+	for tex in stripes do
+		local belt = tex.Parent
+		if belt and belt:IsA("BasePart") then
+			local rel = belt.CFrame:PointToObjectSpace(pos)
+			if math.abs(rel.X) <= belt.Size.X / 2 and math.abs(rel.Z) <= belt.Size.Z / 2 and rel.Y >= 0 and rel.Y <= 7 then
+				return true
+			end
+		end
+	end
+	return false
+end
+
+local function runAnimation(char: Model): Animation?
+	local animate = char:FindFirstChild("Animate")
+	local run = animate and animate:FindFirstChild("run")
+	return run and run:FindFirstChildWhichIsA("Animation") or nil
+end
+
+RunService.Heartbeat:Connect(function()
+	if os.clock() - lastBeltCheck < 0.15 then
+		return
+	end
+	lastBeltCheck = os.clock()
+	local char = player.Character
+	local humanoid = char and char:FindFirstChildOfClass("Humanoid")
+	local root = char and char:FindFirstChild("HumanoidRootPart") :: BasePart?
+	local want = humanoid ~= nil and root ~= nil and humanoid.Health > 0
+		and humanoid.MoveDirection.Magnitude < 0.1 and onAnyBelt(root.Position)
+	if humanoid ~= runHumanoid then
+		if runTrack then
+			runTrack:Stop(0)
+		end
+		runTrack, runHumanoid = nil, humanoid
+	end
+	if want and not runTrack and char and humanoid then
+		local anim = runAnimation(char)
+		local animator = humanoid:FindFirstChildOfClass("Animator")
+		if anim and animator then
+			runTrack = animator:LoadAnimation(anim)
+			local track = runTrack :: AnimationTrack
+			track.Looped = true
+			track.Priority = Enum.AnimationPriority.Action
+			track:Play(0.2)
+		end
+	elseif not want and runTrack then
+		runTrack:Stop(0.2)
+		runTrack = nil
+	end
+end)
