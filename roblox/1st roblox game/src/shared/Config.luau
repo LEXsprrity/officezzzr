@@ -61,34 +61,35 @@ export type Zone = {
 	baseWeight: number, -- Kg of a sprouted Common, before growth
 	icon: string,
 	active: "day" | "night", -- this zone's plants earn ACTIVE_TIME_MULT during that phase
+	wakeDelay: number, -- seconds between a steal and the guard's chase (its "❗" state); see Guards below
 }
 
 Config.ZONES = {
-	{ id = "Meadow", name = "Meadow", req = 0, length = 200, icon = "🌼", active = "day",
+	{ id = "Meadow", name = "Meadow", req = 0, length = 200, icon = "🌼", active = "day", wakeDelay = 0.5,
 		floor = Color3.fromRGB(104, 214, 70), wall = Color3.fromRGB(56, 152, 58), material = "Grass", ui = Color3.fromRGB(70, 180, 70),
 		guard = "Giant Mole", guardColor = Color3.fromRGB(110, 80, 60),
 		seed = "Sproutling", seedColor = Color3.fromRGB(120, 230, 90), baseWeight = 12 },
-	{ id = "Desert", name = "Desert", req = 10e3, length = 450, icon = "🦂", active = "day",
+	{ id = "Desert", name = "Desert", req = 10e3, length = 450, icon = "🦂", active = "day", wakeDelay = 0,
 		floor = Color3.fromRGB(240, 204, 124), wall = Color3.fromRGB(226, 164, 98), material = "Sand", ui = Color3.fromRGB(225, 145, 55),
 		guard = "Giant Scorpion", guardColor = Color3.fromRGB(190, 90, 40),
 		seed = "Cactopod", seedColor = Color3.fromRGB(60, 170, 90), baseWeight = 340 },
-	{ id = "Jungle", name = "Jungle", req = 500e3, length = 600, icon = "🦖", active = "night",
+	{ id = "Jungle", name = "Jungle", req = 500e3, length = 600, icon = "🦖", active = "night", wakeDelay = 0.15,
 		floor = Color3.fromRGB(66, 162, 60), wall = Color3.fromRGB(98, 126, 88), material = "LeafyGrass", ui = Color3.fromRGB(35, 140, 75),
 		guard = "Giant Dino", guardColor = Color3.fromRGB(70, 150, 70),
 		seed = "Fernosaur", seedColor = Color3.fromRGB(40, 200, 120), baseWeight = 9_500 },
-	{ id = "Lava", name = "Lava Fields", req = 5e6, length = 700, icon = "🌋", active = "day",
+	{ id = "Lava", name = "Lava Fields", req = 5e6, length = 700, icon = "🌋", active = "day", wakeDelay = 0.25,
 		floor = Color3.fromRGB(58, 44, 48), wall = Color3.fromRGB(80, 44, 40), material = "Basalt", ui = Color3.fromRGB(225, 85, 30),
 		guard = "Lava Golem", guardColor = Color3.fromRGB(240, 100, 30),
 		seed = "Magmabloom", seedColor = Color3.fromRGB(255, 120, 40), baseWeight = 180_000 },
-	{ id = "Snow", name = "Snow Peaks", req = 50e6, length = 800, icon = "❄️", active = "night",
+	{ id = "Snow", name = "Snow Peaks", req = 50e6, length = 800, icon = "❄️", active = "night", wakeDelay = 0.3,
 		floor = Color3.fromRGB(238, 246, 255), wall = Color3.fromRGB(160, 206, 242), material = "Snow", ui = Color3.fromRGB(65, 150, 225),
 		guard = "Giant Yeti", guardColor = Color3.fromRGB(220, 230, 245),
 		seed = "Frostbulb", seedColor = Color3.fromRGB(120, 200, 255), baseWeight = 2_000_000 },
-	{ id = "Space", name = "Deep Space", req = 500e6, length = 900, icon = "👽", active = "night",
+	{ id = "Space", name = "Deep Space", req = 500e6, length = 900, icon = "👽", active = "night", wakeDelay = 0.3,
 		floor = Color3.fromRGB(30, 24, 70), wall = Color3.fromRGB(46, 36, 100), material = "Glass", ui = Color3.fromRGB(115, 75, 225),
 		guard = "Big Alien", guardColor = Color3.fromRGB(120, 255, 120),
 		seed = "Starpetal", seedColor = Color3.fromRGB(200, 120, 255), baseWeight = 45_000_000 },
-	{ id = "Spirit", name = "Spirit Garden", req = 5e9, length = 1100, icon = "⛩️", active = "day",
+	{ id = "Spirit", name = "Spirit Garden", req = 5e9, length = 1100, icon = "⛩️", active = "day", wakeDelay = 0.5,
 		floor = Color3.fromRGB(238, 232, 220), wall = Color3.fromRGB(250, 240, 224), material = "Pebble", ui = Color3.fromRGB(225, 75, 130),
 		guard = "Spirit Dragon", guardColor = Color3.fromRGB(230, 50, 60),
 		seed = "Lotus Wyrm", seedColor = Color3.fromRGB(255, 150, 200), baseWeight = 900_000_000 },
@@ -129,10 +130,11 @@ end
 ----------------------------------------------------------------------------------------------------
 -- The guard runs exactly as fast as a player at the zone's recommended Speed, so that player escapes on
 -- the head start alone: the ~28 studs between the pods and the sleeping guard (GUARD_HOME_OFFSET), plus
--- GUARD_WAKE_DELAY. Every second of delay also lets slower players escape (at 0.1 s the Desert opens at
--- 50% of its recommended Speed instead of 57%), so it is 0: the gate is meaningful in Speed terms.
+-- the zone's wakeDelay. The delay is slack for reaction time and lag, but it also lets slower players
+-- escape. Each zone's delay keeps the lowest escaping Speed >= 50% of the sign (tests/guard.spec) with
+-- about 0.5 s of slack. Longer runs home (later zones) can afford more. The Desert's short run can't
+-- have both, so it gets 0 (0.3 s of slack).
 Config.GUARD_SPEED_FACTOR = 1 -- chase WalkSpeed = walkSpeedFor(zone.req) * this
-Config.GUARD_WAKE_DELAY = 0 -- seconds between a steal and the chase (the "❗" state)
 Config.GUARD_RETURN_FACTOR = 0.6 -- walking home is slower than chasing
 Config.CATCH_DISTANCE = 6 -- horizontal studs, root to root
 Config.CHASE_TIMEOUT = 45

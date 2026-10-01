@@ -1,5 +1,5 @@
--- Soft gates: the guard wakes after GUARD_WAKE_DELAY (0), then chases at walkSpeedFor(zone.req) * GUARD_SPEED_FACTOR (1)
--- and catches within CATCH_DISTANCE.
+-- Soft gates: the guard wakes after its zone's wakeDelay, then chases at walkSpeedFor(zone.req) * GUARD_SPEED_FACTOR (1)
+-- and catches within CATCH_DISTANCE of the path it walked since its last tick.
 local H = require("./harness")
 local Vector3 = H.Vector3
 
@@ -20,6 +20,7 @@ type SimOpts = {
 	dust: boolean?,
 	walk: number?, -- raw WalkSpeed instead of walkSpeedFor(speedStat)
 	wakeDelay: number?, -- override the guard's wake-up delay
+	reaction: number?, -- seconds the thief stands still after the steal before running
 }
 
 -- Simulates one steal: the thief grabs a pod and runs straight back toward base at the WalkSpeed
@@ -48,7 +49,7 @@ local function simulate(k: number, speedStat: number, opts: SimOpts?): (string, 
 	local chased = false
 	local closest = math.huge
 	while t < 1000 + 180 do
-		local running = not o.standStill
+		local running = not o.standStill and t - 1000 >= (o.reaction or 0) - 1e-9
 		if running and playerPos.X >= Config.CORRIDOR_START_X then
 			playerPos -= Vector3.new(walk * DT, 0, 0)
 		end
@@ -93,6 +94,21 @@ local function escapeShare(k: number): number
 	return hi
 end
 
+-- Slack: the longest a thief at exactly the recommended Speed can stand still after the steal (reaction
+-- time, lag) and still get home, by bisection. The sim ticks at GUARD_HZ, so this moves in 0.1 s steps.
+local function slackOf(k: number): number
+	local lo, hi = 0, 3
+	for _ = 1, 30 do
+		local mid = (lo + hi) / 2
+		if simulate(k, Config.ZONES[k].req, { reaction = mid }) == "escaped" then
+			lo = mid
+		else
+			hi = mid
+		end
+	end
+	return lo
+end
+
 H.test("guard: chase speed is walkSpeedFor(req) * 1.0 for every zone", function()
 	H.eq(Config.GUARD_SPEED_FACTOR, 1)
 	for k, zone in Config.ZONES do
@@ -101,8 +117,15 @@ H.test("guard: chase speed is walkSpeedFor(req) * 1.0 for every zone", function(
 	end
 end)
 
-H.test("guard: wakes the moment a seed is taken (GUARD_WAKE_DELAY = 0)", function()
-	H.eq(Config.GUARD_WAKE_DELAY, 0)
+H.test("guard: every zone has its own wake-up delay, and the guard uses it", function()
+	local want = { Meadow = 0.5, Desert = 0, Jungle = 0.15, Lava = 0.25, Snow = 0.3, Space = 0.3, Spirit = 0.5 }
+	for k, zone in Config.ZONES do
+		H.eq(zone.wakeDelay, want[zone.id], zone.id)
+		H.eq(GuardBrain.new(k, Vector3.new(0, 0, 0)).wakeDelay, zone.wakeDelay, zone.id)
+	end
+end)
+
+H.test("guard: the Desert guard (no delay) wakes the moment a seed is taken", function()
 	local brain = GuardBrain.new(2, Vector3.new(0, 0, 0))
 	GuardBrain.alert(brain, 10)
 	local target = { { id = 1, pos = Vector3.new(-40, 0, 0), safe = false } }
@@ -153,12 +176,23 @@ H.test("guard: the lowest Speed that escapes is at least 50% of the recommended 
 	for k = 2, #Config.ZONES do
 		local zone = Config.ZONES[k]
 		local share = escapeShare(k)
-		H.ok(share >= 0.5, `{zone.id}: escapes from {math.floor(share * 100)}% of the recommended Speed`)
+		H.ok(share >= 0.5, `{zone.id}: escapes from {math.floor(share * 1000) / 10}% of the recommended Speed`)
 		H.ok(share < 1, `{zone.id}: the recommended Speed itself escapes`)
-		table.insert(lines, string.format("%s: rec %s, escape from Speed %.3g (%.0f%% of rec, WalkSpeed %.1f vs guard %.1f)",
-			zone.id, tostring(zone.req), zone.req * share, 100 * share, Config.walkSpeedFor(zone.req * share), Config.guardChaseSpeed(k)))
+		table.insert(lines, string.format("%s: delay %.2fs, escape from Speed %.3g (%.1f%% of rec, WalkSpeed %.1f vs guard %.1f), slack %.1fs",
+			zone.id, zone.wakeDelay, zone.req * share, 100 * share, Config.walkSpeedFor(zone.req * share), Config.guardChaseSpeed(k), slackOf(k)))
 	end
 	print("        escape thresholds  " .. table.concat(lines, "\n                           "))
+end)
+
+H.test("guard: at the recommended Speed there is >= 0.5 s of slack to start running (Desert: 0.3 s)", function()
+	-- The Desert's run home is only ~580 studs: any head start worth 0.4+ s also lets players under 50% of
+	-- its recommended Speed escape, and the 50% gate wins. Every other zone gets the full 0.5 s.
+	for k = 2, #Config.ZONES do
+		local zone = Config.ZONES[k]
+		local need = if zone.id == "Desert" then 0.3 else 0.5
+		H.eq(simulate(k, zone.req, { reaction = need }), "escaped", `{zone.id} reacting {need}s late`)
+		H.ok(slackOf(k) >= need - 1e-6, zone.id)
+	end
 end)
 
 H.test("guard: at ~70% of the recommended WalkSpeed you get caught, in every zone", function()
@@ -191,8 +225,22 @@ H.test("guard: Meadow (req 0) lets anyone escape", function()
 	H.eq(simulate(1, 0), "escaped")
 end)
 
-H.test("guard: standing still with the seed gets you caught, however slow", function()
-	H.eq(simulate(1, 0, { standStill = true }), "caught")
+H.test("guard: standing still with the seed gets you caught, in every zone", function()
+	-- Regression: a Spirit Garden guard moves 17 studs per tick, more than the 12-stud catch circle, and
+	-- used to step back and forth over a standing thief forever. The catch now checks the path walked.
+	for k, zone in Config.ZONES do
+		H.eq(simulate(k, 0, { standStill = true }), "caught", zone.id)
+	end
+end)
+
+H.test("guard: a guard that steps over a thief between ticks still catches them", function()
+	local brain = awakeBrain(7, Vector3.new(100, 0, 0))
+	GuardBrain.alert(brain, 0)
+	local thief = { { id = "p", pos = Vector3.new(50, 0, 0), safe = false } }
+	GuardBrain.step(brain, 0, Vector3.new(58, 0, 0), thief) -- 8 studs short
+	H.eq(brain.state, "Chasing")
+	local cmd = GuardBrain.step(brain, 0.1, Vector3.new(41, 0, 0), thief) -- 9 studs past
+	H.eq(cmd.caughtId, "p")
 end)
 
 H.test("guard: catch uses distance < CATCH_DISTANCE, then walks home and sleeps", function()
@@ -224,7 +272,7 @@ end)
 H.test("guard: the slowest chase still fits in CHASE_TIMEOUT (a recommended-Speed run home from any nest)", function()
 	for k, zone in Config.ZONES do
 		local runHome = (Config.nestX(k) - Config.CORRIDOR_START_X) / Config.walkSpeedFor(zone.req)
-		H.ok(runHome + Config.GUARD_WAKE_DELAY < Config.CHASE_TIMEOUT, `{zone.id}: {runHome}s`)
+		H.ok(runHome + zone.wakeDelay < Config.CHASE_TIMEOUT, `{zone.id}: {runHome}s`)
 	end
 end)
 
@@ -240,7 +288,7 @@ H.test("guard: Sleep Dust delays waking by SLEEP_DUST_EXTRA more seconds", funct
 	local brain = GuardBrain.new(2, Vector3.new(0, 0, 0))
 	H.ok(GuardBrain.dust(brain, 0))
 	GuardBrain.alert(brain, 10)
-	local wake = 10 + Config.GUARD_WAKE_DELAY + Config.SLEEP_DUST_EXTRA
+	local wake = 10 + brain.wakeDelay + Config.SLEEP_DUST_EXTRA
 	local target = { { id = "p", pos = Vector3.new(-40, 0, 0), safe = false } }
 	GuardBrain.step(brain, wake - 0.1, Vector3.new(0, 0, 0), target)
 	H.eq(brain.state, "Waking")

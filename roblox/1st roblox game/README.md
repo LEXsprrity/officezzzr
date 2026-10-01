@@ -65,7 +65,7 @@ luau-lsp analyze --definitions=globalTypes.d.luau --sourcemap=sourcemap.json src
 1. Both players spawn on their own plot. The sign shows "🏠 Name's Plot".
 2. Each player walks into the corridor, steals a Meadow seed (E), gets chased, gets home and plants it on the pad. `+$` popups appear.
 3. Stand on the treadmill: you run in place without being pushed, and Speed climbs even when AFK.
-4. Buy Speed with **+**, then try the Desert at about 3K Speed and at 10K Speed. At 3K: caught, seed back at the nest, knocked back. At 10K: the guard wakes at once and chases exactly as fast as you; run straight home and it never closes the gap.
+4. Buy Speed with **+**, then try the Desert at about 3K Speed and at 10K Speed. At 3K: caught, seed back at the nest, knocked back. At 10K: the guard wakes at once and chases exactly as fast as you; run straight home and it never closes the gap. In the Spirit Garden (5B), the dragon shows ❗ for half a second first.
 5. Both players leave, then rejoin: money, Speed, plants and Index are intact (API access must be on).
 6. Shop → 🎁 Seed Packs: with stub ids, clicking a pack says "coming soon" and no money is charged. With real ids, buy a Meadow pack: Studio shows a test purchase dialog (no real Robux). The reel spins and lands, and the seed shows up in 🌱 Seeds → 🎒 bag. Stand on your pad and press Plant. Rejoin: the bag is intact. The Desert pack shows 🔒 below 10K Speed, and clicking it doesn't open the purchase dialog.
 
@@ -75,7 +75,7 @@ luau-lsp analyze --definitions=globalTypes.d.luau --sourcemap=sourcemap.json src
 - **Speed from moving** (`SpeedService` + `SpeedLogic`). Every 0.25 s the server measures horizontal HumanoidRootPart movement and grants `distance × gainRate × multipliers`, capped per tick.
 - **Movement sanity check.** A tick that moves more than `WalkSpeed × dt × 1.5 + 2` earns nothing. Sustained over-speed that drains a one-second movement budget, or any teleport-sized jump, is rubber-banded to the last valid position. Server-side moves (spawn, knockback) reset the tracker.
 - **Treadmill.** The server checks whether the root part is inside the belt's bounds and grants the full walking rate for the tick × the tier (2×, or 3×/5× from the shop). The belt does not move you: you just stand on it (AFK works) and the client loops your run animation in place. It has the same per-tick cap. There is no client remote.
-- **Guards** (`GuardService` + `GuardBrain`). A guard wakes the moment a seed is taken (`GUARD_WAKE_DELAY = 0`; a delay would show ❗ meanwhile) and chases at `walkSpeedFor(zone.req) × GUARD_SPEED_FACTOR` (1.0), exactly a player's WalkSpeed at the recommended Speed. A server loop calls `Humanoid:MoveTo` along the corridor at 10 Hz, with no pathfinding. A catch is horizontal distance < 6 studs, never `Touched`. The seed goes back to its pod, and the player is knocked 30 studs away and frozen for 1 s. The chase ends when the thief reaches the base, after a catch, or after 45 s, and then the guard walks home and sleeps.
+- **Guards** (`GuardService` + `GuardBrain`). A guard wakes its zone's `wakeDelay` (0–0.5 s, showing ❗ meanwhile) after a seed is taken and chases at `walkSpeedFor(zone.req) × GUARD_SPEED_FACTOR` (1.0), exactly a player's WalkSpeed at the recommended Speed. A server loop calls `Humanoid:MoveTo` along the corridor at 10 Hz, with no pathfinding. A catch is horizontal distance < 6 studs from the path the guard walked since its last tick, never `Touched`. A Spirit Garden guard covers 17 studs per tick, so checking only its current position could step right over a thief. The seed goes back to its pod, and the player is knocked 30 studs away and frozen for 1 s. The chase ends when the thief reaches the base, after a catch, or after 45 s, and then the guard walks home and sleeps.
 - **Carry.** One seed at a time, a server-made part welded to your back. Dying or leaving returns it to its pod.
 - **Growth.** Only `plantedAt` is saved. `weight = sprout × variance × (1 + 4·ease(age/20 min))` grows to 5× and stops. `income = seedIncome(zone) × rarity × mutation × sqrt(weight/sprout)`. A single 3 s payout loop evaluates the formula. There is no per-plant tick.
 - **Day and night plants.** Every zone is either ☀️ day (Meadow, Desert, Lava, Spirit) or 🌙 night (Jungle, Snow, Space), set by `Zone.active`. Its plants pay `ACTIVE_TIME_MULT` (1.5×) during their phase and 1× otherwise (`Config.timeMult`, from the shared `dayPhase` clock). The payout loop applies it, and the plant's billboard shows ☀️/🌙 plus a gold "1.5x!" while it is active. `plantIncome`/`incomeOf` stay the plain base, and the 30 s removal refund uses the base too. Offline income uses the cycle average: 300 s day and 150 s night give ×4/3 for day plants and ×7/6 for night plants.
@@ -84,20 +84,25 @@ luau-lsp analyze --definitions=globalTypes.d.luau --sourcemap=sourcemap.json src
 - **Art.** Everything is built from primitives by `WorldBuilder` (base, plots), `ZoneThemes` (the 7 zones) and the `Props` kit. Only floors, walls and the wall-flush arch pillars collide. All props are anchored and non-colliding (no Touched, no raycasts), so they never block runners, guards or the camera. The corridor is about 2.3k parts and the whole map about 3.7k (tested below 6k/8k). Day/night lighting blends a warm day look into a blue, readable night (`Config.nightBlend`), and the client adds a per-zone colour grade.
 
 ### Soft gates: how soft they are
-A guard runs exactly as fast as a player at the zone's recommended Speed (`GUARD_SPEED_FACTOR = 1`). That player gets home on the head start alone: the ~28 studs between the nearest pod and the sleeping guard. In the tests the guard never gets within 29–45 studs of them, against a 6-stud catch distance. A slower player keeps that head start but loses ground every second, so whether they're caught depends on the run home. WalkSpeed is logarithmic in Speed, so a few WalkSpeed points are a big share of the Speed number:
+A guard runs exactly as fast as a player at the zone's recommended Speed (`GUARD_SPEED_FACTOR = 1`). That player gets home on the head start alone: the ~28 studs between the nearest pod and the sleeping guard, plus the zone's `wakeDelay`. That head start is also the *slack*: how long a player at exactly the recommended Speed can hesitate after the steal (reaction time, lag) and still get home. A slower player keeps the same head start but loses ground every second. WalkSpeed is logarithmic in Speed, so a few WalkSpeed points are a big share of the Speed number:
 
-| Zone | Recommended | Escapes from Speed | WalkSpeed (player vs guard) |
-|---|---|---|---|
-| Desert | 10K | ~5.7K (57%) | 76.1 vs 80.0 |
-| Jungle | 500K | ~330K (66%) | 104.3 vs 107.2 |
-| Lava | 5M | ~3.6M (73%) | 121.0 vs 123.2 |
-| Snow | 50M | ~38M (77%) | 137.3 vs 139.2 |
-| Deep Space | 500M | ~400M (79%) | 153.6 vs 155.2 |
-| Spirit Garden | 5B | ~4.1B (81%) | 169.7 vs 171.2 |
+| Zone | Recommended | `wakeDelay` | Escapes from Speed | WalkSpeed (player vs guard) | Slack |
+|---|---|---|---|---|---|
+| Desert | 10K | 0 s | ~5.7K (57%) | 76.1 vs 80.0 | 0.3 s |
+| Jungle | 500K | 0.15 s | ~250K (50%) | 102.4 vs 107.2 | 0.5 s |
+| Lava | 5M | 0.25 s | ~2.6M (52%) | 118.6 vs 123.2 | 0.5 s |
+| Snow | 50M | 0.3 s | ~28M (57%) | 135.2 vs 139.2 | 0.5 s |
+| Deep Space | 500M | 0.3 s | ~300M (60%) | 151.6 vs 155.2 | 0.5 s |
+| Spirit Garden | 5B | 0.5 s | ~2.6B (52%) | 166.7 vs 171.2 | 0.7 s |
 
-The tests require at least 50% in every zone, compute the thresholds by bisection in the chase sim and print this table. They also check that 70% of the recommended WalkSpeed and the previous zone's recommended Speed get caught everywhere.
+Each delay trades slack against the threshold: every 0.1 s adds 0.1 s of slack and lowers the threshold by about 7–9 points. Longer runs home can afford more delay. The Desert's run home is only ~580 studs, so it can't have both: a 0.1 s delay already drops it to 49.7%. It stays at 0, with 0.3 s of slack. The Meadow (recommended 0) gets 0.5 s.
 
-`GUARD_WAKE_DELAY` is the lever. Every 0.1 s of delay lowers the thresholds by about 7–9 points (at 0.1 s the Desert is at 50%). It is 0, so the only slack for reaction time and lag at exactly the recommended Speed is the head start: about 0.37 s in the Desert down to about 0.22 s in the Spirit Garden. Keep `GUARD_SPEED_FACTOR` at 1 or below, or players at exactly the recommended Speed get caught.
+The tests check, by bisection in the chase sim:
+- every zone's threshold is at least 50%;
+- slack is at least 0.5 s everywhere except the Desert (0.3 s);
+- 70% of the recommended WalkSpeed and the previous zone's recommended Speed get caught everywhere.
+
+The sim ticks at 10 Hz, like the guard loop, so delays act in 0.1 s steps. Keep `GUARD_SPEED_FACTOR` at 1 or below, or players at exactly the recommended Speed get caught.
 
 ## Plant-creatures
 Each planted seed grows into its zone's creature (`CreatureModels`). The creatures are 20–32 parts (up to 39 with Legendary flair) built from Parts, WedgeParts and built-in Sphere `SpecialMesh`es, so nothing needs uploading. Each one hatches from a seed husk and has a leaf or flower motif. Later zones stand taller and glow more.
