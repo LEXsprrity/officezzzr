@@ -14,13 +14,13 @@ H.test("zones: 7 zones with the agreed recommended speeds", function()
 	end
 end)
 
-H.test("zones: corridor is 10-12k studs and a max-speed run to the end takes 60-90 s", function()
+H.test("zones: corridor is 4-6k studs and a max-speed run to the end takes 20-40 s", function()
 	local length = Config.END_X - Config.CORRIDOR_START_X
-	H.ok(length >= 10000 and length <= 12000, "length " .. length)
+	H.ok(length >= 4000 and length <= 6000, "length " .. length)
 	local atEnd = Config.walkSpeedFor(Config.ZONES[#Config.ZONES].req)
 	for _, w in { atEnd, Config.MAX_WALKSPEED } do
 		local seconds = length / w
-		H.ok(seconds >= 60 and seconds <= 90, `run takes {seconds}s at WalkSpeed {w}`)
+		H.ok(seconds >= 20 and seconds <= 40, `run takes {seconds}s at WalkSpeed {w}`)
 	end
 end)
 
@@ -34,8 +34,9 @@ H.test("zones: zoneAtX maps corridor positions to zones, base to nil", function(
 end)
 
 H.test("economy: a full plot of zone-k seeds pays for zone k+1 in PAYBACK_SECONDS", function()
+	H.eq(Config.ECONOMY_SLOTS, 10, "income is balanced for 10 plants, whatever SLOTS_START is")
 	for k = 1, #Config.ZONES - 1 do
-		local perSecond = Config.seedIncome(k) * Config.SLOTS_START
+		local perSecond = Config.seedIncome(k) * Config.ECONOMY_SLOTS
 		H.near(perSecond * Config.PAYBACK_SECONDS * Config.PRICE_PER_SPEED, Config.speedCost(Config.ZONES[k + 1].req), 1e-3, Config.ZONES[k].id)
 	end
 end)
@@ -134,8 +135,27 @@ H.test("shop: tiered upgrades advance, get pricier, and max out", function()
 	H.eq(Shop.buy(p, "Treadmill"), false)
 	local s1 = Config.priceOf("Slot", p)
 	H.ok(Shop.buy(p, "Slot"))
-	H.eq(p.slots, 11)
+	H.eq(p.slots, Config.SLOTS_START + 1)
 	H.ok(Config.priceOf("Slot", p) > s1)
+end)
+
+H.test("shop: slots start at 5, slot 6 costs $500 and every slot costs more than the last", function()
+	H.eq(Config.SLOTS_START, 5)
+	local function priceOfSlot(n: number): number -- price of buying slot n
+		return (Config.priceOf("Slot", { money = 0, speed = 0, speedMultTier = 1, treadmillTier = 1, slots = n - 1 }))
+	end
+	H.eq(priceOfSlot(6), 500)
+	H.eq(priceOfSlot(7), 1250)
+	H.near(priceOfSlot(10), 19.5e3, 0.1e3)
+	H.near(priceOfSlot(15), 1.9e6, 0.01e6)
+	H.near(priceOfSlot(30), 1.8e12, 0.03e12)
+	local last = 0
+	for n = Config.SLOTS_START + 1, Config.SLOTS_MAX do
+		local price = priceOfSlot(n)
+		H.ok(price > last, `slot {n} costs {price}, slot {n - 1} cost {last}`)
+		last = price
+	end
+	H.eq(Config.priceOf("Slot", { money = 0, speed = 0, speedMultTier = 1, treadmillTier = 1, slots = Config.SLOTS_MAX }), nil, "maxed")
 end)
 
 H.test("shop: Sleep Dust is a consumable; potions are gone", function()
@@ -193,6 +213,50 @@ H.test("day/night: lighting blend fades in at dusk, holds, fades out at dawn", f
 		H.ok(b >= last, "fade-in is monotonic")
 		last = b
 	end
+end)
+
+H.test("day/night plants: every zone is a day or a night plant (Meadow/Desert/Lava/Spirit by day)", function()
+	local want = { Meadow = "day", Desert = "day", Jungle = "night", Lava = "day", Snow = "night", Space = "night", Spirit = "day" }
+	for _, zone in Config.ZONES do
+		H.ok(zone.active == "day" or zone.active == "night", `{zone.id} has active = {zone.active}`)
+		H.eq(zone.active, want[zone.id], zone.id)
+		H.ok(Config.ACTIVE_ICONS[zone.active] ~= nil, "icon")
+	end
+end)
+
+H.test("day/night plants: timeMult is 1.5 during the plant's phase and 1 otherwise", function()
+	H.eq(Config.ACTIVE_TIME_MULT, 1.5)
+	for k, zone in Config.ZONES do
+		local day, night = Config.timeMult(k, false), Config.timeMult(k, true)
+		if zone.active == "day" then
+			H.eq(day, 1.5, zone.id .. " by day")
+			H.eq(night, 1, zone.id .. " at night")
+		else
+			H.eq(day, 1, zone.id .. " by day")
+			H.eq(night, 1.5, zone.id .. " at night")
+		end
+	end
+	-- driven by the shared clock
+	local meadow, jungle = 1, 3
+	H.eq(Config.timeMult(meadow, (Config.dayPhase(10))), 1.5)
+	H.eq(Config.timeMult(jungle, (Config.dayPhase(10))), 1)
+	H.eq(Config.timeMult(jungle, (Config.dayPhase(Config.DAY_SECONDS + 10))), 1.5)
+end)
+
+H.test("day/night plants: offline income uses the time-weighted average multiplier", function()
+	local D, N = Config.DAY_SECONDS, Config.NIGHT_SECONDS
+	for k, zone in Config.ZONES do
+		local want = if zone.active == "day" then (D * 1.5 + N) / (D + N) else (D + N * 1.5) / (D + N)
+		H.near(Config.averageTimeMult(k), want, 1e-9, zone.id)
+		-- matches what the payout loop pays over one full cycle, second by second
+		local sum = 0
+		for t = 0, D + N - 1 do
+			sum += Config.timeMult(k, (Config.dayPhase(t + 0.5)))
+		end
+		H.near(Config.averageTimeMult(k), sum / (D + N), 1e-9, zone.id .. " integrated")
+	end
+	H.near(Config.averageTimeMult(1), 4 / 3, 1e-9, "day plants: 300 s x1.5 + 150 s x1")
+	H.near(Config.averageTimeMult(3), 7 / 6, 1e-9, "night plants: 300 s x1 + 150 s x1.5")
 end)
 
 return nil

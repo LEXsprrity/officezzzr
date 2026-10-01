@@ -43,7 +43,7 @@ Config.MOVE_EPSILON = 2
 Config.MOVE_BUCKET_SECONDS = 1 -- sustained over-speed beyond this much budget -> rubber-band
 
 ----------------------------------------------------------------------------------------------------
--- Zones. The corridor is the concatenation of zone lengths (10,900 studs). The Meadow is short so a first seed is a quick grab.
+-- Zones. The corridor is the concatenation of zone lengths (4,750 studs). The Meadow is short so a first seed is a quick grab.
 ----------------------------------------------------------------------------------------------------
 export type Zone = {
 	id: string,
@@ -60,34 +60,36 @@ export type Zone = {
 	seedColor: Color3,
 	baseWeight: number, -- Kg of a sprouted Common, before growth
 	icon: string,
+	active: "day" | "night", -- this zone's plants earn ACTIVE_TIME_MULT during that phase
+	wakeDelay: number, -- seconds between a steal and the guard's chase (its "❗" state); see Guards below
 }
 
 Config.ZONES = {
-	{ id = "Meadow", name = "Meadow", req = 0, length = 200, icon = "🌼",
+	{ id = "Meadow", name = "Meadow", req = 0, length = 200, icon = "🌼", active = "day", wakeDelay = 0.5,
 		floor = Color3.fromRGB(104, 214, 70), wall = Color3.fromRGB(56, 152, 58), material = "Grass", ui = Color3.fromRGB(70, 180, 70),
 		guard = "Giant Mole", guardColor = Color3.fromRGB(110, 80, 60),
 		seed = "Sproutling", seedColor = Color3.fromRGB(120, 230, 90), baseWeight = 12 },
-	{ id = "Desert", name = "Desert", req = 10e3, length = 1000, icon = "🦂",
+	{ id = "Desert", name = "Desert", req = 10e3, length = 450, icon = "🦂", active = "day", wakeDelay = 0,
 		floor = Color3.fromRGB(240, 204, 124), wall = Color3.fromRGB(226, 164, 98), material = "Sand", ui = Color3.fromRGB(225, 145, 55),
 		guard = "Giant Scorpion", guardColor = Color3.fromRGB(190, 90, 40),
 		seed = "Cactopod", seedColor = Color3.fromRGB(60, 170, 90), baseWeight = 340 },
-	{ id = "Jungle", name = "Jungle", req = 500e3, length = 1400, icon = "🦖",
+	{ id = "Jungle", name = "Jungle", req = 500e3, length = 600, icon = "🦖", active = "night", wakeDelay = 0.15,
 		floor = Color3.fromRGB(66, 162, 60), wall = Color3.fromRGB(98, 126, 88), material = "LeafyGrass", ui = Color3.fromRGB(35, 140, 75),
 		guard = "Giant Dino", guardColor = Color3.fromRGB(70, 150, 70),
 		seed = "Fernosaur", seedColor = Color3.fromRGB(40, 200, 120), baseWeight = 9_500 },
-	{ id = "Lava", name = "Lava Fields", req = 5e6, length = 1600, icon = "🌋",
+	{ id = "Lava", name = "Lava Fields", req = 5e6, length = 700, icon = "🌋", active = "day", wakeDelay = 0.25,
 		floor = Color3.fromRGB(58, 44, 48), wall = Color3.fromRGB(80, 44, 40), material = "Basalt", ui = Color3.fromRGB(225, 85, 30),
 		guard = "Lava Golem", guardColor = Color3.fromRGB(240, 100, 30),
 		seed = "Magmabloom", seedColor = Color3.fromRGB(255, 120, 40), baseWeight = 180_000 },
-	{ id = "Snow", name = "Snow Peaks", req = 50e6, length = 1800, icon = "❄️",
+	{ id = "Snow", name = "Snow Peaks", req = 50e6, length = 800, icon = "❄️", active = "night", wakeDelay = 0.3,
 		floor = Color3.fromRGB(238, 246, 255), wall = Color3.fromRGB(160, 206, 242), material = "Snow", ui = Color3.fromRGB(65, 150, 225),
 		guard = "Giant Yeti", guardColor = Color3.fromRGB(220, 230, 245),
 		seed = "Frostbulb", seedColor = Color3.fromRGB(120, 200, 255), baseWeight = 2_000_000 },
-	{ id = "Space", name = "Deep Space", req = 500e6, length = 2100, icon = "👽",
+	{ id = "Space", name = "Deep Space", req = 500e6, length = 900, icon = "👽", active = "night", wakeDelay = 0.3,
 		floor = Color3.fromRGB(30, 24, 70), wall = Color3.fromRGB(46, 36, 100), material = "Glass", ui = Color3.fromRGB(115, 75, 225),
 		guard = "Big Alien", guardColor = Color3.fromRGB(120, 255, 120),
 		seed = "Starpetal", seedColor = Color3.fromRGB(200, 120, 255), baseWeight = 45_000_000 },
-	{ id = "Spirit", name = "Spirit Garden", req = 5e9, length = 2800, icon = "⛩️",
+	{ id = "Spirit", name = "Spirit Garden", req = 5e9, length = 1100, icon = "⛩️", active = "day", wakeDelay = 0.5,
 		floor = Color3.fromRGB(238, 232, 220), wall = Color3.fromRGB(250, 240, 224), material = "Pebble", ui = Color3.fromRGB(225, 75, 130),
 		guard = "Spirit Dragon", guardColor = Color3.fromRGB(230, 50, 60),
 		seed = "Lotus Wyrm", seedColor = Color3.fromRGB(255, 150, 200), baseWeight = 900_000_000 },
@@ -126,7 +128,13 @@ end
 ----------------------------------------------------------------------------------------------------
 -- Guards (soft gates)
 ----------------------------------------------------------------------------------------------------
-Config.GUARD_SPEED_FACTOR = 0.9 -- chase WalkSpeed = walkSpeedFor(zone.req) * this
+-- The guard runs exactly as fast as a player at the zone's recommended Speed, so that player escapes on
+-- the head start alone: the ~28 studs between the pods and the sleeping guard (GUARD_HOME_OFFSET), plus
+-- the zone's wakeDelay. The delay is slack for reaction time and lag, but it also lets slower players
+-- escape. Each zone's delay keeps the lowest escaping Speed >= 50% of the sign (tests/guard.spec) with
+-- about 0.5 s of slack. Longer runs home (later zones) can afford more. The Desert's short run can't
+-- have both, so it gets 0 (0.3 s of slack).
+Config.GUARD_SPEED_FACTOR = 1 -- chase WalkSpeed = walkSpeedFor(zone.req) * this
 Config.GUARD_RETURN_FACTOR = 0.6 -- walking home is slower than chasing
 Config.CATCH_DISTANCE = 6 -- horizontal studs, root to root
 Config.CHASE_TIMEOUT = 45
@@ -222,9 +230,10 @@ end
 -- Economy (formulas)
 ----------------------------------------------------------------------------------------------------
 Config.PRICE_PER_SPEED = 1 -- $ per point of Speed
-Config.SLOTS_START = 10
+Config.SLOTS_START = 5 -- plant slots a new player starts with (older saves keep what they have)
 Config.SLOTS_MAX = 30
-Config.PAYBACK_SECONDS = 300 -- a full plot of zone-k plants pays for zone k+1 in about this long
+Config.ECONOMY_SLOTS = 10 -- the plot size income is balanced for; independent of SLOTS_START
+Config.PAYBACK_SECONDS = 300 -- a full plot (ECONOMY_SLOTS) of zone-k plants pays for zone k+1 in about this long
 Config.PAYOUT_INTERVAL = 3
 
 function Config.speedCost(amount: number): number
@@ -235,7 +244,7 @@ end
 function Config.seedIncome(k: number): number
 	local nextZone = Config.ZONES[k + 1]
 	local nextReq = if nextZone then nextZone.req else Config.ZONES[k].req * 10
-	return nextReq * Config.PRICE_PER_SPEED / (Config.SLOTS_START * Config.PAYBACK_SECONDS)
+	return nextReq * Config.PRICE_PER_SPEED / (Config.ECONOMY_SLOTS * Config.PAYBACK_SECONDS)
 end
 
 -- Growth (P2): closed form from plantedAt, never simulated per tick.
@@ -298,8 +307,10 @@ Config.TREADMILL_TIERS = {
 }
 Config.SPEED_BUY_FRACTION = 0.25 -- the "+" button's small pack: +25% of current Speed...
 Config.SPEED_BUY_MIN = 1000 -- ...but at least this much
-Config.SLOT_BASE_PRICE = 25e3
-Config.SLOT_PRICE_GROWTH = 2.2
+-- Slot n+1 costs SLOT_BASE_PRICE * SLOT_PRICE_GROWTH ^ (n - SLOTS_START): slot 6 $500, 7 $1.25K,
+-- 10 ~$19.5K, 15 ~$1.9M, 30 ~$1.8T.
+Config.SLOT_BASE_PRICE = 500
+Config.SLOT_PRICE_GROWTH = 2.5
 Config.SLEEP_DUST_PRICE = 5e3
 Config.SLEEP_DUST_EXTRA = 5 -- guard stays asleep this much longer
 Config.SLEEP_DUST_RANGE = 60
@@ -415,6 +426,25 @@ function Config.dayPhase(now: number): (boolean, number)
 		return false, Config.DAY_SECONDS - t -- isNight, seconds until it flips
 	end
 	return true, cycle - t
+end
+
+-- Day and night plants: each zone's plants (Zone.active) earn ACTIVE_TIME_MULT during their phase, 1x
+-- otherwise. plantIncome stays the plain base; PlotService applies this on payout.
+Config.ACTIVE_TIME_MULT = 1.5
+Config.ACTIVE_ICONS = { day = "☀️", night = "🌙" } :: { [string]: string }
+
+function Config.isActiveTime(k: number, isNight: boolean): boolean
+	return (Config.ZONES[k].active == "night") == isNight
+end
+
+function Config.timeMult(k: number, isNight: boolean): number
+	return if Config.isActiveTime(k, isNight) then Config.ACTIVE_TIME_MULT else 1
+end
+
+-- Time-weighted mean of timeMult over a full day/night cycle (offline income).
+function Config.averageTimeMult(k: number): number
+	local day, night = Config.DAY_SECONDS, Config.NIGHT_SECONDS
+	return (day * Config.timeMult(k, false) + night * Config.timeMult(k, true)) / (day + night)
 end
 
 -- How "night" the lighting is, 0..1: eases in over the first NIGHT_FADE_SECONDS of the night and back

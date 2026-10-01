@@ -13,12 +13,14 @@ export type Brain = {
 	home: Vector3,
 	chaseSpeed: number,
 	returnSpeed: number,
+	wakeDelay: number, -- seconds from alert to chase (the zone's wakeDelay)
 	wakeAt: number,
 	chaseStarted: number,
 	stunnedUntil: number,
 	afterStun: GuardState,
 	dustedUntil: number,
 	targetId: any?,
+	lastChasePos: Vector3?, -- where the guard was on the previous chase tick (for the swept catch)
 }
 
 export type Target = { id: any, pos: Vector3, safe: boolean }
@@ -37,6 +39,7 @@ function GuardBrain.new(zoneIndex: number, home: Vector3): Brain
 		home = home,
 		chaseSpeed = chase,
 		returnSpeed = math.max(Config.BASE_WALKSPEED, chase * Config.GUARD_RETURN_FACTOR),
+		wakeDelay = Config.ZONES[zoneIndex].wakeDelay,
 		wakeAt = 0,
 		chaseStarted = 0,
 		stunnedUntil = 0,
@@ -51,13 +54,25 @@ local function horizontalDist(a: Vector3, b: Vector3): number
 	return math.sqrt(dx * dx + dz * dz)
 end
 
+-- Horizontal distance from p to the segment a-b. A fast guard covers chaseSpeed / GUARD_HZ studs
+-- between ticks (17 in the Spirit Garden), more than the 12-stud catch circle, so sampling only its
+-- current position can step right over a standing or slow thief, again and again. Catching checks the
+-- path walked since the last tick instead.
+local function sweptDist(a: Vector3, b: Vector3, p: Vector3): number
+	local abx, abz = b.X - a.X, b.Z - a.Z
+	local len2 = abx * abx + abz * abz
+	local t = if len2 > 1e-6 then math.clamp(((p.X - a.X) * abx + (p.Z - a.Z) * abz) / len2, 0, 1) else 0
+	local dx, dz = p.X - (a.X + abx * t), p.Z - (a.Z + abz * t)
+	return math.sqrt(dx * dx + dz * dz)
+end
+
 -- A seed was taken from this guard's nest.
 function GuardBrain.alert(brain: Brain, now: number)
 	if brain.state == "Sleeping" or brain.state == "Returning" then
 		local extra = if now < brain.dustedUntil then Config.SLEEP_DUST_EXTRA else 0
 		brain.dustedUntil = 0 -- one steal uses up the dust
 		brain.state = "Waking"
-		brain.wakeAt = now + extra
+		brain.wakeAt = now + brain.wakeDelay + extra
 	elseif brain.state == "Stunned" then
 		brain.afterStun = "Chasing"
 	end
@@ -81,6 +96,7 @@ function GuardBrain.stun(brain: Brain, now: number, seconds: number): boolean
 	end
 	brain.state = "Stunned"
 	brain.stunnedUntil = now + seconds
+	brain.lastChasePos = nil
 	return true
 end
 
@@ -138,25 +154,34 @@ function GuardBrain.step(brain: Brain, now: number, guardPos: Vector3, targets: 
 	end
 
 	if brain.state == "Chasing" then
+		local from = brain.lastChasePos or guardPos
+		brain.lastChasePos = nil
 		local best: Target? = nil
 		local bestDist = math.huge
+		local caught: Target? = nil
+		local caughtDist = Config.CATCH_DISTANCE
 		for _, t in targets do
 			if not t.safe then
 				local d = horizontalDist(guardPos, t.pos)
 				if d < bestDist then
 					best, bestDist = t, d
 				end
+				local swept = sweptDist(from, guardPos, t.pos)
+				if swept < caughtDist then
+					caught, caughtDist = t, swept
+				end
 			end
 		end
 		if best == nil or now - brain.chaseStarted > Config.CHASE_TIMEOUT then
 			brain.state = "Returning"
 			brain.targetId = nil
-		elseif bestDist < Config.CATCH_DISTANCE then
-			cmd.caughtId = best.id
+		elseif caught then
+			cmd.caughtId = caught.id
 			brain.state = "Returning"
 			brain.targetId = nil
 		else
 			brain.targetId = best.id
+			brain.lastChasePos = guardPos
 			cmd.moveTo = chasePoint(brain, guardPos, best.pos)
 			cmd.walkSpeed = brain.chaseSpeed
 			return cmd
