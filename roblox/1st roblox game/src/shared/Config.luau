@@ -60,34 +60,35 @@ export type Zone = {
 	seedColor: Color3,
 	baseWeight: number, -- Kg of a sprouted Common, before growth
 	icon: string,
+	active: "day" | "night", -- this zone's plants earn ACTIVE_TIME_MULT during that phase
 }
 
 Config.ZONES = {
-	{ id = "Meadow", name = "Meadow", req = 0, length = 200, icon = "🌼",
+	{ id = "Meadow", name = "Meadow", req = 0, length = 200, icon = "🌼", active = "day",
 		floor = Color3.fromRGB(104, 214, 70), wall = Color3.fromRGB(56, 152, 58), material = "Grass", ui = Color3.fromRGB(70, 180, 70),
 		guard = "Giant Mole", guardColor = Color3.fromRGB(110, 80, 60),
 		seed = "Sproutling", seedColor = Color3.fromRGB(120, 230, 90), baseWeight = 12 },
-	{ id = "Desert", name = "Desert", req = 10e3, length = 450, icon = "🦂",
+	{ id = "Desert", name = "Desert", req = 10e3, length = 450, icon = "🦂", active = "day",
 		floor = Color3.fromRGB(240, 204, 124), wall = Color3.fromRGB(226, 164, 98), material = "Sand", ui = Color3.fromRGB(225, 145, 55),
 		guard = "Giant Scorpion", guardColor = Color3.fromRGB(190, 90, 40),
 		seed = "Cactopod", seedColor = Color3.fromRGB(60, 170, 90), baseWeight = 340 },
-	{ id = "Jungle", name = "Jungle", req = 500e3, length = 600, icon = "🦖",
+	{ id = "Jungle", name = "Jungle", req = 500e3, length = 600, icon = "🦖", active = "night",
 		floor = Color3.fromRGB(66, 162, 60), wall = Color3.fromRGB(98, 126, 88), material = "LeafyGrass", ui = Color3.fromRGB(35, 140, 75),
 		guard = "Giant Dino", guardColor = Color3.fromRGB(70, 150, 70),
 		seed = "Fernosaur", seedColor = Color3.fromRGB(40, 200, 120), baseWeight = 9_500 },
-	{ id = "Lava", name = "Lava Fields", req = 5e6, length = 700, icon = "🌋",
+	{ id = "Lava", name = "Lava Fields", req = 5e6, length = 700, icon = "🌋", active = "day",
 		floor = Color3.fromRGB(58, 44, 48), wall = Color3.fromRGB(80, 44, 40), material = "Basalt", ui = Color3.fromRGB(225, 85, 30),
 		guard = "Lava Golem", guardColor = Color3.fromRGB(240, 100, 30),
 		seed = "Magmabloom", seedColor = Color3.fromRGB(255, 120, 40), baseWeight = 180_000 },
-	{ id = "Snow", name = "Snow Peaks", req = 50e6, length = 800, icon = "❄️",
+	{ id = "Snow", name = "Snow Peaks", req = 50e6, length = 800, icon = "❄️", active = "night",
 		floor = Color3.fromRGB(238, 246, 255), wall = Color3.fromRGB(160, 206, 242), material = "Snow", ui = Color3.fromRGB(65, 150, 225),
 		guard = "Giant Yeti", guardColor = Color3.fromRGB(220, 230, 245),
 		seed = "Frostbulb", seedColor = Color3.fromRGB(120, 200, 255), baseWeight = 2_000_000 },
-	{ id = "Space", name = "Deep Space", req = 500e6, length = 900, icon = "👽",
+	{ id = "Space", name = "Deep Space", req = 500e6, length = 900, icon = "👽", active = "night",
 		floor = Color3.fromRGB(30, 24, 70), wall = Color3.fromRGB(46, 36, 100), material = "Glass", ui = Color3.fromRGB(115, 75, 225),
 		guard = "Big Alien", guardColor = Color3.fromRGB(120, 255, 120),
 		seed = "Starpetal", seedColor = Color3.fromRGB(200, 120, 255), baseWeight = 45_000_000 },
-	{ id = "Spirit", name = "Spirit Garden", req = 5e9, length = 1100, icon = "⛩️",
+	{ id = "Spirit", name = "Spirit Garden", req = 5e9, length = 1100, icon = "⛩️", active = "day",
 		floor = Color3.fromRGB(238, 232, 220), wall = Color3.fromRGB(250, 240, 224), material = "Pebble", ui = Color3.fromRGB(225, 75, 130),
 		guard = "Spirit Dragon", guardColor = Color3.fromRGB(230, 50, 60),
 		seed = "Lotus Wyrm", seedColor = Color3.fromRGB(255, 150, 200), baseWeight = 900_000_000 },
@@ -422,6 +423,25 @@ function Config.dayPhase(now: number): (boolean, number)
 		return false, Config.DAY_SECONDS - t -- isNight, seconds until it flips
 	end
 	return true, cycle - t
+end
+
+-- Day and night plants: each zone's plants (Zone.active) earn ACTIVE_TIME_MULT during their phase, 1x
+-- otherwise. plantIncome stays the plain base; PlotService applies this on payout.
+Config.ACTIVE_TIME_MULT = 1.5
+Config.ACTIVE_ICONS = { day = "☀️", night = "🌙" } :: { [string]: string }
+
+function Config.isActiveTime(k: number, isNight: boolean): boolean
+	return (Config.ZONES[k].active == "night") == isNight
+end
+
+function Config.timeMult(k: number, isNight: boolean): number
+	return if Config.isActiveTime(k, isNight) then Config.ACTIVE_TIME_MULT else 1
+end
+
+-- Time-weighted mean of timeMult over a full day/night cycle (offline income).
+function Config.averageTimeMult(k: number): number
+	local day, night = Config.DAY_SECONDS, Config.NIGHT_SECONDS
+	return (day * Config.timeMult(k, false) + night * Config.timeMult(k, true)) / (day + night)
 end
 
 -- How "night" the lighting is, 0..1: eases in over the first NIGHT_FADE_SECONDS of the night and back

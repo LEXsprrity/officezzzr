@@ -207,4 +207,48 @@ H.test("day/night: lighting blend fades in at dusk, holds, fades out at dawn", f
 	end
 end)
 
+H.test("day/night plants: every zone is a day or a night plant (Meadow/Desert/Lava/Spirit by day)", function()
+	local want = { Meadow = "day", Desert = "day", Jungle = "night", Lava = "day", Snow = "night", Space = "night", Spirit = "day" }
+	for _, zone in Config.ZONES do
+		H.ok(zone.active == "day" or zone.active == "night", `{zone.id} has active = {zone.active}`)
+		H.eq(zone.active, want[zone.id], zone.id)
+		H.ok(Config.ACTIVE_ICONS[zone.active] ~= nil, "icon")
+	end
+end)
+
+H.test("day/night plants: timeMult is 1.5 during the plant's phase and 1 otherwise", function()
+	H.eq(Config.ACTIVE_TIME_MULT, 1.5)
+	for k, zone in Config.ZONES do
+		local day, night = Config.timeMult(k, false), Config.timeMult(k, true)
+		if zone.active == "day" then
+			H.eq(day, 1.5, zone.id .. " by day")
+			H.eq(night, 1, zone.id .. " at night")
+		else
+			H.eq(day, 1, zone.id .. " by day")
+			H.eq(night, 1.5, zone.id .. " at night")
+		end
+	end
+	-- driven by the shared clock
+	local meadow, jungle = 1, 3
+	H.eq(Config.timeMult(meadow, (Config.dayPhase(10))), 1.5)
+	H.eq(Config.timeMult(jungle, (Config.dayPhase(10))), 1)
+	H.eq(Config.timeMult(jungle, (Config.dayPhase(Config.DAY_SECONDS + 10))), 1.5)
+end)
+
+H.test("day/night plants: offline income uses the time-weighted average multiplier", function()
+	local D, N = Config.DAY_SECONDS, Config.NIGHT_SECONDS
+	for k, zone in Config.ZONES do
+		local want = if zone.active == "day" then (D * 1.5 + N) / (D + N) else (D + N * 1.5) / (D + N)
+		H.near(Config.averageTimeMult(k), want, 1e-9, zone.id)
+		-- matches what the payout loop pays over one full cycle, second by second
+		local sum = 0
+		for t = 0, D + N - 1 do
+			sum += Config.timeMult(k, (Config.dayPhase(t + 0.5)))
+		end
+		H.near(Config.averageTimeMult(k), sum / (D + N), 1e-9, zone.id .. " integrated")
+	end
+	H.near(Config.averageTimeMult(1), 4 / 3, 1e-9, "day plants: 300 s x1.5 + 150 s x1")
+	H.near(Config.averageTimeMult(3), 7 / 6, 1e-9, "night plants: 300 s x1 + 150 s x1.5")
+end)
+
 return nil

@@ -42,6 +42,27 @@ function PlotService.incomeOf(profile: ProfileStore.Profile, now: number): numbe
 	return total
 end
 
+-- $/s of all plants right now: base income times each plant's day/night multiplier (before money multipliers).
+function PlotService.liveIncomeOf(profile: ProfileStore.Profile, now: number): number
+	local isNight = Config.dayPhase(now)
+	local total = 0
+	for _, plant in profile.plants do
+		local _, income = PlotService.plantStats(plant, now)
+		total += income * Config.timeMult(plant.zone, isNight)
+	end
+	return total
+end
+
+-- Offline $/s: base income times the day/night multiplier averaged over a full cycle.
+function PlotService.offlineIncomeOf(profile: ProfileStore.Profile, now: number): number
+	local total = 0
+	for _, plant in profile.plants do
+		local _, income = PlotService.plantStats(plant, now)
+		total += income * Config.averageTimeMult(plant.zone)
+	end
+	return total
+end
+
 ----------------------------------------------------------------------------------------------------
 -- Models
 ----------------------------------------------------------------------------------------------------
@@ -55,6 +76,16 @@ local function labelsFor(model: Model): (TextLabel?, TextLabel?)
 		return nil, nil
 	end
 	return gui:FindFirstChild("Weight") :: TextLabel?, gui:FindFirstChild("Income") :: TextLabel?
+end
+
+-- "☀️ $12/s 1.5x!" in gold while the plant's phase is on, "🌙 $8/s" in green otherwise.
+local INCOME_GREEN = Color3.fromRGB(120, 255, 120)
+local INCOME_GOLD = Color3.fromRGB(255, 215, 60)
+local function setIncomeLabel(label: TextLabel, zone: number, perSecond: number, isNight: boolean)
+	local active = Config.isActiveTime(zone, isNight)
+	local icon = Config.ACTIVE_ICONS[Config.ZONES[zone].active]
+	label.Text = `{icon} {Format.money(perSecond)}/s{if active then string.format(" %gx!", Config.ACTIVE_TIME_MULT) else ""}`
+	label.TextColor3 = if active then INCOME_GOLD else INCOME_GREEN
 end
 
 local function buildPlantModel(state: PlotState, plant: ProfileStore.Plant, weight: number, income: number, scale: number): Model
@@ -93,10 +124,12 @@ local function buildPlantModel(state: PlotState, plant: ProfileStore.Plant, weig
 		stroke.Thickness = 2
 		stroke.Parent = label
 		label.Parent = gui
+		return label
 	end
 	line("Name", SeedService.seedName(plant.zone, plant.rarity, plant.mutation), if mut then mut.color else rarity.color, 1)
 	line("Weight", Format.weight(weight), Color3.new(1, 1, 1), 2)
-	line("Income", Format.money(income) .. "/s", Color3.fromRGB(120, 255, 120), 3)
+	local isNight = Config.dayPhase(os.time())
+	setIncomeLabel(line("Income", "", INCOME_GREEN, 3), plant.zone, income * Config.timeMult(plant.zone, isNight), isNight)
 
 	-- Owner-only "remove" prompt (the client hides other players' prompts; the server re-checks).
 	local prompt = Instance.new("ProximityPrompt")
@@ -157,16 +190,18 @@ end
 ----------------------------------------------------------------------------------------------------
 local function pushPlants(s: Sessions.Session, now: number)
 	local mult = Sessions.moneyMult(s)
+	local isNight = Config.dayPhase(now)
 	local view = {}
 	for _, plant in s.profile.plants do
 		local weight, income = PlotService.plantStats(plant, now)
-		table.insert(view, { slot = plant.slot, zone = plant.zone, rarity = plant.rarity, mutation = plant.mutation, weight = weight, income = income * mult })
+		income *= mult * Config.timeMult(plant.zone, isNight)
+		table.insert(view, { slot = plant.slot, zone = plant.zone, rarity = plant.rarity, mutation = plant.mutation, weight = weight, income = income })
 	end
 	Sessions.push(s.player, { plants = view, slots = Sessions.maxSlots(s) })
 end
 
 local function refreshIncome(s: Sessions.Session, now: number)
-	s.income = PlotService.incomeOf(s.profile, now)
+	s.income = PlotService.liveIncomeOf(s.profile, now)
 end
 
 ----------------------------------------------------------------------------------------------------
@@ -381,7 +416,8 @@ function PlotService.refreshSlots(s: Sessions.Session)
 	end
 end
 
--- Offline earnings (capped): income of the plants as they are now, times time away.
+-- Offline earnings (capped): income of the plants as they are now, with the day/night multiplier
+-- averaged over a cycle, times time away.
 function PlotService.grantOffline(s: Sessions.Session): number
 	local last = s.profile.lastSeen
 	if last <= 0 then
@@ -389,7 +425,7 @@ function PlotService.grantOffline(s: Sessions.Session): number
 	end
 	local now = os.time()
 	local away = math.clamp(now - last, 0, Config.OFFLINE_CAP_SECONDS)
-	local amount = PlotService.incomeOf(s.profile, now) * away * (if s.passes.DoubleMoney then 2 else 1)
+	local amount = PlotService.offlineIncomeOf(s.profile, now) * away * (if s.passes.DoubleMoney then 2 else 1)
 	if amount > 0 then
 		s.profile.money += amount
 		Net.LootEvent:FireClient(s.player, "Offline", { amount = amount, seconds = away })
@@ -402,10 +438,12 @@ end
 ----------------------------------------------------------------------------------------------------
 local function payout(s: Sessions.Session, state: PlotState, now: number)
 	local mult = Sessions.moneyMult(s)
+	local isNight = Config.dayPhase(now)
 	local total = 0
 	for _, plant in s.profile.plants do
 		local weight, income = PlotService.plantStats(plant, now)
-		local earned = income * mult * Config.PAYOUT_INTERVAL
+		local perSecond = income * Config.timeMult(plant.zone, isNight) * mult
+		local earned = perSecond * Config.PAYOUT_INTERVAL
 		total += earned
 		local model = state.models[plant.slot]
 		if model and model.PrimaryPart then
@@ -414,7 +452,7 @@ local function payout(s: Sessions.Session, state: PlotState, now: number)
 				weightLabel.Text = Format.weight(weight)
 			end
 			if incomeLabel then
-				incomeLabel.Text = Format.money(income * mult) .. "/s"
+				setIncomeLabel(incomeLabel, plant.zone, perSecond, isNight) -- also flips ☀️/🌙 "1.5x!" on a phase change
 			end
 			local scale = plantScale(plant, weight)
 			if math.abs(scale - (state.scales[plant.slot] or 1)) > 0.03 then
