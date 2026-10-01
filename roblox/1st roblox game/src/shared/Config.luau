@@ -5,7 +5,8 @@ local Config = {}
 ----------------------------------------------------------------------------------------------------
 -- Server / world
 ----------------------------------------------------------------------------------------------------
-Config.MAX_PLAYERS = 8 -- one plot each; also set Max Players = 8 in Game Settings
+Config.MAX_PLAYERS = 5 -- one plot each; also set Max Players = 5 in Game Settings
+Config.PLOT_COLUMNS = math.ceil(Config.MAX_PLAYERS / 2) -- plots alternate sides of the walkway
 Config.TICK = 0.25 -- speed tracker tick (s)
 Config.GUARD_HZ = 10 -- guard chase loop rate
 

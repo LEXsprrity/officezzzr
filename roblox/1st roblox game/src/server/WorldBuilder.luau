@@ -32,7 +32,7 @@ export type NestInfo = {
 
 local GROUND = Config.GROUND_Y
 local HALF_W = Config.CORRIDOR_WIDTH / 2
-local BASE_MIN_X = Config.PLOT_FIRST_X - Config.PLOT_SPACING_X * 3 - Config.PLOT_SIZE / 2 - 40
+local BASE_MIN_X = Config.PLOT_FIRST_X - Config.PLOT_SPACING_X * (Config.PLOT_COLUMNS - 1) - Config.PLOT_SIZE / 2 - 24
 local BASE_HALF_Z = Config.PLOT_OFFSET_Z + Config.PLOT_SIZE / 2 + 20
 
 local box, deco, ball, cylinder, flat = Props.box, Props.deco, Props.ball, Props.cylinder, Props.flat
@@ -168,7 +168,7 @@ local function buildBase(world: Folder)
 	props.Parent = base
 
 	-- Street lamps along the walkway, between the plot paths
-	for col = 0, 4 do
+	for col = 0, Config.PLOT_COLUMNS do
 		local x = Config.PLOT_FIRST_X + Config.PLOT_SPACING_X / 2 - col * Config.PLOT_SPACING_X
 		for _, s in { -1, 1 } do
 			Props.lamp(props, Vector3.new(x, GROUND, s * 22), Color3.fromRGB(255, 225, 150))
@@ -191,7 +191,7 @@ local function buildBase(world: Folder)
 	end
 
 	-- Bushes and flowers in the gaps between plots
-	for col = 0, 2 do
+	for col = 0, Config.PLOT_COLUMNS - 2 do
 		local x = Config.PLOT_FIRST_X - Config.PLOT_SPACING_X / 2 - col * Config.PLOT_SPACING_X
 		for _, s in { -1, 1 } do
 			for _, z in { 50, 80, 110 } do

@@ -20,7 +20,7 @@ local function parts(root: any): { any }
 	return out
 end
 
-H.test("world: builds 8 plots and one nest per zone", function()
+H.test("world: builds one plot per player slot and one nest per zone", function()
 	H.ok(world ~= nil, "World folder parented to workspace")
 	H.eq(#plots, Config.MAX_PLAYERS)
 	H.eq(#nests, #Config.ZONES)
