@@ -68,7 +68,7 @@ H.test("robux only: packs have no money price and there is no money purchase pat
 	local p = ProfileStore.defaultProfile()
 	p.money, p.speed = 1e15, 1e15
 	for _, id in { "Pack:Meadow", `Pack:Featured:{SeedPacks.featuredSlot(T)}` } do
-		H.eq((Shop.buy(p, id, 0)), false, id)
+		H.eq((Shop.buy(p, id)), false, id)
 	end
 	H.eq(p.money, 1e15)
 	H.eq(SeedPacks.bagCount(p.seedBag), 0)

@@ -155,7 +155,7 @@ Config.RARITIES = {
 	{ id = "Legendary", color = Color3.fromRGB(255, 190, 30), income = 15, weight = 8, spawn = 1 },
 } :: { Rarity }
 
--- Deeper zones and luck (night, potions) tilt the odds toward the rare end.
+-- Deeper zones and luck (night, featured packs) tilt the odds toward the rare end.
 Config.ZONE_RARITY_BONUS = 0.1
 
 function Config.rarityWeights(k: number, luck: number): { number }
@@ -310,16 +310,6 @@ Config.BAT_RANGE = 14
 Config.BAT_STUN = 2
 Config.BAT_COOLDOWN = 4
 
--- Potions (P3)
-export type Potion = { stat: string, mult: number, seconds: number, label: string, icon: string }
-Config.POTIONS = {
-	PotionSpeed = { stat = "Speed", mult = 2, seconds = 300, label = "Speed Potion", icon = "⚡" },
-	PotionMoney = { stat = "Money", mult = 2, seconds = 300, label = "Money Potion", icon = "💰" },
-	PotionLuck = { stat = "Luck", mult = 2, seconds = 300, label = "Luck Potion", icon = "🍀" },
-} :: { [string]: Potion }
-Config.POTION_MIN_PRICE = 5e3
-Config.POTION_INCOME_SECONDS = 90 -- a potion costs this many seconds of your income
-
 -- Gamepass stubs: set real ids to enable. 0 = not configured.
 export type Gamepass = { id: number, label: string }
 Config.GAMEPASSES = {
@@ -378,7 +368,6 @@ export type ShopView = {
 	speedMultTier: number,
 	treadmillTier: number,
 	slots: number,
-	income: number?,
 }
 
 -- Returns price and a short label, or nil if the item is sold out / unknown.
@@ -408,9 +397,6 @@ function Config.priceOf(itemId: string, v: ShopView): (number?, string?)
 		return math.floor(Config.SLOT_BASE_PRICE * Config.SLOT_PRICE_GROWTH ^ (v.slots - Config.SLOTS_START)), "+1 Plant Slot"
 	elseif itemId == "SleepDust" then
 		return Config.SLEEP_DUST_PRICE, "Sleep Dust"
-	elseif Config.POTIONS[itemId] then
-		local income = v.income or 0
-		return math.max(Config.POTION_MIN_PRICE, math.floor(income * Config.POTION_INCOME_SECONDS)), Config.POTIONS[itemId].label
 	end
 	return nil, nil
 end

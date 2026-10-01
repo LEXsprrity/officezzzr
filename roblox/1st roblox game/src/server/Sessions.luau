@@ -68,22 +68,8 @@ function Sessions.all(): { [Player]: Session }
 	return byPlayer
 end
 
-function Sessions.potionActive(s: Session, stat: string): boolean
-	local expiry = s.profile.potions[stat]
-	return expiry ~= nil and expiry > os.time()
-end
-
-local function potionMult(s: Session, stat: string): number
-	for _, def in Config.POTIONS do
-		if def.stat == stat and Sessions.potionActive(s, stat) then
-			return def.mult
-		end
-	end
-	return 1
-end
-
 function Sessions.speedMult(s: Session): number
-	return Config.SPEED_MULT_TIERS[s.profile.speedMultTier].mult * potionMult(s, "Speed")
+	return Config.SPEED_MULT_TIERS[s.profile.speedMultTier].mult
 end
 
 function Sessions.treadmillMult(s: Session): number
@@ -91,11 +77,7 @@ function Sessions.treadmillMult(s: Session): number
 end
 
 function Sessions.moneyMult(s: Session): number
-	return (if s.passes.DoubleMoney then 2 else 1) * potionMult(s, "Money")
-end
-
-function Sessions.luck(s: Session, isNight: boolean): number
-	return potionMult(s, "Luck") * (if isNight then Config.NIGHT_LUCK else 1)
+	return if s.passes.DoubleMoney then 2 else 1
 end
 
 function Sessions.maxSlots(s: Session): number
@@ -167,7 +149,6 @@ function Sessions.pushFull(s: Session)
 		speedMult = Sessions.speedMult(s),
 		treadmillMult = Sessions.treadmillMult(s),
 		items = table.clone(p.items),
-		potions = table.clone(p.potions),
 		seedBag = table.clone(p.seedBag),
 		index = table.clone(p.index),
 		reachedEnd = p.reachedEnd,

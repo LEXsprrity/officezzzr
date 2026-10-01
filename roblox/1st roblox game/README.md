@@ -26,7 +26,7 @@ The Meadow is deliberately short (200 studs) so a new player grabs a first seed 
 | ⚡ **+** | Buy Speed (+25% pack, Max, next Speed Gain multiplier) |
 | 🛒 / 📖 | Shop (🎁 Seed Packs / ⚡ Upgrades tabs) / Index (collection book) |
 | 🐢 Slow | Slow Mode: clamps your own WalkSpeed to 16 for moving around the base |
-| 🌱 🪴 🧪 (right) | Seeds (incl. your 🎒 seed bag: **Plant** at your pad) / Plants / Potions menus |
+| 🌱 🪴 (right) | Seeds (incl. your 🎒 seed bag: **Plant** at your pad) / Plants menus |
 
 ## Seed packs
 Our version of "eggs with odds". The 🛒 Shop opens on the **🎁 Seed Packs** tab. **Packs are Robux only**: every pack is a developer product, and there is no way to buy one with in-game money.
@@ -79,7 +79,7 @@ luau-lsp analyze --definitions=globalTypes.d.luau --sourcemap=sourcemap.json src
 - **Carry.** One seed at a time, a server-made part welded to your back. Dying or leaving returns it to its pod.
 - **Growth.** Only `plantedAt` is saved. `weight = sprout × variance × (1 + 4·ease(age/20 min))` grows to 5× and stops. `income = seedIncome(zone) × rarity × mutation × sqrt(weight/sprout)`. A single 3 s payout loop evaluates the formula. There is no per-plant tick.
 - **Economy** is formulas in `Config`. `speedCost(n) = n × $1`. `seedIncome(k) = req[k+1] / (10 slots × 300 s)`, so a full plot of zone-k Commons pays for zone k+1 in about 5 minutes. Upgrades are priced geometrically.
-- **Data** (`ProfileStore`, format v2). `UpdateAsync` with retries and exponential backoff, autosave every 90 s, `BindToClose`. If a load fails, that session never saves, so it can't overwrite real data with defaults. Saved fields: money, Speed, multiplier tiers, slots, plants (slot, zone, rarity, mutation, plantedAt), Index, items, potion expiries, the seed bag, the last 100 Robux receipt ids and `lastSeen`. v1 saves load with an empty bag and no receipts. Offline income is capped at 1 h.
+- **Data** (`ProfileStore`, format v2). `UpdateAsync` with retries and exponential backoff, autosave every 90 s, `BindToClose`. If a load fails, that session never saves, so it can't overwrite real data with defaults. Saved fields: money, Speed, multiplier tiers, slots, plants (slot, zone, rarity, mutation, plantedAt), Index, items (Sleep Dust), the seed bag, the last 100 Robux receipt ids and `lastSeen`. v1 saves load with an empty bag and no receipts. Potions were removed: potion timers and potion items in old saves are dropped on load. Offline income is capped at 1 h.
 - **Art.** Everything is built from primitives by `WorldBuilder` (base, plots), `ZoneThemes` (the 7 zones) and the `Props` kit. Only floors, walls and the wall-flush arch pillars collide. All props are anchored and non-colliding (no Touched, no raycasts), so they never block runners, guards or the camera. The corridor is about 3.5k parts and the whole map about 4.9k (tested below 6k/8k). Day/night lighting blends a warm day look into a blue, readable night (`Config.nightBlend`), and the client adds a per-zone colour grade.
 
 ### Soft gates: how soft they are
@@ -136,7 +136,7 @@ Each planted seed grows into its zone's creature (`CreatureModels`). The creatur
 | `src/server/PlotService.luau` | 〃 | Plot assignment, planting, plant-creatures, growth, payouts, offline income |
 | `src/server/CreatureModels.luau` | 〃 | Builds the seven plant-creatures from primitives, plus rarity/mutation flair and scale-by-weight |
 | `src/server/Shop.luau` | 〃 | *Pure*: purchase rules, seed-pack prompt gates, idempotent Robux receipt grants, full-bag compensation |
-| `src/server/ShopService.luau` | 〃 | `RequestBuy` / `RequestUseItem`, potions, gamepass stubs, seed-pack Robux prompts, `ProcessReceipt` |
+| `src/server/ShopService.luau` | 〃 | `RequestBuy` / `RequestUseItem`, gamepass stubs, seed-pack Robux prompts, `ProcessReceipt` |
 | `src/server/ProfileStore.luau` | 〃 | Save format, validation, DataStore wrapper |
 | `src/server/AmbientService.luau` | 〃 | Day/night lighting, "Fastest here" board |
 | `src/client/HUD.client.luau` | `StarterPlayerScripts.Client` | All UI, Slow Mode |
@@ -147,7 +147,7 @@ Each planted seed grows into its zone's creature (`CreatureModels`). The creatur
 `ReplicatedStorage.Remotes`:
 - Client → server: `RequestBuy(itemId)`, `RequestUseItem(itemId)`.
   - `RequestBuy` ids: shop items, `Pass:<name>`, `Product:<name>` (seed packs, Robux only; featured bundles send `Product:<name>:<slot>` with the featured slot the menu showed). The server only opens the Robux prompt; `ProcessReceipt` grants.
-  - `RequestUseItem` ids: `Bat`, `SleepDust`, potions, `Seed:<bagKey>` (plant from the seed bag).
+  - `RequestUseItem` ids: `Bat`, `SleepDust`, `Seed:<bagKey>` (plant from the seed bag).
 - Server → client: `StatsUpdate(partialStats)` (the client merges it), `LootEvent(kind, data)`, `IncomePopup(amount, position)`. Pack openings are `LootEvent("PackRoll", { packId, name, zone, featured, results })`.
 - Stealing, planting and removing plants use server-side ProximityPrompts. Day/night is computed from the shared clock (`Config.dayPhase`), so it needs no remote.
 

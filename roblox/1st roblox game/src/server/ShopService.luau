@@ -95,7 +95,7 @@ local function onBuy(player: Player, itemId: any)
 		return
 	end
 
-	local ok, msg = Shop.buy(s.profile, itemId, s.income * Sessions.moneyMult(s))
+	local ok, msg = Shop.buy(s.profile, itemId)
 	if not ok then
 		Net.toast(player, msg, "red")
 		return
@@ -131,29 +131,21 @@ local function onUse(player: Player, itemId: any)
 		return
 	end
 
-	local count = s.profile.items[itemId] or 0
+	if itemId ~= "SleepDust" then -- the only consumable
+		return
+	end
+	local count = s.profile.items.SleepDust or 0
 	if count <= 0 then
 		Net.toast(player, "You don't have any of those. Check the Shop!", "red")
 		return
 	end
-
-	if itemId == "SleepDust" then
-		local guard = GuardService.dust(player)
-		if not guard then
-			Net.toast(player, "Get close to a sleeping guard to use Sleep Dust.", "red")
-			return
-		end
-		s.profile.items.SleepDust = count - 1
-		Net.LootEvent:FireClient(player, "Dusted", { guard = guard, seconds = Config.SLEEP_DUST_EXTRA })
-	elseif Config.POTIONS[itemId] then
-		local def = Config.POTIONS[itemId]
-		s.profile.items[itemId] = count - 1
-		local t = os.time()
-		s.profile.potions[def.stat] = math.max(t, s.profile.potions[def.stat] or 0) + def.seconds
-		Net.LootEvent:FireClient(player, "Potion", { itemId = itemId, label = def.label })
-	else
+	local guard = GuardService.dust(player)
+	if not guard then
+		Net.toast(player, "Get close to a sleeping guard to use Sleep Dust.", "red")
 		return
 	end
+	s.profile.items.SleepDust = count - 1
+	Net.LootEvent:FireClient(player, "Dusted", { guard = guard, seconds = Config.SLEEP_DUST_EXTRA })
 	Sessions.pushFull(s)
 end
 
@@ -222,25 +214,6 @@ function ShopService.init()
 		for name, pass in Config.GAMEPASSES do
 			if pass.id == passId then
 				grantPass(s, name)
-			end
-		end
-	end)
-	-- Potions expiring changes multipliers; refresh clients once a second when that happens.
-	task.spawn(function()
-		while true do
-			task.wait(1)
-			local t = os.time()
-			for _, player in Players:GetPlayers() do
-				local s = Sessions.get(player)
-				if s then
-					for stat, expiry in s.profile.potions do
-						if expiry <= t then
-							s.profile.potions[stat] = nil
-							Sessions.pushFull(s)
-							Net.toast(player, `Your {stat} potion wore off.`)
-						end
-					end
-				end
 			end
 		end
 	end)

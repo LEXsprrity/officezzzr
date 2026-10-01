@@ -19,17 +19,9 @@ type Profile = {
 	items: { [string]: number },
 }
 
--- Returns (ok, message). `income` is the player's current $/s (potion prices scale with it).
-function Shop.buy(p: Profile, itemId: string, income: number): (boolean, string)
-	local view = {
-		money = p.money,
-		speed = p.speed,
-		speedMultTier = p.speedMultTier,
-		treadmillTier = p.treadmillTier,
-		slots = p.slots,
-		income = income,
-	}
-	local price, label = Config.priceOf(itemId, view)
+-- Returns (ok, message).
+function Shop.buy(p: Profile, itemId: string): (boolean, string)
+	local price, label = Config.priceOf(itemId, p)
 	if price == nil then
 		return false, if label then `{label}` else "Unknown item"
 	end
@@ -49,7 +41,7 @@ function Shop.buy(p: Profile, itemId: string, income: number): (boolean, string)
 		p.treadmillTier += 1
 	elseif itemId == "Slot" then
 		p.slots += 1
-	else -- consumables: Sleep Dust and potions
+	else -- consumables: Sleep Dust
 		p.items[itemId] = (p.items[itemId] or 0) + 1
 	end
 	return true, label or itemId
