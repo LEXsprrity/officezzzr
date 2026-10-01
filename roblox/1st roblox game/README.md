@@ -57,7 +57,7 @@ luau-lsp analyze --definitions=globalTypes.d.luau --sourcemap=sourcemap.json src
 
 **Studio settings the place file can't carry:**
 - Game Settings → Security → **Enable Studio Access to API Services**. Without it saving is off, and the game tells you so in a toast.
-- Game Settings → Places → **Max Players = 8**, one plot each. A 9th player is kicked with a "server full" message.
+- Game Settings → Places → **Max Players = 5**, one plot each. A 6th player is kicked with a "server full" message.
 - Gamepasses are stubs. Put real ids in `Config.GAMEPASSES` to turn them on.
 - Seed packs are developer-product stubs. Create 10 developer products on the Creator Dashboard (7 zone packs + featured ×1/×3/×10) and paste their ids into `Config.DEVELOPER_PRODUCTS`. The price comes from the Dashboard. The place must be published for `PromptProductPurchase`/`GetProductInfo` to work.
 
@@ -133,7 +133,7 @@ Each planted seed grows into its zone's creature (`CreatureModels`). The creatur
 | `src/server/Main.server.luau` | `ServerScriptService.Server` | Bootstrap: collision groups, world, services, join/leave, autosave, BindToClose |
 | `src/server/Net.luau` | 〃 | Creates the fixed remotes |
 | `src/server/Sessions.luau` | 〃 | Per-player runtime state, multipliers, StatsUpdate + leaderstats |
-| `src/server/WorldBuilder.luau` | 〃 | Builds the map from primitives: base, 8 plots + treadmills, zone arches + signs, nests, the End |
+| `src/server/WorldBuilder.luau` | 〃 | Builds the map from primitives: base, 5 plots + treadmills, zone arches + signs, nests, the End |
 | `src/server/ZoneThemes.luau` | 〃 | Per-zone floor, walls, props and particle ambience for the 7 zones |
 | `src/server/Props.luau` | 〃 | Primitive kit (blocks, ellipsoids, overlays, lights, emitters) and reusable props |
 | `src/server/SpeedLogic.luau` | 〃 | *Pure*: per-tick gain, cap, treadmill, sanity check |
