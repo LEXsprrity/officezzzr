@@ -1,19 +1,19 @@
 --!strict
--- Seed packs ("eggs with odds"): prices, the visible odds table, rolls, the server-wide featured
--- rotation and the seed-bag key format. Pure and shared, so the Shop UI shows exactly the odds the
--- server rolls with, and the featured countdown needs no remote.
+-- Seed packs ("eggs with odds"): the visible odds table, rolls, the server-wide featured rotation,
+-- the developer products that sell packs (Robux only) and the seed-bag key format. Pure and shared,
+-- so the Shop UI shows exactly the odds the server rolls with, and the featured countdown needs no
+-- remote.
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Config = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("Config"))
 
 local SeedPacks = {}
 
 export type Pack = {
-	id: string, -- RequestBuy item id: "Pack:<zoneId>" or "Pack:Featured:<slot>"
+	id: string, -- reveal id: "Pack:<zoneId>" or "Pack:Featured:<slot>"
 	zone: number,
 	featured: boolean,
 	slot: number?, -- featured rotation slot
 	name: string,
-	price: number,
 	luck: number,
 	mutationMult: number,
 	exclusive: string?, -- featured-only mutation id
@@ -26,20 +26,6 @@ export type Odds = {
 	noMutation: number, -- percent; mutations + noMutation sum to 100
 }
 
--- Two significant figures, so prices read like "$40K" / "$1.2K".
-function SeedPacks.roundPrice(x: number): number
-	if x <= 0 then
-		return 0
-	end
-	local step = 10 ^ math.max(0, math.floor(math.log10(x)) - 1)
-	return math.floor(x / step + 0.5) * step
-end
-
--- Priced like the rest of the economy: PACK_INCOME_SECONDS of a Common zone-k plant's income.
-function SeedPacks.basePrice(k: number): number
-	return SeedPacks.roundPrice(Config.seedIncome(k) * Config.PACK_INCOME_SECONDS)
-end
-
 function SeedPacks.zonePack(k: number): Pack
 	local zone = Config.ZONES[k]
 	return {
@@ -48,7 +34,6 @@ function SeedPacks.zonePack(k: number): Pack
 		featured = false,
 		slot = nil,
 		name = `{zone.seed} Pack`,
-		price = SeedPacks.basePrice(k),
 		luck = Config.PACK_LUCK,
 		mutationMult = Config.PACK_MUTATION_MULT,
 		exclusive = nil,
@@ -111,7 +96,6 @@ function SeedPacks.featuredPackForSlot(slot: number): Pack
 		featured = true,
 		slot = slot,
 		name = `Featured {zone.seed} Pack`,
-		price = SeedPacks.roundPrice(SeedPacks.basePrice(k) * Config.FEATURED_PRICE_MULT),
 		luck = Config.FEATURED_LUCK,
 		mutationMult = Config.FEATURED_MUTATION_MULT,
 		exclusive = Config.FEATURED_EXCLUSIVE,
@@ -138,17 +122,65 @@ function SeedPacks.lookup(id: string): Pack?
 	return nil
 end
 
--- A pack the player may buy right now. Featured ids carry their slot, so a click from a stale menu
--- (the pack rotated while it was open) is refused instead of buying a different pack.
-function SeedPacks.fromId(id: string, now: number): (Pack?, string?)
-	local pack = SeedPacks.lookup(id)
-	if not pack then
-		return nil, "Unknown pack"
+----------------------------------------------------------------------------------------------------
+-- Developer products (Robux): Config.DEVELOPER_PRODUCTS[name] = { id, label, robux, packs, zone? }
+----------------------------------------------------------------------------------------------------
+-- The product with this (non-zero) developer product id, as (name, product).
+function SeedPacks.productById(productId: number): (string?, Config.DevProduct?)
+	if productId == 0 then
+		return nil, nil
 	end
-	if pack.featured and pack.slot ~= SeedPacks.featuredSlot(now) then
-		return nil, "The featured pack just rotated! Check out the new one."
+	for name, product in Config.DEVELOPER_PRODUCTS do
+		if product.id == productId then
+			return name, product
+		end
 	end
-	return pack, nil
+	return nil, nil
+end
+
+-- The product that sells zone k's pack, as (name, product).
+function SeedPacks.zoneProduct(k: number): (string?, Config.DevProduct?)
+	for name, product in Config.DEVELOPER_PRODUCTS do
+		if product.zone == k then
+			return name, product
+		end
+	end
+	return nil, nil
+end
+
+-- Featured-pack products, smallest bundle first.
+function SeedPacks.featuredProducts(): { { name: string, product: Config.DevProduct } }
+	local list = {}
+	for name, product in Config.DEVELOPER_PRODUCTS do
+		if product.zone == nil then
+			table.insert(list, { name = name, product = product })
+		end
+	end
+	table.sort(list, function(a, b)
+		return a.product.packs < b.product.packs
+	end)
+	return list
+end
+
+-- The pack a product opens: its zone pack, or the featured pack of `featuredSlot`.
+function SeedPacks.packForProduct(product: Config.DevProduct, featuredSlot: number): Pack
+	if product.zone then
+		return SeedPacks.zonePack(product.zone)
+	end
+	return SeedPacks.featuredPackForSlot(featuredSlot)
+end
+
+-- Which featured slot a receipt opens. The player gets the pack they were shown when they clicked
+-- Buy (`promptedSlot`, recorded by the server at `promptedAt`), even if it rotated while the Robux
+-- dialog was open, as long as the receipt arrives within FEATURED_PROMPT_GRACE seconds. Otherwise
+-- (receipt replayed on a later join, or on another server) it's the current featured pack.
+function SeedPacks.receiptSlot(promptedSlot: number?, promptedAt: number?, now: number): number
+	local current = SeedPacks.featuredSlot(now)
+	if promptedSlot and promptedAt and now - promptedAt >= 0 and now - promptedAt <= Config.FEATURED_PROMPT_GRACE
+		and promptedSlot <= current and promptedSlot >= current - 1 then
+		return promptedSlot
+	end
+	return current
 end
 
 ----------------------------------------------------------------------------------------------------

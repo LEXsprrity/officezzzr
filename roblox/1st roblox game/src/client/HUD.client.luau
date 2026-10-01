@@ -1,5 +1,6 @@
 -- HUD, built in code. Display only: it renders StatsUpdate/LootEvent, sends RequestBuy/RequestUseItem,
 -- and owns the local Slow Mode toggle. No game state is decided here.
+local MarketplaceService = game:GetService("MarketplaceService")
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local RunService = game:GetService("RunService")
@@ -585,6 +586,42 @@ local CARD_DARK = Color3.fromRGB(44, 38, 72)
 local featuredLive: { countdown: TextLabel?, shine: Frame?, badge: UIScale? } = {}
 local seenFeaturedSlot = -1
 
+-- Robux prices. Packs are developer products; the real price is set on the Creator Dashboard, so it
+-- is fetched once per id with GetProductInfo (pcall'd, cached). Until then, or with no id yet, the
+-- placeholder from Config is shown.
+local robuxPrices: { [number]: number } = {}
+local priceFetching: { [number]: boolean } = {}
+local priceRerender = false
+local function robuxPrice(product: Config.DevProduct): number
+	local cached = robuxPrices[product.id]
+	if cached then
+		return cached
+	end
+	if product.id ~= 0 and not priceFetching[product.id] then
+		priceFetching[product.id] = true
+		task.spawn(function()
+			local ok, info = pcall(MarketplaceService.GetProductInfo, MarketplaceService, product.id, Enum.InfoType.Product)
+			if ok and type(info) == "table" and type(info.PriceInRobux) == "number" then
+				robuxPrices[product.id] = info.PriceInRobux
+				if not priceRerender then -- one re-render for a burst of answers
+					priceRerender = true
+					task.delay(0.3, function()
+						priceRerender = false
+						if modal.Visible and modalName == "Shop" and shopTab == "Packs" then
+							renderModal()
+						end
+					end)
+				end
+			else
+				task.delay(30, function() -- let a later render try again
+					priceFetching[product.id] = nil
+				end)
+			end
+		end)
+	end
+	return product.robux
+end
+
 -- "2:13:05"
 local function hms(seconds: number): string
 	local s = math.max(0, math.floor(seconds))
@@ -677,50 +714,58 @@ local function renderPacks()
 		Text = `Luckier odds than the zone pack, and the only way to get 🌟 {f.exclusive} seeds (x{(Config.mutationById(f.exclusive) :: any).income} income)!`,
 		Size = UDim2.new(0.4, -28, 0, 60), Position = UDim2.new(0.6, 12, 0, 84), TextWrapped = true, TextColor3 = Color3.fromRGB(255, 255, 230),
 	})
-	local canBuyF = stats.money >= f.price
-	button(banner, `Buy {Format.money(f.price)}`, if canBuyF then COLORS.money else COLORS.disabled, UDim2.fromOffset(200, 58), function()
-		RequestBuy:FireServer(f.id)
-	end).Position = UDim2.new(1, -216, 0, 14)
+	-- Packs are Robux only. Featured clicks carry the slot this menu shows, so a click from a stale
+	-- menu (the pack rotated while it was open) is refused instead of buying a different pack.
+	local bundles = SeedPacks.featuredProducts()
+	local single = bundles[1]
+	if single then
+		local live = single.product.id ~= 0
+		button(banner, if live then `Buy {Format.robux(robuxPrice(single.product))}` else `Soon · {Format.robux(single.product.robux)}`,
+			if live then COLORS.money else COLORS.disabled, UDim2.fromOffset(200, 58), function()
+				RequestBuy:FireServer(`Product:{single.name}:{f.slot}`)
+			end).Position = UDim2.new(1, -216, 0, 14)
+	end
 
-	-- Zone packs
+	-- Zone packs: locked until the zone's recommended Speed (the server won't prompt a locked pack)
 	heading("🎁 Zone Seed Packs", 2)
 	local grid = new("Frame", { BackgroundTransparency = 1, Size = UDim2.new(1, -12, 0, 0), AutomaticSize = Enum.AutomaticSize.Y, LayoutOrder = 3, Parent = modalBody },
 		{ new("UIGridLayout", { CellSize = UDim2.fromOffset(234, 262), CellPadding = UDim2.fromOffset(10, 10), SortOrder = Enum.SortOrder.LayoutOrder }) })
 	for k, zone in Config.ZONES do
 		local pack = SeedPacks.zonePack(k)
+		local productName, product = SeedPacks.zoneProduct(k)
 		local unlocked = stats.speed >= zone.req
 		local c = new("Frame", { BackgroundColor3 = CARD_DARK, LayoutOrder = k, Parent = grid }, deco(12, 3))
 		local head = new("Frame", { Size = UDim2.new(1, 0, 0, 40), BackgroundColor3 = zone.ui, Parent = c }, { new("UICorner", { CornerRadius = UDim.new(0, 12) }) })
 		text(head, { Text = `{zone.icon} {pack.name}`, Size = UDim2.new(1, -12, 1, -8), Position = UDim2.fromOffset(6, 4) })
 		lootTable(c, pack, UDim2.fromOffset(8, 48), UDim2.new(1, -16, 0, 130))
 		text(c, { Text = mutationLine(pack), Size = UDim2.new(1, -16, 0, 20), Position = UDim2.fromOffset(8, 184), TextColor3 = Color3.fromRGB(255, 240, 180) })
-		local caption = if unlocked then `Buy {Format.money(pack.price)}` else `🔒 Speed {Format.short(zone.req)}`
-		button(c, caption, if unlocked and stats.money >= pack.price then COLORS.gold else COLORS.disabled, UDim2.new(1, -16, 0, 42), function()
-			RequestBuy:FireServer(pack.id)
-		end).Position = UDim2.new(0, 8, 1, -50)
+		if productName and product then
+			local live = product.id ~= 0
+			local caption = if not unlocked then `🔒 Speed {Format.short(zone.req)}`
+				elseif live then Format.robux(robuxPrice(product))
+				else `Soon · {Format.robux(product.robux)}`
+			button(c, caption, if unlocked and live then COLORS.gold else COLORS.disabled, UDim2.new(1, -16, 0, 42), function()
+				RequestBuy:FireServer("Product:" .. productName)
+			end).Position = UDim2.new(0, 8, 1, -50)
+		end
 	end
 
-	-- Robux bundles of featured packs (greyed out until a real developer product id is set)
+	-- Featured pack bundles (greyed out until a real developer product id is set)
 	heading("💎 Featured Pack Bundles", 4)
 	local row = new("Frame", { BackgroundTransparency = 1, Size = UDim2.new(1, -12, 0, 118), LayoutOrder = 5, Parent = modalBody },
 		{ new("UIListLayout", { FillDirection = Enum.FillDirection.Horizontal, Padding = UDim.new(0, 10), SortOrder = Enum.SortOrder.LayoutOrder }) })
-	local bundles = {}
-	for name, product in Config.DEVELOPER_PRODUCTS do
-		table.insert(bundles, { name = name, product = product })
-	end
-	table.sort(bundles, function(a, b)
-		return a.product.packs < b.product.packs
-	end)
 	for i, entry in bundles do
 		local live = entry.product.id ~= 0
 		local c = new("Frame", { Size = UDim2.new(1 / #bundles, -8, 1, 0), BackgroundColor3 = if live then Color3.fromRGB(0, 170, 200) else COLORS.disabled, LayoutOrder = i, Parent = row }, deco(12, 3))
 		text(c, { Text = `💎 {entry.product.label}`, Size = UDim2.new(1, -12, 0, 34), Position = UDim2.fromOffset(6, 8) })
-		button(c, if live then "Buy with Robux" else "Coming soon", if live then COLORS.gold else Color3.fromRGB(140, 140, 150), UDim2.new(1, -16, 0, 44), function()
-			RequestBuy:FireServer("Product:" .. entry.name)
-		end).Position = UDim2.new(0, 8, 1, -54)
+		button(c, if live then Format.robux(robuxPrice(entry.product)) else `Coming soon · {Format.robux(entry.product.robux)}`,
+			if live then COLORS.gold else Color3.fromRGB(140, 140, 150), UDim2.new(1, -16, 0, 44), function()
+				RequestBuy:FireServer(`Product:{entry.name}:{f.slot}`)
+			end).Position = UDim2.new(0, 8, 1, -54)
 	end
 
-	heading(`🎒 Seed bag {SeedPacks.bagCount(stats.seedBag or {})}/{Config.SEED_BAG_MAX} · plant bagged seeds from the 🌱 Seeds menu at your plot's pad`, 6)
+	local bagCount = SeedPacks.bagCount(stats.seedBag or {})
+	heading(`🎒 Seed bag {bagCount}/{Config.SEED_BAG_MAX}{if bagCount >= Config.SEED_BAG_MAX then " (full: plant some first!)" else ""} · plant bagged seeds from the 🌱 Seeds menu at your plot's pad`, 6)
 end
 
 local function renderShop()

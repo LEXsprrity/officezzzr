@@ -52,6 +52,11 @@ function Format.commas(n: number): string
 	return (if n < 0 then "-" else "") .. out
 end
 
+-- 1200 -> "R$ 1,200"
+function Format.robux(n: number): string
+	return "R$ " .. Format.commas(n)
+end
+
 function Format.weight(kg: number): string
 	return Format.commas(kg) .. " Kg"
 end

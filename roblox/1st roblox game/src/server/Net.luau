@@ -1,6 +1,6 @@
 -- The fixed remote contract. Everything else (pickup, planting, selling) goes through ProximityPrompts.
 --   client -> server: RequestBuy(itemId), RequestUseItem(itemId)
---     RequestBuy ids: shop items, "Pass:<name>", "Pack:<zoneId>", "Pack:Featured:<slot>", "Product:<name>"
+--     RequestBuy ids: shop items, "Pass:<name>", "Product:<name>[:<featuredSlot>]" (seed packs, Robux only)
 --     RequestUseItem ids: "Bat", "SleepDust", potions, "Seed:<bagKey>" (plant from the seed bag)
 --   server -> client: StatsUpdate(stats), LootEvent(kind, data), IncomePopup(amount, position)
 local ReplicatedStorage = game:GetService("ReplicatedStorage")

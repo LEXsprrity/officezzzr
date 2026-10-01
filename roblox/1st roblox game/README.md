@@ -29,12 +29,14 @@ The Meadow is deliberately short (200 studs) so a new player grabs a first seed 
 | 🌱 🪴 🧪 (right) | Seeds (incl. your 🎒 seed bag: **Plant** at your pad) / Plants / Potions menus |
 
 ## Seed packs
-Our version of "eggs with odds". The 🛒 Shop opens on the **🎁 Seed Packs** tab:
-- **One pack per zone.** It costs `PACK_INCOME_SECONDS` (240 s) of a Common zone-k plant's income, so $800 for Meadow, then $40K, $400K, $4M, $40M, $400M and $4B. A zone's pack unlocks at the zone's recommended Speed. It rolls like a daytime pod in that zone, and the loot table in the UI comes from the same function the server rolls with (`SeedPacks.odds`). Mutations are Gold 4% and Rainbow 1%. Night never rolls from packs.
-- **Featured pack.** It rotates every 3 h on `os.time`, so every server shows the same pack with the same countdown. Zones come in shuffled cycles: each zone once per cycle, never twice in a row. It costs 1.5× its zone pack, has no Speed gate, rolls with night luck and doubled mutation chances, and is the only source of the exclusive **🌟 Celestial** mutation (0.5%, ×12 income). The UI shows a NEW! badge, a shine and a live countdown. Buying with a stale menu after a rotation is refused.
-- **Where the seed goes.** Into a persisted **seed bag** (`profile.seedBag`, stacks by `zone:rarity[:Mutation]`, at most `SEED_BAG_MAX` = 50 from money). Plant from the 🌱 Seeds menu while standing on your pad. It follows the same rules as a carried seed: your plot, near the pad, a free slot. The pad prompt still plants carried seeds.
+Our version of "eggs with odds". The 🛒 Shop opens on the **🎁 Seed Packs** tab. **Packs are Robux only**: every pack is a developer product, and there is no way to buy one with in-game money.
+- **One pack per zone.** Each zone pack is its own developer product (`PackMeadow` … `PackSpirit`). It stays locked in the UI until you reach the zone's recommended Speed, and the server refuses to open the Robux prompt for a locked pack. It rolls like a daytime pod in that zone, and the loot table in the UI comes from the same function the server rolls with (`SeedPacks.odds`). Mutations are Gold 4% and Rainbow 1%. Night never rolls from packs.
+- **Featured pack.** It rotates every 3 h on `os.time`, so every server shows the same pack with the same countdown. Zones come in shuffled cycles: each zone once per cycle, never twice in a row. It's sold as 1/3/10-pack bundles (`PackBundle1/3/10`), has no Speed gate, rolls with night luck and doubled mutation chances, and is the only source of the exclusive **🌟 Celestial** mutation (0.5%, ×12 income). The UI shows a NEW! badge, a shine and a live countdown. A click from a stale menu after a rotation is refused. If the pack rotates while the Robux dialog is open, a receipt that arrives within `FEATURED_PROMPT_GRACE` (10 min) still opens the pack you clicked. A receipt replayed later (rejoin, another server) opens the current featured pack.
+- **Prices.** The real price is whatever you set on the Creator Dashboard. The Shop fetches it once per product with `MarketplaceService:GetProductInfo` (pcall'd and cached) and shows it as `R$ 80`. Until that works, or while the id is still `0`, it shows the placeholder `robux` from `Config.DEVELOPER_PRODUCTS`: zone packs 25/30/35/45/55/65/75 R$, featured ×1/×3/×10 = 80/200/600 R$.
+- **Buying.** Clicking a pack with `id = 0` shows a "coming soon" toast. With a real id, the server checks the gates (`Shop.canPrompt`: Speed for zone packs, the featured slot, bag below `SEED_BAG_MAX`) and calls `PromptProductPurchase`. `ProcessReceipt` grants. A receipt that arrives is **always** granted, even for a pack the player hasn't unlocked, because the player paid.
+- **Receipts.** `ProcessReceipt` grants once per `PurchaseId` (the last 100 ids are kept in the profile), saves, and only then returns `PurchaseGranted`. If the save fails it returns `NotProcessedYet`, and a retry in the same session doesn't grant twice. If the server dies before saving, neither the seeds nor the id were saved, so the retry on the next server grants exactly once.
+- **Where the seed goes.** Into a persisted **seed bag** (`profile.seedBag`, stacks by `zone:rarity[:Mutation]`). Plant from the 🌱 Seeds menu while standing on your pad. It follows the same rules as a carried seed: your plot, near the pad, a free slot. The pad prompt still plants carried seeds. `SEED_BAG_MAX` (50) is a soft cap: the Shop won't *prompt* past it, but paid grants go past it up to `SEED_BAG_HARD_MAX` (250). A pack whose seed doesn't fit at the hard max pays money instead: `PACK_FULL_BAG_INCOME_SECONDS` (300 s) of your current income, or 300 s of a Common plant from that pack's zone if that's more (so a player with no plants still gets something). A paid pack is never lost, and a toast says what happened.
 - **Reveal.** A reel spins through candidate seeds, lands on the server's result and bursts in its rarity colour. Bundles show every result.
-- **Robux.** `Config.DEVELOPER_PRODUCTS` holds 1/3/10 featured-pack bundles as stubs (`id = 0`, shown greyed out as "Coming soon"). Put real developer product ids in to enable them. `ProcessReceipt` grants once per `PurchaseId` (ids are kept in the profile), saves, and only then returns `PurchaseGranted`. If the save fails it returns `NotProcessedYet`, and a retry in the same session doesn't grant twice. Robux grants may pass the 50-seed cap up to `SEED_BAG_HARD_MAX`. Past that, a pack refunds its money price.
 
 ## Build, test, run
 You need Rojo 7, Luau (`luau-compile`) and [Lune](https://github.com/lune-org/lune) for the tests.
@@ -57,7 +59,7 @@ luau-lsp analyze --definitions=globalTypes.d.luau --sourcemap=sourcemap.json src
 - Game Settings → Security → **Enable Studio Access to API Services**. Without it saving is off, and the game tells you so in a toast.
 - Game Settings → Places → **Max Players = 8**, one plot each. A 9th player is kicked with a "server full" message.
 - Gamepasses are stubs. Put real ids in `Config.GAMEPASSES` to turn them on.
-- Seed-pack bundles are developer-product stubs. Create 3 developer products and put their ids in `Config.DEVELOPER_PRODUCTS`.
+- Seed packs are developer-product stubs. Create 10 developer products on the Creator Dashboard (7 zone packs + featured ×1/×3/×10) and paste their ids into `Config.DEVELOPER_PRODUCTS`. The price comes from the Dashboard. The place must be published for `PromptProductPurchase`/`GetProductInfo` to work.
 
 ### Manual acceptance test (Studio → Test → Local Server, 2 players)
 1. Both players spawn on their own plot. The sign shows "🏠 Name's Plot".
@@ -65,7 +67,7 @@ luau-lsp analyze --definitions=globalTypes.d.luau --sourcemap=sourcemap.json src
 3. Stand on the treadmill: you run in place without being pushed, and Speed climbs even when AFK.
 4. Buy Speed with **+**, then try the Desert both below and above 10K Speed. Below: caught, seed back at the nest, knocked back. Above: you escape.
 5. Both players leave, then rejoin: money, Speed, plants and Index are intact (API access must be on).
-6. Shop → 🎁 Seed Packs: buy a Meadow pack. The reel spins and lands, and the seed shows up in 🌱 Seeds → 🎒 bag. Stand on your pad and press Plant. Rejoin: the bag is intact.
+6. Shop → 🎁 Seed Packs: with stub ids, clicking a pack says "coming soon" and no money is charged. With real ids, buy a Meadow pack: Studio shows a test purchase dialog (no real Robux). The reel spins and lands, and the seed shows up in 🌱 Seeds → 🎒 bag. Stand on your pad and press Plant. Rejoin: the bag is intact. The Desert pack shows 🔒 below 10K Speed, and clicking it doesn't open the purchase dialog.
 
 ## Rules the code enforces
 - **Server-authoritative.** Money, Speed, pickup, carry, planting and purchases all live on the server. The client only draws the HUD and VFX and runs Slow Mode. Every prompt and remote re-checks distance, ownership and state, and remotes are rate-limited.
@@ -119,7 +121,7 @@ Each planted seed grows into its zone's creature (`CreatureModels`). The creatur
 |---|---|---|
 | `src/shared/Config.luau` | `ReplicatedStorage.Shared` | All tuning: zones, rarities, mutations, economy/growth formulas, shop prices, day/night |
 | `src/shared/Format.luau` | `ReplicatedStorage.Shared` | `1.2K / 3.4M / 5B / 7.5T / 3Qa`, `2,018,798 Kg`, `m:ss` |
-| `src/shared/SeedPacks.luau` | 〃 | *Pure*: pack prices, odds tables, rolls, featured rotation, seed-bag keys |
+| `src/shared/SeedPacks.luau` | 〃 | *Pure*: odds tables, rolls, featured rotation, developer-product lookups, seed-bag keys |
 | `src/server/Main.server.luau` | `ServerScriptService.Server` | Bootstrap: collision groups, world, services, join/leave, autosave, BindToClose |
 | `src/server/Net.luau` | 〃 | Creates the fixed remotes |
 | `src/server/Sessions.luau` | 〃 | Per-player runtime state, multipliers, StatsUpdate + leaderstats |
@@ -133,8 +135,8 @@ Each planted seed grows into its zone's creature (`CreatureModels`). The creatur
 | `src/server/SeedService.luau` | 〃 | Nests, pods, steal prompts, carry weld, return/regrow |
 | `src/server/PlotService.luau` | 〃 | Plot assignment, planting, plant-creatures, growth, payouts, offline income |
 | `src/server/CreatureModels.luau` | 〃 | Builds the seven plant-creatures from primitives, plus rarity/mutation flair and scale-by-weight |
-| `src/server/Shop.luau` | 〃 | *Pure*: purchase rules, seed-pack purchases, idempotent Robux receipt grants |
-| `src/server/ShopService.luau` | 〃 | `RequestBuy` / `RequestUseItem`, potions, seed packs, gamepass + developer-product stubs, `ProcessReceipt` |
+| `src/server/Shop.luau` | 〃 | *Pure*: purchase rules, seed-pack prompt gates, idempotent Robux receipt grants, full-bag compensation |
+| `src/server/ShopService.luau` | 〃 | `RequestBuy` / `RequestUseItem`, potions, gamepass stubs, seed-pack Robux prompts, `ProcessReceipt` |
 | `src/server/ProfileStore.luau` | 〃 | Save format, validation, DataStore wrapper |
 | `src/server/AmbientService.luau` | 〃 | Day/night lighting, "Fastest here" board |
 | `src/client/HUD.client.luau` | `StarterPlayerScripts.Client` | All UI, Slow Mode |
@@ -144,7 +146,7 @@ Each planted seed grows into its zone's creature (`CreatureModels`). The creatur
 ## Networking
 `ReplicatedStorage.Remotes`:
 - Client → server: `RequestBuy(itemId)`, `RequestUseItem(itemId)`.
-  - `RequestBuy` ids: shop items, `Pass:<name>`, `Pack:<zoneId>`, `Pack:Featured:<slot>`, `Product:<name>`. Pack buys also have a 0.6 s per-player cooldown.
+  - `RequestBuy` ids: shop items, `Pass:<name>`, `Product:<name>` (seed packs, Robux only; featured bundles send `Product:<name>:<slot>` with the featured slot the menu showed). The server only opens the Robux prompt; `ProcessReceipt` grants.
   - `RequestUseItem` ids: `Bat`, `SleepDust`, potions, `Seed:<bagKey>` (plant from the seed bag).
 - Server → client: `StatsUpdate(partialStats)` (the client merges it), `LootEvent(kind, data)`, `IncomePopup(amount, position)`. Pack openings are `LootEvent("PackRoll", { packId, name, zone, featured, results })`.
 - Stealing, planting and removing plants use server-side ProximityPrompts. Day/night is computed from the shared clock (`Config.dayPhase`), so it needs no remote.
