@@ -7,3 +7,6 @@ sourcemap.json
 
 # Agent Office
 .agent-office/
+
+# Claude Code personal settings
+.claude/settings.local.json
