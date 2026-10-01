@@ -58,7 +58,7 @@ local function tickPlayer(s: Sessions.Session, dt: number, now: number)
 	local gain, verdict, back = SpeedLogic.step(s.tracker, pos, dt, {
 		walkSpeed = s.walkSpeed,
 		onTreadmill = onTreadmill,
-		mult = Sessions.speedMult(s),
+		mult = Sessions.speedPerStud(s),
 		treadmillMult = Sessions.treadmillMult(s),
 	})
 

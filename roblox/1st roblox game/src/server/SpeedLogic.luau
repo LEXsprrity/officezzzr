@@ -17,7 +17,7 @@ export type Verdict = "ok" | "reset" | "ignored" | "rubberband"
 export type Opts = {
 	walkSpeed: number, -- the server's WalkSpeed for this player (highest of this and last tick)
 	onTreadmill: boolean,
-	mult: number, -- speed-gain multiplier (the equipped trail)
+	mult: number, -- Speed per stud: Config.speedPerStud (progression curve x equipped trail)
 	treadmillMult: number, -- 2 / 3 / 5
 }
 
@@ -36,9 +36,9 @@ local function horizontal(v: Vector3): number
 	return math.sqrt(v.X * v.X + v.Z * v.Z)
 end
 
--- Gain for walking `dist` studs, capped per tick.
+-- Gain for walking `dist` studs at `mult` Speed per stud, capped per tick.
 function SpeedLogic.walkGain(dist: number, mult: number): number
-	return math.min(dist, Config.GAIN_CAP_STUDS_PER_TICK) * Config.GAIN_PER_STUD * mult
+	return math.min(dist, Config.GAIN_CAP_STUDS_PER_TICK) * mult
 end
 
 -- Treadmill = the full walking rate for this tick (as if you walked WalkSpeed*dt), times its tier.

@@ -89,8 +89,8 @@ H.test("trails: seven tiers with the agreed multipliers, prices and Robux produc
 		{ "Blue", "Rare", 2.5, 75e3, "TrailBlue", 24 },
 		{ "Purple", "Epic", 3, 1.5e6, "TrailPurple", 40 },
 		{ "Golden", "Legendary", 3.5, 30e6, "TrailGolden", 64 },
-		{ "Red", "Mythic", 4, 600e6, "TrailRed", 100 },
-		{ "Rainbow", "Secret", 5, 15e9, "TrailRainbow", 180 },
+		{ "Red", "Mythic", 4, 20e9, "TrailRed", 100 },
+		{ "Rainbow", "Secret", 5, 1e12, "TrailRainbow", 180 },
 	}
 	H.eq(#Config.TRAILS, #want)
 	for i, w in want do
@@ -160,12 +160,12 @@ H.test("trails: the equipped trail multiplies Speed gained walking and on the tr
 			SpeedLogic.step(s, Vector3.new(0, 0, 0), DT, { walkSpeed = 80, onTreadmill = false, mult = 1, treadmillMult = 2 })
 		end
 		local to = if onTreadmill then Vector3.new(0, 0, 0) else Vector3.new(80 * DT, 0, 0)
-		local g = SpeedLogic.step(s, to, DT, { walkSpeed = 80, onTreadmill = onTreadmill, mult = Config.trailMult(trail), treadmillMult = 2 })
+		local g = SpeedLogic.step(s, to, DT, { walkSpeed = 80, onTreadmill = onTreadmill, mult = Config.speedPerStud(0, trail), treadmillMult = 2 })
 		return g
 	end
 	for _, onTreadmill in { false, true } do
 		local grey = gain("Grey", onTreadmill)
-		H.near(grey, 80 * DT * Config.GAIN_PER_STUD * 1.5 * (if onTreadmill then 2 else 1), 1e-9, "Grey x1.5")
+		H.near(grey, 80 * DT * Config.GAIN_PER_STUD * 1.5 * (if onTreadmill then 2 else 1), 1e-9, "Grey x1.5 at 0 Speed")
 		for _, t in Config.TRAILS do
 			H.near(gain(t.id, onTreadmill), grey / 1.5 * t.mult, 1e-9, t.id)
 		end

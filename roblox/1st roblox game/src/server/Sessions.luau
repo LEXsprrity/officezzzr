@@ -71,6 +71,11 @@ function Sessions.speedMult(s: Session): number
 	return Config.trailMult(s.profile.equippedTrail)
 end
 
+-- Speed per stud right now: the progression curve at the current Speed x the trail.
+function Sessions.speedPerStud(s: Session): number
+	return Config.speedPerStud(s.profile.speed, s.profile.equippedTrail)
+end
+
 function Sessions.treadmillMult(s: Session): number
 	return Config.TREADMILL_TIERS[s.profile.treadmillTier].mult
 end

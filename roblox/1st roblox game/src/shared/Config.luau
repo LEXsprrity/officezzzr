@@ -37,7 +37,19 @@ function Config.walkSpeedFor(speed: number): number
 end
 
 -- Speed from moving
-Config.GAIN_PER_STUD = 1 -- Speed stat per stud walked, before multipliers
+-- Speed per stud ("per step") compounds with progress: zone reqs grow exponentially (10K -> 5B) while
+-- the studs anyone can walk grow linearly, so a flat rate would make the late zones take hundreds of
+-- hours. gainPerStud(Speed) = GAIN_PER_STUD * (1 + Speed / GAIN_PIVOT) ^ GAIN_EXPONENT, before the
+-- trail and treadmill multipliers. The HUD and the treadmill sign show it. Tuned with the free-player
+-- simulation in tests/progression.spec (README "Progression").
+Config.GAIN_PER_STUD = 0.32 -- Speed per stud at 0 Speed
+Config.GAIN_PIVOT = 100e3
+Config.GAIN_EXPONENT = 0.61
+
+function Config.gainPerStud(speed: number): number
+	return Config.GAIN_PER_STUD * (1 + math.max(0, speed) / Config.GAIN_PIVOT) ^ Config.GAIN_EXPONENT
+end
+
 Config.GAIN_CAP_STUDS_PER_TICK = Config.MAX_WALKSPEED * Config.TICK -- most studs one tick can pay for
 Config.MOVE_SLACK = 1.5 -- per-tick distance allowed = WalkSpeed * dt * slack + epsilon
 Config.MOVE_EPSILON = 2
@@ -314,8 +326,8 @@ Config.TRAILS = {
 	{ id = "Blue", name = "Blue Trail", rarity = "Rare", mult = 2.5, price = 75e3, product = "TrailBlue", color = Color3.fromRGB(55, 145, 255) },
 	{ id = "Purple", name = "Purple Trail", rarity = "Epic", mult = 3, price = 1.5e6, product = "TrailPurple", color = Color3.fromRGB(165, 75, 255) },
 	{ id = "Golden", name = "Golden Trail", rarity = "Legendary", mult = 3.5, price = 30e6, product = "TrailGolden", color = Color3.fromRGB(255, 195, 35) },
-	{ id = "Red", name = "Red Trail", rarity = "Mythic", mult = 4, price = 600e6, product = "TrailRed", color = Color3.fromRGB(235, 45, 55) },
-	{ id = "Rainbow", name = "Rainbow Trail", rarity = "Secret", mult = 5, price = 15e9, product = "TrailRainbow", color = Color3.fromRGB(255, 90, 200), rainbow = true },
+	{ id = "Red", name = "Red Trail", rarity = "Mythic", mult = 4, price = 20e9, product = "TrailRed", color = Color3.fromRGB(235, 45, 55) },
+	{ id = "Rainbow", name = "Rainbow Trail", rarity = "Secret", mult = 5, price = 1e12, product = "TrailRainbow", color = Color3.fromRGB(255, 90, 200), rainbow = true },
 } :: { Trail }
 Config.DEFAULT_TRAIL = "Grey"
 
@@ -332,6 +344,12 @@ end
 function Config.trailMult(id: string?): number
 	local t = Config.trailById(id) or Config.trailById(Config.DEFAULT_TRAIL) :: Trail
 	return t.mult
+end
+
+-- Speed gained per stud walked (or per stud of treadmill belt) at `speed` with trail `trailId`: the
+-- progression curve times the trail. The HUD shows it as "+X Speed/step"; the treadmill multiplies it.
+function Config.speedPerStud(speed: number, trailId: string?): number
+	return Config.gainPerStud(speed) * Config.trailMult(trailId)
 end
 
 -- The colours a trail draws with: its colour fading to white, or a rainbow.
