@@ -24,7 +24,7 @@ The Meadow is deliberately short (200 studs) so a new player grabs a first seed 
 | **R** (hold) | Remove one of your plants (refunds 30 s of its income) |
 | **1** | Bat: stuns a nearby awake guard for 2 s (4 s cooldown) |
 | **2** | Sleep Dust: the nearest sleeping guard stays asleep 5 s longer after the next steal |
-| 🏃 (on the Speed panel) | Trail Shop: buy trails for $ or R$, equip one |
+| 🏃 (on the Speed panel) | Trail Shop: buy trails for $ or R$, equip one. The panel shows your WalkSpeed and **+X Speed/step** |
 | 🛒 / 📖 | Shop (seed packs, plot upgrade, Speed, money, treadmill, items, passes) / Index (collection book) |
 | 🐢 Slow | Slow Mode: clamps your own WalkSpeed to 16 for moving around the base |
 | 🌱 🪴 (right) | Seeds (incl. your 🎒 seed bag: **Plant** at your pad) / Plants menus |
@@ -59,8 +59,8 @@ A trail is a coloured `Trail` that streams behind your character (two Attachment
 | Blue | Rare | x2.5 | $75K | `TrailBlue` | 24 R$ |
 | Purple | Epic | x3 | $1.5M | `TrailPurple` | 40 R$ |
 | Golden | Legendary | x3.5 | $30M | `TrailGolden` | 64 R$ |
-| Red | Mythic | x4 | $600M | `TrailRed` | 100 R$ |
-| Rainbow | Secret | x5 | $15B | `TrailRainbow` | 180 R$ |
+| Red | Mythic | x4 | $20B | `TrailRed` | 100 R$ |
+| Rainbow | Secret | x5 | $1T | `TrailRainbow` | 180 R$ |
 
 The 🏃 button on the Speed panel (it replaced the old "+" Speed menu) and the 🏃 TRAIL SHOP stall open the Trail Shop: one card per trail, scrolling sideways, in the trail's colour, with name, rarity, "xN Speed" and a green **$** button plus a purple **R$** button, or **Equip** / **Equipped** once owned.
 
@@ -110,8 +110,31 @@ Saves from before the rework (v1/v2) are migrated on load, once (the next save i
 - **Slots → plot level** = slots − 5 + 1 (clamped to 1–26), so everyone keeps exactly their slots. The plot's income multiplier comes with the level.
 - Treadmill tier, Sleep Dust, plants, Index, seed bag and receipts are kept as they are.
 
-### Balance note: Speed is only earned now
-Without money→Speed, Speed comes from moving (x the trail), the treadmill (x2, or x3/x5 with Robux) and Robux Speed packs. Standing on the free x2 treadmill with the Rainbow trail (x5), the gap from one zone to the next takes about 0.2 h (Jungle), 1.2 h (Lava), 10 h (Snow), 90 h (Deep Space) and 800 h (Spirit Garden). `GAIN_PER_STUD` is the knob if that's too slow.
+### Progression: Speed per step compounds
+Money can't buy Speed, so Speed comes from moving (× the trail), the treadmill (x2, or x3/x5 with Robux) and Robux Speed packs. The zone reqs grow exponentially (10K → 5B) but the studs anyone can walk only grow linearly. So the Speed each stud ("step") pays **grows with your current Speed**:
+
+```
+gainPerStud(Speed) = 0.32 × (1 + Speed / 100K) ^ 0.61        (GAIN_PER_STUD, GAIN_PIVOT, GAIN_EXPONENT)
+Speed per step     = gainPerStud(Speed) × trail              (Config.speedPerStud)
+treadmill          = WalkSpeed × Speed per step × tier, per second
+```
+
+With the trail a free player typically has by then: 0.48/step for a new player (Grey), 1.2 at 100K (Blue), 50 at 50M (Golden), 1.2K at 5B (Rainbow). Players see it: the Speed panel shows **"+X Speed/step"**, the Trail Shop repeats it, and the sign over each treadmill shows its owner's **"TREADMILL x2 · +X Speed/s"**, refreshed every payout. The zone reqs, guard speeds and escape thresholds are unchanged.
+
+**Tuning: a simulated free player** (`tests/progression_sim.luau`, asserted in `tests/progression.spec.luau`). The player is active and spends no Robux. They steal from the furthest zone their Speed allows and plant it (filling free slots, then replacing the plant worth least once grown). When the plot is full of good plants, they stand on the free x2 treadmill. Whenever affordable, they buy the cheaper of the next trail and the next plot level. Each steal trip costs the run there and back plus 10 s. Arrival times (cumulative play):
+
+| Zone | Rec. Speed | Target | Free player | ±50% window (tested) | Treadmill x5 (R$) | x5 + 11M Speed packs (R$) |
+|---|---|---|---|---|---|---|
+| 🦂 Desert | 10K | 5 min | **4m 26s** | 2m 30s – 7m 30s | 3m 10s | instant |
+| 🦖 Jungle | 500K | 30 min | **32m** | 15 – 45 min | 18m | instant |
+| 🌋 Lava Fields | 5M | 1–1.5 h | **1h 22m** | 37 min – 1h 52m | 44m | instant |
+| ❄️ Snow Peaks | 50M | 3 h | **3h 05m** | 1h 30m – 4h 30m | 1h 34m | 41m |
+| 👽 Deep Space | 500M | 6 h | **6h 21m** | 3h – 9h | 3h 03m | 2h 10m |
+| ⛩️ Spirit Garden | 5B | 10–15 h | **12h 06m** | 6h 15m – 18h 45m | 5h 36m | 4h 43m |
+
+The times hold across RNG seeds (tested). The x5 treadmill roughly halves them (tested ≤ 70%). Speed packs help on top.
+
+**Money stays a sink all game.** The owner's trail prices Green–Golden ($5K / $75K / $1.5M / $30M) are bought in the first 40 minutes. Red ($20B, bought at ~3h, around Snow) and Rainbow ($1T, ~6h 47m, between Deep Space and Spirit) were retuned from $600M / $15B, which the free player bought at 1h 19m and 2h 38m. Plot levels are bought all along, the last at 10h 13m (level 23). At the Spirit Garden the player still has levels 24–26 ahead ($443T in total; level 26 alone is several hours of late-game income).
 
 ## Build, test, run
 You need Rojo 7, Luau (`luau-compile`) and [Lune](https://github.com/lune-org/lune) for the tests.
@@ -166,7 +189,7 @@ luau-lsp analyze --definitions=globalTypes.d.luau --sourcemap=sourcemap.json src
 ### Manual acceptance test (Studio → Test → Local Server, 2 players)
 1. Both players spawn on their own plot. The sign shows "🏠 Name's Plot".
 2. Each player walks into the corridor, steals a Meadow seed (E), gets chased, gets home and plants it on the pad. `+$` popups appear.
-3. Stand on the treadmill: you run in place without being pushed, and Speed climbs even when AFK. A grey trail streams behind you (the other player sees it too).
+3. Stand on the treadmill: you run in place without being pushed, and Speed climbs even when AFK. A grey trail streams behind you (the other player sees it too). The sign over your treadmill shows "TREADMILL x2 · +X Speed/s", and the Speed panel shows "+X Speed/step"; both grow as your Speed grows.
 4. Earn $5K and buy the Green trail in the 🏃 Trail Shop: it turns green at once (and stays green after a respawn), and Speed climbs faster. Equip Grey again from its card. Walk to the ⬆️ UPGRADE PLOT board at your gate: only you get the prompt; buy level 2, a 6th soil patch appears and the board shows "Level 2 → 3".
 5. Get Speed (treadmill, or a Speed pack once its id is set), then try the Desert at about 3K Speed and at 10K Speed. At 3K: caught, seed back at the nest, knocked back. At 10K: the guard wakes at once and chases exactly as fast as you; run straight home and it never closes the gap. In the Spirit Garden (5B), the dragon shows ❗ for half a second first.
 6. Both players leave, then rejoin: money, Speed, plants, Index, owned/equipped trail and plot level are intact (API access must be on).
@@ -176,7 +199,7 @@ luau-lsp analyze --definitions=globalTypes.d.luau --sourcemap=sourcemap.json src
 ## Rules the code enforces
 - **Server-authoritative.** Money, Speed, pickup, carry, planting and purchases all live on the server. The client only draws the HUD and VFX and runs Slow Mode. Every prompt and remote re-checks distance, ownership and state, and remotes are rate-limited.
 - **Speed stat vs WalkSpeed.** `WalkSpeed = clamp(16 + 16*log10(1+Speed), 16, 180)`. Zones compare the *stat*.
-- **Speed from moving** (`SpeedService` + `SpeedLogic`). Every 0.25 s the server measures horizontal HumanoidRootPart movement and grants `distance × gainRate × the equipped trail's multiplier`, capped per tick.
+- **Speed from moving** (`SpeedService` + `SpeedLogic`). Every 0.25 s the server measures horizontal HumanoidRootPart movement and grants `distance × Config.speedPerStud(Speed, trail)` (the progression curve below × the equipped trail), capped per tick.
 - **Movement sanity check.** A tick that moves more than `WalkSpeed × dt × 1.5 + 2` earns nothing. Sustained over-speed that drains a one-second movement budget, or any teleport-sized jump, is rubber-banded to the last valid position. Server-side moves (spawn, knockback) reset the tracker.
 - **Treadmill.** The server checks whether the root part is inside the belt's bounds and grants the full walking rate for the tick × the trail × the treadmill tier (2×, or 3×/5× with Robux). The belt does not move you: you just stand on it (AFK works) and the client loops your run animation in place. It has the same per-tick cap. There is no client remote.
 - **Guards** (`GuardService` + `GuardBrain`). A guard wakes its zone's `wakeDelay` (0–0.5 s, showing ❗ meanwhile) after a seed is taken and chases at `walkSpeedFor(zone.req) × GUARD_SPEED_FACTOR` (1.0), exactly a player's WalkSpeed at the recommended Speed. A server loop calls `Humanoid:MoveTo` along the corridor at 10 Hz, with no pathfinding. A catch is horizontal distance < 6 studs from the path the guard walked since its last tick, never `Touched`. A Spirit Garden guard covers 17 studs per tick, so checking only its current position could step right over a thief. The seed goes back to its pod, and the player is knocked 30 studs away and frozen for 1 s. The chase ends when the thief reaches the base, after a catch, or after 45 s, and then the guard walks home and sleeps.
@@ -254,7 +277,7 @@ Each planted seed grows into its zone's creature (`CreatureModels`). The creatur
 | `src/server/AmbientService.luau` | 〃 | Day/night lighting, "Fastest here" board |
 | `src/client/HUD.client.luau` | `StarterPlayerScripts.Client` | All UI, Slow Mode |
 | `src/client/Effects.client.luau` | 〃 | Income popups, sounds, shake, belt scroll, rainbow mutation, creature idle sway, owner-only prompts, per-zone colour grade |
-| `tests/` | — | Lune harness + specs (guard, speed, data, economy, world, packs, shop, creatures) |
+| `tests/` | — | Lune harness + specs (guard, speed, data, economy, world, packs, shop, progression + its free-player simulation, creatures) |
 
 ## Networking
 `ReplicatedStorage.Remotes`:
