@@ -31,7 +31,6 @@ export type Session = {
 	passes: { [string]: boolean },
 	cooldowns: { [string]: number },
 	requests: { number },
-	featuredPrompt: { slot: number, at: number }?, -- last featured-pack Robux prompt (SeedPacks.receiptSlot)
 }
 
 local byPlayer: { [Player]: Session } = {}
@@ -50,7 +49,6 @@ function Sessions.create(player: Player, profile: ProfileStore.Profile, canSave:
 		passes = {},
 		cooldowns = {},
 		requests = {},
-		featuredPrompt = nil,
 	}
 	byPlayer[player] = s
 	return s

@@ -215,15 +215,9 @@ local rowButtons = new("Frame", {
 }, { new("UIListLayout", { FillDirection = Enum.FillDirection.Horizontal, Padding = UDim.new(0, 8) }) })
 
 local openModal: (name: string) -> ()
-local shopButton = button(rowButtons, "🛒 Shop", COLORS.shop, UDim2.fromOffset(100, 48), function()
+button(rowButtons, "🛒 Shop", COLORS.shop, UDim2.fromOffset(100, 48), function()
 	openModal("Shop")
 end)
--- "NEW!" tag on the Shop button until the player has seen the current featured pack
-local shopNewBadge = new("Frame", {
-	AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.new(1, -8, 0, 2), Size = UDim2.fromOffset(46, 22), Rotation = 12,
-	BackgroundColor3 = COLORS.red, ZIndex = 3, Parent = shopButton,
-}, deco(8, 2))
-text(shopNewBadge, { Text = "NEW!", Size = UDim2.new(1, -4, 1, -4), Position = UDim2.fromOffset(2, 2), ZIndex = 3 })
 button(rowButtons, "📖 Index", COLORS.index, UDim2.fromOffset(100, 48), function()
 	openModal("Index")
 end)
@@ -559,11 +553,9 @@ local function renderUpgrades()
 end
 
 ----------------------------------------------------------------------------------------------------
--- Shop: Seed Packs tab (loot tables with the exact server odds, featured pack, Robux bundles)
+-- Shop: Seed Packs tab (the two premium packs, with loot tables showing the exact server odds)
 ----------------------------------------------------------------------------------------------------
-local CARD_DARK = Color3.fromRGB(44, 38, 72)
-local featuredLive: { countdown: TextLabel?, shine: Frame?, badge: UIScale? } = {}
-local seenFeaturedSlot = -1
+local packShines: { Frame } = {} -- swept across the premium cards every frame while they're shown
 
 -- Robux prices. Packs are developer products; the real price is set on the Creator Dashboard, so it
 -- is fetched once per id with GetProductInfo (pcall'd, cached). Until then, or with no id yet, the
@@ -599,12 +591,6 @@ local function robuxPrice(product: Config.DevProduct): number
 		end)
 	end
 	return product.robux
-end
-
--- "2:13:05"
-local function hms(seconds: number): string
-	local s = math.max(0, math.floor(seconds))
-	return string.format("%d:%02d:%02d", s // 3600, (s // 60) % 60, s % 60)
 end
 
 -- Loot table: one row per rarity with a bar as wide as its chance.
@@ -644,107 +630,62 @@ local function heading(label: string, order: number)
 	end
 end
 
+-- One big premium card per pack: zone colours, a gold frame, a sweeping shine, the loot table with
+-- the exact odds and the R$ button. No Speed gate: anyone can buy them.
+local function packCard(parent: Instance, order: number, productName: string, product: Config.DevProduct, bagFull: boolean)
+	local pack = SeedPacks.packForProduct(product)
+	local zone = Config.ZONES[pack.zone]
+	local c = new("Frame", {
+		Size = UDim2.new(0.5, -6, 1, 0), BackgroundColor3 = WHITE, ClipsDescendants = true, LayoutOrder = order, Parent = parent,
+	}, {
+		new("UIGradient", { Rotation = 90, Color = ColorSequence.new(zone.ui:Lerp(WHITE, 0.15), zone.ui:Lerp(Color3.new(0, 0, 0), 0.55)) }),
+		new("UICorner", { CornerRadius = UDim.new(0, 16) }),
+		new("UIStroke", { Thickness = 4, Color = COLORS.gold, ApplyStrokeMode = Enum.ApplyStrokeMode.Border }),
+	})
+	table.insert(packShines, new("Frame", { Size = UDim2.new(0, 80, 1, 0), BackgroundColor3 = WHITE, BorderSizePixel = 0, Parent = c }, {
+		new("UIGradient", { Transparency = NumberSequence.new({
+			NumberSequenceKeypoint.new(0, 1), NumberSequenceKeypoint.new(0.5, 0.6), NumberSequenceKeypoint.new(1, 1),
+		}) }),
+	}))
+	local band = new("Frame", { Size = UDim2.new(1, 0, 0, 28), BackgroundColor3 = COLORS.gold, BorderSizePixel = 0, Parent = c })
+	text(band, { Text = "💎 PREMIUM · LATE-GAME SEED", Size = UDim2.new(1, -12, 1, -6), Position = UDim2.fromOffset(6, 3) })
+	text(c, { Text = zone.icon, Size = UDim2.fromOffset(60, 60), Position = UDim2.fromOffset(12, 36) })
+	text(c, { Text = pack.name, Size = UDim2.new(1, -94, 0, 34), Position = UDim2.fromOffset(82, 38), TextXAlignment = Enum.TextXAlignment.Left })
+	text(c, {
+		Text = `{zone.name} seed · no Speed needed`, Size = UDim2.new(1, -94, 0, 22), Position = UDim2.fromOffset(82, 74),
+		TextXAlignment = Enum.TextXAlignment.Left, TextColor3 = Color3.fromRGB(255, 245, 210),
+	})
+	lootTable(c, pack, UDim2.fromOffset(12, 106), UDim2.new(1, -24, 0, 140))
+	text(c, { Text = mutationLine(pack), Size = UDim2.new(1, -24, 0, 22), Position = UDim2.fromOffset(12, 252), TextColor3 = Color3.fromRGB(255, 240, 180) })
+	local exclusive = Config.mutationById(pack.exclusive)
+	text(c, {
+		Text = `💰 {Format.money(Config.seedIncome(pack.zone))}/s per Common sprout`
+			.. (if exclusive then ` · 🌟 {exclusive.id} x{exclusive.income} income, only from packs` else ""),
+		Size = UDim2.new(1, -24, 0, 40), Position = UDim2.fromOffset(12, 280), TextWrapped = true, TextColor3 = Color3.fromRGB(255, 255, 230),
+	})
+	-- Robux only. With id = 0 the server answers "coming soon"; with a full bag it won't prompt.
+	local live = product.id ~= 0
+	local price = Format.robux(if live then robuxPrice(product) else product.robux)
+	local caption = if not live then `Coming soon · {price}` elseif bagFull then `🎒 Bag full · {price}` else `Buy · {price}`
+	button(c, caption, if live and not bagFull then COLORS.money else COLORS.disabled, UDim2.new(1, -24, 0, 58), function()
+		RequestBuy:FireServer("Product:" .. productName)
+	end).Position = UDim2.new(0, 12, 1, -70)
+end
+
 local function renderPacks()
 	modalBody:ClearAllChildren()
 	new("UIListLayout", { Padding = UDim.new(0, 12), SortOrder = Enum.SortOrder.LayoutOrder, HorizontalAlignment = Enum.HorizontalAlignment.Center, Parent = modalBody })
-	local now = workspace:GetServerTimeNow()
-	seenFeaturedSlot = SeedPacks.featuredSlot(now)
-	shopNewBadge.Visible = false
-
-	-- Featured pack banner
-	local f = SeedPacks.featuredPack(now)
-	local fz = Config.ZONES[f.zone]
-	local banner = new("Frame", {
-		Size = UDim2.new(1, -12, 0, 214), BackgroundColor3 = Color3.new(1, 1, 1), ClipsDescendants = true, LayoutOrder = 1, Parent = modalBody,
-	}, {
-		new("UIGradient", { Rotation = 15, Color = ColorSequence.new({
-			ColorSequenceKeypoint.new(0, Color3.fromRGB(255, 190, 40)),
-			ColorSequenceKeypoint.new(0.5, Color3.fromRGB(255, 80, 170)),
-			ColorSequenceKeypoint.new(1, Color3.fromRGB(130, 70, 255)),
-		}) }),
-		table.unpack(deco(14, 4)),
-	})
-	local shine = new("Frame", { Size = UDim2.new(0, 70, 1, 0), BackgroundColor3 = Color3.new(1, 1, 1), BorderSizePixel = 0, Parent = banner }, {
-		new("UIGradient", { Transparency = NumberSequence.new({
-			NumberSequenceKeypoint.new(0, 1), NumberSequenceKeypoint.new(0.5, 0.55), NumberSequenceKeypoint.new(1, 1),
-		}) }),
-	})
-	local badge = new("Frame", {
-		Position = UDim2.fromOffset(12, 12), Size = UDim2.fromOffset(84, 36), Rotation = -12, BackgroundColor3 = COLORS.red, Parent = banner,
-	}, deco(10, 3))
-	local badgeScale = new("UIScale", { Parent = badge })
-	text(badge, { Text = "NEW!", Size = UDim2.new(1, -8, 1, -6), Position = UDim2.fromOffset(4, 3) })
-	text(banner, {
-		Text = `✨ FEATURED: {fz.icon} {fz.seed} Pack`, Size = UDim2.new(1, -330, 0, 38), Position = UDim2.fromOffset(108, 10), TextXAlignment = Enum.TextXAlignment.Left,
-	})
-	featuredLive = {
-		countdown = text(banner, {
-			Text = "", Size = UDim2.new(1, -330, 0, 26), Position = UDim2.fromOffset(108, 50), TextXAlignment = Enum.TextXAlignment.Left,
-			TextColor3 = Color3.fromRGB(255, 250, 200),
-		}),
-		shine = shine,
-		badge = badgeScale,
-	}
-	lootTable(banner, f, UDim2.fromOffset(16, 84), UDim2.new(0.6, -16, 0, 96))
-	text(banner, {
-		Text = mutationLine(f), Size = UDim2.new(1, -32, 0, 22), Position = UDim2.new(0, 16, 1, -30), TextXAlignment = Enum.TextXAlignment.Left,
-	})
-	text(banner, {
-		Text = `Luckier odds than the zone pack, and the only way to get 🌟 {f.exclusive} seeds (x{(Config.mutationById(f.exclusive) :: any).income} income)!`,
-		Size = UDim2.new(0.4, -28, 0, 60), Position = UDim2.new(0.6, 12, 0, 84), TextWrapped = true, TextColor3 = Color3.fromRGB(255, 255, 230),
-	})
-	-- Packs are Robux only. Featured clicks carry the slot this menu shows, so a click from a stale
-	-- menu (the pack rotated while it was open) is refused instead of buying a different pack.
-	local bundles = SeedPacks.featuredProducts()
-	local single = bundles[1]
-	if single then
-		local live = single.product.id ~= 0
-		button(banner, if live then `Buy {Format.robux(robuxPrice(single.product))}` else `Soon · {Format.robux(single.product.robux)}`,
-			if live then COLORS.money else COLORS.disabled, UDim2.fromOffset(200, 58), function()
-				RequestBuy:FireServer(`Product:{single.name}:{f.slot}`)
-			end).Position = UDim2.new(1, -216, 0, 14)
-	end
-
-	-- Zone packs: locked until the zone's recommended Speed (the server won't prompt a locked pack)
-	heading("🎁 Zone Seed Packs", 2)
-	local grid = new("Frame", { BackgroundTransparency = 1, Size = UDim2.new(1, -12, 0, 0), AutomaticSize = Enum.AutomaticSize.Y, LayoutOrder = 3, Parent = modalBody },
-		{ new("UIGridLayout", { CellSize = UDim2.fromOffset(234, 262), CellPadding = UDim2.fromOffset(10, 10), SortOrder = Enum.SortOrder.LayoutOrder }) })
-	for k, zone in Config.ZONES do
-		local pack = SeedPacks.zonePack(k)
-		local productName, product = SeedPacks.zoneProduct(k)
-		local unlocked = stats.speed >= zone.req
-		local c = new("Frame", { BackgroundColor3 = CARD_DARK, LayoutOrder = k, Parent = grid }, deco(12, 3))
-		local head = new("Frame", { Size = UDim2.new(1, 0, 0, 40), BackgroundColor3 = zone.ui, Parent = c }, { new("UICorner", { CornerRadius = UDim.new(0, 12) }) })
-		text(head, { Text = `{zone.icon} {pack.name}`, Size = UDim2.new(1, -12, 1, -8), Position = UDim2.fromOffset(6, 4) })
-		lootTable(c, pack, UDim2.fromOffset(8, 48), UDim2.new(1, -16, 0, 130))
-		text(c, { Text = mutationLine(pack), Size = UDim2.new(1, -16, 0, 20), Position = UDim2.fromOffset(8, 184), TextColor3 = Color3.fromRGB(255, 240, 180) })
-		if productName and product then
-			local live = product.id ~= 0
-			local caption = if not unlocked then `🔒 Speed {Format.short(zone.req)}`
-				elseif live then Format.robux(robuxPrice(product))
-				else `Soon · {Format.robux(product.robux)}`
-			button(c, caption, if unlocked and live then COLORS.gold else COLORS.disabled, UDim2.new(1, -16, 0, 42), function()
-				RequestBuy:FireServer("Product:" .. productName)
-			end).Position = UDim2.new(0, 8, 1, -50)
-		end
-	end
-
-	-- Featured pack bundles (greyed out until a real developer product id is set)
-	heading("💎 Featured Pack Bundles", 4)
-	local row = new("Frame", { BackgroundTransparency = 1, Size = UDim2.new(1, -12, 0, 118), LayoutOrder = 5, Parent = modalBody },
-		{ new("UIListLayout", { FillDirection = Enum.FillDirection.Horizontal, Padding = UDim.new(0, 10), SortOrder = Enum.SortOrder.LayoutOrder }) })
-	for i, entry in bundles do
-		local live = entry.product.id ~= 0
-		local c = new("Frame", { Size = UDim2.new(1 / #bundles, -8, 1, 0), BackgroundColor3 = if live then Color3.fromRGB(0, 170, 200) else COLORS.disabled, LayoutOrder = i, Parent = row }, deco(12, 3))
-		text(c, { Text = `💎 {entry.product.label}`, Size = UDim2.new(1, -12, 0, 34), Position = UDim2.fromOffset(6, 8) })
-		button(c, if live then Format.robux(robuxPrice(entry.product)) else `Coming soon · {Format.robux(entry.product.robux)}`,
-			if live then COLORS.gold else Color3.fromRGB(140, 140, 150), UDim2.new(1, -16, 0, 44), function()
-				RequestBuy:FireServer(`Product:{entry.name}:{f.slot}`)
-			end).Position = UDim2.new(0, 8, 1, -54)
-	end
-
 	local bagCount = SeedPacks.bagCount(stats.seedBag or {})
-	heading(`🎒 Seed bag {bagCount}/{Config.SEED_BAG_MAX}{if bagCount >= Config.SEED_BAG_MAX then " (full: plant some first!)" else ""} · plant bagged seeds from the 🌱 Seeds menu at your plot's pad`, 6)
+	local bagFull = bagCount >= Config.SEED_BAG_MAX
+
+	heading("💎 Premium Seed Packs: skip the run! Each pack rolls one late-game seed into your 🎒 bag.", 1)
+	local row = new("Frame", { BackgroundTransparency = 1, Size = UDim2.new(1, -12, 0, 400), LayoutOrder = 2, Parent = modalBody },
+		{ new("UIListLayout", { FillDirection = Enum.FillDirection.Horizontal, HorizontalAlignment = Enum.HorizontalAlignment.Center, Padding = UDim.new(0, 12), SortOrder = Enum.SortOrder.LayoutOrder }) })
+	for i, entry in SeedPacks.products() do
+		packCard(row, i, entry.name, entry.product, bagFull)
+	end
+
+	heading(`🎒 Seed bag {bagCount}/{Config.SEED_BAG_MAX}{if bagFull then " (full: plant some first!)" else ""} · plant bagged seeds from the 🌱 Seeds menu at your plot's pad`, 3)
 end
 
 local function renderShop()
@@ -755,7 +696,6 @@ local function renderShop()
 	if shopTab == "Packs" then
 		renderPacks()
 	else
-		featuredLive = {}
 		renderUpgrades()
 	end
 end
@@ -794,13 +734,11 @@ end
 
 renderModal = function()
 	shopTabs.Visible = modalName == "Shop"
+	table.clear(packShines) -- renderPacks adds the current cards' shines back
 	if modalName == "Shop" then
 		renderShop()
-	else
-		featuredLive = {}
-		if modalName == "Index" then
-			renderIndex()
-		end
+	elseif modalName == "Index" then
+		renderIndex()
 	end
 end
 
@@ -840,23 +778,13 @@ new("Frame", {
 local resultLabel = text(stage, { Text = "", Size = UDim2.new(1, 0, 0, 54), Position = UDim2.fromOffset(0, 60 + REEL_H + 14), ZIndex = 3 })
 local resultScale = new("UIScale", { Parent = resultLabel })
 local resultSub = text(stage, { Text = "", Size = UDim2.new(1, 0, 0, 28), Position = UDim2.fromOffset(0, 60 + REEL_H + 70), ZIndex = 3 })
-local summary = new("Frame", {
-	BackgroundTransparency = 1, Position = UDim2.fromOffset(0, 60 + REEL_H + 108), Size = UDim2.new(1, 0, 0, 70), ZIndex = 3, Parent = stage,
-}, { new("UIListLayout", { FillDirection = Enum.FillDirection.Horizontal, HorizontalAlignment = Enum.HorizontalAlignment.Center, Padding = UDim.new(0, 6), SortOrder = Enum.SortOrder.LayoutOrder }) })
 local continueHint = text(stage, { Text = "Click to continue", Size = UDim2.new(1, 0, 0, 24), Position = UDim2.new(0, 0, 1, -24), TextColor3 = Color3.fromRGB(220, 220, 235) })
 local closeButton = new("TextButton", { Size = UDim2.fromScale(1, 1), BackgroundTransparency = 1, Text = "", ZIndex = 10, Visible = false, Parent = revealGui })
 
-type RollView = { zone: number, rarity: number, mutation: string? }
-
-local function seedRank(r: RollView): number
-	local mut = Config.mutationById(r.mutation)
-	return r.rarity * 100 + (if mut then mut.income else 0)
-end
-
-local function seedCard(parent: Instance, zone: number, rarity: number, mutation: string?, size: UDim2, order: number?): Frame
+local function seedCard(parent: Instance, zone: number, rarity: number, mutation: string?, size: UDim2): Frame
 	local r = Config.RARITIES[rarity]
 	local mut = Config.mutationById(mutation)
-	local f = new("Frame", { Size = size, BackgroundColor3 = Color3.new(1, 1, 1), LayoutOrder = order or 0, Parent = parent }, deco(12, 3))
+	local f = new("Frame", { Size = size, BackgroundColor3 = Color3.new(1, 1, 1), Parent = parent }, deco(12, 3))
 	new("UIGradient", { Rotation = 45, Color = ColorSequence.new(r.color, if mut then mut.color else r.color:Lerp(Color3.new(0, 0, 0), 0.35)), Parent = f })
 	text(f, { Text = Config.ZONES[zone].icon, Size = UDim2.fromScale(1, 0.46), Position = UDim2.fromScale(0, 0.08) })
 	text(f, { Text = r.id, Size = UDim2.new(1, -8, 0.2, 0), Position = UDim2.new(0, 4, 0.56, 0) })
@@ -894,26 +822,15 @@ end
 
 local function playReveal(data: any, fast: boolean)
 	local pack = SeedPacks.lookup(tostring(data.packId))
-	local results = data.results
-	if not pack or type(results) ~= "table" or #results == 0 then
+	local best = data.result
+	if not pack or type(best) ~= "table" or not Config.RARITIES[best.rarity] or not Config.ZONES[best.zone] then
 		return
 	end
-	local best: RollView = results[1]
-	for _, r in results do
-		if seedRank(r) > seedRank(best) then
-			best = r
-		end
-	end
 
-	revealTitle.Text = `🎁 Opening {if #results > 1 then #results .. "x " else ""}{data.name}...`
+	revealTitle.Text = `🎁 Opening {data.name}...`
 	resultLabel.Visible, resultSub.Visible, continueHint.Visible, closeButton.Visible = false, false, false, false
 	burst:ClearAllChildren()
 	strip:ClearAllChildren()
-	for _, c in summary:GetChildren() do
-		if c:IsA("GuiObject") then
-			c:Destroy()
-		end
-	end
 
 	-- Filler cards come from the same odds, luck-boosted so the reel teases rare seeds.
 	local tease = table.clone(pack)
@@ -972,20 +889,8 @@ local function playReveal(data: any, fast: boolean)
 	resultScale.Scale = 0.4
 	TweenService:Create(resultScale, TweenInfo.new(0.45, Enum.EasingStyle.Back, Enum.EasingDirection.Out), { Scale = 1 }):Play()
 	local exclusive = best.mutation ~= nil and best.mutation == pack.exclusive
-	resultSub.Text = `{if exclusive then "🌟 FEATURED EXCLUSIVE! " else ""}{Config.ZONES[best.zone].icon} {SeedPacks.seedName(best.zone, best.rarity, best.mutation)} → your 🌱 Seeds bag`
+	resultSub.Text = `{if exclusive then "🌟 PACK EXCLUSIVE! " else ""}{Config.ZONES[best.zone].icon} {SeedPacks.seedName(best.zone, best.rarity, best.mutation)} → your 🌱 Seeds bag`
 	resultSub.Visible = true
-	if #results > 1 then
-		local sorted = table.clone(results)
-		table.sort(sorted, function(a, b)
-			return seedRank(a) > seedRank(b)
-		end)
-		for i, r in sorted do
-			if i > 10 then
-				break
-			end
-			seedCard(summary, r.zone, r.rarity, r.mutation, UDim2.fromOffset(56, 66), i)
-		end
-	end
 
 	continueHint.Visible = true
 	closeButton.Visible = true
@@ -1161,29 +1066,18 @@ RunService.RenderStepped:Connect(function()
 	local left = batCooldownUntil - os.clock()
 	batShade.Size = UDim2.fromScale(1, math.clamp(left / Config.BAT_COOLDOWN, 0, 1))
 
-	-- Featured banner: a shine sweeping across and a pulsing NEW! badge
-	local shine, badge = featuredLive.shine, featuredLive.badge
-	if shine and shine.Parent then
-		shine.Position = UDim2.fromScale((os.clock() * 0.45) % 1.6 - 0.3, 0)
-	end
-	if badge and badge.Parent then
-		badge.Scale = 1 + 0.08 * math.sin(os.clock() * 6)
+	-- Premium pack cards: a shine sweeping across each, staggered
+	if modal.Visible then
+		for i, shine in packShines do
+			if shine.Parent then
+				shine.Position = UDim2.fromScale((os.clock() * 0.4 + i * 0.55) % 1.6 - 0.3, 0)
+			end
+		end
 	end
 
 	if os.clock() - lastTimerUpdate >= 0.25 then
 		lastTimerUpdate = os.clock()
 		local now = workspace:GetServerTimeNow()
-		local slot = SeedPacks.featuredSlot(now)
-		local countdown = featuredLive.countdown
-		if countdown and countdown.Parent then
-			if slot ~= seenFeaturedSlot and modal.Visible and modalName == "Shop" and shopTab == "Packs" then
-				toast("✨ A new featured seed pack is in the Shop!", "gold")
-				renderModal() -- the pack rotated while the Shop was open
-			else
-				countdown.Text = `⏳ Leaves in {hms(SeedPacks.slotEndsAt(slot) - now)} · luckier odds + 🌟 exclusive`
-			end
-		end
-		shopNewBadge.Visible = slot ~= seenFeaturedSlot
 		local night, remaining = Config.dayPhase(now)
 		dayLabel.Text = if night then `🌙 Night · Day in {Format.clock(remaining)}` else `☀️ Day · Night in {Format.clock(remaining)}`
 		dayFrame.BackgroundColor3 = if night then Color3.fromRGB(70, 70, 160) else COLORS.shop
