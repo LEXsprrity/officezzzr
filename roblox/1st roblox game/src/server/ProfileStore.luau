@@ -1,6 +1,6 @@
 --!strict
--- Player save data: defaults, (de)serialization with validation, and a DataStore wrapper that
--- uses UpdateAsync with retries. The DataStore is injected so tests can pass a mock.
+-- Player save data: defaults, (de)serialization with validation and migrations, and a DataStore wrapper
+-- that uses UpdateAsync with retries. The DataStore is injected so tests can pass a mock.
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Shared = ReplicatedStorage:WaitForChild("Shared")
 local Config = require(Shared:WaitForChild("Config"))
@@ -9,12 +9,24 @@ local SeedPacks = require(Shared:WaitForChild("SeedPacks"))
 local ProfileStore = {}
 ProfileStore.__index = ProfileStore
 
--- v2 adds the seed bag and Robux receipt history; v1 saves load with both empty.
-ProfileStore.VERSION = 2
+-- v2 added the seed bag and Robux receipt history; v1 saves load with both empty.
+-- v3 (economy rework) replaced the Speed Gain tier with owned/equipped trails and bought slots with the
+-- plot level; v1/v2 saves are migrated on load (see migrateSpeedMult and the plot level below).
+ProfileStore.VERSION = 3
 
 -- Potions were removed from the game. Saves of any version may still hold potion timers
 -- (`potions`, ignored) and potion items, which are dropped from the inventory on load.
 local RETIRED_ITEMS = { PotionSpeed = true, PotionMoney = true, PotionLuck = true }
+
+-- The removed money-bought Speed Gain tiers (v1/v2 `speedMultTier`): their multiplier and what they cost.
+ProfileStore.LEGACY_SPEED_MULT = {
+	{ mult = 1, price = 0 },
+	{ mult = 2, price = 15e3 },
+	{ mult = 3, price = 400e3 },
+	{ mult = 5, price = 8e6 },
+	{ mult = 10, price = 250e6 },
+	{ mult = 25, price = 10e9 },
+}
 
 export type Plant = {
 	slot: number,
@@ -27,9 +39,10 @@ export type Plant = {
 export type Profile = {
 	money: number,
 	speed: number,
-	speedMultTier: number,
+	trails: { [string]: boolean }, -- owned trail ids (always includes the free one)
+	equippedTrail: string,
 	treadmillTier: number,
-	slots: number,
+	plotLevel: number, -- 1..Config.PLOT_LEVEL_MAX; slots = Config.plotSlots(plotLevel)
 	plants: { Plant },
 	index: { [string]: boolean }, -- "zone:rarity" and "zone:Mutation" keys
 	items: { [string]: number },
@@ -47,9 +60,10 @@ function ProfileStore.defaultProfile(): Profile
 	return {
 		money = 0,
 		speed = 0,
-		speedMultTier = 1,
+		trails = { [Config.DEFAULT_TRAIL] = true },
+		equippedTrail = Config.DEFAULT_TRAIL,
 		treadmillTier = 1,
-		slots = Config.SLOTS_START,
+		plotLevel = 1,
 		plants = {},
 		index = {},
 		items = items,
@@ -71,6 +85,34 @@ local function int(v: any, default: number, lo: number, hi: number): number
 	return math.floor(num(v, default, lo, hi))
 end
 
+-- v1/v2 -> v3: an old Speed Gain tier becomes the trail with the nearest multiplier at or below it
+-- (x1 -> Grey x1.5, x2 -> Green x2, x3 -> Purple x3, x5 -> Rainbow x5), owned and equipped, so nobody's
+-- multiplier drops. x10 and x25 are above the best trail (Rainbow x5): those players get Rainbow and the
+-- money they paid for the tiers above x5 back. Returns (trail id, refund).
+function ProfileStore.migrateSpeedMult(tier: number): (string, number)
+	local old = ProfileStore.LEGACY_SPEED_MULT[tier] or ProfileStore.LEGACY_SPEED_MULT[1]
+	local best = Config.trailById(Config.DEFAULT_TRAIL) :: Config.Trail
+	for _, t in Config.TRAILS do
+		if t.mult <= old.mult and t.mult > best.mult then
+			best = t
+		end
+	end
+	local refund = 0
+	for i = 1, tier do
+		local paid = ProfileStore.LEGACY_SPEED_MULT[i]
+		if paid and paid.mult > best.mult then
+			refund += paid.price
+		end
+	end
+	return best.id, refund
+end
+
+-- v1/v2 -> v3: bought slots become the plot level that has them (5 slots = level 1), so everyone keeps
+-- their slots.
+function ProfileStore.levelForSlots(slots: number): number
+	return math.clamp(math.floor(slots) - Config.SLOTS_START + 1, 1, Config.PLOT_LEVEL_MAX)
+end
+
 -- Plain JSON-safe table for the DataStore.
 function ProfileStore.serialize(p: Profile): { [string]: any }
 	local plants = {}
@@ -84,13 +126,21 @@ function ProfileStore.serialize(p: Profile): { [string]: any }
 		end
 	end
 	table.sort(index)
+	local trails = {}
+	for id, owned in p.trails do
+		if owned then
+			table.insert(trails, id)
+		end
+	end
+	table.sort(trails)
 	return {
 		v = ProfileStore.VERSION,
 		money = p.money,
 		speed = p.speed,
-		speedMultTier = p.speedMultTier,
+		trails = trails,
+		trail = p.equippedTrail,
 		treadmillTier = p.treadmillTier,
-		slots = p.slots,
+		plotLevel = p.plotLevel,
 		plants = plants,
 		index = index,
 		items = table.clone(p.items),
@@ -110,9 +160,27 @@ function ProfileStore.deserialize(data: any): Profile
 	local maxSlots = Config.SLOTS_MAX + Config.PASS_EXTRA_SLOTS
 	p.money = num(data.money, 0, 0, math.huge)
 	p.speed = num(data.speed, 0, 0, math.huge)
-	p.speedMultTier = int(data.speedMultTier, 1, 1, #Config.SPEED_MULT_TIERS)
 	p.treadmillTier = int(data.treadmillTier, 1, 1, #Config.TREADMILL_TIERS)
-	p.slots = int(data.slots, Config.SLOTS_START, Config.SLOTS_START, Config.SLOTS_MAX)
+	if type(data.v) == "number" and data.v >= 3 then
+		p.plotLevel = int(data.plotLevel, 1, 1, Config.PLOT_LEVEL_MAX)
+		if type(data.trails) == "table" then
+			for _, id in data.trails do
+				local trail = Config.trailById(id)
+				if trail then
+					p.trails[trail.id] = true
+				end
+			end
+		end
+		local equipped = Config.trailById(data.trail)
+		p.equippedTrail = if equipped and p.trails[equipped.id] then equipped.id else Config.DEFAULT_TRAIL
+	else
+		-- v1/v2: bought slots -> plot level; Speed Gain tier -> a trail (+ a refund above Rainbow)
+		p.plotLevel = ProfileStore.levelForSlots(int(data.slots, Config.SLOTS_START, Config.SLOTS_START, Config.SLOTS_MAX))
+		local trail, refund = ProfileStore.migrateSpeedMult(int(data.speedMultTier, 1, 1, #ProfileStore.LEGACY_SPEED_MULT))
+		p.trails[trail] = true
+		p.equippedTrail = trail
+		p.money += refund
+	end
 	p.reachedEnd = data.reachedEnd == true
 	p.lastSeen = num(data.lastSeen, 0, 0, math.huge)
 

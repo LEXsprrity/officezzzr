@@ -28,9 +28,10 @@ local function richProfile()
 	local p = ProfileStore.defaultProfile()
 	p.money = 1234567.89
 	p.speed = 5.5e9
-	p.speedMultTier = 4
+	p.trails = { Grey = true, Green = true, Blue = true }
+	p.equippedTrail = "Blue"
 	p.treadmillTier = 3
-	p.slots = 14
+	p.plotLevel = 10
 	p.plants = {
 		{ slot = 1, zone = 1, rarity = 1, mutation = nil, plantedAt = 1790000000 },
 		{ slot = 2, zone = 4, rarity = 5, mutation = "Gold", plantedAt = 1790000123 },
@@ -70,21 +71,25 @@ H.test("data: only the plant timestamp is stored, not weight or income", functio
 	end
 end)
 
-H.test("data: a new player gets defaults (5 slots, 3 Sleep Dust, 2x treadmill)", function()
+H.test("data: a new player gets defaults (plot level 1 = 5 slots, Grey trail, 3 Sleep Dust, 2x treadmill)", function()
 	local p, ok = ProfileStore.new(mockDataStore()):load(7)
 	H.ok(ok)
-	H.eq(p.slots, Config.SLOTS_START)
-	H.eq(p.slots, 5)
+	H.eq(p.plotLevel, 1)
+	H.eq(Config.plotSlots(p.plotLevel), 5)
+	H.ok(p.trails.Grey, "everyone owns the Grey trail")
+	H.eq(p.equippedTrail, "Grey")
+	H.eq(Config.trailMult(p.equippedTrail), 1.5)
 	H.eq(p.items.SleepDust, 3)
 	H.eq(Config.TREADMILL_TIERS[p.treadmillTier].mult, 2)
 	H.eq(p.money, 0)
 	H.eq(#p.plants, 0)
 end)
 
-H.test("data: saves from before 5 starting slots keep their 10+ slots", function()
-	H.eq(ProfileStore.deserialize({ slots = 10 }).slots, 10)
-	H.eq(ProfileStore.deserialize({ slots = 17 }).slots, 17)
-	H.eq(ProfileStore.deserialize({}).slots, Config.SLOTS_START, "missing -> default")
+H.test("data: saves from before 5 starting slots keep their 10+ slots (as plot levels)", function()
+	H.eq(ProfileStore.deserialize({ slots = 10 }).plotLevel, 6)
+	H.eq(Config.plotSlots(ProfileStore.deserialize({ slots = 10 }).plotLevel), 10)
+	H.eq(Config.plotSlots(ProfileStore.deserialize({ slots = 17 }).plotLevel), 17)
+	H.eq(ProfileStore.deserialize({}).plotLevel, 1, "missing -> level 1")
 end)
 
 H.test("data: UpdateAsync is retried on failure", function()
@@ -104,7 +109,8 @@ end)
 
 H.test("data: garbage and out-of-range values are sanitized", function()
 	local p = ProfileStore.deserialize({
-		money = "lots", speed = -5, speedMultTier = 999, treadmillTier = 0, slots = 1e9,
+		v = 3, money = "lots", speed = -5, speedMultTier = 999, treadmillTier = 0, slots = 5, plotLevel = 1e9,
+		trails = { "Grey", "Hacked", 5, "Red" }, trail = "Rainbow",
 		plants = {
 			{ s = 1, z = 2, r = 3, t = 100 },
 			{ s = 1, z = 2, r = 3, t = 200 }, -- duplicate slot
@@ -117,9 +123,12 @@ H.test("data: garbage and out-of-range values are sanitized", function()
 	})
 	H.eq(p.money, 0)
 	H.eq(p.speed, 0)
-	H.eq(p.speedMultTier, #Config.SPEED_MULT_TIERS)
 	H.eq(p.treadmillTier, 1)
-	H.eq(p.slots, Config.SLOTS_MAX)
+	H.eq(p.plotLevel, Config.PLOT_LEVEL_MAX)
+	H.eq(Config.plotSlots(p.plotLevel), Config.SLOTS_MAX)
+	H.ok(p.trails.Red and p.trails.Grey and not p.trails.Hacked, "only real trail ids are kept")
+	H.eq(p.equippedTrail, "Grey", "an equipped trail that isn't owned falls back to Grey")
+	H.eq(p.money, 0, "a v3 save never runs the Speed Gain migration")
 	H.eq(#p.plants, 3)
 	H.eq(p.plants[1].plantedAt, 100)
 	H.eq(p.plants[3].mutation, nil)
@@ -146,7 +155,8 @@ H.test("data: v1/v2 saves with potions still load; potion timers and potion item
 		local p, ok = ProfileStore.new(ds, 1, 0):load(7)
 		H.ok(ok, `v{old.v} save loads`)
 		H.eq(p.money, 50)
-		H.eq(p.speedMultTier, 2)
+		H.eq(p.equippedTrail, "Green", "Speed Gain x2 -> Green trail x2")
+		H.eq(Config.plotSlots(p.plotLevel), 11, "11 slots kept")
 		H.eq(#p.plants, 1)
 		H.eq(p.items.SleepDust, 2, "Sleep Dust is kept")
 		for _, id in { "PotionSpeed", "PotionMoney", "PotionLuck" } do

@@ -1,10 +1,8 @@
--- Economy, growth, zones, shop and formatting.
+-- Economy, growth, zones and formatting (the shop has its own spec: shop.spec).
 local H = require("./harness")
 
 local Config = H.shared("Config")
 local Format = H.shared("Format")
-local Shop = H.server("Shop")
-local ProfileStore = H.server("ProfileStore")
 
 H.test("zones: 7 zones with the agreed recommended speeds", function()
 	local want = { 0, 10e3, 500e3, 5e6, 50e6, 500e6, 5e9 }
@@ -33,12 +31,13 @@ H.test("zones: zoneAtX maps corridor positions to zones, base to nil", function(
 	H.eq(Config.zoneAtX(Config.END_X - 1), #Config.ZONES)
 end)
 
-H.test("economy: a full plot of zone-k seeds pays for zone k+1 in PAYBACK_SECONDS", function()
+H.test("economy: a full plot of zone-k Commons earns zone k+1's recommended Speed in dollars in PAYBACK_SECONDS", function()
 	H.eq(Config.ECONOMY_SLOTS, 10, "income is balanced for 10 plants, whatever SLOTS_START is")
 	for k = 1, #Config.ZONES - 1 do
 		local perSecond = Config.seedIncome(k) * Config.ECONOMY_SLOTS
-		H.near(perSecond * Config.PAYBACK_SECONDS * Config.PRICE_PER_SPEED, Config.speedCost(Config.ZONES[k + 1].req), 1e-3, Config.ZONES[k].id)
+		H.near(perSecond * Config.PAYBACK_SECONDS, Config.ZONES[k + 1].req, 1e-3, Config.ZONES[k].id)
 	end
+	H.near(Config.seedIncome(1), 10e3 / 3000, 1e-9, "the money scale is unchanged by the rework")
 end)
 
 H.test("growth: weight grows from sprout to GROW_MAX_FACTOR x and then stops (closed form)", function()
@@ -100,80 +99,6 @@ H.test("rarity: 5 rarities, luck and deeper zones shift odds toward rare", funct
 		return Config.MUTATIONS[1].chance + Config.MUTATIONS[2].chance + 0.01
 	end)
 	H.eq(dayMut, nil)
-end)
-
-H.test("shop: + button buys speed at speedCost, refuses without money", function()
-	local p = ProfileStore.defaultProfile()
-	local ok = Shop.buy(p, "Speed25")
-	H.eq(ok, false)
-	p.money = 5000
-	ok = Shop.buy(p, "Speed25")
-	H.ok(ok)
-	H.eq(p.speed, Config.SPEED_BUY_MIN)
-	H.eq(p.money, 5000 - Config.speedCost(Config.SPEED_BUY_MIN))
-	ok = Shop.buy(p, "SpeedMax")
-	H.ok(ok)
-	H.eq(p.money, 0)
-	H.eq(p.speed, 5000 / Config.PRICE_PER_SPEED)
-end)
-
-H.test("shop: tiered upgrades advance, get pricier, and max out", function()
-	local p = ProfileStore.defaultProfile()
-	p.money = 1e15
-	local last = 0
-	for tier = 2, #Config.SPEED_MULT_TIERS do
-		local price = Config.priceOf("SpeedMult", p)
-		H.ok(price > last, "geometric")
-		last = price
-		H.ok(Shop.buy(p, "SpeedMult"))
-		H.eq(p.speedMultTier, tier)
-	end
-	H.eq(Shop.buy(p, "SpeedMult"), false, "maxed")
-	H.ok(Shop.buy(p, "Treadmill"))
-	H.ok(Shop.buy(p, "Treadmill"))
-	H.eq(Config.TREADMILL_TIERS[p.treadmillTier].mult, 5)
-	H.eq(Shop.buy(p, "Treadmill"), false)
-	local s1 = Config.priceOf("Slot", p)
-	H.ok(Shop.buy(p, "Slot"))
-	H.eq(p.slots, Config.SLOTS_START + 1)
-	H.ok(Config.priceOf("Slot", p) > s1)
-end)
-
-H.test("shop: slots start at 5, slot 6 costs $500 and every slot costs more than the last", function()
-	H.eq(Config.SLOTS_START, 5)
-	local function priceOfSlot(n: number): number -- price of buying slot n
-		return (Config.priceOf("Slot", { money = 0, speed = 0, speedMultTier = 1, treadmillTier = 1, slots = n - 1 }))
-	end
-	H.eq(priceOfSlot(6), 500)
-	H.eq(priceOfSlot(7), 1250)
-	H.near(priceOfSlot(10), 19.5e3, 0.1e3)
-	H.near(priceOfSlot(15), 1.9e6, 0.01e6)
-	H.near(priceOfSlot(30), 1.8e12, 0.03e12)
-	local last = 0
-	for n = Config.SLOTS_START + 1, Config.SLOTS_MAX do
-		local price = priceOfSlot(n)
-		H.ok(price > last, `slot {n} costs {price}, slot {n - 1} cost {last}`)
-		last = price
-	end
-	H.eq(Config.priceOf("Slot", { money = 0, speed = 0, speedMultTier = 1, treadmillTier = 1, slots = Config.SLOTS_MAX }), nil, "maxed")
-end)
-
-H.test("shop: Sleep Dust is a consumable; potions are gone", function()
-	local p = ProfileStore.defaultProfile()
-	p.money = 1e6
-	H.ok(Shop.buy(p, "SleepDust"))
-	H.eq(p.items.SleepDust, 4)
-	H.eq(Shop.buy(p, "Nonsense"), false)
-	H.eq(Config.POTIONS, nil)
-	H.eq(Config.POTION_MIN_PRICE, nil)
-	H.eq(Config.POTION_INCOME_SECONDS, nil)
-	local money = p.money
-	for _, id in { "PotionSpeed", "PotionMoney", "PotionLuck" } do
-		H.eq((Config.priceOf(id, p)), nil, id .. " has no price")
-		H.eq((Shop.buy(p, id)), false, id .. " can't be bought")
-		H.eq(p.items[id], nil)
-	end
-	H.eq(p.money, money)
 end)
 
 H.test("format: K/M/B/T/Qa and comma weights", function()

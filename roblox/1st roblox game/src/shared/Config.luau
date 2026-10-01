@@ -166,6 +166,7 @@ Config.RARITIES = {
 
 -- Deeper zones and luck (night) tilt the odds toward the rare end.
 Config.ZONE_RARITY_BONUS = 0.1
+Config.NIGHT_LUCK = 2 -- pods roll with this luck at night; premium packs always do (PACK_LUCK)
 
 function Config.rarityWeights(k: number, luck: number): { number }
 	local tilt = luck * (1 + Config.ZONE_RARITY_BONUS * (k - 1))
@@ -231,22 +232,21 @@ end
 ----------------------------------------------------------------------------------------------------
 -- Economy (formulas)
 ----------------------------------------------------------------------------------------------------
-Config.PRICE_PER_SPEED = 1 -- $ per point of Speed
-Config.SLOTS_START = 5 -- plant slots a new player starts with (older saves keep what they have)
-Config.SLOTS_MAX = 30
+-- In-game money buys only two things: trails (Speed gain, see Shop below) and plot upgrades. Speed is
+-- earned by moving, or bought with Robux. Plant income is anchored to the zones' recommended Speed: a
+-- full plot (ECONOMY_SLOTS) of zone-k Commons earns zone k+1's recommended Speed, in dollars, in
+-- PAYBACK_SECONDS. That keeps the money scale of older saves unchanged.
+Config.SLOTS_START = 5 -- plant slots at plot level 1
+Config.SLOTS_MAX = 30 -- plant slots at the last plot level (the ExtraSlots gamepass adds on top)
 Config.ECONOMY_SLOTS = 10 -- the plot size income is balanced for; independent of SLOTS_START
-Config.PAYBACK_SECONDS = 300 -- a full plot (ECONOMY_SLOTS) of zone-k plants pays for zone k+1 in about this long
+Config.PAYBACK_SECONDS = 300
 Config.PAYOUT_INTERVAL = 3
-
-function Config.speedCost(amount: number): number
-	return amount * Config.PRICE_PER_SPEED
-end
 
 -- Common, sprout-weight income per plant for zone k ($/s)
 function Config.seedIncome(k: number): number
 	local nextZone = Config.ZONES[k + 1]
 	local nextReq = if nextZone then nextZone.req else Config.ZONES[k].req * 10
-	return nextReq * Config.PRICE_PER_SPEED / (Config.ECONOMY_SLOTS * Config.PAYBACK_SECONDS)
+	return nextReq / (Config.ECONOMY_SLOTS * Config.PAYBACK_SECONDS)
 end
 
 -- Growth (P2): closed form from plantedAt, never simulated per tick.
@@ -291,29 +291,97 @@ Config.OFFLINE_CAP_SECONDS = 3600
 Config.SELL_SECONDS = 30 -- removing a plant refunds this many seconds of its income
 
 ----------------------------------------------------------------------------------------------------
--- Shop
+-- Shop. In-game money buys only two things: TRAILS and PLOT UPGRADES (Config.priceOf). Everything else
+-- is Robux: developer products (DEVELOPER_PRODUCTS below) and gamepasses. Rules live in Server/Shop.
 ----------------------------------------------------------------------------------------------------
--- Speed multiplier tiers (applies to Speed gained from moving and the treadmill)
-Config.SPEED_MULT_TIERS = {
-	{ mult = 1, price = 0 },
-	{ mult = 2, price = 15e3 },
-	{ mult = 3, price = 400e3 },
-	{ mult = 5, price = 8e6 },
-	{ mult = 10, price = 250e6 },
-	{ mult = 25, price = 10e9 },
+-- Trails: a coloured Trail behind the player (Server/TrailService) that multiplies the Speed gained from
+-- walking and the treadmill. Players own trails (saved) and equip one at a time. Grey is free: everyone
+-- owns it and starts with it equipped. Any other tier can be bought directly, for money (`price`) or
+-- Robux (the `product` developer product); there is no need to own the tier below.
+export type Trail = {
+	id: string,
+	name: string,
+	rarity: string,
+	mult: number, -- Speed gain multiplier while equipped
+	price: number, -- $; 0 = free, owned by everyone
+	product: string?, -- DEVELOPER_PRODUCTS key of its Robux price
+	color: Color3,
+	rainbow: boolean?, -- drawn (and shown on its card) as a rainbow gradient
 }
+Config.TRAILS = {
+	{ id = "Grey", name = "Grey Trail", rarity = "Common", mult = 1.5, price = 0, color = Color3.fromRGB(175, 178, 190) },
+	{ id = "Green", name = "Green Trail", rarity = "Uncommon", mult = 2, price = 5e3, product = "TrailGreen", color = Color3.fromRGB(70, 215, 90) },
+	{ id = "Blue", name = "Blue Trail", rarity = "Rare", mult = 2.5, price = 75e3, product = "TrailBlue", color = Color3.fromRGB(55, 145, 255) },
+	{ id = "Purple", name = "Purple Trail", rarity = "Epic", mult = 3, price = 1.5e6, product = "TrailPurple", color = Color3.fromRGB(165, 75, 255) },
+	{ id = "Golden", name = "Golden Trail", rarity = "Legendary", mult = 3.5, price = 30e6, product = "TrailGolden", color = Color3.fromRGB(255, 195, 35) },
+	{ id = "Red", name = "Red Trail", rarity = "Mythic", mult = 4, price = 600e6, product = "TrailRed", color = Color3.fromRGB(235, 45, 55) },
+	{ id = "Rainbow", name = "Rainbow Trail", rarity = "Secret", mult = 5, price = 15e9, product = "TrailRainbow", color = Color3.fromRGB(255, 90, 200), rainbow = true },
+} :: { Trail }
+Config.DEFAULT_TRAIL = "Grey"
+
+function Config.trailById(id: any): Trail?
+	for _, t in Config.TRAILS do
+		if t.id == id then
+			return t
+		end
+	end
+	return nil
+end
+
+-- The Speed gain multiplier of an equipped trail id (the free trail's for anything unknown).
+function Config.trailMult(id: string?): number
+	local t = Config.trailById(id) or Config.trailById(Config.DEFAULT_TRAIL) :: Trail
+	return t.mult
+end
+
+-- The colours a trail draws with: its colour fading to white, or a rainbow.
+function Config.trailColors(t: Trail): ColorSequence
+	if t.rainbow then
+		local keys = {}
+		for i = 0, 6 do
+			table.insert(keys, ColorSequenceKeypoint.new(i / 6, Color3.fromHSV(i / 7, 0.85, 1)))
+		end
+		return ColorSequence.new(keys)
+	end
+	return ColorSequence.new(t.color, t.color:Lerp(Color3.new(1, 1, 1), 0.45))
+end
+
+-- Plot upgrades (money only). Level 1 has SLOTS_START slots. Each level adds one slot (SLOTS_MAX at
+-- PLOT_LEVEL_MAX) and PLOT_MONEY_PER_LEVEL to the multiplier on all of the plot's plant income: x1.06 at
+-- level 2, x2.5 at the last level (26). Upgrading to level L costs
+-- PLOT_UPGRADE_BASE_PRICE * PLOT_UPGRADE_GROWTH ^ (L - 2): $500 for level 2, ~$40K for 6, ~$9.8M for 11,
+-- ~$2.4B for 16, ~$581B for 21 and ~$141T for 26, about 4 h of a strong late-game income (README).
+Config.PLOT_LEVEL_MAX = Config.SLOTS_MAX - Config.SLOTS_START + 1
+Config.PLOT_MONEY_PER_LEVEL = 0.06
+Config.PLOT_UPGRADE_BASE_PRICE = 500
+Config.PLOT_UPGRADE_GROWTH = 3.1
+
+function Config.plotSlots(level: number): number
+	return Config.SLOTS_START + level - 1
+end
+
+-- Rounded to 0.01 so it reads "x1.42", not "x1.4200000000000002".
+function Config.plotMoneyMult(level: number): number
+	return math.round((1 + Config.PLOT_MONEY_PER_LEVEL * (level - 1)) * 100) / 100
+end
+
+-- Price of upgrading a plot to `toLevel` (2..PLOT_LEVEL_MAX).
+function Config.plotUpgradePrice(toLevel: number): number
+	return math.floor(Config.PLOT_UPGRADE_BASE_PRICE * Config.PLOT_UPGRADE_GROWTH ^ (toLevel - 2))
+end
+
+-- Everything that multiplies plant income except day/night: the plot level and the 2x Money pass. The
+-- payout loop, offline income, removal refunds and income-based Robux grants all use it.
+function Config.moneyMult(plotLevel: number, doubleMoney: boolean): number
+	return Config.plotMoneyMult(plotLevel) * (if doubleMoney then 2 else 1)
+end
+
+-- Treadmill tiers. Tier 1 is free; the others are Robux (`product`). A tier can be bought directly.
 Config.TREADMILL_TIERS = {
-	{ mult = 2, price = 0 },
-	{ mult = 3, price = 150e3 },
-	{ mult = 5, price = 60e6 },
-}
-Config.SPEED_BUY_FRACTION = 0.25 -- the "+" button's small pack: +25% of current Speed...
-Config.SPEED_BUY_MIN = 1000 -- ...but at least this much
--- Slot n+1 costs SLOT_BASE_PRICE * SLOT_PRICE_GROWTH ^ (n - SLOTS_START): slot 6 $500, 7 $1.25K,
--- 10 ~$19.5K, 15 ~$1.9M, 30 ~$1.8T.
-Config.SLOT_BASE_PRICE = 500
-Config.SLOT_PRICE_GROWTH = 2.5
-Config.SLEEP_DUST_PRICE = 5e3
+	{ mult = 2 },
+	{ mult = 3, product = "TreadmillX3" },
+	{ mult = 5, product = "TreadmillX5" },
+} :: { { mult: number, product: string? } }
 Config.SLEEP_DUST_EXTRA = 5 -- guard stays asleep this much longer
 Config.SLEEP_DUST_RANGE = 60
 Config.SLEEP_DUST_LASTS = 60 -- a dusted nest stays dusted this long
@@ -329,7 +397,7 @@ Config.GAMEPASSES = {
 	DoubleMoney = { id = 0, label = "2x Money" },
 	ExtraSlots = { id = 0, label = "+10 Plant Slots" },
 } :: { [string]: Gamepass }
-Config.PASS_EXTRA_SLOTS = 10 -- the ExtraSlots pass adds this many slots
+Config.PASS_EXTRA_SLOTS = 10 -- the ExtraSlots pass adds this many slots, on top of the plot level's
 
 ----------------------------------------------------------------------------------------------------
 -- Seed packs: our "eggs with odds". Two premium, late-game packs, Robux only: each is a developer
@@ -337,8 +405,8 @@ Config.PASS_EXTRA_SLOTS = 10 -- the ExtraSlots pass adds this many slots
 -- seed of its zone into the player's seed bag, which they plant from the Seeds menu at their pad.
 -- Rolls live in Shared/SeedPacks, purchase rules in Server/Shop.
 ----------------------------------------------------------------------------------------------------
-Config.PACK_LUCK = 1 -- packs roll rarities like a daytime pod in their zone...
-Config.PACK_MUTATION_MULT = 1 -- ...with the same Gold/Rainbow chances (Night never rolls from packs)...
+Config.PACK_LUCK = Config.NIGHT_LUCK -- packs roll rarities like a night pod in their zone...
+Config.PACK_MUTATION_MULT = 2 -- ...with twice the Gold/Rainbow chances (Night never rolls from packs)...
 Config.PACK_EXCLUSIVE = "Celestial" -- ...plus the pack-only mutation, which pods never roll
 Config.PACK_EXCLUSIVE_CHANCE = 0.005
 Config.SEED_BAG_MAX = 50 -- soft cap: the Shop won't *prompt* a pack purchase once the bag holds this many
@@ -349,52 +417,118 @@ Config.SEED_BAG_HARD_MAX = 250 -- paid grants may go past SEED_BAG_MAX up to her
 Config.PACK_FULL_BAG_INCOME_SECONDS = 300
 Config.RECEIPT_HISTORY = 100 -- processed Robux PurchaseIds kept per profile, so a grant never repeats
 
--- Developer products: one per pack, each opening one pack of its `zone`. Create each one on the
--- Creator Dashboard and paste its id here; id = 0 means "not set up yet" (the Shop says "coming soon").
--- `robux` is only the placeholder shown while the real price can't be fetched: the real price is set
--- on the Dashboard and read with MarketplaceService:GetProductInfo.
-export type DevProduct = { id: number, label: string, robux: number, zone: number }
+----------------------------------------------------------------------------------------------------
+-- Developer products: everything sold for Robux except the gamepasses. Create each one on the Creator
+-- Dashboard and paste its id here; id = 0 means "not set up yet" (the Shop says "coming soon"). `robux`
+-- is only the placeholder shown while the real price can't be fetched: the real price is set on the
+-- Dashboard and read with MarketplaceService:GetProductInfo. `kind` says what a receipt grants:
+--   Pack      one seed of `zone` into the seed bag
+--   Speed     + `amount` Speed
+--   Money     max(`amount`, `minutes` of the buyer's current income), so late-game packs stay useful
+--   Treadmill the treadmill at TREADMILL_TIERS[`tier`]
+--   Dust      `count` Sleep Dust
+--   Trail     owns and equips Config.TRAILS[`trail`]
+----------------------------------------------------------------------------------------------------
+export type DevProduct = {
+	id: number,
+	kind: string,
+	label: string,
+	robux: number,
+	zone: number?,
+	amount: number?,
+	minutes: number?,
+	tier: number?,
+	count: number?,
+	trail: string?,
+}
 Config.DEVELOPER_PRODUCTS = {
-	PackSpace = { id = 0, label = "Starpetal Pack", robux = 2000, zone = 6 },
-	PackSpirit = { id = 0, label = "Lotus Wyrm Pack", robux = 3000, zone = 7 },
+	PackSpace = { id = 0, kind = "Pack", label = "Starpetal Pack", robux = 2000, zone = 6 },
+	PackSpirit = { id = 0, kind = "Pack", label = "Lotus Wyrm Pack", robux = 3000, zone = 7 },
+
+	Speed150K = { id = 0, kind = "Speed", label = "+150K Speed", robux = 64, amount = 150e3 },
+	Speed1M = { id = 0, kind = "Speed", label = "+1M Speed", robux = 200, amount = 1e6 },
+	Speed10M = { id = 0, kind = "Speed", label = "+10M Speed", robux = 560, amount = 10e6 },
+	Speed50M = { id = 0, kind = "Speed", label = "+50M Speed", robux = 1200, amount = 50e6 },
+	Speed500M = { id = 0, kind = "Speed", label = "+500M Speed", robux = 1600, amount = 500e6 },
+	Speed1B = { id = 0, kind = "Speed", label = "+1B Speed", robux = 2400, amount = 1e9 },
+
+	Money24K = { id = 0, kind = "Money", label = "Pocket Cash", robux = 40, amount = 24e3, minutes = 10 },
+	Money200K = { id = 0, kind = "Money", label = "Cash Bag", robux = 80, amount = 200e3, minutes = 30 },
+	Money800K = { id = 0, kind = "Money", label = "Cash Stack", robux = 200, amount = 800e3, minutes = 60 },
+	Money4M = { id = 0, kind = "Money", label = "Cash Crate", robux = 400, amount = 4e6, minutes = 180 },
+	Money8M = { id = 0, kind = "Money", label = "Cash Vault", robux = 640, amount = 8e6, minutes = 360 },
+
+	TreadmillX3 = { id = 0, kind = "Treadmill", label = "Treadmill x3", robux = 60, tier = 2 },
+	TreadmillX5 = { id = 0, kind = "Treadmill", label = "Treadmill x5", robux = 200, tier = 3 },
+
+	SleepDust3 = { id = 0, kind = "Dust", label = "3 Sleep Dust", robux = 25, count = 3 },
+
+	TrailGreen = { id = 0, kind = "Trail", label = "Green Trail", robux = 16, trail = "Green" },
+	TrailBlue = { id = 0, kind = "Trail", label = "Blue Trail", robux = 24, trail = "Blue" },
+	TrailPurple = { id = 0, kind = "Trail", label = "Purple Trail", robux = 40, trail = "Purple" },
+	TrailGolden = { id = 0, kind = "Trail", label = "Golden Trail", robux = 64, trail = "Golden" },
+	TrailRed = { id = 0, kind = "Trail", label = "Red Trail", robux = 100, trail = "Red" },
+	TrailRainbow = { id = 0, kind = "Trail", label = "Rainbow Trail", robux = 180, trail = "Rainbow" },
 } :: { [string]: DevProduct }
+
+-- The products of one kind, cheapest first (the Shop's card order).
+function Config.products(kind: string): { { name: string, product: DevProduct } }
+	local list = {}
+	for name, product in Config.DEVELOPER_PRODUCTS do
+		if product.kind == kind then
+			table.insert(list, { name = name, product = product })
+		end
+	end
+	table.sort(list, function(a, b)
+		if a.product.robux ~= b.product.robux then
+			return a.product.robux < b.product.robux
+		end
+		return a.name < b.name
+	end)
+	return list
+end
+
+-- The product with this (non-zero) developer product id, as (name, product).
+function Config.productById(productId: number): (string?, DevProduct?)
+	if productId == 0 then
+		return nil, nil
+	end
+	for name, product in Config.DEVELOPER_PRODUCTS do
+		if product.id == productId then
+			return name, product
+		end
+	end
+	return nil, nil
+end
+
+-- What a Money product pays a player earning `income` $/s (with all multipliers): its fixed amount, or
+-- `minutes` of that income if more. The Shop card shows the same number.
+function Config.moneyPackAmount(product: DevProduct, income: number): number
+	return math.floor(math.max(product.amount or 0, math.max(0, income) * (product.minutes or 0) * 60))
+end
 
 -- What the shop needs to know about a player (profile or client stats snapshot).
 export type ShopView = {
 	money: number,
-	speed: number,
-	speedMultTier: number,
-	treadmillTier: number,
-	slots: number,
+	plotLevel: number,
+	trails: { [string]: boolean },
 }
 
--- Returns price and a short label, or nil if the item is sold out / unknown.
+-- The money price and a short label of a money item ("PlotUpgrade" or "Trail:<id>"), or nil (with
+-- "Maxed"/"Owned", or nothing for anything that isn't sold for money).
 function Config.priceOf(itemId: string, v: ShopView): (number?, string?)
-	if itemId == "Speed25" then
-		local amount = math.max(Config.SPEED_BUY_MIN, math.floor(v.speed * Config.SPEED_BUY_FRACTION))
-		return Config.speedCost(amount), `+{amount} Speed`
-	elseif itemId == "SpeedMax" then
-		local amount = math.floor(v.money / Config.PRICE_PER_SPEED)
-		return Config.speedCost(amount), `+{amount} Speed`
-	elseif itemId == "SpeedMult" then
-		local nextTier = Config.SPEED_MULT_TIERS[v.speedMultTier + 1]
-		if not nextTier then
+	if itemId == "PlotUpgrade" then
+		if v.plotLevel >= Config.PLOT_LEVEL_MAX then
 			return nil, "Maxed"
 		end
-		return nextTier.price, `x{nextTier.mult} Speed Gain`
-	elseif itemId == "Treadmill" then
-		local nextTier = Config.TREADMILL_TIERS[v.treadmillTier + 1]
-		if not nextTier then
-			return nil, "Maxed"
+		return Config.plotUpgradePrice(v.plotLevel + 1), `Plot Level {v.plotLevel + 1}`
+	end
+	local trail = Config.trailById(string.match(itemId, "^Trail:(%a+)$"))
+	if trail then
+		if trail.price <= 0 or v.trails[trail.id] then
+			return nil, "Owned"
 		end
-		return nextTier.price, `Treadmill x{nextTier.mult}`
-	elseif itemId == "Slot" then
-		if v.slots >= Config.SLOTS_MAX then
-			return nil, "Maxed"
-		end
-		return math.floor(Config.SLOT_BASE_PRICE * Config.SLOT_PRICE_GROWTH ^ (v.slots - Config.SLOTS_START)), "+1 Plant Slot"
-	elseif itemId == "SleepDust" then
-		return Config.SLEEP_DUST_PRICE, "Sleep Dust"
+		return trail.price, trail.name
 	end
 	return nil, nil
 end
@@ -404,7 +538,6 @@ end
 ----------------------------------------------------------------------------------------------------
 Config.DAY_SECONDS = 300
 Config.NIGHT_SECONDS = 150
-Config.NIGHT_LUCK = 2
 
 function Config.dayPhase(now: number): (boolean, number)
 	local cycle = Config.DAY_SECONDS + Config.NIGHT_SECONDS
