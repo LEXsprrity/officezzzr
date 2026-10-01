@@ -14,13 +14,13 @@ H.test("zones: 7 zones with the agreed recommended speeds", function()
 	end
 end)
 
-H.test("zones: corridor is 10-12k studs and a max-speed run to the end takes 60-90 s", function()
+H.test("zones: corridor is 4-6k studs and a max-speed run to the end takes 20-40 s", function()
 	local length = Config.END_X - Config.CORRIDOR_START_X
-	H.ok(length >= 10000 and length <= 12000, "length " .. length)
+	H.ok(length >= 4000 and length <= 6000, "length " .. length)
 	local atEnd = Config.walkSpeedFor(Config.ZONES[#Config.ZONES].req)
 	for _, w in { atEnd, Config.MAX_WALKSPEED } do
 		local seconds = length / w
-		H.ok(seconds >= 60 and seconds <= 90, `run takes {seconds}s at WalkSpeed {w}`)
+		H.ok(seconds >= 20 and seconds <= 40, `run takes {seconds}s at WalkSpeed {w}`)
 	end
 end)
 

@@ -13,6 +13,7 @@ export type Brain = {
 	home: Vector3,
 	chaseSpeed: number,
 	returnSpeed: number,
+	wakeDelay: number, -- seconds from alert to chase (Config.GUARD_WAKE_DELAY)
 	wakeAt: number,
 	chaseStarted: number,
 	stunnedUntil: number,
@@ -37,6 +38,7 @@ function GuardBrain.new(zoneIndex: number, home: Vector3): Brain
 		home = home,
 		chaseSpeed = chase,
 		returnSpeed = math.max(Config.BASE_WALKSPEED, chase * Config.GUARD_RETURN_FACTOR),
+		wakeDelay = Config.GUARD_WAKE_DELAY,
 		wakeAt = 0,
 		chaseStarted = 0,
 		stunnedUntil = 0,
@@ -57,7 +59,7 @@ function GuardBrain.alert(brain: Brain, now: number)
 		local extra = if now < brain.dustedUntil then Config.SLEEP_DUST_EXTRA else 0
 		brain.dustedUntil = 0 -- one steal uses up the dust
 		brain.state = "Waking"
-		brain.wakeAt = now + extra
+		brain.wakeAt = now + brain.wakeDelay + extra
 	elseif brain.state == "Stunned" then
 		brain.afterStun = "Chasing"
 	end

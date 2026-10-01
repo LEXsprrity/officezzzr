@@ -4,17 +4,17 @@ A Roblox "steal-and-run" game in Luau, built with [Rojo](https://rojo.space) 7. 
 
 Players get a fenced plot. From spawn, one long walled corridor runs through seven themed zones. Each zone has a sleeping giant guardian next to a glowing mother plant. Grab a seed pod, the guardian wakes and chases you, and you run home and plant it. It sprouts into a plant-creature with a weight ("2,018,798 Kg") that earns money. Money buys Speed, Speed gets you further down the corridor, and further zones grow better seeds. **The goal is to reach the End of the Line.**
 
-| # | Zone | Guardian | Seed | Recommended Speed |
-|---|---|---|---|---|
-| 1 | 🌼 Meadow | Giant Mole | Sproutling | 0 |
-| 2 | 🦂 Desert | Giant Scorpion | Cactopod | 10K |
-| 3 | 🦖 Jungle | Giant Dino | Fernosaur | 500K |
-| 4 | 🌋 Lava Fields | Lava Golem | Magmabloom | 5M |
-| 5 | ❄️ Snow Peaks | Giant Yeti | Frostbulb | 50M |
-| 6 | 👽 Deep Space | Big Alien | Starpetal | 500M |
-| 7 | ⛩️ Spirit Garden (END) | Spirit Dragon | Lotus Wyrm | 5B |
+| # | Zone | Guardian | Seed | Recommended Speed | Length (studs) |
+|---|---|---|---|---|---|
+| 1 | 🌼 Meadow | Giant Mole | Sproutling | 0 | 200 |
+| 2 | 🦂 Desert | Giant Scorpion | Cactopod | 10K | 450 |
+| 3 | 🦖 Jungle | Giant Dino | Fernosaur | 500K | 600 |
+| 4 | 🌋 Lava Fields | Lava Golem | Magmabloom | 5M | 700 |
+| 5 | ❄️ Snow Peaks | Giant Yeti | Frostbulb | 50M | 800 |
+| 6 | 👽 Deep Space | Big Alien | Starpetal | 500M | 900 |
+| 7 | ⛩️ Spirit Garden (END) | Spirit Dragon | Lotus Wyrm | 5B | 1,100 |
 
-The Meadow is deliberately short (200 studs) so a new player grabs a first seed within seconds. The corridor is 10,900 studs long (the Spirit Garden got the length the Meadow gave up), so a run to the end takes about 64 s at the Spirit Garden's recommended Speed (WalkSpeed 172).
+The Meadow is deliberately short (200 studs) so a new player grabs a first seed within seconds. The corridor is 4,750 studs long, so a run to the end takes about 28 s at the Spirit Garden's recommended Speed (WalkSpeed 171) and 26 s at max WalkSpeed (180).
 
 ## Controls
 | Key / button | What |
@@ -63,7 +63,7 @@ luau-lsp analyze --definitions=globalTypes.d.luau --sourcemap=sourcemap.json src
 1. Both players spawn on their own plot. The sign shows "🏠 Name's Plot".
 2. Each player walks into the corridor, steals a Meadow seed (E), gets chased, gets home and plants it on the pad. `+$` popups appear.
 3. Stand on the treadmill: you run in place without being pushed, and Speed climbs even when AFK.
-4. Buy Speed with **+**, then try the Desert both below and above 10K Speed. Below: caught, seed back at the nest, knocked back. Above: you escape.
+4. Buy Speed with **+**, then try the Desert well below (under 1K Speed) and at 10K Speed. Below: caught, seed back at the nest, knocked back. At 10K: the guard shows ❗ for 1.25 s, then chases exactly as fast as you, and you get home.
 5. Both players leave, then rejoin: money, Speed, plants and Index are intact (API access must be on).
 6. Shop → 🎁 Seed Packs: buy a Meadow pack. The reel spins and lands, and the seed shows up in 🌱 Seeds → 🎒 bag. Stand on your pad and press Plant. Rejoin: the bag is intact.
 
@@ -73,26 +73,26 @@ luau-lsp analyze --definitions=globalTypes.d.luau --sourcemap=sourcemap.json src
 - **Speed from moving** (`SpeedService` + `SpeedLogic`). Every 0.25 s the server measures horizontal HumanoidRootPart movement and grants `distance × gainRate × multipliers`, capped per tick.
 - **Movement sanity check.** A tick that moves more than `WalkSpeed × dt × 1.5 + 2` earns nothing. Sustained over-speed that drains a one-second movement budget, or any teleport-sized jump, is rubber-banded to the last valid position. Server-side moves (spawn, knockback) reset the tracker.
 - **Treadmill.** The server checks whether the root part is inside the belt's bounds and grants the full walking rate for the tick × the tier (2×, or 3×/5× from the shop). The belt does not move you: you just stand on it (AFK works) and the client loops your run animation in place. It has the same per-tick cap. There is no client remote.
-- **Guards** (`GuardService` + `GuardBrain`). A guard wakes the moment a seed is taken and chases at `walkSpeedFor(zone.req) × 0.9`. A server loop calls `Humanoid:MoveTo` along the corridor at 10 Hz, with no pathfinding. A catch is horizontal distance < 6 studs, never `Touched`. The seed goes back to its pod, and the player is knocked 30 studs away and frozen for 1 s. The chase ends when the thief reaches the base, after a catch, or after 45 s, and then the guard walks home and sleeps.
+- **Guards** (`GuardService` + `GuardBrain`). A guard wakes `GUARD_WAKE_DELAY` (1.25 s) after a seed is taken (it shows ❗ meanwhile) and chases at `walkSpeedFor(zone.req) × GUARD_SPEED_FACTOR` (1.0), exactly a player's WalkSpeed at the recommended Speed. A server loop calls `Humanoid:MoveTo` along the corridor at 10 Hz, with no pathfinding. A catch is horizontal distance < 6 studs, never `Touched`. The seed goes back to its pod, and the player is knocked 30 studs away and frozen for 1 s. The chase ends when the thief reaches the base, after a catch, or after 45 s, and then the guard walks home and sleeps.
 - **Carry.** One seed at a time, a server-made part welded to your back. Dying or leaving returns it to its pod.
 - **Growth.** Only `plantedAt` is saved. `weight = sprout × variance × (1 + 4·ease(age/20 min))` grows to 5× and stops. `income = seedIncome(zone) × rarity × mutation × sqrt(weight/sprout)`. A single 3 s payout loop evaluates the formula. There is no per-plant tick.
 - **Economy** is formulas in `Config`. `speedCost(n) = n × $1`. `seedIncome(k) = req[k+1] / (ECONOMY_SLOTS × 300 s)` with `ECONOMY_SLOTS = 10`, so a 10-plant plot of zone-k Commons pays for zone k+1 in about 5 minutes. New players start with `SLOTS_START = 5` slots (older saves keep theirs). Slot 6 costs $500 and each further slot 2.5× the last (slot 10 ≈ $19.5K, 15 ≈ $1.9M, 30 ≈ $1.8T). Other upgrades are priced geometrically too.
 - **Data** (`ProfileStore`, format v2). `UpdateAsync` with retries and exponential backoff, autosave every 90 s, `BindToClose`. If a load fails, that session never saves, so it can't overwrite real data with defaults. Saved fields: money, Speed, multiplier tiers, slots, plants (slot, zone, rarity, mutation, plantedAt), Index, items, potion expiries, the seed bag, the last 100 Robux receipt ids and `lastSeen`. v1 saves load with an empty bag and no receipts. Offline income is capped at 1 h.
-- **Art.** Everything is built from primitives by `WorldBuilder` (base, plots), `ZoneThemes` (the 7 zones) and the `Props` kit. Only floors, walls and the wall-flush arch pillars collide. All props are anchored and non-colliding (no Touched, no raycasts), so they never block runners, guards or the camera. The corridor is about 3.5k parts and the whole map about 4.9k (tested below 6k/8k). Day/night lighting blends a warm day look into a blue, readable night (`Config.nightBlend`), and the client adds a per-zone colour grade.
+- **Art.** Everything is built from primitives by `WorldBuilder` (base, plots), `ZoneThemes` (the 7 zones) and the `Props` kit. Only floors, walls and the wall-flush arch pillars collide. All props are anchored and non-colliding (no Touched, no raycasts), so they never block runners, guards or the camera. The corridor is about 2.3k parts and the whole map about 3.7k (tested below 6k/8k). Day/night lighting blends a warm day look into a blue, readable night (`Config.nightBlend`), and the client adds a per-zone colour grade.
 
 ### Soft gates: how soft they are
-The 0.9 factor applies to *WalkSpeed*, which is logarithmic in Speed, so the Speed you actually need to outrun a guard is well below the sign's number:
+A guard runs exactly as fast as a player at the zone's recommended Speed (`GUARD_SPEED_FACTOR = 1`). That player gets home on the head start alone: the 1.25 s wake-up plus the ~24 studs between the pods and the sleeping guard. The wake-up also absorbs the thief's reaction time and network lag, because the server sees the runner a little late. A slower player keeps that head start but loses ground every second, so whether they're caught depends on the run home. The thresholds are in *WalkSpeed*, which is logarithmic in Speed, so in Speed terms they are well below the sign:
 
-| Zone | Recommended | Outruns the guard from |
-|---|---|---|
-| Desert | 10K | ~3.2K (32%) |
-| Jungle | 500K | ~107K (21%) |
-| Lava | 5M | ~850K (17%) |
-| Snow | 50M | ~6.8M (13%) |
-| Deep Space | 500M | ~54M (11%) |
-| Spirit Garden | 5B | ~430M (9%) |
+| Zone | Recommended | Escapes from WalkSpeed | = Speed |
+|---|---|---|---|
+| Desert | 10K | 81% | ~1.2K (12%) |
+| Jungle | 500K | 87% | ~68K (14%) |
+| Lava | 5M | 90% | ~920K (18%) |
+| Snow | 50M | 92% | ~11M (22%) |
+| Deep Space | 500M | 94% | ~120M (24%) |
+| Spirit Garden | 5B | 95% | ~1.3B (26%) |
 
-At the top end, the previous zone's recommended Speed is already (almost) enough. The tests print this table. For tighter gates, raise `Config.GUARD_SPEED_FACTOR`. At 0.95 you need about 56% of the sign in the Desert and 32% in the Spirit Garden. Keep it below 1, or players at exactly the recommended Speed get caught.
+The previous zone's recommended Speed always gets caught. 70% of the recommended WalkSpeed gets caught in every zone. The tests check both and print this table. For tighter gates, shorten `GUARD_WAKE_DELAY`: at 1.0 s the Desert needs 16% of the sign and the Spirit Garden 34%. The trade-off is less slack for laggy players at the recommended Speed. Keep `GUARD_SPEED_FACTOR` at 1 or below, or players at exactly the recommended Speed get caught.
 
 ## Plant-creatures
 Each planted seed grows into its zone's creature (`CreatureModels`). The creatures are 20–32 parts (up to 39 with Legendary flair) built from Parts, WedgeParts and built-in Sphere `SpecialMesh`es, so nothing needs uploading. Each one hatches from a seed husk and has a leaf or flower motif. Later zones stand taller and glow more.
