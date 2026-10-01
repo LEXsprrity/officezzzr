@@ -1,5 +1,6 @@
 -- HUD, built in code. Display only: it renders StatsUpdate/LootEvent, sends RequestBuy/RequestUseItem,
 -- and owns the local Slow Mode toggle. No game state is decided here.
+local MarketplaceService = game:GetService("MarketplaceService")
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local RunService = game:GetService("RunService")
@@ -26,7 +27,7 @@ pcall(StarterGui.SetCoreGuiEnabled, StarterGui, Enum.CoreGuiType.Backpack, false
 local stats: { [string]: any } = {
 	money = 0, speed = 0, walkSpeed = 16, income = 0, slots = Config.SLOTS_START, baseSlots = Config.SLOTS_START,
 	speedMultTier = 1, treadmillTier = 1, speedMult = 1, treadmillMult = 2,
-	items = {}, potions = {}, index = {}, plants = {}, passes = {}, carrying = false, reachedEnd = false, seedBag = {},
+	items = {}, index = {}, plants = {}, passes = {}, carrying = false, reachedEnd = false, seedBag = {},
 }
 
 ----------------------------------------------------------------------------------------------------
@@ -260,19 +261,12 @@ if player.Character then
 end
 
 ----------------------------------------------------------------------------------------------------
--- Bottom-right: potion timers + day/night timer
+-- Bottom-right: day/night timer
 ----------------------------------------------------------------------------------------------------
 local bottomRight = new("Frame", {
 	BackgroundTransparency = 1, AnchorPoint = Vector2.new(1, 1), Position = UDim2.new(1, -14, 1, -14),
 	Size = UDim2.fromOffset(260, 200), Parent = gui,
 }, { new("UIListLayout", { VerticalAlignment = Enum.VerticalAlignment.Bottom, HorizontalAlignment = Enum.HorizontalAlignment.Right, Padding = UDim.new(0, 6), SortOrder = Enum.SortOrder.LayoutOrder }) })
-local potionTimers: { [string]: Frame } = {}
-for _, id in { "PotionSpeed", "PotionMoney", "PotionLuck" } do
-	local def = Config.POTIONS[id]
-	local f = new("Frame", { Size = UDim2.fromOffset(240, 36), BackgroundColor3 = COLORS.index, Visible = false, LayoutOrder = 1, Parent = bottomRight }, deco(10))
-	text(f, { Name = "Label", Text = "", Size = UDim2.new(1, -12, 1, -6), Position = UDim2.fromOffset(6, 3) })
-	potionTimers[def.stat] = f
-end
 local dayFrame = new("Frame", { Size = UDim2.fromOffset(240, 40), BackgroundColor3 = COLORS.shop, LayoutOrder = 2, Parent = bottomRight }, deco(10))
 local dayLabel = text(dayFrame, { Text = "", Size = UDim2.new(1, -12, 1, -6), Position = UDim2.fromOffset(6, 3) })
 
@@ -314,11 +308,11 @@ UserInputService.InputBegan:Connect(function(input, processed)
 end)
 
 ----------------------------------------------------------------------------------------------------
--- Right side: Seeds / Plants / Potions menus
+-- Right side: Seeds / Plants menus
 ----------------------------------------------------------------------------------------------------
 local rightTabs = new("Frame", {
 	BackgroundTransparency = 1, AnchorPoint = Vector2.new(1, 0.5), Position = UDim2.new(1, -14, 0.45, 0),
-	Size = UDim2.fromOffset(70, 230), Parent = gui,
+	Size = UDim2.fromOffset(70, 150), Parent = gui,
 }, { new("UIListLayout", { Padding = UDim.new(0, 8), VerticalAlignment = Enum.VerticalAlignment.Center }) })
 
 local sidePanel = new("Frame", {
@@ -434,43 +428,16 @@ local function renderPlants()
 	end
 end
 
-local function renderPotions()
-	sideTitle.Text = "🧪 Potions"
-	local now = workspace:GetServerTimeNow()
-	local order = 0
-	for id, def in Config.POTIONS do
-		order += 1
-		local f = card(order, COLORS.index, 96)
-		local owned = (stats.items or {})[id] or 0
-		local expiry = (stats.potions or {})[def.stat]
-		local active = if expiry and expiry > now then ` · active {Format.clock(expiry - now)}` else ""
-		text(f, { Text = `{def.icon} {def.label} (x{def.mult} {def.stat}) — own {owned}{active}`, Size = UDim2.new(1, -12, 0, 30), Position = UDim2.fromOffset(6, 4),
-			TextXAlignment = Enum.TextXAlignment.Left })
-		local use = button(f, "Use", if owned > 0 then COLORS.money else COLORS.disabled, UDim2.new(0.45, -8, 0, 44), function()
-			RequestUseItem:FireServer(id)
-		end)
-		use.Position = UDim2.new(0, 6, 0, 42)
-		local price = Config.priceOf(id, stats :: any)
-		local buy = button(f, `Buy {Format.money(price or 0)}`, if price and stats.money >= price then COLORS.shop else COLORS.disabled,
-			UDim2.new(0.55, -8, 0, 44), function()
-				RequestBuy:FireServer(id)
-			end)
-		buy.Position = UDim2.new(0.45, 2, 0, 42)
-	end
-end
-
 renderSide = function()
 	clearSide()
 	if sideTab == "Seeds" then
 		renderSeeds()
 	elseif sideTab == "Plants" then
 		renderPlants()
-	elseif sideTab == "Potions" then
-		renderPotions()
 	end
 end
 
-for _, tab in { { "Seeds", "🌱" }, { "Plants", "🪴" }, { "Potions", "🧪" } } do
+for _, tab in { { "Seeds", "🌱" }, { "Plants", "🪴" } } do
 	local name = tab[1]
 	button(rightTabs, tab[2], Color3.fromRGB(110, 210, 120), UDim2.fromOffset(70, 70), function()
 		if sideTab == name then
@@ -540,9 +507,6 @@ local SHOP_ITEMS = {
 	{ id = "Treadmill", title = "🏃 Treadmill", color = Color3.fromRGB(240, 90, 90) },
 	{ id = "Slot", title = "🪴 Plant Slot", color = COLORS.money },
 	{ id = "SleepDust", title = "💤 Sleep Dust", color = Color3.fromRGB(120, 130, 255) },
-	{ id = "PotionSpeed", title = "⚡ Speed Potion", color = COLORS.index },
-	{ id = "PotionMoney", title = "💰 Money Potion", color = COLORS.index },
-	{ id = "PotionLuck", title = "🍀 Luck Potion", color = COLORS.index },
 	{ id = "Pass:DoubleMoney", title = "💎 2x Money", color = Color3.fromRGB(0, 180, 200) },
 	{ id = "Pass:ExtraSlots", title = "💎 +10 Slots", color = Color3.fromRGB(0, 180, 200) },
 }
@@ -584,6 +548,42 @@ end
 local CARD_DARK = Color3.fromRGB(44, 38, 72)
 local featuredLive: { countdown: TextLabel?, shine: Frame?, badge: UIScale? } = {}
 local seenFeaturedSlot = -1
+
+-- Robux prices. Packs are developer products; the real price is set on the Creator Dashboard, so it
+-- is fetched once per id with GetProductInfo (pcall'd, cached). Until then, or with no id yet, the
+-- placeholder from Config is shown.
+local robuxPrices: { [number]: number } = {}
+local priceFetching: { [number]: boolean } = {}
+local priceRerender = false
+local function robuxPrice(product: Config.DevProduct): number
+	local cached = robuxPrices[product.id]
+	if cached then
+		return cached
+	end
+	if product.id ~= 0 and not priceFetching[product.id] then
+		priceFetching[product.id] = true
+		task.spawn(function()
+			local ok, info = pcall(MarketplaceService.GetProductInfo, MarketplaceService, product.id, Enum.InfoType.Product)
+			if ok and type(info) == "table" and type(info.PriceInRobux) == "number" then
+				robuxPrices[product.id] = info.PriceInRobux
+				if not priceRerender then -- one re-render for a burst of answers
+					priceRerender = true
+					task.delay(0.3, function()
+						priceRerender = false
+						if modal.Visible and modalName == "Shop" and shopTab == "Packs" then
+							renderModal()
+						end
+					end)
+				end
+			else
+				task.delay(30, function() -- let a later render try again
+					priceFetching[product.id] = nil
+				end)
+			end
+		end)
+	end
+	return product.robux
+end
 
 -- "2:13:05"
 local function hms(seconds: number): string
@@ -677,50 +677,58 @@ local function renderPacks()
 		Text = `Luckier odds than the zone pack, and the only way to get 🌟 {f.exclusive} seeds (x{(Config.mutationById(f.exclusive) :: any).income} income)!`,
 		Size = UDim2.new(0.4, -28, 0, 60), Position = UDim2.new(0.6, 12, 0, 84), TextWrapped = true, TextColor3 = Color3.fromRGB(255, 255, 230),
 	})
-	local canBuyF = stats.money >= f.price
-	button(banner, `Buy {Format.money(f.price)}`, if canBuyF then COLORS.money else COLORS.disabled, UDim2.fromOffset(200, 58), function()
-		RequestBuy:FireServer(f.id)
-	end).Position = UDim2.new(1, -216, 0, 14)
+	-- Packs are Robux only. Featured clicks carry the slot this menu shows, so a click from a stale
+	-- menu (the pack rotated while it was open) is refused instead of buying a different pack.
+	local bundles = SeedPacks.featuredProducts()
+	local single = bundles[1]
+	if single then
+		local live = single.product.id ~= 0
+		button(banner, if live then `Buy {Format.robux(robuxPrice(single.product))}` else `Soon · {Format.robux(single.product.robux)}`,
+			if live then COLORS.money else COLORS.disabled, UDim2.fromOffset(200, 58), function()
+				RequestBuy:FireServer(`Product:{single.name}:{f.slot}`)
+			end).Position = UDim2.new(1, -216, 0, 14)
+	end
 
-	-- Zone packs
+	-- Zone packs: locked until the zone's recommended Speed (the server won't prompt a locked pack)
 	heading("🎁 Zone Seed Packs", 2)
 	local grid = new("Frame", { BackgroundTransparency = 1, Size = UDim2.new(1, -12, 0, 0), AutomaticSize = Enum.AutomaticSize.Y, LayoutOrder = 3, Parent = modalBody },
 		{ new("UIGridLayout", { CellSize = UDim2.fromOffset(234, 262), CellPadding = UDim2.fromOffset(10, 10), SortOrder = Enum.SortOrder.LayoutOrder }) })
 	for k, zone in Config.ZONES do
 		local pack = SeedPacks.zonePack(k)
+		local productName, product = SeedPacks.zoneProduct(k)
 		local unlocked = stats.speed >= zone.req
 		local c = new("Frame", { BackgroundColor3 = CARD_DARK, LayoutOrder = k, Parent = grid }, deco(12, 3))
 		local head = new("Frame", { Size = UDim2.new(1, 0, 0, 40), BackgroundColor3 = zone.ui, Parent = c }, { new("UICorner", { CornerRadius = UDim.new(0, 12) }) })
 		text(head, { Text = `{zone.icon} {pack.name}`, Size = UDim2.new(1, -12, 1, -8), Position = UDim2.fromOffset(6, 4) })
 		lootTable(c, pack, UDim2.fromOffset(8, 48), UDim2.new(1, -16, 0, 130))
 		text(c, { Text = mutationLine(pack), Size = UDim2.new(1, -16, 0, 20), Position = UDim2.fromOffset(8, 184), TextColor3 = Color3.fromRGB(255, 240, 180) })
-		local caption = if unlocked then `Buy {Format.money(pack.price)}` else `🔒 Speed {Format.short(zone.req)}`
-		button(c, caption, if unlocked and stats.money >= pack.price then COLORS.gold else COLORS.disabled, UDim2.new(1, -16, 0, 42), function()
-			RequestBuy:FireServer(pack.id)
-		end).Position = UDim2.new(0, 8, 1, -50)
+		if productName and product then
+			local live = product.id ~= 0
+			local caption = if not unlocked then `🔒 Speed {Format.short(zone.req)}`
+				elseif live then Format.robux(robuxPrice(product))
+				else `Soon · {Format.robux(product.robux)}`
+			button(c, caption, if unlocked and live then COLORS.gold else COLORS.disabled, UDim2.new(1, -16, 0, 42), function()
+				RequestBuy:FireServer("Product:" .. productName)
+			end).Position = UDim2.new(0, 8, 1, -50)
+		end
 	end
 
-	-- Robux bundles of featured packs (greyed out until a real developer product id is set)
+	-- Featured pack bundles (greyed out until a real developer product id is set)
 	heading("💎 Featured Pack Bundles", 4)
 	local row = new("Frame", { BackgroundTransparency = 1, Size = UDim2.new(1, -12, 0, 118), LayoutOrder = 5, Parent = modalBody },
 		{ new("UIListLayout", { FillDirection = Enum.FillDirection.Horizontal, Padding = UDim.new(0, 10), SortOrder = Enum.SortOrder.LayoutOrder }) })
-	local bundles = {}
-	for name, product in Config.DEVELOPER_PRODUCTS do
-		table.insert(bundles, { name = name, product = product })
-	end
-	table.sort(bundles, function(a, b)
-		return a.product.packs < b.product.packs
-	end)
 	for i, entry in bundles do
 		local live = entry.product.id ~= 0
 		local c = new("Frame", { Size = UDim2.new(1 / #bundles, -8, 1, 0), BackgroundColor3 = if live then Color3.fromRGB(0, 170, 200) else COLORS.disabled, LayoutOrder = i, Parent = row }, deco(12, 3))
 		text(c, { Text = `💎 {entry.product.label}`, Size = UDim2.new(1, -12, 0, 34), Position = UDim2.fromOffset(6, 8) })
-		button(c, if live then "Buy with Robux" else "Coming soon", if live then COLORS.gold else Color3.fromRGB(140, 140, 150), UDim2.new(1, -16, 0, 44), function()
-			RequestBuy:FireServer("Product:" .. entry.name)
-		end).Position = UDim2.new(0, 8, 1, -54)
+		button(c, if live then Format.robux(robuxPrice(entry.product)) else `Coming soon · {Format.robux(entry.product.robux)}`,
+			if live then COLORS.gold else Color3.fromRGB(140, 140, 150), UDim2.new(1, -16, 0, 44), function()
+				RequestBuy:FireServer(`Product:{entry.name}:{f.slot}`)
+			end).Position = UDim2.new(0, 8, 1, -54)
 	end
 
-	heading(`🎒 Seed bag {SeedPacks.bagCount(stats.seedBag or {})}/{Config.SEED_BAG_MAX} · plant bagged seeds from the 🌱 Seeds menu at your plot's pad`, 6)
+	local bagCount = SeedPacks.bagCount(stats.seedBag or {})
+	heading(`🎒 Seed bag {bagCount}/{Config.SEED_BAG_MAX}{if bagCount >= Config.SEED_BAG_MAX then " (full: plant some first!)" else ""} · plant bagged seeds from the 🌱 Seeds menu at your plot's pad`, 6)
 end
 
 local function renderShop()
@@ -1043,7 +1051,7 @@ local function refresh(changed: { [string]: any })
 	end
 	local unlockChanged = unlocked ~= lastUnlocked
 	lastUnlocked = unlocked
-	if sidePanel.Visible and (changed.plants or changed.carrying or changed.items or changed.potions or changed.seedBag or sideTab == "Seeds" and unlockChanged) then
+	if sidePanel.Visible and (changed.plants or changed.carrying or changed.items or changed.seedBag or sideTab == "Seeds" and unlockChanged) then
 		renderSide()
 	end
 	if modal.Visible and (changed.index or changed.items or changed.slots or changed.speedMultTier or changed.treadmillTier or changed.passes or changed.money
@@ -1103,8 +1111,6 @@ LootEvent.OnClientEvent:Connect(function(kind: string, data: any)
 		end
 	elseif kind == "Dusted" then
 		toast(`💤 The {data.guard} will sleep {data.seconds}s longer on the next steal.`, "blue")
-	elseif kind == "Potion" then
-		toast(`🧪 {data.label} active!`, "blue")
 	elseif kind == "Offline" then
 		toast(`While you were away ({Format.clock(data.seconds)}): +{Format.money(data.amount)}`, "gold", 6)
 	elseif kind == "End" then
@@ -1165,15 +1171,6 @@ RunService.RenderStepped:Connect(function()
 		local night, remaining = Config.dayPhase(now)
 		dayLabel.Text = if night then `🌙 Night · Day in {Format.clock(remaining)}` else `☀️ Day · Night in {Format.clock(remaining)}`
 		dayFrame.BackgroundColor3 = if night then Color3.fromRGB(70, 70, 160) else COLORS.shop
-		for _, def in Config.POTIONS do
-			local f = potionTimers[def.stat]
-			local expiry = (stats.potions or {})[def.stat]
-			local active = expiry ~= nil and expiry > now
-			f.Visible = active
-			if active then
-				setLabel(f, `{def.icon} {def.stat} x{def.mult} · {Format.clock(expiry - now)}`)
-			end
-		end
 	end
 end)
 

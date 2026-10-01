@@ -37,8 +37,7 @@ local function richProfile()
 		{ slot = 7, zone = 7, rarity = 3, mutation = "Rainbow", plantedAt = 1790000456 },
 	}
 	p.index = { ["1:1"] = true, ["4:5"] = true, ["4:Gold"] = true, ["7:3"] = true, ["7:Rainbow"] = true }
-	p.items = { SleepDust = 2, PotionLuck = 1 }
-	p.potions = { Money = 1790001000 }
+	p.items = { SleepDust = 2 }
 	p.reachedEnd = true
 	p.lastSeen = 1790000999
 	return p
@@ -121,6 +120,44 @@ H.test("data: garbage and out-of-range values are sanitized", function()
 	H.ok(p.index["1:1"])
 	H.eq(p.items.SleepDust, 2)
 	H.eq(p.items.Bad, nil)
+end)
+
+H.test("data: v1/v2 saves with potions still load; potion timers and potion items are dropped", function()
+	local v1 = {
+		v = 1, money = 50, speed = 10, speedMultTier = 2, treadmillTier = 1, slots = 11,
+		plants = { { s = 1, z = 1, r = 2, t = 1790000000 } }, index = { "1:2" },
+		items = { SleepDust = 2, PotionSpeed = 3, PotionMoney = 1, PotionLuck = 4 },
+		potions = { Speed = 1790000300, Money = 1790000600, Luck = 1790000900 },
+		reachedEnd = false, lastSeen = 5,
+	}
+	local v2 = table.clone(v1)
+	v2.v = 2
+	v2.bag = { ["1:1"] = 2 }
+	v2.receipts = { "r1" }
+	for _, old in { v1, v2 } do
+		local ds = mockDataStore()
+		ds.data["Player_7"] = serde.encode("json", old)
+		local p, ok = ProfileStore.new(ds, 1, 0):load(7)
+		H.ok(ok, `v{old.v} save loads`)
+		H.eq(p.money, 50)
+		H.eq(p.speedMultTier, 2)
+		H.eq(#p.plants, 1)
+		H.eq(p.items.SleepDust, 2, "Sleep Dust is kept")
+		for _, id in { "PotionSpeed", "PotionMoney", "PotionLuck" } do
+			H.eq(p.items[id], nil, id .. " dropped")
+		end
+		H.eq((p :: any).potions, nil, "no potion timers in the profile")
+		-- the next save no longer carries them
+		H.ok(ProfileStore.new(ds, 1, 0):save(7, p))
+		local saved = serde.decode("json", ds.data["Player_7"])
+		H.eq(saved.potions, nil)
+		H.eq(saved.items.PotionLuck, nil)
+		H.eq(saved.items.SleepDust, 2)
+	end
+	-- malformed potion data doesn't error either
+	local p = ProfileStore.deserialize({ potions = "x", items = { PotionLuck = "y", SleepDust = 1 } })
+	H.eq(p.items.SleepDust, 1)
+	H.eq(p.items.PotionLuck, nil)
 end)
 
 return nil

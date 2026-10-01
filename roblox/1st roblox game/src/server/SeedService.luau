@@ -130,18 +130,7 @@ local function steal(player: Player, zone: number, podIndex: number)
 		return
 	end
 
-	-- Luck potion: a second roll, keep the rarer result.
 	local rarity, mutation = pod.rarity, pod.mutation
-	if Sessions.potionActive(s, "Luck") then
-		local r2, m2 = Config.rollSeed(zone, Sessions.luck(s, isNight()), isNight(), function()
-			return rng:NextNumber()
-		end)
-		if r2 > rarity then
-			rarity = r2
-		end
-		mutation = mutation or m2
-	end
-
 	hidePod(pod)
 	local carry: Sessions.Carry = { zone = zone, rarity = rarity, mutation = mutation, pod = podIndex, model = nil }
 	carry.model = makeCarryModel(char, carry)

@@ -17,7 +17,7 @@ export type Verdict = "ok" | "reset" | "ignored" | "rubberband"
 export type Opts = {
 	walkSpeed: number, -- the server's WalkSpeed for this player (highest of this and last tick)
 	onTreadmill: boolean,
-	mult: number, -- speed-gain multipliers (shop tier * potion)
+	mult: number, -- speed-gain multiplier (shop tier)
 	treadmillMult: number, -- 2 / 3 / 5
 }
 

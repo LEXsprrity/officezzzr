@@ -1,11 +1,13 @@
 -- RequestBuy / RequestUseItem handlers. Every request is rate-limited, type-checked and validated
--- against server state; the client only says what it wants. Also seed packs (money) and the Robux
--- ProcessReceipt for pack bundles.
+-- against server state; the client only says what it wants. Also seed packs, which are Robux only:
+-- the Robux prompt (gated) and ProcessReceipt (always grants what was paid for).
 local MarketplaceService = game:GetService("MarketplaceService")
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Shared = ReplicatedStorage:WaitForChild("Shared")
 local Config = require(Shared:WaitForChild("Config"))
+local Format = require(Shared:WaitForChild("Format"))
+local SeedPacks = require(Shared:WaitForChild("SeedPacks"))
 local Net = require(script.Parent:WaitForChild("Net"))
 local Sessions = require(script.Parent:WaitForChild("Sessions"))
 local Shop = require(script.Parent:WaitForChild("Shop"))
@@ -73,36 +75,27 @@ local function onBuy(player: Player, itemId: any)
 		return
 	end
 
+	-- Seed packs are Robux only: "Product:<name>", or "Product:<name>:<slot>" for featured packs (the
+	-- featured slot the menu showed). We only open the Robux prompt here; ProcessReceipt grants.
 	if string.sub(itemId, 1, 8) == "Product:" then
-		local product = Config.DEVELOPER_PRODUCTS[string.sub(itemId, 9)]
+		local name, slotText = string.match(itemId, "^Product:(%a%w*):?(%d*)$")
+		if not name then
+			return
+		end
+		local now = os.time()
+		local product, why = Shop.canPrompt(s.profile, name, now, tonumber(slotText))
 		if not product then
+			Net.toast(player, why or "Unknown pack", "red")
 			return
 		end
-		if product.id == 0 then
-			Net.toast(player, `{product.label}: coming soon!`, "red")
-		else
-			MarketplaceService:PromptProductPurchase(player, product.id)
+		if product.zone == nil then
+			s.featuredPrompt = { slot = SeedPacks.featuredSlot(now), at = now }
 		end
+		MarketplaceService:PromptProductPurchase(player, product.id)
 		return
 	end
 
-	if string.sub(itemId, 1, 5) == "Pack:" then
-		local now = os.clock()
-		if now < (s.cooldowns.Pack or 0) then
-			return
-		end
-		s.cooldowns.Pack = now + Config.PACK_COOLDOWN
-		local ok, msg, result, pack = Shop.buyPack(s.profile, itemId, os.time(), roll01)
-		if not ok or not result or not pack then
-			Net.toast(player, msg, "red")
-			return
-		end
-		Sessions.pushFull(s)
-		Net.LootEvent:FireClient(player, "PackRoll", { packId = pack.id, name = pack.name, zone = pack.zone, featured = pack.featured, results = { result } })
-		return
-	end
-
-	local ok, msg = Shop.buy(s.profile, itemId, s.income * Sessions.moneyMult(s))
+	local ok, msg = Shop.buy(s.profile, itemId)
 	if not ok then
 		Net.toast(player, msg, "red")
 		return
@@ -138,44 +131,27 @@ local function onUse(player: Player, itemId: any)
 		return
 	end
 
-	local count = s.profile.items[itemId] or 0
+	if itemId ~= "SleepDust" then -- the only consumable
+		return
+	end
+	local count = s.profile.items.SleepDust or 0
 	if count <= 0 then
 		Net.toast(player, "You don't have any of those. Check the Shop!", "red")
 		return
 	end
-
-	if itemId == "SleepDust" then
-		local guard = GuardService.dust(player)
-		if not guard then
-			Net.toast(player, "Get close to a sleeping guard to use Sleep Dust.", "red")
-			return
-		end
-		s.profile.items.SleepDust = count - 1
-		Net.LootEvent:FireClient(player, "Dusted", { guard = guard, seconds = Config.SLEEP_DUST_EXTRA })
-	elseif Config.POTIONS[itemId] then
-		local def = Config.POTIONS[itemId]
-		s.profile.items[itemId] = count - 1
-		local t = os.time()
-		s.profile.potions[def.stat] = math.max(t, s.profile.potions[def.stat] or 0) + def.seconds
-		Net.LootEvent:FireClient(player, "Potion", { itemId = itemId, label = def.label })
-	else
+	local guard = GuardService.dust(player)
+	if not guard then
+		Net.toast(player, "Get close to a sleeping guard to use Sleep Dust.", "red")
 		return
 	end
+	s.profile.items.SleepDust = count - 1
+	Net.LootEvent:FireClient(player, "Dusted", { guard = guard, seconds = Config.SLEEP_DUST_EXTRA })
 	Sessions.pushFull(s)
 end
 
 ----------------------------------------------------------------------------------------------------
--- Robux: developer products (featured pack bundles)
+-- Robux: developer products (zone packs and featured pack bundles)
 ----------------------------------------------------------------------------------------------------
-local function productNameById(productId: number): string?
-	for name, product in Config.DEVELOPER_PRODUCTS do
-		if product.id ~= 0 and product.id == productId then
-			return name
-		end
-	end
-	return nil
-end
-
 -- Pending receipts are delivered as the player joins, often before their profile has loaded.
 local function waitForSession(userId: number, seconds: number): Sessions.Session?
 	local deadline = os.clock() + seconds
@@ -194,20 +170,31 @@ local function waitForSession(userId: number, seconds: number): Sessions.Session
 end
 
 -- Grant once per PurchaseId (the id is stored in the profile), save, and only then confirm.
--- Anything else returns NotProcessedYet and Roblox delivers the receipt again later.
+-- Anything else returns NotProcessedYet and Roblox delivers the receipt again later. A receipt is
+-- granted even for a zone pack the player hasn't unlocked: only the prompt is Speed-gated.
 local function processReceipt(receiptInfo: { [string]: any }): Enum.ProductPurchaseDecision
-	local name = productNameById(receiptInfo.ProductId)
+	local name = SeedPacks.productById(receiptInfo.ProductId)
 	if not name then
 		warn(`[ShopService] receipt for unknown developer product {receiptInfo.ProductId}`)
 	end
 	local s = waitForSession(receiptInfo.PlayerId, 15)
-	local confirm, status, rolls, pack = Shop.processReceipt(if s then s.profile else nil, name, tostring(receiptInfo.PurchaseId), os.time(), roll01, function()
+	local now = os.time()
+	local prompt = if s then s.featuredPrompt else nil
+	local slot = SeedPacks.receiptSlot(if prompt then prompt.slot else nil, if prompt then prompt.at else nil, now)
+	local income = if s then PlotService.incomeOf(s.profile, now) * Sessions.moneyMult(s) else 0
+	local confirm, status, grant = Shop.processReceipt(if s then s.profile else nil, name, tostring(receiptInfo.PurchaseId), slot, income, roll01, function()
 		local save = ShopService.save
 		return s ~= nil and save ~= nil and save(s)
 	end)
-	if s and status == "granted" and rolls and pack and s.player.Parent then
+	if s and status == "granted" and grant and s.player.Parent then
+		local pack = grant.pack
 		Sessions.pushFull(s)
-		Net.LootEvent:FireClient(s.player, "PackRoll", { packId = pack.id, name = pack.name, zone = pack.zone, featured = true, results = rolls })
+		if #grant.rolls > 0 then
+			Net.LootEvent:FireClient(s.player, "PackRoll", { packId = pack.id, name = pack.name, zone = pack.zone, featured = pack.featured, results = grant.rolls })
+		end
+		if grant.compensated > 0 then
+			Net.toast(s.player, `🎒 Your seed bag is full, so {grant.compensated} {pack.name}{if grant.compensated > 1 then "s" else ""} paid {Format.money(grant.compensation)} instead.`, "gold")
+		end
 	end
 	return if confirm then Enum.ProductPurchaseDecision.PurchaseGranted else Enum.ProductPurchaseDecision.NotProcessedYet
 end
@@ -227,25 +214,6 @@ function ShopService.init()
 		for name, pass in Config.GAMEPASSES do
 			if pass.id == passId then
 				grantPass(s, name)
-			end
-		end
-	end)
-	-- Potions expiring changes multipliers; refresh clients once a second when that happens.
-	task.spawn(function()
-		while true do
-			task.wait(1)
-			local t = os.time()
-			for _, player in Players:GetPlayers() do
-				local s = Sessions.get(player)
-				if s then
-					for stat, expiry in s.profile.potions do
-						if expiry <= t then
-							s.profile.potions[stat] = nil
-							Sessions.pushFull(s)
-							Net.toast(player, `Your {stat} potion wore off.`)
-						end
-					end
-				end
 			end
 		end
 	end)
