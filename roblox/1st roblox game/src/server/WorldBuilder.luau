@@ -621,7 +621,14 @@ end
 
 ----------------------------------------------------------------------------------------------------
 
+-- Also runs in Studio edit mode, to preview the map without pressing Play (Command Bar):
+--   require(game.ServerScriptService.Server.WorldBuilder).build()
+-- A preview left in the place is replaced when the game starts, so it never doubles up.
 function WorldBuilder.build(): ({ PlotInfo }, { NestInfo })
+	local old = workspace:FindFirstChild("World")
+	if old then
+		old:Destroy()
+	end
 	local world = Instance.new("Folder")
 	world.Name = "World"
 	buildBase(world)
