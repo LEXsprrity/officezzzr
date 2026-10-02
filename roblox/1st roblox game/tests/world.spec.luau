@@ -181,3 +181,25 @@ H.test("world: each plot has a small, non-colliding Upgrade Plot board just outs
 		end
 	end
 end)
+
+H.test("world: the baked edit-mode map (map/World.rbxm) matches the code (rerun tools/build_map.luau)", function()
+	local fs = require("@lune/fs")
+	local baked = require("@lune/roblox").deserializeModel(fs.readFile("map/World.rbxm"))[1]
+	H.ok(baked ~= nil and baked.Name == "World", "map/World.rbxm holds a World folder")
+	local function names(root: any): { [string]: number }
+		local out = {}
+		for _, d in root:GetDescendants() do
+			if d:IsA("BasePart") then
+				out[d.Name] = (out[d.Name] or 0) + 1
+			end
+		end
+		return out
+	end
+	local want, got = names(world), names(baked)
+	for name, n in want do
+		H.eq(got[name], n, `baked map has {n} x {name}; run: lune run tools/build_map.luau`)
+	end
+	for name in got do
+		H.ok(want[name] ~= nil, `baked map has stale part {name}; run: lune run tools/build_map.luau`)
+	end
+end)

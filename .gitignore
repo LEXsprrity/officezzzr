@@ -2,6 +2,7 @@
 *.rbxl
 *.rbxlx
 *.rbxm
+!**/map/World.rbxm
 *.rbxmx
 sourcemap.json
 
