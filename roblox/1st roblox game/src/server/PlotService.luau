@@ -347,7 +347,7 @@ end
 -- Plot upgrades (money only): the board at each plot's gate, and the Shop's "PlotUpgrade"
 ----------------------------------------------------------------------------------------------------
 local function upgradePrompt(state: PlotState): ProximityPrompt?
-	return state.info.upgradeBoard:FindFirstChildOfClass("ProximityPrompt")
+	return state.info.upgradeBoard:FindFirstChildWhichIsA("ProximityPrompt", true)
 end
 
 -- The treadmill sign shows what standing on it pays its owner right now (WalkSpeed x Speed per stud x
@@ -381,8 +381,7 @@ local function renderUpgradeSign(state: PlotState)
 		labels.perk.Text = `{Config.plotSlots(level)} slots · cash x{Config.plotMoneyMult(level)}`
 		labels.price.Text = "Fully upgraded!"
 		if prompt then
-			prompt.ActionText = "Maxed"
-			prompt.ObjectText = `Plot Level {level}`
+			prompt.MaxActivationDistance = 0 -- nothing left to buy (Enabled is owned by the client-side owner filter)
 		end
 		return
 	end
@@ -390,8 +389,7 @@ local function renderUpgradeSign(state: PlotState)
 	labels.perk.Text = `+1 slot · cash x{Config.plotMoneyMult(level)} → x{Config.plotMoneyMult(level + 1)}`
 	labels.price.Text = Format.money(price)
 	if prompt then
-		prompt.ActionText = `Upgrade · {Format.money(price)}`
-		prompt.ObjectText = `Plot Level {level} → {level + 1}`
+		prompt.MaxActivationDistance = 9
 	end
 end
 
@@ -426,15 +424,20 @@ function PlotService.init(infos: { WorldBuilder.PlotInfo })
 		local state: PlotState = { info = info, owner = nil, models = {}, scales = {} }
 		plots[i] = state
 		-- Owner-only "Upgrade" prompt on the gate's board (the client hides other players' prompts).
+		-- Just the key bubble, under the board: the board already shows the level and price.
+		local anchor = Instance.new("Attachment")
+		anchor.Name = "UpgradePromptAnchor"
+		anchor.Position = Vector3.new(0, -info.upgradeBoard.Size.Y / 2 - 1.2, 0)
+		anchor.Parent = info.upgradeBoard
 		local upgrade = Instance.new("ProximityPrompt")
-		upgrade.ActionText = "Upgrade"
-		upgrade.ObjectText = "Plot"
+		upgrade.ActionText = ""
+		upgrade.ObjectText = ""
 		upgrade.HoldDuration = 0.3
 		upgrade.MaxActivationDistance = 9
 		upgrade.RequiresLineOfSight = false
 		upgrade.KeyboardKeyCode = Enum.KeyCode.E
 		upgrade:SetAttribute("OwnerUserId", 0)
-		upgrade.Parent = info.upgradeBoard
+		upgrade.Parent = anchor
 		upgrade.Triggered:Connect(function(player: Player)
 			local char = player.Character
 			local root = char and char:FindFirstChild("HumanoidRootPart") :: BasePart?
