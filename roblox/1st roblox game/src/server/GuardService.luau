@@ -8,6 +8,7 @@ local GuardBrain = require(script.Parent:WaitForChild("GuardBrain"))
 local SeedService = require(script.Parent:WaitForChild("SeedService"))
 local SpeedService = require(script.Parent:WaitForChild("SpeedService"))
 local WorldBuilder = require(script.Parent:WaitForChild("WorldBuilder"))
+local Assets = require(script.Parent:WaitForChild("Assets"))
 
 local GuardService = {}
 
@@ -43,24 +44,9 @@ local function weldPart(model: Model, root: BasePart, name: string, size: Vector
 	return p
 end
 
--- A blocky giant facing -X (toward the base), scaled by GUARD_SCALE, with a few zone-specific bits.
-local function buildGuard(info: WorldBuilder.NestInfo): Guard
-	local zone = Config.ZONES[info.zone]
+-- The blocky giant's body, welded to the root, with a few zone-specific bits. Returns its eyes.
+local function proceduralBody(model: Model, root: BasePart, zone: Config.Zone, hip: number): { BasePart }
 	local S = Config.GUARD_SCALE
-	local model = Instance.new("Model")
-	model.Name = "Guard_" .. zone.id
-	model.ModelStreamingMode = Enum.ModelStreamingMode.Atomic
-
-	local hip = 2 * S
-	local root = Instance.new("Part")
-	root.Name = "HumanoidRootPart"
-	root.Size = Vector3.new(2, 2, 1) * S
-	root.Transparency = 1
-	root.CanCollide = false
-	root.CFrame = CFrame.lookAt(info.guardHome + Vector3.new(0, hip + root.Size.Y / 2, 0), info.guardHome + Vector3.new(-10, hip + root.Size.Y / 2, 0))
-	root.Parent = model
-	model.PrimaryPart = root
-
 	local c = zone.guardColor
 	local dark = c:Lerp(Color3.new(0, 0, 0), 0.35)
 	weldPart(model, root, "Body", Vector3.new(4, 4, 3) * S, CFrame.new(0, 0.5 * S, 0), c)
@@ -95,6 +81,65 @@ local function buildGuard(info: WorldBuilder.NestInfo): Guard
 		weldPart(model, root, "Antenna", Vector3.new(0.2, 2, 0.2) * S, CFrame.new(0, 5.5 * S, 0), c)
 		weldPart(model, root, "AntennaTip", Vector3.one * 0.6 * S, CFrame.new(0, 6.5 * S, 0), Color3.fromRGB(255, 255, 120), Enum.Material.Neon, Enum.PartType.Ball)
 	end
+	return eyes
+end
+
+-- A body from the assets folder (slot Guard_<Name>, e.g. Guard_GiantMole), if there is one: fitted to
+-- about the blocky giant's size with its feet on the ground under the invisible root, facing the root's
+-- front, then unanchored, massless and welded to the root so it moves with the chase like the blocky
+-- body. A rigged model stays in its saved pose (no animation). An invisible "Head" at its top carries
+-- the name and state labels. Returns false when there is no usable model.
+local function assetBody(model: Model, root: BasePart, zone: Config.Zone, hip: number): boolean
+	local slot = "Guard_" .. string.gsub(zone.guard, "%s", "")
+	if not Assets.get(slot) then
+		return false
+	end
+	local S = Config.GUARD_SCALE
+	local ground = root.CFrame * CFrame.new(0, -(hip + root.Size.Y / 2), 0)
+	local body = Assets.place(slot, model, ground, Vector3.new(10, 7.75, 10) * S)
+	if not body then
+		return false
+	end
+	local _, hi = Assets.bounds(body, ground)
+	local top = if hi then hi.Y else 7.75 * S
+	for _, d in body:GetDescendants() do
+		if d:IsA("BasePart") then
+			d.CanCollide = false
+			d.CanQuery = false
+			d.CanTouch = false
+			d.Massless = true
+			local w = Instance.new("WeldConstraint")
+			w.Part0 = root
+			w.Part1 = d
+			w.Parent = d
+			d.Anchored = false
+		end
+	end
+	local head = weldPart(model, root, "Head", Vector3.new(3, 2.5, 2.5) * S, root.CFrame:ToObjectSpace(ground * CFrame.new(0, top - 1.25 * S, 0)), zone.guardColor)
+	head.Transparency = 1
+	return true
+end
+
+-- A giant facing -X (toward the base), scaled by GUARD_SCALE: the blocky body or a model from the assets
+-- folder, either way welded to an invisible HumanoidRootPart that Humanoid:MoveTo drives.
+local function buildGuard(info: WorldBuilder.NestInfo): Guard
+	local zone = Config.ZONES[info.zone]
+	local S = Config.GUARD_SCALE
+	local model = Instance.new("Model")
+	model.Name = "Guard_" .. zone.id
+	model.ModelStreamingMode = Enum.ModelStreamingMode.Atomic
+
+	local hip = 2 * S
+	local root = Instance.new("Part")
+	root.Name = "HumanoidRootPart"
+	root.Size = Vector3.new(2, 2, 1) * S
+	root.Transparency = 1
+	root.CanCollide = false
+	root.CFrame = CFrame.lookAt(info.guardHome + Vector3.new(0, hip + root.Size.Y / 2, 0), info.guardHome + Vector3.new(-10, hip + root.Size.Y / 2, 0))
+	root.Parent = model
+	model.PrimaryPart = root
+
+	local eyes = if assetBody(model, root, zone, hip) then {} else proceduralBody(model, root, zone, hip)
 
 	local hum = Instance.new("Humanoid")
 	hum.RigType = Enum.HumanoidRigType.R15 -- R15 honours HipHeight on a legless custom rig

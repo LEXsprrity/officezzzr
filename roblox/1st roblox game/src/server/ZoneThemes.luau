@@ -6,9 +6,12 @@
 --   * tall props stand along the walls (|z| >= ~18); the middle only gets flat floor overlays,
 --     so the run and the guards' chase line stay visually clear
 --   * part counts are budgeted (tests/world.spec.luau keeps the whole corridor under 6k parts)
+--   * each distinctive prop is an asset slot ("Desert_Cactus", ...; see Assets.swap): its random draws
+--     happen inside the build function, so a drop-in model never shifts the rest of the layout
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Config = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("Config"))
 local Props = require(script.Parent:WaitForChild("Props"))
+local Assets = require(script.Parent:WaitForChild("Assets"))
 
 local ZoneThemes = {}
 
@@ -18,6 +21,7 @@ local H = Config.WALL_HEIGHT
 local M = Enum.Material
 
 local box, deco, ball, cylinder, rod, blob, flat, disc = Props.box, Props.deco, Props.ball, Props.cylinder, Props.rod, Props.blob, Props.flat, Props.disc
+local swap, spin = Assets.swap, Assets.spin
 
 type Ctx = {
 	folder: Folder,
@@ -145,7 +149,7 @@ local function buildMeadow(c: Ctx)
 	for _ = 1, 70 do
 		local x = randX(c)
 		local z = side(rng) * rng:NextNumber(12, 30)
-		Props.flower(F, Vector3.new(x, GROUND, z), BRIGHT[rng:NextInteger(1, #BRIGHT)], rng:NextNumber(1.2, 2.4))
+		Props.flower(F, Vector3.new(x, GROUND, z), BRIGHT[rng:NextInteger(1, #BRIGHT)], rng:NextNumber(1.2, 2.4), "Meadow_Flower")
 	end
 	for _ = 1, 14 do
 		Props.bush(F, Vector3.new(randX(c), GROUND, side(rng) * rng:NextNumber(26, 30)), rng:NextNumber(4, 7), rgb(70, 180, 60))
@@ -157,8 +161,10 @@ local function buildMeadow(c: Ctx)
 	for _ = 1, 10 do -- toadstools
 		local p = Vector3.new(randX(c), GROUND, side(rng) * rng:NextNumber(18, 28))
 		local h = rng:NextNumber(1.5, 3)
-		cylinder(F, "MushroomStem", h, 0.9, p + Vector3.new(0, h / 2, 0), rgb(250, 240, 220))
-		blob(F, "MushroomCap", Vector3.new(3, 1.6, 3), CFrame.new(p + Vector3.new(0, h, 0)), rgb(235, 60, 60))
+		swap("Meadow_Mushroom", F, spin(p), function(into)
+			cylinder(into, "MushroomStem", h, 0.9, p + Vector3.new(0, h / 2, 0), rgb(250, 240, 220))
+			blob(into, "MushroomCap", Vector3.new(3, 1.6, 3), CFrame.new(p + Vector3.new(0, h, 0)), rgb(235, 60, 60))
+		end)
 	end
 	for _ = 1, 6 do
 		Props.rock(F, Vector3.new(randX(c), GROUND, side(rng) * rng:NextNumber(20, 29)), Vector3.new(rng:NextNumber(3, 6), rng:NextNumber(2, 4), rng:NextNumber(3, 5)), rgb(160, 160, 170), M.Slate, rng:NextNumber(0, 6))
@@ -244,29 +250,39 @@ local function buildDesert(c: Ctx)
 			CFrame.new(x, GROUND - 1, s * rng:NextNumber(27, 30)), rgb(244, 212, 138), M.Sand)
 	end)
 	for _ = 1, 16 do
-		saguaro(F, Vector3.new(randX(c), GROUND, side(rng) * rng:NextNumber(19, 27)), rng)
+		local p = Vector3.new(randX(c), GROUND, side(rng) * rng:NextNumber(19, 27))
+		swap("Desert_Cactus", F, spin(p), function(into)
+			saguaro(into, p, rng)
+		end)
 	end
 	for i = 1, 3 do
-		skeleton(F, Vector3.new(c.x0 + c.len * (i / 4) + rng:NextNumber(-40, 40), GROUND, (if i % 2 == 0 then 1 else -1) * 22), rng)
+		local p = Vector3.new(c.x0 + c.len * (i / 4) + rng:NextNumber(-40, 40), GROUND, (if i % 2 == 0 then 1 else -1) * 22)
+		swap("Desert_Skull", F, Assets.facing(p, Vector3.xAxis), function(into) -- the skull looks along +X
+			skeleton(into, p, rng)
+		end)
 	end
 	for _ = 1, 10 do -- loose bones
 		local p = Vector3.new(randX(c), GROUND + 0.4, side(rng) * rng:NextNumber(6, 26))
 		local d = Vector3.new(rng:NextNumber(-1, 1), 0, rng:NextNumber(-1, 1)).Unit * 1.6
-		rod(F, "Bone", p - d, p + d, 0.5, BONE)
-		ball(F, "BoneEnd", 0.9, p - d, BONE)
-		ball(F, "BoneEnd", 0.9, p + d, BONE)
+		swap("Desert_Bone", F, Assets.facing(p - Vector3.new(0, 0.4, 0), d), function(into)
+			rod(into, "Bone", p - d, p + d, 0.5, BONE)
+			ball(into, "BoneEnd", 0.9, p - d, BONE)
+			ball(into, "BoneEnd", 0.9, p + d, BONE)
+		end)
 	end
 	for _ = 1, 8 do -- mesas
 		local p = Vector3.new(randX(c), GROUND, side(rng) * rng:NextNumber(26, 29))
 		local w = rng:NextNumber(10, 16)
-		local y = 0
-		for j = 1, 3 do
-			local h = rng:NextNumber(3, 6)
-			deco(F, "Mesa", Vector3.new(w, h, w * 0.6), CFrame.new(p + Vector3.new(0, y + h / 2, 0)) * CFrame.Angles(0, rng:NextNumber(-0.3, 0.3), 0),
-				if j % 2 == 0 then rgb(214, 128, 76) else rgb(196, 106, 62), M.Sandstone)
-			y += h
-			w *= 0.72
-		end
+		swap("Desert_Mesa", F, spin(p), function(into)
+			local y = 0
+			for j = 1, 3 do
+				local h = rng:NextNumber(3, 6)
+				deco(into, "Mesa", Vector3.new(w, h, w * 0.6), CFrame.new(p + Vector3.new(0, y + h / 2, 0)) * CFrame.Angles(0, rng:NextNumber(-0.3, 0.3), 0),
+					if j % 2 == 0 then rgb(214, 128, 76) else rgb(196, 106, 62), M.Sandstone)
+				y += h
+				w *= 0.72
+			end
+		end)
 	end
 
 	ambience(c, 200, 3, 4, {
@@ -313,30 +329,36 @@ local function buildJungle(c: Ctx)
 	every(c, 40, 8, function(x)
 		for _, s in { -1, 1 } do
 			local base = Vector3.new(x + rng:NextNumber(-6, 6), GROUND, s * rng:NextNumber(26, 29))
-			local h = rng:NextNumber(22, 34)
-			cylinder(F, "Trunk", h, 3.4, base + Vector3.new(0, h / 2, 0), rgb(104, 72, 46), M.Wood)
-			local top = base + Vector3.new(0, h, 0)
-			blob(F, "Canopy", Vector3.new(24, 8, 22), CFrame.new(top + Vector3.new(0, 1, -s * 6)), rgb(40, 150, 55), M.LeafyGrass)
-			blob(F, "Canopy", Vector3.new(16, 7, 14), CFrame.new(top + Vector3.new(rng:NextNumber(-5, 5), 5, -s * 2)), rgb(62, 176, 60), M.LeafyGrass)
-			rod(F, "Vine", top + Vector3.new(2, 0, -s * 10), top + Vector3.new(2, -rng:NextNumber(8, 16), -s * 11), 0.4, rgb(52, 136, 52), M.Grass)
+			swap("Jungle_Tree", F, Assets.facing(base, Vector3.new(0, 0, -s)), function(into) -- front toward the path
+				local h = rng:NextNumber(22, 34)
+				cylinder(into, "Trunk", h, 3.4, base + Vector3.new(0, h / 2, 0), rgb(104, 72, 46), M.Wood)
+				local top = base + Vector3.new(0, h, 0)
+				blob(into, "Canopy", Vector3.new(24, 8, 22), CFrame.new(top + Vector3.new(0, 1, -s * 6)), rgb(40, 150, 55), M.LeafyGrass)
+				blob(into, "Canopy", Vector3.new(16, 7, 14), CFrame.new(top + Vector3.new(rng:NextNumber(-5, 5), 5, -s * 2)), rgb(62, 176, 60), M.LeafyGrass)
+				rod(into, "Vine", top + Vector3.new(2, 0, -s * 10), top + Vector3.new(2, -rng:NextNumber(8, 16), -s * 11), 0.4, rgb(52, 136, 52), M.Grass)
+			end)
 		end
 	end)
 
 	for _ = 1, 28 do -- ferns: big leaves fanned out
 		local p = Vector3.new(randX(c), GROUND, side(rng) * rng:NextNumber(18, 25))
 		local green = Color3.fromHSV(rng:NextNumber(0.27, 0.36), 0.75, rng:NextNumber(0.55, 0.75))
-		for j = 1, 4 do
-			local a = j / 4 * math.pi * 2 + rng:NextNumber(-0.3, 0.3)
-			blob(F, "Fern", Vector3.new(7, 0.5, 2.6),
-				CFrame.new(p + Vector3.new(math.cos(a) * 3, 1.6, math.sin(a) * 3)) * CFrame.Angles(0, -a, math.rad(25)), green, M.Grass)
-		end
+		swap("Jungle_Fern", F, spin(p), function(into)
+			for j = 1, 4 do
+				local a = j / 4 * math.pi * 2 + rng:NextNumber(-0.3, 0.3)
+				blob(into, "Fern", Vector3.new(7, 0.5, 2.6),
+					CFrame.new(p + Vector3.new(math.cos(a) * 3, 1.6, math.sin(a) * 3)) * CFrame.Angles(0, -a, math.rad(25)), green, M.Grass)
+			end
+		end)
 	end
 	for _ = 1, 12 do
 		Props.flower(F, Vector3.new(randX(c), GROUND, side(rng) * rng:NextNumber(16, 24)), ({ rgb(255, 70, 70), rgb(255, 150, 40), rgb(255, 90, 200) })[rng:NextInteger(1, 3)], rng:NextNumber(2, 3.5))
 	end
 	for _ = 1, 5 do
 		local p = Vector3.new(randX(c), GROUND + 1.4, side(rng) * rng:NextNumber(22, 26))
-		rod(F, "Log", p - Vector3.new(6, 0, 1), p + Vector3.new(6, 0, 1), 2.8, rgb(110, 76, 48), M.Wood)
+		swap("Jungle_Log", F, Assets.facing(p - Vector3.new(0, 1.4, 0), Vector3.new(1, 0, -6)), function(into) -- model X along the log
+			rod(into, "Log", p - Vector3.new(6, 0, 1), p + Vector3.new(6, 0, 1), 2.8, rgb(110, 76, 48), M.Wood)
+		end)
 	end
 
 	ambience(c, 230, 7, 10, { -- fireflies
@@ -422,29 +444,36 @@ local function buildLava(c: Ctx)
 		end
 	end)
 
-	for i = 1, 6 do -- volcanoes against the walls
+	for i = 1, 6 do -- volcanoes against the walls (a drop-in volcano gets the crater's light, smoke and embers)
 		local p = Vector3.new(c.x0 + c.len * (i - 0.5) / 6 + rng:NextNumber(-40, 40), GROUND, (if i % 2 == 0 then 1 else -1) * 27)
-		cylinder(F, "Volcano", 5, 20, p + Vector3.new(0, 2.5, 0), rgb(70, 46, 44), M.Basalt)
-		cylinder(F, "Volcano", 5, 14, p + Vector3.new(0, 7.5, 0), rgb(84, 52, 48), M.Basalt)
-		cylinder(F, "Volcano", 4, 9, p + Vector3.new(0, 12, 0), rgb(96, 58, 50), M.Basalt)
-		local crater = disc(F, "Crater", 7, p + Vector3.new(0, 14, 0), LAVA_HOT, M.Neon, 0.3)
-		Props.light(crater, LAVA, 24, 2)
-		smoke(crater, 3)
-		embers(crater)
+		swap("Lava_Volcano", F, Assets.facing(p, Vector3.new(0, 0, -math.sign(p.Z))), function(into)
+			cylinder(into, "Volcano", 5, 20, p + Vector3.new(0, 2.5, 0), rgb(70, 46, 44), M.Basalt)
+			cylinder(into, "Volcano", 5, 14, p + Vector3.new(0, 7.5, 0), rgb(84, 52, 48), M.Basalt)
+			cylinder(into, "Volcano", 4, 9, p + Vector3.new(0, 12, 0), rgb(96, 58, 50), M.Basalt)
+			local crater = disc(into, "Crater", 7, p + Vector3.new(0, 14, 0), LAVA_HOT, M.Neon, 0.3)
+			Props.light(crater, LAVA, 24, 2)
+			smoke(crater, 3)
+			embers(crater)
+		end, Vector3.new(1.2, 1.5, 1.2))
 	end
 	for _ = 1, 18 do
 		local p = Vector3.new(randX(c), GROUND, side(rng) * rng:NextNumber(14, 20))
 		local size = Vector3.new(rng:NextNumber(4, 9), rng:NextNumber(3, 6), rng:NextNumber(4, 8))
-		Props.rock(F, p, size, rgb(44, 34, 38), M.Basalt, rng:NextNumber(0, 6))
-		if rng:NextNumber() < 0.5 then
-			ball(F, "Magma", size.Y * 0.5, p + Vector3.new(0, size.Y * 0.45, 0), LAVA, M.Neon)
-		end
+		local yaw = rng:NextNumber(0, 6)
+		swap("Lava_Rock", F, CFrame.new(p) * CFrame.Angles(0, yaw, 0), function(into)
+			Props.rock(into, p, size, rgb(44, 34, 38), M.Basalt, yaw, false)
+			if rng:NextNumber() < 0.5 then
+				ball(into, "Magma", size.Y * 0.5, p + Vector3.new(0, size.Y * 0.45, 0), LAVA, M.Neon)
+			end
+		end)
 	end
 	for _ = 1, 16 do -- obsidian spikes
 		local p = Vector3.new(randX(c), GROUND, side(rng) * rng:NextNumber(26, 30))
 		local h = rng:NextNumber(6, 14)
-		deco(F, "Obsidian", Vector3.new(1.6, h, 1.6), CFrame.new(p + Vector3.new(0, h / 2 - 1, 0)) * CFrame.Angles(rng:NextNumber(-0.25, 0.25), rng:NextNumber(0, 3), rng:NextNumber(-0.25, 0.25)),
-			rgb(26, 20, 32), M.Glass)
+		swap("Lava_Obsidian", F, spin(p), function(into)
+			deco(into, "Obsidian", Vector3.new(1.6, h, 1.6), CFrame.new(p + Vector3.new(0, h / 2 - 1, 0)) * CFrame.Angles(rng:NextNumber(-0.25, 0.25), rng:NextNumber(0, 3), rng:NextNumber(-0.25, 0.25)),
+				rgb(26, 20, 32), M.Glass)
+		end, Vector3.new(3, 1, 3))
 	end
 
 	ambience(c, 400, 34, 2, { -- falling ash
@@ -472,26 +501,31 @@ end
 local ICE = rgb(170, 216, 250)
 
 local function pine(F: Instance, p: Vector3, scale: number)
-	local green = rgb(38, 118, 82)
-	cylinder(F, "PineTrunk", 4 * scale, 1.6 * scale, p + Vector3.new(0, 2 * scale, 0), rgb(110, 76, 50), M.Wood)
-	for i = 0, 2 do
-		local w = (12 - i * 3) * scale
-		deco(F, "PineTier", Vector3.new(w, 3.5 * scale, w), CFrame.new(p + Vector3.new(0, (5 + i * 3.4) * scale, 0)) * CFrame.Angles(0, if i % 2 == 0 then 0 else math.rad(45), 0), green, M.Grass)
-	end
-	blob(F, "PineSnow", Vector3.new(6, 2.4, 6) * scale, CFrame.new(p + Vector3.new(0, 13 * scale, 0)), rgb(250, 252, 255), M.Snow)
+	swap("Snow_Pine", F, spin(p), function(into)
+		local green = rgb(38, 118, 82)
+		cylinder(into, "PineTrunk", 4 * scale, 1.6 * scale, p + Vector3.new(0, 2 * scale, 0), rgb(110, 76, 50), M.Wood)
+		for i = 0, 2 do
+			local w = (12 - i * 3) * scale
+			deco(into, "PineTier", Vector3.new(w, 3.5 * scale, w), CFrame.new(p + Vector3.new(0, (5 + i * 3.4) * scale, 0)) * CFrame.Angles(0, if i % 2 == 0 then 0 else math.rad(45), 0), green, M.Grass)
+		end
+		blob(into, "PineSnow", Vector3.new(6, 2.4, 6) * scale, CFrame.new(p + Vector3.new(0, 13 * scale, 0)), rgb(250, 252, 255), M.Snow)
+	end)
 end
 
+-- Looks toward -X, at the players coming from the base.
 local function snowman(F: Instance, p: Vector3)
-	local white = rgb(248, 250, 255)
-	ball(F, "Snowman", 6, p + Vector3.new(0, 2.6, 0), white, M.Snow)
-	ball(F, "Snowman", 4.4, p + Vector3.new(0, 6.6, 0), white, M.Snow)
-	ball(F, "Snowman", 3.2, p + Vector3.new(0, 9.6, 0), white, M.Snow)
-	for _, z in { -0.6, 0.6 } do
-		ball(F, "Coal", 0.5, p + Vector3.new(-1.45, 10, z), rgb(30, 30, 35))
-	end
-	rod(F, "Carrot", p + Vector3.new(-1.3, 9.6, 0), p + Vector3.new(-3.2, 9.4, 0), 0.5, rgb(255, 140, 40))
-	cylinder(F, "Hat", 2, 2.2, p + Vector3.new(0, 11.8, 0), rgb(30, 30, 40))
-	disc(F, "HatBrim", 3.2, p + Vector3.new(0, 10.8, 0), rgb(30, 30, 40))
+	swap("Snow_Snowman", F, Assets.facing(p, -Vector3.xAxis), function(into)
+		local white = rgb(248, 250, 255)
+		ball(into, "Snowman", 6, p + Vector3.new(0, 2.6, 0), white, M.Snow)
+		ball(into, "Snowman", 4.4, p + Vector3.new(0, 6.6, 0), white, M.Snow)
+		ball(into, "Snowman", 3.2, p + Vector3.new(0, 9.6, 0), white, M.Snow)
+		for _, z in { -0.6, 0.6 } do
+			ball(into, "Coal", 0.5, p + Vector3.new(-1.45, 10, z), rgb(30, 30, 35))
+		end
+		rod(into, "Carrot", p + Vector3.new(-1.3, 9.6, 0), p + Vector3.new(-3.2, 9.4, 0), 0.5, rgb(255, 140, 40))
+		cylinder(into, "Hat", 2, 2.2, p + Vector3.new(0, 11.8, 0), rgb(30, 30, 40))
+		disc(into, "HatBrim", 3.2, p + Vector3.new(0, 10.8, 0), rgb(30, 30, 40))
+	end)
 end
 
 local function buildSnow(c: Ctx)
@@ -522,12 +556,14 @@ local function buildSnow(c: Ctx)
 	end
 	for _ = 1, 12 do -- ice crystal clusters
 		local p = Vector3.new(randX(c), GROUND, side(rng) * rng:NextNumber(20, 28))
-		for j = 1, 3 do
-			local h = rng:NextNumber(3, 9)
-			deco(F, "IceCrystal", Vector3.new(1.4, h, 1.4), CFrame.new(p + Vector3.new(rng:NextNumber(-1.5, 1.5), h / 2 - 0.5, rng:NextNumber(-1.5, 1.5)))
-				* CFrame.Angles(rng:NextNumber(-0.35, 0.35), rng:NextNumber(0, 3), rng:NextNumber(-0.35, 0.35)),
-				if j == 1 then rgb(150, 235, 255) else ICE, if j == 1 then M.Neon else M.Ice)
-		end
+		swap("Snow_Crystal", F, spin(p), function(into)
+			for j = 1, 3 do
+				local h = rng:NextNumber(3, 9)
+				deco(into, "IceCrystal", Vector3.new(1.4, h, 1.4), CFrame.new(p + Vector3.new(rng:NextNumber(-1.5, 1.5), h / 2 - 0.5, rng:NextNumber(-1.5, 1.5)))
+					* CFrame.Angles(rng:NextNumber(-0.35, 0.35), rng:NextNumber(0, 3), rng:NextNumber(-0.35, 0.35)),
+					if j == 1 then rgb(150, 235, 255) else ICE, if j == 1 then M.Neon else M.Ice)
+			end
+		end)
 	end
 
 	ambience(c, 150, 48, 2, { -- snowfall
@@ -576,51 +612,62 @@ local function buildSpace(c: Ctx)
 		end
 	end)
 
-	-- Planets hang in the sky over the corridor
+	-- Planets hang in the sky over the corridor (a drop-in planet's pivot is the bottom of the sphere)
 	local planetColors = { rgb(255, 150, 60), rgb(80, 220, 200), rgb(255, 110, 180), rgb(150, 110, 255), rgb(255, 220, 90), rgb(110, 170, 255) }
 	for i = 1, 8 do
 		local size = rng:NextNumber(18, 42)
 		local p = Vector3.new(c.x0 + c.len * (i - 0.5) / 8, GROUND + rng:NextNumber(70, 110), rng:NextNumber(-40, 40))
 		local color = planetColors[(i - 1) % #planetColors + 1]
-		ball(F, "Planet", size, p, color)
-		if i % 2 == 1 then
-			local ring = deco(F, "PlanetRing", Vector3.new(0.6, size * 1.9, size * 1.9), CFrame.new(p) * CFrame.Angles(0, rng:NextNumber(0, 3), math.rad(90) + rng:NextNumber(-0.5, 0.5)),
-				color:Lerp(Color3.new(1, 1, 1), 0.5), M.Neon)
-			ring.Shape = Enum.PartType.Cylinder
-			ring.Transparency = 0.35
-		end
+		swap("Space_Planet", F, spin(p - Vector3.new(0, size / 2, 0)), function(into)
+			ball(into, "Planet", size, p, color)
+			if i % 2 == 1 then
+				local ring = deco(into, "PlanetRing", Vector3.new(0.6, size * 1.9, size * 1.9), CFrame.new(p) * CFrame.Angles(0, rng:NextNumber(0, 3), math.rad(90) + rng:NextNumber(-0.5, 0.5)),
+					color:Lerp(Color3.new(1, 1, 1), 0.5), M.Neon)
+				ring.Shape = Enum.PartType.Cylinder
+				ring.Transparency = 0.35
+			end
+		end, Vector3.new(1, 1, 1))
 	end
 	for _ = 1, 22 do -- crystal clusters
 		local p = Vector3.new(randX(c), GROUND, side(rng) * rng:NextNumber(22, 29))
 		local color = if rng:NextNumber() < 0.5 then rgb(190, 120, 255) else SPACE_CYAN
-		local first: BasePart? = nil
-		for j = 1, 3 do
-			local h = rng:NextNumber(5, 14)
-			local cr = deco(F, "Crystal", Vector3.new(rng:NextNumber(1.5, 3), h, rng:NextNumber(1.5, 3)),
-				CFrame.new(p + Vector3.new(rng:NextNumber(-2, 2), h / 2 - 1, rng:NextNumber(-2, 2))) * CFrame.Angles(rng:NextNumber(-0.4, 0.4), rng:NextNumber(0, 3), rng:NextNumber(-0.4, 0.4)),
-				color, if j == 1 then M.Neon else M.Glass)
-			first = first or cr
-		end
-		if first and rng:NextNumber() < 0.35 then
-			Props.light(first, color, 16, 1.5)
-		end
+		swap("Space_Crystal", F, spin(p), function(into)
+			local first: BasePart? = nil
+			for j = 1, 3 do
+				local h = rng:NextNumber(5, 14)
+				local cr = deco(into, "Crystal", Vector3.new(rng:NextNumber(1.5, 3), h, rng:NextNumber(1.5, 3)),
+					CFrame.new(p + Vector3.new(rng:NextNumber(-2, 2), h / 2 - 1, rng:NextNumber(-2, 2))) * CFrame.Angles(rng:NextNumber(-0.4, 0.4), rng:NextNumber(0, 3), rng:NextNumber(-0.4, 0.4)),
+					color, if j == 1 then M.Neon else M.Glass)
+				first = first or cr
+			end
+			if first and rng:NextNumber() < 0.35 then
+				Props.light(first, color, 16, 1.5)
+			end
+		end)
 	end
-	for _ = 1, 14 do
+	for _ = 1, 14 do -- asteroids floating along the walls (a drop-in one's pivot is its bottom)
 		local size = rng:NextNumber(3, 8)
-		blob(F, "Asteroid", Vector3.new(size, size * 0.8, size * 0.9), CFrame.new(randX(c), GROUND + rng:NextNumber(18, 38), side(rng) * rng:NextNumber(18, 28))
-			* CFrame.Angles(rng:NextNumber(0, 3), rng:NextNumber(0, 3), 0), rgb(110, 104, 132), M.Slate)
+		local pos = Vector3.new(randX(c), GROUND + rng:NextNumber(18, 38), side(rng) * rng:NextNumber(18, 28))
+		local rot = CFrame.Angles(rng:NextNumber(0, 3), rng:NextNumber(0, 3), 0)
+		swap("Space_Asteroid", F, spin(pos - Vector3.new(0, size * 0.45, 0)), function(into)
+			blob(into, "Asteroid", Vector3.new(size, size * 0.8, size * 0.9), CFrame.new(pos) * rot, rgb(110, 104, 132), M.Slate)
+		end, Vector3.new(1.2, 1.2, 1.2))
 	end
 	for _ = 1, 10 do -- alien mushrooms
 		local p = Vector3.new(randX(c), GROUND, side(rng) * rng:NextNumber(18, 26))
 		local h = rng:NextNumber(3, 7)
-		cylinder(F, "AlienStem", h, 0.8, p + Vector3.new(0, h / 2, 0), rgb(200, 240, 230))
-		blob(F, "AlienCap", Vector3.new(4, 1.6, 4), CFrame.new(p + Vector3.new(0, h, 0)), if rng:NextNumber() < 0.5 then rgb(120, 255, 150) else SPACE_PINK, M.Neon)
+		swap("Space_Mushroom", F, spin(p), function(into)
+			cylinder(into, "AlienStem", h, 0.8, p + Vector3.new(0, h / 2, 0), rgb(200, 240, 230))
+			blob(into, "AlienCap", Vector3.new(4, 1.6, 4), CFrame.new(p + Vector3.new(0, h, 0)), if rng:NextNumber() < 0.5 then rgb(120, 255, 150) else SPACE_PINK, M.Neon)
+		end)
 	end
-	-- A UFO parked over the first stretch
+	-- A UFO parked over the first stretch (a drop-in UFO keeps the tractor beam under it)
 	local u = Vector3.new(c.x0 + 260, GROUND + 36, 0)
-	blob(F, "UFO", Vector3.new(24, 4, 24), CFrame.new(u), rgb(180, 185, 200), M.Metal)
-	blob(F, "UFODome", Vector3.new(10, 7, 10), CFrame.new(u + Vector3.new(0, 2.5, 0)), rgb(120, 230, 255), M.Glass).Transparency = 0.3
-	disc(F, "UFORing", 20, u - Vector3.new(0, 1.8, 0), rgb(120, 255, 150), M.Neon, 0.3)
+	swap("Space_UFO", F, Assets.facing(u - Vector3.new(0, 2, 0), -Vector3.xAxis), function(into)
+		blob(into, "UFO", Vector3.new(24, 4, 24), CFrame.new(u), rgb(180, 185, 200), M.Metal)
+		blob(into, "UFODome", Vector3.new(10, 7, 10), CFrame.new(u + Vector3.new(0, 2.5, 0)), rgb(120, 230, 255), M.Glass).Transparency = 0.3
+		disc(into, "UFORing", 20, u - Vector3.new(0, 1.8, 0), rgb(120, 255, 150), M.Neon, 0.3)
+	end, Vector3.new(1.2, 2, 1.2))
 	local beam = cylinder(F, "UFOBeam", 34, 12, u - Vector3.new(0, 19, 0), rgb(120, 255, 150), M.Neon)
 	beam.Transparency = 0.85
 	beam.CastShadow = false
@@ -649,24 +696,30 @@ end
 local TORII_RED = rgb(212, 40, 46)
 local BLOSSOM = { rgb(255, 176, 206), rgb(255, 200, 222), rgb(250, 150, 190) }
 
+-- A stone lantern; a lit one's light carries over to a drop-in model that has none of its own.
 local function stoneLantern(F: Instance, p: Vector3, lit: boolean)
-	local stone = rgb(170, 166, 160)
-	deco(F, "LanternBase", Vector3.new(2.6, 1, 2.6), CFrame.new(p + Vector3.new(0, 0.5, 0)), stone, M.Slate)
-	cylinder(F, "LanternPost", 3.4, 1.1, p + Vector3.new(0, 2.7, 0), stone, M.Slate)
-	local light = deco(F, "LanternLight", Vector3.new(2, 1.8, 2), CFrame.new(p + Vector3.new(0, 5.3, 0)), rgb(255, 214, 130), M.Neon)
-	blob(F, "LanternRoof", Vector3.new(4, 1.4, 4), CFrame.new(p + Vector3.new(0, 6.6, 0)), rgb(92, 90, 96), M.Slate)
-	if lit then
-		Props.light(light, rgb(255, 200, 120), 16, 1.2)
-	end
+	swap("Spirit_Lantern", F, Assets.facing(p, Vector3.new(0, 0, -math.sign(p.Z))), function(into) -- front toward the path
+		local stone = rgb(170, 166, 160)
+		deco(into, "LanternBase", Vector3.new(2.6, 1, 2.6), CFrame.new(p + Vector3.new(0, 0.5, 0)), stone, M.Slate)
+		cylinder(into, "LanternPost", 3.4, 1.1, p + Vector3.new(0, 2.7, 0), stone, M.Slate)
+		local light = deco(into, "LanternLight", Vector3.new(2, 1.8, 2), CFrame.new(p + Vector3.new(0, 5.3, 0)), rgb(255, 214, 130), M.Neon)
+		blob(into, "LanternRoof", Vector3.new(4, 1.4, 4), CFrame.new(p + Vector3.new(0, 6.6, 0)), rgb(92, 90, 96), M.Slate)
+		if lit then
+			Props.light(light, rgb(255, 200, 120), 16, 1.2)
+		end
+	end)
 end
 
+-- A cherry tree leaning over the path (side `s`).
 local function cherryTree(F: Instance, p: Vector3, s: number, rng: Random)
-	local top = p + Vector3.new(rng:NextNumber(-2, 2), rng:NextNumber(11, 15), -s * 3)
-	rod(F, "Trunk", p, top, 1.8, rgb(96, 58, 48), M.Wood)
-	local branch = top + Vector3.new(rng:NextNumber(3, 6), rng:NextNumber(1, 3), -s * 4)
-	rod(F, "Branch", top, branch, 1, rgb(96, 58, 48), M.Wood)
-	blob(F, "Blossom", Vector3.new(16, 9, 14), CFrame.new(top + Vector3.new(0, 2, 0)), BLOSSOM[rng:NextInteger(1, #BLOSSOM)], M.Grass)
-	blob(F, "Blossom", Vector3.new(11, 7, 10), CFrame.new(branch + Vector3.new(0, 1.5, 0)), BLOSSOM[rng:NextInteger(1, #BLOSSOM)], M.Grass)
+	swap("Spirit_CherryTree", F, Assets.facing(p, Vector3.new(0, 0, -s)), function(into) -- front toward the path
+		local top = p + Vector3.new(rng:NextNumber(-2, 2), rng:NextNumber(11, 15), -s * 3)
+		rod(into, "Trunk", p, top, 1.8, rgb(96, 58, 48), M.Wood)
+		local branch = top + Vector3.new(rng:NextNumber(3, 6), rng:NextNumber(1, 3), -s * 4)
+		rod(into, "Branch", top, branch, 1, rgb(96, 58, 48), M.Wood)
+		blob(into, "Blossom", Vector3.new(16, 9, 14), CFrame.new(top + Vector3.new(0, 2, 0)), BLOSSOM[rng:NextInteger(1, #BLOSSOM)], M.Grass)
+		blob(into, "Blossom", Vector3.new(11, 7, 10), CFrame.new(branch + Vector3.new(0, 1.5, 0)), BLOSSOM[rng:NextInteger(1, #BLOSSOM)], M.Grass)
+	end)
 end
 
 local function buildSpirit(c: Ctx)

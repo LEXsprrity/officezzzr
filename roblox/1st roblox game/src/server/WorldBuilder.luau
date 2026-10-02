@@ -1,11 +1,19 @@
 -- Generates the whole map from primitives: base area with 8 fenced plots (each with a treadmill),
 -- the walled corridor split into themed zones (ZoneThemes) with entry arches, a mother-plant nest
 -- per zone, and the End. Decoration is anchored and non-colliding (see Props).
+--
+-- The map is hand-editable: map/World.rbxm (Rojo puts it at Workspace.World) is the source of truth, and
+-- WorldBuilder.load() ADOPTS it at server start instead of rebuilding. Every piece gameplay needs carries
+-- a Role attribute (plus PlotIndex or ZoneIndex), and the plant slots, spawn points, pods and guard homes
+-- are tagged Attachments, so adopt() finds them by attribute wherever they were moved or reparented.
+-- Only a map missing a required piece is regenerated from code (WorldBuilder.build()), with a warning.
+-- Zone boundaries for gameplay (zoneAtX, guards) always come from Config, not from the zone floors.
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Config = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("Config"))
 local Format = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("Format"))
 local Props = require(script.Parent:WaitForChild("Props"))
 local ZoneThemes = require(script.Parent:WaitForChild("ZoneThemes"))
+local Assets = require(script.Parent:WaitForChild("Assets"))
 
 local WorldBuilder = {}
 
@@ -40,9 +48,34 @@ local BASE_HALF_Z = Config.PLOT_OFFSET_Z + Config.PLOT_SIZE / 2 + 20
 
 local box, deco, ball, cylinder, flat = Props.box, Props.deco, Props.ball, Props.cylinder, Props.flat
 
+-- Marks a piece gameplay needs, so adopt() finds it by attribute wherever it ends up.
+local function tag<T>(inst: T, role: string, scope: "PlotIndex" | "ZoneIndex", index: number): T
+	(inst :: any):SetAttribute("Role", role);
+	(inst :: any):SetAttribute(scope, index)
+	return inst
+end
+
+-- A tagged Attachment on `host` at world CFrame `cf` (slots, spawn, pods, guard home).
+local function marker(host: BasePart, name: string, cf: CFrame, role: string, scope: "PlotIndex" | "ZoneIndex", index: number): Attachment
+	local a = Instance.new("Attachment")
+	a.Name = name
+	a.CFrame = host.CFrame:Inverse() * cf
+	tag(a, role, scope, index)
+	a.Parent = host
+	return a
+end
+
+-- An invisible, non-colliding anchor part.
+local function hidden(parent: Instance, name: string, size: Vector3, cf: CFrame): Part
+	local p = deco(parent, name, size, cf, Color3.new(1, 1, 1))
+	p.Transparency = 1
+	p.CastShadow = false
+	return p
+end
+
 -- A board facing -X (toward players coming from base) with big text lines.
 local function sign(parent: Instance, pos: Vector3, size: Vector2, lines: { { text: string, color: Color3 } }, boardColor: Color3, material: Enum.Material?)
-	local board = box(parent, "Sign", Vector3.new(size.X, size.Y, 1), CFrame.lookAt(pos, pos - Vector3.xAxis), boardColor, material)
+	local board = box(parent, "Sign", Vector3.new(size.X, size.Y, 1), Props.lookAt(pos, pos - Vector3.xAxis), boardColor, material)
 	board.CanCollide = false
 	local gui = Instance.new("SurfaceGui")
 	gui.Face = Enum.NormalId.Front
@@ -120,7 +153,7 @@ local FLOWER_COLORS = {
 -- inner face. `inward` points into the base.
 local function patternWall(parent: Instance, center: Vector3, along: Vector3, inward: Vector3, len: number)
 	local h = Config.WALL_HEIGHT
-	local rot = CFrame.lookAt(Vector3.zero, along) -- local Z along the wall, X across it
+	local rot = Props.lookAt(Vector3.zero, along) -- local Z along the wall, X across it
 	box(parent, "Wall", Vector3.new(4, h, len), CFrame.new(center + Vector3.new(0, h / 2, 0)) * rot, WALL, Enum.Material.Brick)
 	deco(parent, "WallCap", Vector3.new(6, 2, len + 2), CFrame.new(center + Vector3.new(0, h + 1, 0)) * rot, WALL_CAP, Enum.Material.WoodPlanks)
 	local face = center + inward * 2.3
@@ -161,10 +194,14 @@ local function buildBase(world: Folder)
 		patternWall(base, Vector3.new(Config.CORRIDOR_START_X + 2, GROUND, s * (HALF_W + frontLen / 2)), Vector3.zAxis, -Vector3.xAxis, frontLen)
 	end
 
-	sign(base, Vector3.new(Config.CORRIDOR_START_X - 6, GROUND + 22, 0), Vector2.new(44, 12), {
-		{ text = "🌱 STEAL A SEED 🌱", color = Color3.fromRGB(255, 240, 120), scale = 1.4 },
-		{ text = "Grab a seed. Run. Plant it. Get faster.", color = Color3.new(1, 1, 1) },
-	} :: any, Color3.fromRGB(70, 170, 80))
+	-- The big sign floats over the corridor mouth; a drop-in SpawnSign hangs from the same bottom edge.
+	local signPos = Vector3.new(Config.CORRIDOR_START_X - 6, GROUND + 22, 0)
+	Assets.swap("SpawnSign", base, Assets.facing(signPos - Vector3.new(0, 6, 0), -Vector3.xAxis), function(into)
+		sign(into, signPos, Vector2.new(44, 12), {
+			{ text = "🌱 STEAL A SEED 🌱", color = Color3.fromRGB(255, 240, 120), scale = 1.4 },
+			{ text = "Grab a seed. Run. Plant it. Get faster.", color = Color3.new(1, 1, 1) },
+		} :: any, Color3.fromRGB(70, 170, 80))
+	end, Vector3.new(1, 1, 0))
 
 	local props = Instance.new("Folder")
 	props.Name = "Props"
@@ -215,7 +252,7 @@ local function buildBase(world: Folder)
 			Props.flower(props, bed + Vector3.new(math.cos(a) * r, 0.4, math.sin(a) * r), FLOWER_COLORS[i % #FLOWER_COLORS + 1], 2)
 		end
 		Props.roundTree(props, Vector3.new(40, GROUND, s * 100), rng, Color3.fromRGB(80, 190, 70), 14)
-		Props.roundTree(props, Vector3.new(-12, GROUND, s * 118), rng, Color3.fromRGB(255, 150, 190), 12) -- a blossom tree
+		Props.roundTree(props, Vector3.new(-12, GROUND, s * 118), rng, Color3.fromRGB(255, 150, 190), 12, "BlossomTree")
 		Props.rock(props, Vector3.new(38, GROUND, s * 60), Vector3.new(6, 4, 5), Color3.fromRGB(150, 150, 160))
 		Props.rock(props, Vector3.new(44, GROUND, s * 66), Vector3.new(3, 2, 3), Color3.fromRGB(170, 170, 180))
 	end
@@ -242,7 +279,7 @@ local PLOT_COLORS = {
 local PLOT_GRASS = Color3.fromRGB(104, 212, 78)
 local PLOT_GRASS_LIGHT = Color3.fromRGB(136, 230, 96)
 
-local function buildPlot(world: Folder, index: number): PlotInfo
+local function buildPlot(world: Folder, index: number)
 	local col = (index - 1) // 2
 	local side = if index % 2 == 1 then 1 else -1
 	local center = Vector3.new(Config.PLOT_FIRST_X - col * Config.PLOT_SPACING_X, GROUND, side * Config.PLOT_OFFSET_Z)
@@ -252,19 +289,25 @@ local function buildPlot(world: Folder, index: number): PlotInfo
 	local function at(u: number, w: number, y: number): Vector3
 		return entrance + Vector3.new(u, y, -toWalk * w)
 	end
-	local facingIn = CFrame.lookAt(Vector3.zero, Vector3.new(0, 0, -toWalk)) -- rotation looking into the plot
+	local facingIn = Props.lookAt(Vector3.zero, Vector3.new(0, 0, -toWalk)) -- rotation looking into the plot
 	local rng = Random.new(1000 + index)
 
-	local model = Instance.new("Model")
+	local model = tag(Instance.new("Model"), "Plot", "PlotIndex", index)
 	model.Name = "Plot" .. index
 	model.ModelStreamingMode = Enum.ModelStreamingMode.Atomic
 	model.Parent = world
 	local color = PLOT_COLORS[index]
 
-	-- Checkered lawn with a border in the plot's colour
-	local floor = box(model, "Floor", Vector3.new(Config.PLOT_SIZE, 1, Config.PLOT_SIZE), CFrame.new(center + Vector3.new(0, 0.5, 0)),
-		PLOT_GRASS, Enum.Material.Grass)
+	-- Checkered lawn with a border in the plot's colour. The floor carries the plant slots and the spawn
+	-- point (tagged Attachments), so they follow it when it is moved.
+	local floor = tag(box(model, "Floor", Vector3.new(Config.PLOT_SIZE, 1, Config.PLOT_SIZE), CFrame.new(center + Vector3.new(0, 0.5, 0)),
+		PLOT_GRASS, Enum.Material.Grass), "PlotFloor", "PlotIndex", index)
 	model.PrimaryPart = floor
+	for i = 1, Config.SLOTS_MAX + Config.PASS_EXTRA_SLOTS do
+		local u, w = slotLocal(i)
+		marker(floor, "Slot" .. i, CFrame.new(at(u, w, 1)) * facingIn, "Slot", "PlotIndex", index):SetAttribute("SlotIndex", i)
+	end
+	marker(floor, "Spawn", CFrame.new(at(-24, 12, 4)) * facingIn, "Spawn", "PlotIndex", index)
 	local tile = Config.PLOT_SIZE / 7
 	for i = 0, 6 do
 		for j = 0, 6 do
@@ -286,10 +329,14 @@ local function buildPlot(world: Folder, index: number): PlotInfo
 	for _, sx in { -1, 1 } do
 		Props.fence(model, center + y1 + Vector3.new(sx * half, 0, toWalk * half), center + y1 + Vector3.new(sx * half, 0, -toWalk * half), fenceH, 7)
 		Props.fence(model, entrance + y1 + Vector3.new(sx * 11, 0, 0), entrance + y1 + Vector3.new(sx * half, 0, 0), fenceH, 7)
-		box(model, "GatePost", Vector3.new(2, 9, 2), CFrame.new(entrance + Vector3.new(sx * 10, 5.5, 0)), color, Enum.Material.WoodPlanks)
-		ball(model, "GateFinial", 2.6, entrance + Vector3.new(sx * 10, 10.6, 0), color:Lerp(Color3.new(1, 1, 1), 0.35))
 	end
-	deco(model, "GateArch", Vector3.new(22, 1.6, 1.6), CFrame.new(entrance + Vector3.new(0, 9.6, 0)), color, Enum.Material.WoodPlanks)
+	Assets.swap("PlotGate", model, Assets.facing(entrance + y1, Vector3.new(0, 0, toWalk)), function(into)
+		for _, sx in { -1, 1 } do
+			box(into, "GatePost", Vector3.new(2, 9, 2), CFrame.new(entrance + Vector3.new(sx * 10, 5.5, 0)), color, Enum.Material.WoodPlanks)
+			ball(into, "GateFinial", 2.6, entrance + Vector3.new(sx * 10, 10.6, 0), color:Lerp(Color3.new(1, 1, 1), 0.35))
+		end
+		deco(into, "GateArch", Vector3.new(22, 1.6, 1.6), CFrame.new(entrance + Vector3.new(0, 9.6, 0)), color, Enum.Material.WoodPlanks)
+	end, Vector3.new(1, 1.5, 0))
 
 	-- Stone path from the gate to the walkway, and on to the pad
 	local toWalkway = math.abs(entrance.Z) - 19
@@ -297,23 +344,24 @@ local function buildPlot(world: Folder, index: number): PlotInfo
 	flat(model, "Path", 10, 5, at(0, 2.5, 1), STONE, Enum.Material.Pebble, nil, 0.1)
 
 	-- House-icon sign over the gate
-	local signPart = box(model, "SignPost", Vector3.new(1, 1, 1), CFrame.new(entrance + Vector3.new(0, 12, 0)), color)
+	local signPart = tag(box(model, "SignPost", Vector3.new(1, 1, 1), CFrame.new(entrance + Vector3.new(0, 12, 0)), color), "PlotSign", "PlotIndex", index)
 	signPart.Transparency = 1
 	signPart.CanCollide = false
 	-- Sized in studs (not pixels) so it shrinks with distance, and only shown up close: from the
 	-- walkway you read the nearby plots' names, not a wall of labels down the whole row.
-	local signLabel = billboard(signPart, "🏠 Empty Plot", UDim2.fromScale(16, 3.6), Vector3.zero, 75)
+	billboard(signPart, "🏠 Empty Plot", UDim2.fromScale(16, 3.6), Vector3.zero, 75)
 
 	-- Planting pad just inside the gate, on a rim in the plot's colour
-	local pad = box(model, "PlantPad", Vector3.new(10, 1, 10), CFrame.new(at(0, 10, 1.2)), Color3.fromRGB(120, 80, 50), Enum.Material.Ground)
+	tag(box(model, "PlantPad", Vector3.new(10, 1, 10), CFrame.new(at(0, 10, 1.2)), Color3.fromRGB(120, 80, 50), Enum.Material.Ground), "PlantPad", "PlotIndex", index)
 	flat(model, "PadRim", 12, 12, at(0, 10, 1), color, Enum.Material.SmoothPlastic, nil, 0.3)
 
 	-- Treadmill: stand on it to gain Speed (AFK works). It doesn't move you: the client plays the run
-	-- animation in place and scrolls the belt texture.
+	-- animation in place and scrolls the belt texture. The belt is the gameplay piece; the frame around it
+	-- is the Treadmill asset slot.
 	local tmU, tmW0, tmLen = 30, 12, 28
 	local beltCenter = at(tmU, tmW0 + tmLen / 2, 1.5)
-	local belt = box(model, "TreadmillBelt", Vector3.new(8, 1, tmLen), CFrame.new(beltCenter) * facingIn,
-		Color3.fromRGB(40, 40, 45), Enum.Material.DiamondPlate)
+	local belt = tag(box(model, "TreadmillBelt", Vector3.new(8, 1, tmLen), CFrame.new(beltCenter) * facingIn,
+		Color3.fromRGB(40, 40, 45), Enum.Material.DiamondPlate), "TreadmillBelt", "PlotIndex", index)
 	local tex = Instance.new("Texture")
 	tex.Name = "Stripes"
 	tex.Texture = "rbxasset://textures/SurfaceTextures/DiamondPlate.png"
@@ -322,16 +370,18 @@ local function buildPlot(world: Folder, index: number): PlotInfo
 	tex.StudsPerTileV = 4
 	tex.Transparency = 0.4
 	tex.Parent = belt
-	box(model, "TreadmillFrame", Vector3.new(12, 1, tmLen + 4), CFrame.new(beltCenter - Vector3.new(0, 0.6, 0)) * facingIn, Color3.fromRGB(230, 60, 60))
-	for _, s in { -1, 1 } do
-		box(model, "TreadmillRail", Vector3.new(1, 3, tmLen), CFrame.new(beltCenter + Vector3.new(s * 4.5, 1.5, 0)) * facingIn, Color3.fromRGB(230, 60, 60))
-	end
-	box(model, "TreadmillStop", Vector3.new(8, 4, 1), CFrame.new(at(tmU, tmW0 - 0.5, 3)), Color3.fromRGB(230, 60, 60))
-	local tmSignPart = box(model, "TreadmillSign", Vector3.new(1, 1, 1), CFrame.new(beltCenter + Vector3.new(0, 8, 0)), color)
+	Assets.swap("Treadmill", model, Assets.facing(at(tmU, tmW0 + tmLen / 2, 1), Vector3.new(0, 0, toWalk)), function(into)
+		box(into, "TreadmillFrame", Vector3.new(12, 1, tmLen + 4), CFrame.new(beltCenter - Vector3.new(0, 0.6, 0)) * facingIn, Color3.fromRGB(230, 60, 60))
+		for _, s in { -1, 1 } do
+			box(into, "TreadmillRail", Vector3.new(1, 3, tmLen), CFrame.new(beltCenter + Vector3.new(s * 4.5, 1.5, 0)) * facingIn, Color3.fromRGB(230, 60, 60))
+		end
+		box(into, "TreadmillStop", Vector3.new(8, 4, 1), CFrame.new(at(tmU, tmW0 - 0.5, 3)), Color3.fromRGB(230, 60, 60))
+	end, Vector3.new(1, 6, 1))
+	local tmSignPart = tag(box(model, "TreadmillSign", Vector3.new(1, 1, 1), CFrame.new(beltCenter + Vector3.new(0, 8, 0)), color), "TreadmillSign", "PlotIndex", index)
 	tmSignPart.Transparency = 1
 	tmSignPart.CanCollide = false
 	-- PlotService writes the owner's live rate on it ("+X Speed/s").
-	local treadmillLabel = billboard(tmSignPart, "🏃 TREADMILL", UDim2.fromScale(10, 3.6), Vector3.zero, 60)
+	billboard(tmSignPart, "🏃 TREADMILL", UDim2.fromScale(10, 3.6), Vector3.zero, 60)
 
 	-- A few props in the corners, clear of the slots, pad, treadmill and spawn point
 	Props.roundTree(model, at(-35, 30, 1), rng, Color3.fromRGB(70, 185, 70), 10)
@@ -346,14 +396,17 @@ local function buildPlot(world: Folder, index: number): PlotInfo
 
 	-- "Upgrade Plot" board just outside the gate, beside the path (like an "Upgrade Pen" sign). Small and
 	-- sized in studs, so it reads only up close. PlotService writes the owner's level and price on it and
-	-- owns its prompt.
+	-- owns its prompt. The board is the gameplay piece; its posts and trim are the UpgradeSign slot.
 	local boardPos = at(-17, -4, 3.4)
-	local boardCF = CFrame.lookAt(boardPos, boardPos + Vector3.new(0, 0, toWalk)) -- front face toward the walkway
-	for _, s in { -1, 1 } do
-		deco(model, "UpgradePost", Vector3.new(0.6, 3.4, 0.6), boardCF * CFrame.new(s * 2.4, -2.3, 0.3), Color3.fromRGB(110, 70, 40), Enum.Material.Wood)
-	end
-	local upgradeBoard = deco(model, "UpgradeBoard", Vector3.new(6, 3.6, 0.4), boardCF, Color3.fromRGB(70, 46, 28), Enum.Material.WoodPlanks)
-	deco(model, "UpgradeBoardTrim", Vector3.new(6.4, 0.4, 0.5), boardCF * CFrame.new(0, 1.9, 0), color, Enum.Material.SmoothPlastic)
+	local boardCF = Props.lookAt(boardPos, boardPos + Vector3.new(0, 0, toWalk)) -- front face toward the walkway
+	Assets.swap("UpgradeSign", model, Assets.facing(Vector3.new(boardPos.X, GROUND, boardPos.Z), Vector3.new(0, 0, toWalk)), function(into)
+		for _, s in { -1, 1 } do
+			deco(into, "UpgradePost", Vector3.new(0.6, 3.4, 0.6), boardCF * CFrame.new(s * 2.4, -2.3, 0.3), Color3.fromRGB(110, 70, 40), Enum.Material.Wood)
+		end
+		deco(into, "UpgradeBoardTrim", Vector3.new(6.4, 0.4, 0.5), boardCF * CFrame.new(0, 1.9, 0), color, Enum.Material.SmoothPlastic)
+	end, Vector3.new(1.2, 1.5, 0))
+	local upgradeBoard = tag(deco(model, "UpgradeBoard", Vector3.new(6, 3.6, 0.4), boardCF, Color3.fromRGB(70, 46, 28), Enum.Material.WoodPlanks),
+		"UpgradeBoard", "PlotIndex", index)
 	local boardGui = Instance.new("SurfaceGui")
 	boardGui.Face = Enum.NormalId.Front
 	boardGui.SizingMode = Enum.SurfaceGuiSizingMode.PixelsPerStud
@@ -366,7 +419,7 @@ local function buildPlot(world: Folder, index: number): PlotInfo
 	boardList.VerticalAlignment = Enum.VerticalAlignment.Center
 	boardList.SortOrder = Enum.SortOrder.LayoutOrder
 	boardList.Parent = boardGui
-	local function boardLine(name: string, text: string, textColor: Color3, height: number, order: number): TextLabel
+	local function boardLine(name: string, text: string, textColor: Color3, height: number, order: number)
 		local label = Instance.new("TextLabel")
 		label.Name = name
 		label.BackgroundTransparency = 1
@@ -381,140 +434,118 @@ local function buildPlot(world: Folder, index: number): PlotInfo
 		stroke.Color = Color3.fromRGB(25, 20, 30)
 		stroke.Parent = label
 		label.Parent = boardGui
-		return label
 	end
 	boardLine("Title", "⬆️ UPGRADE PLOT", Color3.fromRGB(255, 225, 90), 0.3, 1)
-	local upgradeLabels = {
-		level = boardLine("Level", "Level 1 → 2", Color3.new(1, 1, 1), 0.24, 2),
-		perk = boardLine("Perk", "", Color3.fromRGB(200, 240, 255), 0.16, 3),
-		price = boardLine("Price", "", Color3.fromRGB(120, 255, 120), 0.26, 4),
-	}
+	boardLine("Level", "Level 1 → 2", Color3.new(1, 1, 1), 0.24, 2)
+	boardLine("Perk", "", Color3.fromRGB(200, 240, 255), 0.16, 3)
+	boardLine("Price", "", Color3.fromRGB(120, 255, 120), 0.26, 4)
 
-	local slotCFrames = {}
-	for i = 1, Config.SLOTS_MAX + Config.PASS_EXTRA_SLOTS do
-		local u, w = slotLocal(i)
-		slotCFrames[i] = CFrame.new(at(u, w, 1)) * facingIn
-	end
-
-	local soil = Instance.new("Folder")
+	local soil = tag(Instance.new("Folder"), "Soil", "PlotIndex", index)
 	soil.Name = "Soil"
 	soil.Parent = model
-	local plants = Instance.new("Folder")
+	local plants = tag(Instance.new("Folder"), "Plants", "PlotIndex", index)
 	plants.Name = "Plants"
 	plants.Parent = model
-
-	return {
-		index = index,
-		model = model,
-		center = center,
-		signLabel = signLabel,
-		pad = pad,
-		spawnCFrame = CFrame.new(at(-24, 12, 4)) * facingIn,
-		slotCFrames = slotCFrames,
-		belt = belt,
-		treadmillLabel = treadmillLabel,
-		soil = soil,
-		plants = plants,
-		upgradeBoard = upgradeBoard,
-		upgradeLabels = upgradeLabels,
-	}
 end
 
 ----------------------------------------------------------------------------------------------------
 -- Corridor & zones
 ----------------------------------------------------------------------------------------------------
 -- The zone's entry arch: two pillars flush with the walls, a beam over the top, the name sign
--- (name + recommended Speed + guardian) and a glowing threshold line on the floor.
+-- (name + recommended Speed + guardian) and a glowing threshold line on the floor. The sign and the
+-- threshold stay; the rest (with the zone's ornament) is the Arch_<zone> slot.
 local function buildArch(folder: Instance, k: number)
 	local zone = Config.ZONES[k]
 	local theme = ZoneThemes.theme(k)
 	local x0 = Config.zoneStartX(k)
 	local h = Config.WALL_HEIGHT
 	local x = x0 + 3
-	for _, s in { -1, 1 } do
-		box(folder, "GatePillar", Vector3.new(6, h + 10, 6), CFrame.new(x, GROUND + (h + 10) / 2, s * (HALF_W - 1)), theme.arch, theme.archMaterial)
-		ball(folder, "PillarCap", 8, Vector3.new(x, GROUND + h + 12, s * (HALF_W - 1)), theme.accent, Enum.Material.Neon)
-	end
-	deco(folder, "ArchBeam", Vector3.new(7, 5, Config.CORRIDOR_WIDTH + 10), CFrame.new(x, GROUND + h + 6, 0), theme.arch, theme.archMaterial)
-	deco(folder, "ArchTrim", Vector3.new(7.4, 1, Config.CORRIDOR_WIDTH + 10.4), CFrame.new(x, GROUND + h + 3.2, 0), theme.accent, Enum.Material.Neon)
+	Assets.swap("Arch_" .. zone.id, folder, Assets.facing(Vector3.new(x, GROUND, 0), -Vector3.xAxis), function(into)
+		for _, s in { -1, 1 } do
+			box(into, "GatePillar", Vector3.new(6, h + 10, 6), CFrame.new(x, GROUND + (h + 10) / 2, s * (HALF_W - 1)), theme.arch, theme.archMaterial)
+			ball(into, "PillarCap", 8, Vector3.new(x, GROUND + h + 12, s * (HALF_W - 1)), theme.accent, Enum.Material.Neon)
+		end
+		deco(into, "ArchBeam", Vector3.new(7, 5, Config.CORRIDOR_WIDTH + 10), CFrame.new(x, GROUND + h + 6, 0), theme.arch, theme.archMaterial)
+		deco(into, "ArchTrim", Vector3.new(7.4, 1, Config.CORRIDOR_WIDTH + 10.4), CFrame.new(x, GROUND + h + 3.2, 0), theme.accent, Enum.Material.Neon)
+		ZoneThemes.archOrnament(into, k, x)
+	end, Vector3.new(1, 1.5, 0))
 	sign(folder, Vector3.new(x - 3.6, GROUND + h - 4, 0), Vector2.new(Config.CORRIDOR_WIDTH - 12, 13), {
 		{ text = `{zone.icon} {string.upper(zone.name)} {zone.icon}`, color = Color3.new(1, 1, 1), scale = 1.5 },
 		{ text = `⚡ Recommended Speed: {Format.short(zone.req)}`, color = Color3.fromRGB(255, 232, 90) },
 		{ text = `Guardian: {zone.guard}`, color = theme.signText },
 	} :: any, theme.sign, Enum.Material.SmoothPlastic)
 	flat(folder, "Threshold", 3, Config.CORRIDOR_WIDTH, Vector3.new(x0 + 1.5, GROUND, 0), theme.accent, Enum.Material.Neon, nil, 0.1)
-	ZoneThemes.archOrnament(folder, k, x)
 end
 
 local function torii(folder: Instance, x: number, color: Color3, height: number)
-	for _, s in { -1, 1 } do
-		deco(folder, "ToriiPillar", Vector3.new(3, height, 3), CFrame.new(x, GROUND + height / 2, s * (HALF_W - 6)), color, Enum.Material.SmoothPlastic)
-		deco(folder, "ToriiFoot", Vector3.new(4, 2, 4), CFrame.new(x, GROUND + 1, s * (HALF_W - 6)), Color3.fromRGB(35, 30, 35))
-	end
-	deco(folder, "ToriiBeam", Vector3.new(4, 2.5, Config.CORRIDOR_WIDTH), CFrame.new(x, GROUND + height, 0), color)
-	deco(folder, "ToriiCap", Vector3.new(5, 1.2, Config.CORRIDOR_WIDTH + 4), CFrame.new(x, GROUND + height + 1.8, 0), Color3.fromRGB(35, 30, 35))
-	deco(folder, "ToriiBeam", Vector3.new(3, 1.5, Config.CORRIDOR_WIDTH - 12), CFrame.new(x, GROUND + height - 5, 0), color)
+	Assets.swap("Spirit_Torii", folder, Assets.facing(Vector3.new(x, GROUND, 0), -Vector3.xAxis), function(into)
+		for _, s in { -1, 1 } do
+			deco(into, "ToriiPillar", Vector3.new(3, height, 3), CFrame.new(x, GROUND + height / 2, s * (HALF_W - 6)), color, Enum.Material.SmoothPlastic)
+			deco(into, "ToriiFoot", Vector3.new(4, 2, 4), CFrame.new(x, GROUND + 1, s * (HALF_W - 6)), Color3.fromRGB(35, 30, 35))
+		end
+		deco(into, "ToriiBeam", Vector3.new(4, 2.5, Config.CORRIDOR_WIDTH), CFrame.new(x, GROUND + height, 0), color)
+		deco(into, "ToriiCap", Vector3.new(5, 1.2, Config.CORRIDOR_WIDTH + 4), CFrame.new(x, GROUND + height + 1.8, 0), Color3.fromRGB(35, 30, 35))
+		deco(into, "ToriiBeam", Vector3.new(3, 1.5, Config.CORRIDOR_WIDTH - 12), CFrame.new(x, GROUND + height - 5, 0), color)
+	end, Vector3.new(1, 1.5, 0))
 end
 WorldBuilder.torii = torii
 
-local function buildNest(folder: Folder, k: number): NestInfo
+-- The zone's nest. Its gameplay piece is NestCore, an invisible part where the mother bulb glows: it holds
+-- the "Mother Plant" label and the tagged Attachments for the nest centre, the pods and the guard's home.
+-- The mother plant itself (mound, stones, stem, bulb, leaves) is the Nest_<zone> slot.
+local function buildNest(folder: Folder, k: number)
 	local zone = Config.ZONES[k]
 	local theme = ZoneThemes.theme(k)
 	local x = Config.nestX(k)
 	local center = Vector3.new(x, GROUND, 0)
-	local model = Instance.new("Model")
+	local model = tag(Instance.new("Model"), "Nest", "ZoneIndex", k)
 	model.Name = "Nest_" .. zone.id
 	model.ModelStreamingMode = Enum.ModelStreamingMode.Atomic
 	model.Parent = folder
 
 	-- Non-colliding so neither runners nor the giant snag on it.
-	local mound = cylinder(model, "Mound", 1, 22, center + Vector3.new(0, 0.2, 0), theme.mound, Enum.Material.Ground)
-	model.PrimaryPart = mound
-	Props.disc(model, "GlowRing", 26, center, zone.seedColor, Enum.Material.Neon, 0.15)
-	for i = 1, 8 do
-		local a = i / 8 * math.pi * 2
-		Props.rock(model, center + Vector3.new(math.cos(a) * 12.5, 0, math.sin(a) * 12.5), Vector3.new(3, 2.2, 2.6), theme.nestStone, theme.nestStoneMaterial, a)
-	end
-	cylinder(model, "Stem", 14, 2, center + Vector3.new(0, 8, 0), Color3.fromRGB(60, 170, 60), Enum.Material.Grass)
-	local bulb = ball(model, "MotherBulb", 8, center + Vector3.new(0, 16, 0), zone.seedColor, Enum.Material.Neon)
-	local light = Instance.new("PointLight")
-	light.Color = zone.seedColor
-	light.Range = 30
-	light.Brightness = 3
-	light.Parent = bulb
-	for i = 0, 3 do
-		local a = i * math.pi / 2 + math.pi / 4
-		Props.blob(model, "Leaf", Vector3.new(10, 0.8, 4.5),
-			CFrame.new(center + Vector3.new(math.cos(a) * 5, 9, math.sin(a) * 5)) * CFrame.Angles(0, -a, math.rad(20)),
-			theme.leaf, Enum.Material.Grass)
-	end
-	Props.emitOn(bulb, {
-		color = zone.seedColor, rate = 6, lifetime = NumberRange.new(1.5, 2.5), speed = NumberRange.new(2, 4),
-		size = NumberSequence.new(0.6), spread = Vector2.new(180, 180), lightEmission = 1,
-	})
-	billboard(bulb, `{zone.icon} {zone.seed} Mother Plant`, UDim2.fromOffset(300, 40), Vector3.new(0, 8, 0), 250)
+	Assets.swap("Nest_" .. zone.id, model, Assets.facing(center, -Vector3.xAxis), function(into)
+		cylinder(into, "Mound", 1, 22, center + Vector3.new(0, 0.2, 0), theme.mound, Enum.Material.Ground)
+		Props.disc(into, "GlowRing", 26, center, zone.seedColor, Enum.Material.Neon, 0.15)
+		for i = 1, 8 do
+			local a = i / 8 * math.pi * 2
+			Props.rock(into, center + Vector3.new(math.cos(a) * 12.5, 0, math.sin(a) * 12.5), Vector3.new(3, 2.2, 2.6), theme.nestStone, theme.nestStoneMaterial, a, false)
+		end
+		cylinder(into, "Stem", 14, 2, center + Vector3.new(0, 8, 0), Color3.fromRGB(60, 170, 60), Enum.Material.Grass)
+		local bulb = ball(into, "MotherBulb", 8, center + Vector3.new(0, 16, 0), zone.seedColor, Enum.Material.Neon)
+		local light = Instance.new("PointLight")
+		light.Color = zone.seedColor
+		light.Range = 30
+		light.Brightness = 3
+		light.Parent = bulb
+		for i = 0, 3 do
+			local a = i * math.pi / 2 + math.pi / 4
+			Props.blob(into, "Leaf", Vector3.new(10, 0.8, 4.5),
+				CFrame.new(center + Vector3.new(math.cos(a) * 5, 9, math.sin(a) * 5)) * CFrame.Angles(0, -a, math.rad(20)),
+				theme.leaf, Enum.Material.Grass)
+		end
+		Props.emitOn(bulb, {
+			color = zone.seedColor, rate = 6, lifetime = NumberRange.new(1.5, 2.5), speed = NumberRange.new(2, 4),
+			size = NumberSequence.new(0.6), spread = Vector2.new(180, 180), lightEmission = 1,
+		})
+	end, Vector3.new(1, 2, 1))
 
+	local core = tag(hidden(model, "NestCore", Vector3.new(2, 2, 2), CFrame.new(center + Vector3.new(0, 16, 0))), "NestCore", "ZoneIndex", k)
+	model.PrimaryPart = core
+	billboard(core, `{zone.icon} {zone.seed} Mother Plant`, UDim2.fromOffset(300, 40), Vector3.new(0, 8, 0), 250)
+	marker(core, "Center", CFrame.new(center), "NestCenter", "ZoneIndex", k)
 	-- Pods ring the mound on the -X half, so thieves grab and run home with the guard behind them.
-	local podCFrames = {}
 	for i = 1, Config.PODS_PER_NEST do
 		local a = math.pi / 2 + (i - 0.5) * math.pi / Config.PODS_PER_NEST
-		podCFrames[i] = CFrame.new(center + Vector3.new(math.cos(a) * 8, 2.5, math.sin(a) * 8))
+		marker(core, "Pod" .. i, CFrame.new(center + Vector3.new(math.cos(a) * 8, 2.5, math.sin(a) * 8)), "Pod", "ZoneIndex", k):SetAttribute("PodIndex", i)
 	end
-
-	return {
-		zone = k,
-		model = model,
-		center = center,
-		podCFrames = podCFrames,
-		guardHome = center + Vector3.new(Config.GUARD_HOME_OFFSET, 0, 0),
-	}
+	marker(core, "GuardHome", CFrame.new(center + Vector3.new(Config.GUARD_HOME_OFFSET, 0, 0)), "GuardHome", "ZoneIndex", k)
 end
 
-local function buildCorridor(world: Folder): { NestInfo }
+local function buildCorridor(world: Folder)
 	local corridor = Instance.new("Folder")
 	corridor.Name = "Corridor"
 	corridor.Parent = world
-	local nests = {}
 	local rng = Random.new(20260930)
 	local h = Config.WALL_HEIGHT
 
@@ -524,7 +555,7 @@ local function buildCorridor(world: Folder): { NestInfo }
 		zoneFolder.Parent = corridor
 		ZoneThemes.build(zoneFolder, k, rng, { torii = torii })
 		buildArch(zoneFolder, k)
-		nests[k] = buildNest(zoneFolder, k)
+		buildNest(zoneFolder, k)
 	end
 
 	-- End of the line
@@ -549,8 +580,6 @@ local function buildCorridor(world: Folder): { NestInfo }
 		{ text = "⛩️ END OF THE LINE ⛩️", color = Color3.fromRGB(255, 230, 90) },
 		{ text = "You made it!", color = Color3.new(1, 1, 1) },
 	}, Color3.fromRGB(120, 20, 30))
-
-	return nests
 end
 
 ----------------------------------------------------------------------------------------------------
@@ -583,24 +612,29 @@ local function buildShops(world: Folder)
 	for i, stall in STALLS do
 		local u = (i - (#STALLS + 1) / 2) * spacing
 		local w0 = 18 -- counter's distance in from the plaza's front edge
-		local counter = box(model, "Counter", Vector3.new(16, 4, 3), CFrame.new(at(u, w0, 2)), stall.color, Enum.Material.WoodPlanks)
-		deco(model, "CounterTop", Vector3.new(17, 0.6, 4), CFrame.new(at(u, w0, 4.3)), Color3.fromRGB(250, 245, 235), Enum.Material.SmoothPlastic)
-		box(model, "Back", Vector3.new(16, 12, 1), CFrame.new(at(u, w0 + 8, 6)), stall.color, Enum.Material.WoodPlanks)
-		for _, du in { -7.5, 7.5 } do
-			for _, dw in { -1, 8 } do
-				box(model, "Post", Vector3.new(1, 12, 1), CFrame.new(at(u + du, w0 + dw, 6)), Color3.fromRGB(110, 70, 40), Enum.Material.Wood)
+		-- The stall (ShopStall_<menu> slot, else ShopStall) faces the walkway.
+		Assets.swap("ShopStall_" .. stall.opens, model, Assets.facing(at(u, w0 + 3.5, 0), Vector3.new(0, 0, -side)), function(into)
+			box(into, "Counter", Vector3.new(16, 4, 3), CFrame.new(at(u, w0, 2)), stall.color, Enum.Material.WoodPlanks)
+			deco(into, "CounterTop", Vector3.new(17, 0.6, 4), CFrame.new(at(u, w0, 4.3)), Color3.fromRGB(250, 245, 235), Enum.Material.SmoothPlastic)
+			box(into, "Back", Vector3.new(16, 12, 1), CFrame.new(at(u, w0 + 8, 6)), stall.color, Enum.Material.WoodPlanks)
+			for _, du in { -7.5, 7.5 } do
+				for _, dw in { -1, 8 } do
+					box(into, "Post", Vector3.new(1, 12, 1), CFrame.new(at(u + du, w0 + dw, 6)), Color3.fromRGB(110, 70, 40), Enum.Material.Wood)
+				end
 			end
-		end
-		-- Striped awning sloping down toward the walkway
-		local tilt = CFrame.Angles(math.rad(-side * 14), 0, 0)
-		for s = 0, 7 do
-			deco(model, "Awning", Vector3.new(2.25, 0.5, 12), CFrame.new(at(u - 7.875 + s * 2.25, w0 + 2.5, 12.5)) * tilt,
-				if s % 2 == 0 then stall.color else stall.stripe, Enum.Material.Fabric)
-		end
+			-- Striped awning sloping down toward the walkway
+			local tilt = CFrame.Angles(math.rad(-side * 14), 0, 0)
+			for s = 0, 7 do
+				deco(into, "Awning", Vector3.new(2.25, 0.5, 12), CFrame.new(at(u - 7.875 + s * 2.25, w0 + 2.5, 12.5)) * tilt,
+					if s % 2 == 0 then stall.color else stall.stripe, Enum.Material.Fabric)
+			end
+		end, Vector3.new(1, 1.5, 1.5))
 		local signPart = deco(model, "StallSign", Vector3.new(1, 1, 1), CFrame.new(at(u, w0, 17)), stall.color)
 		signPart.Transparency = 1
 		billboard(signPart, stall.label, UDim2.fromScale(15, 3), Vector3.zero, 90)
 
+		-- The prompt sits on an invisible part at the counter, so it stays when the stall is re-modelled.
+		local promptHost = hidden(model, "StallPrompt", Vector3.new(16, 4, 3), CFrame.new(at(u, w0, 2)))
 		local prompt = Instance.new("ProximityPrompt")
 		prompt.ActionText = "Open"
 		prompt.ObjectText = stall.label
@@ -609,7 +643,7 @@ local function buildShops(world: Folder)
 		prompt.MaxActivationDistance = 12
 		prompt.RequiresLineOfSight = false
 		prompt:SetAttribute("OpensShop", stall.opens)
-		prompt.Parent = counter
+		prompt.Parent = promptHost
 
 		Props.lamp(model, at(u + spacing / 2, 4, 0), Color3.fromRGB(255, 225, 150))
 	end
@@ -620,11 +654,160 @@ local function buildShops(world: Folder)
 end
 
 ----------------------------------------------------------------------------------------------------
+-- Adopting a (hand-edited) map
+----------------------------------------------------------------------------------------------------
+local function worldCFrame(a: Attachment): CFrame
+	return (a.Parent :: BasePart).CFrame * a.CFrame
+end
 
--- Also runs in Studio edit mode, to preview the map without pressing Play (Command Bar):
---   require(game.ServerScriptService.Server.WorldBuilder).build()
--- A preview left in the place is replaced when the game starts, so it never doubles up.
+local function findLabel(root: Instance, name: string?): TextLabel?
+	for _, d in root:GetDescendants() do
+		if d:IsA("TextLabel") and (name == nil or d.Name == name) then
+			return d
+		end
+	end
+	return nil
+end
+
+-- Reads everything gameplay needs from a map by its Role attributes (see the header). Returns the plot
+-- and nest infos, or nil and the list of problems (which plot or zone, which role) when a required piece
+-- is missing. Pieces that turn up twice (e.g. duplicated in Studio) are reported too, and the first wins.
+function WorldBuilder.adopt(world: Instance): ({ PlotInfo }?, { NestInfo }?, { string })
+	local problems: { string } = {}
+	local notes: { string } = {}
+	local found: { [string]: Instance } = {}
+	for _, d in world:GetDescendants() do
+		local role = d:GetAttribute("Role")
+		if type(role) ~= "string" then
+			continue
+		end
+		local plot, zone = d:GetAttribute("PlotIndex"), d:GetAttribute("ZoneIndex")
+		local scope = if plot then `Plot {plot}` elseif zone then `Zone {zone}` else "World"
+		local key = `{scope}/{role}{d:GetAttribute("SlotIndex") or d:GetAttribute("PodIndex") or ""}`
+		if found[key] then
+			table.insert(notes, `{key}: found twice, using {found[key]:GetFullName()}`)
+		else
+			found[key] = d
+		end
+	end
+
+	local function need(scope: string, role: string, class: string, what: string, indexName: string?, index: number?): any
+		local inst = found[`{scope}/{role}{index or ""}`]
+		if not inst then
+			local kind, n = string.match(scope, "^(%a+) (%d+)$")
+			local extra = `, {if kind == "Plot" then "PlotIndex" else "ZoneIndex"} = {n}` .. (if indexName then `, {indexName} = {index}` else "")
+			table.insert(problems, `{scope}: missing {what} (an instance with attributes Role = "{role}"{extra})`)
+			return nil
+		end
+		if not inst:IsA(class) then
+			table.insert(problems, `{scope}: {inst:GetFullName()} has Role "{role}" but is a {inst.ClassName}, not a {class}`)
+			return nil
+		end
+		if inst:IsA("Attachment") and not (inst.Parent and inst.Parent:IsA("BasePart")) then
+			table.insert(problems, `{scope}: {inst:GetFullName()} (Role "{role}") must sit inside a part`)
+			return nil
+		end
+		return inst
+	end
+
+	local plots: { PlotInfo } = {}
+	for i = 1, Config.MAX_PLAYERS do
+		local scope = `Plot {i}`
+		local model = need(scope, "Plot", "Model", "the plot model")
+		local floor = need(scope, "PlotFloor", "BasePart", "the plot floor")
+		local pad = need(scope, "PlantPad", "BasePart", "the planting pad")
+		local belt = need(scope, "TreadmillBelt", "BasePart", "the treadmill belt")
+		local signPart = need(scope, "PlotSign", "BasePart", "the name sign over the gate")
+		local tmSign = need(scope, "TreadmillSign", "BasePart", "the treadmill sign")
+		local board = need(scope, "UpgradeBoard", "BasePart", "the Upgrade Plot board")
+		local spawn = need(scope, "Spawn", "Attachment", "the spawn point")
+		local slots = {}
+		for s = 1, Config.SLOTS_MAX + Config.PASS_EXTRA_SLOTS do
+			local a = need(scope, "Slot", "Attachment", `plant slot {s}`, "SlotIndex", s)
+			slots[s] = if a then worldCFrame(a) else CFrame.identity
+		end
+		local signLabel = signPart and findLabel(signPart)
+		local tmLabel = tmSign and findLabel(tmSign)
+		if signPart and not signLabel then
+			table.insert(problems, `{scope}: the name sign {signPart:GetFullName()} has no TextLabel`)
+		end
+		if tmSign and not tmLabel then
+			table.insert(problems, `{scope}: the treadmill sign {tmSign:GetFullName()} has no TextLabel`)
+		end
+		local labels = {}
+		for key, name in { level = "Level", perk = "Perk", price = "Price" } do
+			labels[key] = board and findLabel(board, name)
+			if board and not labels[key] then
+				table.insert(problems, `{scope}: the Upgrade Plot board has no "{name}" TextLabel`)
+			end
+		end
+		if not (model and floor and pad and belt and signLabel and tmLabel and board and spawn and labels.level and labels.perk and labels.price) then
+			continue
+		end
+		-- The plants and soil folders are rebuilt at runtime, so they are made if missing.
+		local function folder(role: string): Folder
+			local f = found[`{scope}/{role}`]
+			if f and f:IsA("Folder") then
+				return f
+			end
+			local made = tag(Instance.new("Folder"), role, "PlotIndex", i)
+			made.Name = role
+			made.Parent = model
+			return made
+		end
+		plots[i] = {
+			index = i,
+			model = model,
+			center = (floor.CFrame * CFrame.new(0, -floor.Size.Y / 2, 0)).Position,
+			signLabel = signLabel,
+			pad = pad,
+			spawnCFrame = worldCFrame(spawn),
+			slotCFrames = slots,
+			belt = belt,
+			treadmillLabel = tmLabel,
+			soil = folder("Soil"),
+			plants = folder("Plants"),
+			upgradeBoard = board,
+			upgradeLabels = labels :: any,
+		}
+	end
+
+	local nests: { NestInfo } = {}
+	for k in Config.ZONES do
+		local scope = `Zone {k}`
+		local model = need(scope, "Nest", "Model", "the nest model")
+		local center = need(scope, "NestCenter", "Attachment", "the nest centre")
+		local home = need(scope, "GuardHome", "Attachment", "the guard's home")
+		local pods = {}
+		for p = 1, Config.PODS_PER_NEST do
+			local a = need(scope, "Pod", "Attachment", `seed pod {p}`, "PodIndex", p)
+			pods[p] = if a then CFrame.new(worldCFrame(a).Position) else CFrame.identity
+		end
+		if model and center and home then
+			nests[k] = {
+				zone = k,
+				model = model,
+				center = worldCFrame(center).Position,
+				podCFrames = pods,
+				guardHome = worldCFrame(home).Position,
+			}
+		end
+	end
+
+	if #problems > 0 then
+		for _, n in notes do
+			table.insert(problems, n)
+		end
+		return nil, nil, problems
+	end
+	return plots, nests, notes
+end
+
+-- Generates the map from code into Workspace.World, replacing any map there, and adopts it. Also runs in
+-- Studio edit mode (Command Bar): require(game.ServerScriptService.Server.WorldBuilder).build(). That
+-- REPLACES the hand-edited map in the open place; tools/build_map.luau --force does it for map/World.rbxm.
 function WorldBuilder.build(): ({ PlotInfo }, { NestInfo })
+	Assets.audit()
 	local old = workspace:FindFirstChild("World")
 	if old then
 		old:Destroy()
@@ -632,14 +815,37 @@ function WorldBuilder.build(): ({ PlotInfo }, { NestInfo })
 	local world = Instance.new("Folder")
 	world.Name = "World"
 	buildBase(world)
-	local plots = {}
 	for i = 1, Config.MAX_PLAYERS do
-		plots[i] = buildPlot(world, i)
+		buildPlot(world, i)
 	end
 	buildShops(world)
-	local nests = buildCorridor(world)
+	buildCorridor(world)
 	world.Parent = workspace
+	local plots, nests, problems = WorldBuilder.adopt(world)
+	assert(plots and nests, "the generated map breaks its own contract:\n" .. table.concat(problems, "\n"))
 	return plots, nests
+end
+
+-- Server start: adopts the map in the place (Workspace.World, from map/World.rbxm) with every hand edit,
+-- puts the assets folder's models into the pieces still built from code, and only regenerates the map
+-- when a piece gameplay needs is missing.
+function WorldBuilder.load(): ({ PlotInfo }, { NestInfo })
+	local world = workspace:FindFirstChild("World")
+	if world then
+		local plots, nests, problems = WorldBuilder.adopt(world)
+		if plots and nests then
+			for _, note in problems do
+				warn("[WorldBuilder] " .. note)
+			end
+			Assets.refresh(world)
+			return plots, nests
+		end
+		warn("[WorldBuilder] Workspace.World is missing pieces the game needs, so this server regenerates the map from code"
+			.. " (hand edits are not used until they are fixed in map/World.rbxm):\n  " .. table.concat(problems, "\n  "))
+	else
+		warn("[WorldBuilder] no Workspace.World in the place, so the map is generated from code")
+	end
+	return WorldBuilder.build()
 end
 
 -- Is `pos` standing on this plot's treadmill belt?

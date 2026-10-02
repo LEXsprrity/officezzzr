@@ -7,9 +7,11 @@
 -- model onto its slot and scales it with Model:ScaleTo, which scales around that pivot.
 --
 -- Rarity adds flair (aura ring, recoloured trims, Neon, light, sparkles, a halo); a mutation tints and
--- swaps materials and adds particles. Config.CREATURE_ASSETS can swap in an uploaded model per zone.
+-- swaps materials and adds particles. A model in the assets folder (slot Creature_<Seed>, e.g. Creature_LotusWyrm)
+-- replaces a zone's creature; Config.CREATURE_ASSETS (uploaded asset ids) is the next choice.
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Config = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("Config"))
+local Assets = require(script.Parent:WaitForChild("Assets"))
 
 local CreatureModels = {}
 
@@ -644,9 +646,19 @@ function CreatureModels.build(zoneIndex: number, rarityIndex: number, mutation: 
 	local zone = Config.ZONES[zoneIndex]
 	local model: Model
 	local b: Builder
+	-- A model from the assets folder comes first: fitted like an uploaded one (footprint and a zone-ish
+	-- height), and its fit scale is kept as BaseScale for applyScale.
+	local slot = "Creature_" .. string.gsub(zone.seed, "%s", "")
+	local fitted = Assets.get(slot) and Assets.place(slot, nil, CFrame.identity,
+		Vector3.new(Config.CREATURE_FOOTPRINT, 4.5 + 0.5 * zoneIndex, Config.CREATURE_FOOTPRINT))
 	local template = templates[zoneIndex]
-	if template then
-		model = template:Clone()
+	if fitted or template then
+		if fitted then
+			model = fitted
+			model:SetAttribute("BaseScale", Assets.scaleOf(model))
+		else
+			model = template:Clone()
+		end
 		b = { model = model, body = model.PrimaryPart, parts = {}, roles = {} }
 		for _, d in model:GetDescendants() do
 			if d:IsA("BasePart") then

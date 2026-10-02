@@ -1,27 +1,12 @@
--- Bakes the generated map into map/World.rbxm so it is visible in Studio edit mode (Rojo puts it
--- in Workspace.World). The server still rebuilds the map when the game starts, replacing this copy,
--- so gameplay always uses the code's map. Run from the game folder, before `rojo build`:
---   lune run tools/build_map.luau
-local fs = require("@lune/fs")
-local roblox = require("@lune/roblox")
-local H = require("../tests/harness")
+-- REGENERATES the map from code into map/World.rbxm (Rojo puts it at Workspace.World). That file is the
+-- hand-editable map the game uses, so this refuses to replace it unless run with --force, which DISCARDS
+-- every hand edit in it. Run from the game folder:
+--   lune run tools/build_map.luau --force
+-- To put new models from assets/ into the current map while keeping hand edits, use
+-- tools/apply_assets.luau instead.
+local process = require("@lune/process")
+local MapTool = require("./map_tool")
 
-local WorldBuilder = H.server("WorldBuilder")
-WorldBuilder.build()
-local world = H.workspace:FindFirstChild("World")
-assert(world, "WorldBuilder.build() made no Workspace.World")
-
-local count = 0
-for _, d in world:GetDescendants() do
-	if d:IsA("BasePart") then
-		count += 1
-	elseif d:IsA("TextLabel") or d:IsA("TextButton") or d:IsA("TextBox") then
-		-- Lune keeps `.Font = Enum.Font.X` as a raw EnumItem the file format rejects; store it as FontFace.
-		local font = d.Font
-		if typeof(font) == "EnumItem" then
-			d.FontFace = roblox.Font.fromEnum(font)
-		end
-	end
-end
-fs.writeFile("map/World.rbxm", roblox.serializeModel({ world }))
-print(`map/World.rbxm: {count} parts`)
+local ok, message = MapTool.regenerate(process.args, MapTool.PATH)
+print(message)
+process.exit(if ok then 0 else 1)

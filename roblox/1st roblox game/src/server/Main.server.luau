@@ -26,7 +26,7 @@ PhysicsService:RegisterCollisionGroup("Players")
 PhysicsService:CollisionGroupSetCollidable("Guards", "Players", false)
 PhysicsService:CollisionGroupSetCollidable("Guards", "Guards", false)
 
-local plotInfos, nestInfos = WorldBuilder.build()
+local plotInfos, nestInfos = WorldBuilder.load()
 PlotService.init(plotInfos)
 SeedService.init(nestInfos)
 GuardService.init(nestInfos)
