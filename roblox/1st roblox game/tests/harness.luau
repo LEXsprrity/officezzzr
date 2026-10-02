@@ -50,6 +50,36 @@ local services = {
 services.ReplicatedStorage.__children.Shared = sharedNode
 services.ServerScriptService.__children.Server = serverNode
 
+-- A real (Lune) DataModel so instance-building modules like WorldBuilder can run; Lune checks
+-- every property name and value type against the Roblox reflection database.
+local dataModel = roblox.Instance.new("DataModel")
+Harness.workspace = dataModel:GetService("Workspace")
+Harness.serverStorage = dataModel:GetService("ServerStorage")
+services.ServerStorage = Harness.serverStorage :: any
+
+-- The assets folder, loaded like Rojo maps it: each assets/<Name>.rbxm(x) becomes ServerStorage.Assets.<Name>.
+-- Files that don't load are listed in Harness.assetErrors (a test fails on them).
+Harness.assets = roblox.Instance.new("Folder")
+Harness.assets.Name = "Assets"
+Harness.assets.Parent = Harness.serverStorage
+Harness.assetFiles = {} :: { string }
+Harness.assetErrors = {} :: { string }
+if fs.isDir("assets") then
+	for _, entry in fs.readDir("assets") do
+		local name = string.match(entry, "^(.+)%.rbxmx?$")
+		if name then
+			table.insert(Harness.assetFiles, entry)
+			local ok, roots = pcall(roblox.deserializeModel, fs.readFile("assets/" .. entry))
+			if ok and #roots == 1 then
+				roots[1].Name = name
+				roots[1].Parent = Harness.assets
+			else
+				table.insert(Harness.assetErrors, `assets/{entry}: {if ok then `{#roots} top-level instances (save exactly one Model or Folder)` else roots}`)
+			end
+		end
+	end
+end
+
 local game = {
 	GetService = function(_, name: string)
 		local s = services[name]
@@ -96,11 +126,6 @@ function RandomMock:NextInteger(lo: number, hi: number): number
 	return math.min(hi, lo + math.floor(self:NextNumber() * (hi - lo + 1)))
 end
 Harness.Random = RandomMock
-
--- A real (Lune) DataModel so instance-building modules like WorldBuilder can run; Lune checks
--- every property name and value type against the Roblox reflection database.
-local dataModel = roblox.Instance.new("DataModel")
-Harness.workspace = dataModel:GetService("Workspace")
 
 local cache: { [string]: any } = {}
 local requireModule

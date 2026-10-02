@@ -8,8 +8,13 @@ local H = require("./harness")
 
 local Config = H.shared("Config")
 local configNode = {}
+local assetsNode = {}
 local sharedNode = { WaitForChild = function(_, name)
 	return if name == "Config" then configNode else nil
+end }
+local serverNode = { WaitForChild = function(_, name)
+	assert(name == "Assets", "CreatureModels required server module " .. name)
+	return assetsNode
 end }
 
 local env = {
@@ -19,7 +24,11 @@ local env = {
 			return sharedNode
 		end }
 	end },
+	script = { Parent = serverNode },
 	require = function(target)
+		if target == assetsNode then
+			return H.server("Assets") -- reads the harness's ServerStorage.Assets
+		end
 		assert(target == configNode, "unexpected require")
 		return Config
 	end,

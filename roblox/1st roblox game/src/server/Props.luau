@@ -2,7 +2,26 @@
 -- overlays, lights, particle emitters, and a few reusable cartoon props (trees, flowers, lamps, fences).
 -- Everything is anchored. Decoration never collides, never fires Touched and is skipped by raycasts,
 -- so neither players, guards nor the camera snag on it.
+--
+-- The reusable props are asset slots (see Assets): each is a group Model that a drop-in model from the
+-- assets folder can replace. Pass `slot = false` to build one untagged, inside a bigger piece.
+local Assets = require(script.Parent:WaitForChild("Assets"))
+
 local Props = {}
+
+-- A CFrame at `pos` looking at `target`, like CFrame.lookAt. Built with fromMatrix because the map is
+-- baked under Lune, whose CFrame.lookAt points the wrong way for most directions.
+function Props.lookAt(pos: Vector3, target: Vector3): CFrame
+	local look = (target - pos).Unit
+	local right = look:Cross(Vector3.yAxis)
+	right = if right.Magnitude < 1e-3 then Vector3.xAxis else right.Unit
+	return CFrame.fromMatrix(pos, right, right:Cross(look))
+end
+
+type Slot = string | false | nil
+local function slotOr(slot: Slot, default: string): string | false
+	return if slot == nil then default else slot
+end
 
 local function part(props: { [string]: any }): Part
 	local p = Instance.new("Part")
@@ -72,7 +91,7 @@ end
 -- Cylinder between two points (branches, bones, arms).
 function Props.rod(parent: Instance, name: string, a: Vector3, b: Vector3, diameter: number, color: Color3, material: Enum.Material?): Part
 	local len = (b - a).Magnitude
-	local cf = CFrame.lookAt((a + b) / 2, b) * CFrame.Angles(0, math.rad(90), 0) -- local X along a->b
+	local cf = Props.lookAt((a + b) / 2, b) * CFrame.Angles(0, math.rad(90), 0) -- local X along a->b
 	local p = part({
 		Name = name,
 		Shape = Enum.PartType.Cylinder,
@@ -187,53 +206,74 @@ end
 Props.WOOD = Color3.fromRGB(150, 98, 58)
 Props.WOOD_LIGHT = Color3.fromRGB(196, 138, 82)
 
-function Props.roundTree(parent: Instance, pos: Vector3, rng: Random, leaf: Color3, height: number?)
-	local h = height or rng:NextNumber(9, 14)
-	Props.cylinder(parent, "Trunk", h, 1.8, pos + Vector3.new(0, h / 2, 0), Props.WOOD, Enum.Material.Wood)
-	local r = rng:NextNumber(9, 12)
-	Props.ball(parent, "Canopy", r, pos + Vector3.new(0, h + r * 0.2, 0), leaf, Enum.Material.Grass)
-	Props.ball(parent, "Canopy", r * 0.7, pos + Vector3.new(r * 0.35, h + r * 0.55, rng:NextNumber(-2, 2)), leaf:Lerp(Color3.new(1, 1, 0.6), 0.15), Enum.Material.Grass)
+function Props.roundTree(parent: Instance, pos: Vector3, rng: Random, leaf: Color3, height: number?, slot: Slot): Model?
+	return Assets.swap(slotOr(slot, "Tree"), parent, Assets.spin(pos), function(into)
+		local h = height or rng:NextNumber(9, 14)
+		Props.cylinder(into, "Trunk", h, 1.8, pos + Vector3.new(0, h / 2, 0), Props.WOOD, Enum.Material.Wood)
+		local r = rng:NextNumber(9, 12)
+		Props.ball(into, "Canopy", r, pos + Vector3.new(0, h + r * 0.2, 0), leaf, Enum.Material.Grass)
+		Props.ball(into, "Canopy", r * 0.7, pos + Vector3.new(r * 0.35, h + r * 0.55, rng:NextNumber(-2, 2)), leaf:Lerp(Color3.new(1, 1, 0.6), 0.15), Enum.Material.Grass)
+	end)
 end
 
-function Props.flower(parent: Instance, pos: Vector3, petal: Color3, height: number?)
-	local h = height or 1.6
-	Props.cylinder(parent, "Stem", h, 0.3, pos + Vector3.new(0, h / 2, 0), Color3.fromRGB(70, 170, 60)).CastShadow = false
-	local head = Props.blob(parent, "Flower", Vector3.new(1.6, 0.7, 1.6), CFrame.new(pos + Vector3.new(0, h + 0.2, 0)), petal)
-	head.CastShadow = false
+function Props.flower(parent: Instance, pos: Vector3, petal: Color3, height: number?, slot: Slot): Model?
+	return Assets.swap(slotOr(slot, "Flower"), parent, Assets.spin(pos), function(into)
+		local h = height or 1.6
+		Props.cylinder(into, "Stem", h, 0.3, pos + Vector3.new(0, h / 2, 0), Color3.fromRGB(70, 170, 60)).CastShadow = false
+		local head = Props.blob(into, "Flower", Vector3.new(1.6, 0.7, 1.6), CFrame.new(pos + Vector3.new(0, h + 0.2, 0)), petal)
+		head.CastShadow = false
+	end)
 end
 
-function Props.bush(parent: Instance, pos: Vector3, size: number, color: Color3)
-	Props.blob(parent, "Bush", Vector3.new(size * 1.3, size, size), CFrame.new(pos + Vector3.new(0, size * 0.35, 0)), color, Enum.Material.Grass)
+function Props.bush(parent: Instance, pos: Vector3, size: number, color: Color3, slot: Slot): Model?
+	return Assets.swap(slotOr(slot, "Bush"), parent, Assets.spin(pos), function(into)
+		Props.blob(into, "Bush", Vector3.new(size * 1.3, size, size), CFrame.new(pos + Vector3.new(0, size * 0.35, 0)), color, Enum.Material.Grass)
+	end)
 end
 
-function Props.rock(parent: Instance, pos: Vector3, size: Vector3, color: Color3, material: Enum.Material?, yaw: number?)
-	Props.blob(parent, "Rock", size, CFrame.new(pos + Vector3.new(0, size.Y * 0.3, 0)) * CFrame.Angles(0, yaw or 0, 0), color, material or Enum.Material.Slate)
+function Props.rock(parent: Instance, pos: Vector3, size: Vector3, color: Color3, material: Enum.Material?, yaw: number?, slot: Slot): Model?
+	local cf = CFrame.new(pos) * CFrame.Angles(0, yaw or 0, 0)
+	return Assets.swap(slotOr(slot, "Rock"), parent, cf, function(into)
+		Props.blob(into, "Rock", size, cf + Vector3.new(0, size.Y * 0.3, 0), color, material or Enum.Material.Slate)
+	end)
 end
 
-function Props.lamp(parent: Instance, pos: Vector3, glow: Color3, height: number?): Part
-	local h = height or 9
-	Props.cylinder(parent, "LampPost", h, 0.6, pos + Vector3.new(0, h / 2, 0), Color3.fromRGB(45, 45, 55), Enum.Material.Metal)
-	local head = Props.ball(parent, "LampHead", 1.8, pos + Vector3.new(0, h + 0.6, 0), glow, Enum.Material.Neon)
-	head.CastShadow = false
-	Props.light(head, glow, 22, 1.4)
-	return head
+-- A street lamp; its light carries over to a drop-in model that has none of its own.
+function Props.lamp(parent: Instance, pos: Vector3, glow: Color3, height: number?, slot: Slot): Model?
+	return Assets.swap(slotOr(slot, "Lamp"), parent, CFrame.new(pos), function(into)
+		local h = height or 9
+		Props.cylinder(into, "LampPost", h, 0.6, pos + Vector3.new(0, h / 2, 0), Color3.fromRGB(45, 45, 55), Enum.Material.Metal)
+		local head = Props.ball(into, "LampHead", 1.8, pos + Vector3.new(0, h + 0.6, 0), glow, Enum.Material.Neon)
+		head.CastShadow = false
+		Props.light(head, glow, 22, 1.4)
+	end, Vector3.new(3, 1, 3))
 end
 
--- A wooden fence from a to b (on the ground at a.Y): posts every ~`spacing` studs and two rails.
--- Solid, like a real fence; used around plots, never inside the corridor.
+-- A wooden fence from a to b (on the ground at a.Y): posts every ~`spacing` studs and two rails between
+-- each pair. Solid, like a real fence; used around plots, never inside the corridor. Each post is a
+-- FencePost slot and each stretch of rails between two posts a FenceSection slot.
 function Props.fence(parent: Instance, a: Vector3, b: Vector3, height: number, spacing: number, post: Color3?, rail: Color3?)
 	local postColor, railColor = post or Props.WOOD, rail or Props.WOOD_LIGHT
 	local delta = b - a
 	local len = delta.Magnitude
 	local n = math.max(1, math.round(len / spacing))
 	local dir = delta.Unit
+	local along = CFrame.fromMatrix(Vector3.zero, dir, Vector3.yAxis) -- local X along the run (asset frame)
+	local rot = Props.lookAt(Vector3.zero, dir) -- local -Z along the run
+	local seg = len / n
 	for i = 0, n do
-		local p = a + dir * (len * i / n)
-		Props.box(parent, "FencePost", Vector3.new(1, height + 0.6, 1), CFrame.new(p + Vector3.new(0, (height + 0.6) / 2, 0)), postColor, Enum.Material.Wood)
-	end
-	local rot = CFrame.lookAt(Vector3.zero, dir) -- local -Z along the run
-	for _, y in { height * 0.38, height * 0.82 } do
-		Props.box(parent, "FenceRail", Vector3.new(0.5, 0.8, len), CFrame.new((a + b) / 2 + Vector3.new(0, y, 0)) * rot, railColor, Enum.Material.WoodPlanks)
+		local p = a + dir * (seg * i)
+		Assets.swap("FencePost", parent, CFrame.new(p) * along, function(into)
+			Props.box(into, "FencePost", Vector3.new(1, height + 0.6, 1), CFrame.new(p + Vector3.new(0, (height + 0.6) / 2, 0)), postColor, Enum.Material.Wood)
+		end, Vector3.new(2, 1, 2))
+		if i < n then
+			local mid = p + dir * (seg / 2)
+			Assets.swap("FenceSection", parent, CFrame.new(mid) * along, function(into)
+				for _, y in { height * 0.38, height * 0.82 } do
+					Props.box(into, "FenceRail", Vector3.new(0.5, 0.8, seg), CFrame.new(mid + Vector3.new(0, y, 0)) * rot, railColor, Enum.Material.WoodPlanks)
+				end
+			end, Vector3.new(1, 1.3, 0))
+		end
 	end
 end
 

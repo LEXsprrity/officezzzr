@@ -2,8 +2,10 @@
 *.rbxl
 *.rbxlx
 *.rbxm
-!**/map/World.rbxm
 *.rbxmx
+!**/map/World.rbxm
+!**/assets/*.rbxm
+!**/assets/*.rbxmx
 sourcemap.json
 
 # Agent Office
