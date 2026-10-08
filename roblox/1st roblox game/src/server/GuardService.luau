@@ -9,6 +9,7 @@ local SeedService = require(script.Parent:WaitForChild("SeedService"))
 local SpeedService = require(script.Parent:WaitForChild("SpeedService"))
 local WorldBuilder = require(script.Parent:WaitForChild("WorldBuilder"))
 local Assets = require(script.Parent:WaitForChild("Assets"))
+local GiantMole = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("GiantMole"))
 
 local GuardService = {}
 
@@ -139,7 +140,18 @@ local function buildGuard(info: WorldBuilder.NestInfo): Guard
 	root.Parent = model
 	model.PrimaryPart = root
 
-	local eyes = if assetBody(model, root, zone, hip) then {} else proceduralBody(model, root, zone, hip)
+	-- The Meadow boss is a fully rigged, animated Giant Mole (GiantMole + GuardAnimator.client) unless a
+	-- Guard_GiantMole model is in the assets folder; the other giants are still the blocky bodies.
+	local rigged = false
+	local eyes: { BasePart } = {}
+	if not assetBody(model, root, zone, hip) then
+		if zone.id == "Meadow" then
+			GiantMole.build(model, root, root.CFrame * CFrame.new(0, -(hip + root.Size.Y / 2), 0))
+			rigged = true
+		else
+			eyes = proceduralBody(model, root, zone, hip)
+		end
+	end
 
 	local hum = Instance.new("Humanoid")
 	hum.RigType = Enum.HumanoidRigType.R15 -- R15 honours HipHeight on a legless custom rig
@@ -161,8 +173,11 @@ local function buildGuard(info: WorldBuilder.NestInfo): Guard
 	end
 
 	local head = model:FindFirstChild("Head") :: BasePart
-	local status = WorldBuilder.billboard(head, "💤", UDim2.fromOffset(120, 60), Vector3.new(0, 3 * S, 0), 300)
-	local nameLabel = WorldBuilder.billboard(head, zone.guard, UDim2.fromOffset(240, 30), Vector3.new(0, 1.6 * S, 0), 200)
+	-- The rigged boss shows its own animated Zzz and expressions, so its status label starts empty.
+	local statusY = if rigged then GiantMole.HEAD_LABEL_OFFSETS.status else 3 * S
+	local nameY = if rigged then GiantMole.HEAD_LABEL_OFFSETS.name else 1.6 * S
+	local status = WorldBuilder.billboard(head, if rigged then "" else "💤", UDim2.fromOffset(120, 60), Vector3.new(0, statusY, 0), 300)
+	local nameLabel = WorldBuilder.billboard(head, zone.guard, UDim2.fromOffset(240, 30), Vector3.new(0, nameY, 0), 200)
 	nameLabel.TextColor3 = Color3.fromRGB(255, 200, 200)
 
 	model.Parent = info.model.Parent
@@ -200,6 +215,7 @@ end
 local function onCaught(g: Guard, player: Player)
 	local s = Sessions.get(player)
 	local root = SpeedService.rootOf(player)
+	g.model:SetAttribute("SwipeAt", workspace:GetServerTimeNow()) -- the rigged boss plays a paw swipe
 	SeedService.returnCarry(player)
 	if not s or not root then
 		return

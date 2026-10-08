@@ -13,6 +13,7 @@ require("./shop.spec")
 require("./progression.spec")
 require("./assets.spec")
 require("./map.spec")
+require("./mole.spec")
 
 print("Steal a Seed: mocked server tests\n")
 local failed = H.run()
