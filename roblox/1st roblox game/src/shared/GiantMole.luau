@@ -21,7 +21,7 @@ local METAL = Color3.fromRGB(88, 90, 98)
 
 -- Joint name -> { parent bone, child bone }. Order matters: parents before children.
 GiantMole.JOINTS = {
-	"Spine", "Neck", "Nose", "HelmetJ", "HaloJ",
+	"Spine", "Neck", "Nose", "JawJ", "HelmetJ", "HaloJ",
 	"ShoulderL", "ShoulderR", "WristL", "WristR", "HipL", "HipR", "TailJ",
 }
 
@@ -143,9 +143,20 @@ function GiantMole.build(model: Model, root: BasePart, ground: CFrame): BasePart
 			local tip = base + V(s * 3.6, dy * 1.6 - 0.3, 0.9 + i * 0.25)
 			weld(head, rod(b, "Whisker", base, tip, 0.13, Color3.fromRGB(235, 230, 220)))
 		end
-		weld(head, newPart(b, "Tooth", V(0.78, 1.15, 0.36), CFrame.new(s * 0.43, 5.55, -14.45), Color3.fromRGB(255, 252, 240)))
 	end
-	weld(head, newPart(b, "Mouth", V(2.3, 0.22, 0.22), CFrame.new(0, 6.15, -14.35), Color3.fromRGB(70, 30, 36)))
+
+	-- Mouth: a dark mouth tucked under the snout, a hinged chin with a tongue (the Jaw bone), two big
+	-- buck teeth resting on the lower lip, and corners curled into a cheeky grin.
+	weld(head, blob(b, "MouthInside", V(2.7, 1.1, 2.0), CFrame.new(0, 5.85, -13.65), Color3.fromRGB(64, 22, 32)))
+	local jaw = blob(b, "Jaw", V(3.0, 1.45, 3.1), CFrame.new(0, 5.25, -13.15), FUR_LIGHT, Enum.Material.Fabric)
+	joint(b, "JawJ", head, jaw, V(0, 5.9, -11.9))
+	weld(jaw, blob(b, "Tongue", V(1.7, 0.55, 1.5), CFrame.new(0, 5.72, -13.55), Color3.fromRGB(232, 92, 118)))
+	weld(jaw, blob(b, "LowerLip", V(2.4, 0.5, 0.9), CFrame.new(0, 5.55, -14.35), Color3.fromRGB(150, 112, 98), Enum.Material.Fabric))
+	for _, s in { -1, 1 } do
+		local tooth = newPart(b, "Tooth", V(0.72, 1.0, 0.32), CFrame.new(s * 0.4, 5.6, -14.68) * CFrame.Angles(rad(-6), 0, rad(-s * 3)), Color3.fromRGB(255, 252, 240))
+		weld(head, tooth)
+		weld(head, rod(b, "Grin", V(s * 1.0, 5.95, -14.25), V(s * 1.6, 6.35, -13.6), 0.24, Color3.fromRGB(64, 22, 32)))
+	end
 
 	-- The star nose: a pink core ringed by 16 little tentacles that wiggle as it sniffs.
 	local star = newPart(b, "StarCore", V(1.6, 1.6, 1.6), CFrame.new(0, 7.2, -15.45), STAR, Enum.Material.SmoothPlastic, Enum.PartType.Ball)
@@ -245,6 +256,7 @@ local function sleeping(t: number): Pose
 		Neck = P(0, -0.7, 0.3) * A(rad(-17 - 2.5 * breath), 0, rad(7)),
 		HelmetJ = P(0, -0.35, -1.0) * A(rad(-24), 0, rad(-9)),
 		Nose = A(0, 0, rad(5 * sin(t * 1.9))),
+		JawJ = A(rad(-3 - 5 * math.max(0, breath)), 0, 0), -- snoring: opens on each breath in
 		HaloJ = CFrame.identity,
 		ShoulderL = A(rad(40), rad(-12), rad(14)),
 		ShoulderR = A(rad(40), rad(12), rad(-14)),
@@ -262,6 +274,7 @@ local function alert(t: number): Pose
 		Neck = A(rad(16), 0, 0),
 		HelmetJ = P(0, 0.25, 0) * A(rad(9), 0, 0),
 		Nose = A(0, 0, rad(22 * sin(t * 16))),
+		JawJ = A(rad(-26 + 3 * sin(t * 30)), 0, 0), -- a startled roar
 		HaloJ = CFrame.identity,
 		ShoulderL = A(rad(-12), 0, rad(-38)),
 		ShoulderR = A(rad(-12), 0, rad(38)),
@@ -280,6 +293,7 @@ local function gallop(t: number, p: number, k: number, grumpy: boolean): Pose
 		Neck = A(rad((if grumpy then -10 else 4) + 6 * k * sin(2 * p + 0.6)), rad(-4 * k * sin(p)), 0),
 		HelmetJ = P(0, 0.3 * k * abs(sin(p + 0.4)), 0) * A(rad(5 * k * sin(2 * p + 1.2)), 0, 0),
 		Nose = A(0, 0, rad(18 * sin(t * (if grumpy then 6 else 15)))),
+		JawJ = A(rad(if grumpy then -2 else -9 - 7 * abs(sin(2 * p))), 0, 0), -- panting while it runs
 		HaloJ = CFrame.identity,
 		TailJ = A(rad(10), rad(30 * k * sin(2 * p)), 0),
 	}
@@ -301,6 +315,7 @@ local function stunned(t: number): Pose
 		Neck = A(rad(-12), 0, rad(16 * sin(t * 7))),
 		HelmetJ = P(0.3, -0.2, -0.3) * A(rad(12), 0, rad(18)),
 		Nose = A(0, 0, rad(30 * sin(t * 4))),
+		JawJ = A(rad(-14 + 6 * sin(t * 5)), 0, rad(8 * sin(t * 3))), -- dazed, jaw hanging
 		HaloJ = A(0, t * 4.5, 0),
 		TailJ = A(rad(-25), 0, 0),
 	}
@@ -347,6 +362,7 @@ function GiantMole.pose(state: string, t: number, age: number, phase: number, sw
 		local w = sin(swipeAge / 0.6 * pi)
 		pose.ShoulderR = pose.ShoulderR:Lerp(A(rad(135), rad(-25), rad(30)), w)
 		pose.WristR = pose.WristR:Lerp(A(rad(-45), 0, 0), w)
+		pose.JawJ = pose.JawJ:Lerp(A(rad(-30), 0, 0), w)
 		pose.Spine = pose.Spine * A(0, rad(-16 * w), rad(-6 * w))
 	end
 	return pose
