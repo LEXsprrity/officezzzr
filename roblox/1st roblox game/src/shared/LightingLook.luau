@@ -21,14 +21,15 @@ export type Look = { [string]: { any } }
 
 -- Day values are calm and natural (owner playtest: the old 3 Brightness, +0.28 saturation and bloom were
 -- glaring and washed out): a normal sun, a plain grey-blue ambient, no exposure boost, a little saturation
--- and contrast, bloom only on the brightest neon. Night stays a clear, readable blue.
+-- and contrast, bloom only on the brightest neon. Night stays a clear, readable blue, bright enough that the
+-- far zones (the dark Lava Fields and Deep Space) still read against the black sky from the spawn (owner).
 LightingLook.LIGHTING = {
-	Brightness = { 2, 1.4 },
-	Ambient = { rgb(70, 72, 82), rgb(92, 108, 170) },
-	OutdoorAmbient = { rgb(128, 130, 138), rgb(120, 140, 210) },
+	Brightness = { 2, 1.7 },
+	Ambient = { rgb(70, 72, 82), rgb(106, 120, 182) },
+	OutdoorAmbient = { rgb(128, 130, 138), rgb(136, 154, 220) },
 	ColorShift_Top = { rgb(236, 228, 212), rgb(170, 190, 255) },
 	ColorShift_Bottom = { rgb(40, 55, 80), rgb(40, 50, 110) },
-	ExposureCompensation = { -0.1, 0.2 },
+	ExposureCompensation = { -0.1, 0.25 },
 	EnvironmentDiffuseScale = { 0.5, 0.6 },
 	EnvironmentSpecularScale = { 0.1, 0.3 }, -- low by day: flat plastic, not glossy
 } :: Look
@@ -44,7 +45,7 @@ LightingLook.EFFECTS = {
 		TintColor = { rgb(255, 255, 255), rgb(208, 220, 255) },
 		Saturation = { 0.12, 0.15 },
 		Contrast = { 0.04, 0.06 },
-		Brightness = { 0, 0.02 },
+		Brightness = { 0, 0.03 },
 	},
 	BloomEffect = {
 		Intensity = { 0.15, 0.5 },

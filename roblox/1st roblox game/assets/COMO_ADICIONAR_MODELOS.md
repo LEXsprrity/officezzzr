@@ -91,7 +91,7 @@ Workspace
     └── arvore_variant3   (Model: arvore3 + topo3)
 ```
 
-Botão direito na pasta **Arvores** → **Save to File...** → `assets/Arvores.rbxm`. Pronto: todas as árvores redondas do jogo viram as suas, misturando as três versões. Do mesmo jeito: a pasta **Arbustos** → `assets/Arbustos.rbxm`.
+Botão direito na pasta **Arvores** → **Save to File...** → `assets/Arvores.rbxm`. Pronto: todas as peças `Tree` do jogo viram as suas, misturando as três versões. Do mesmo jeito: a pasta **Arbustos** → `assets/Arbustos.rbxm`. (Hoje as árvores e arbustos da Meadow são de blocos com studs, nas peças `Meadow_Tree` e `Meadow_Bush`: para trocar essas, salve a pasta com esse nome, por exemplo `assets/Meadow_Tree.rbxm`.)
 
 #### Nomes
 
@@ -138,43 +138,69 @@ Botão direito na pasta **Arvores** → **Save to File...** → `assets/Arvores.
 
 | Nome | O que é | Onde aparece | Altura | Largura máx. |
 |---|---|---|---|---|
-| `Tree` | árvore redonda (tronco + copa) | 🌼 Meadow (a base agora fica sem árvores) | 18 a 25 | ~16 a 27 |
+| `Tree` | árvore redonda (tronco + copa) | não aparece agora: a Meadow usa as árvores de blocos com studs (`Meadow_Tree`) | 18 a 25 | ~16 a 27 |
 | `BlossomTree` | árvore florida (rosa) | não aparece agora (a base ficou limpa); fica para uso futuro | ~21 | ~20 |
-| `Bush` | arbusto | 🌼 Meadow | 3,5 a 6 | 7 a 15 |
-| `Rock` | pedra | não aparece agora (os lagos ficaram lisos) | 1,3 a 3 | 4 a 9 |
-| `Flower` | flor (cabo + flor) | Jungle (e Meadow se não houver `Meadow_Flower`) | 2 a 4 | ~3 |
+| `Bush` | arbusto | não aparece agora: a Meadow usa `Meadow_Bush` | 3,5 a 6 | 7 a 15 |
+| `Rock` | pedra | não aparece agora (cada zona tem a sua: `Meadow_Rock`, `Desert_Rock`...) | 1,3 a 3 | 4 a 9 |
+| `Flower` | flor (cabo + flor) | a Meadow, só se não houver `Meadow_Flower` | 2 a 4 | ~3 |
 | `Lamp` | poste de luz | não aparece agora (a base ficou limpa); fica para uso futuro | ~10,5 | ~5 |
 | `FencePost` | um poste da cerca | em volta dos lotes | ~5 | ~2 |
 | `FenceSection` | as tábuas da cerca **entre dois postes** (sem os postes), comprimento ao longo do X | em volta dos lotes | ~4 | 10 a 12 de comprimento |
 
 ### Zonas do corredor
 
+Todas as peças do corredor são feitas de blocos de plástico **com studs**, iguais ao chão e às paredes (pedido do dono), e só brilham (Neon) a lava, os cristais e as luzes. Um modelo seu pode ter outro visual, mas combina mais se tiver studs também.
+
 | Nome | O que é | Onde aparece | Altura | Largura máx. |
 |---|---|---|---|---|
-| `Meadow_Flower` | flor da Meadow | 🌼 Meadow | 2 a 3 | ~3 |
-| `Meadow_Mushroom` | cogumelo vermelho | 🌼 Meadow | 2,5 a 4 | 5 a 6 |
-| `Desert_Cactus` | cacto saguaro | 🦂 Desert | 9 a 15 | 4 a 10 |
-| `Desert_Skull` | esqueleto gigante deitado (crânio olhando para +X) | 🦂 Desert | ~6 | ~13 × 45 de comprimento |
+| `Meadow_Tree` | árvore redonda de blocos (tronco + copa em bola) | 🌼 Meadow | 23 a 28 | ~27 a 29 |
+| `Meadow_Bush` | arbusto de blocos (às vezes com frutinhas) | 🌼 Meadow | 3 a 5 | 9 a 11 |
+| `Meadow_Flower` | florzinha (cabo, folha, pétalas e miolo) | 🌼 Meadow | 2 a 3 | ~3 |
+| `Meadow_FlowerBed` | canteiro de flores com borda de madeira e uma cerquinha branca atrás (frente = caminho) | 🌼 Meadow | ~4,5 | 20 a 47 |
+| `Meadow_Mushroom` | grupo de 4 cogumelos vermelhos com pintas | 🌼 Meadow | ~12 | ~31 |
+| `Meadow_Rock` | pedrinha | 🌼 Meadow | 2 a 3 | 7 a 10 |
+| `Desert_Pyramid` | pirâmide em degraus encostada na parede: escada, templo no topo, canto quebrado e dois obeliscos (frente = caminho) | 🦂 Desert | ~33 | ~115 |
+| `Desert_Ruins` | ruínas: colunas quebradas, uma coluna caída e um muro desmoronando (frente = caminho) | 🦂 Desert | ~19 | ~70 |
+| `Desert_Palm` | palmeira inclinada do oásis (frente = para onde ela inclina) | 🦂 Desert | 15 a 19 | ~24 |
+| `Desert_Rock` | pedra do oásis | 🦂 Desert | 2 a 3 | 7 a 10 |
+| `Desert_Cactus` | grupo de cactos (saguaro + cacto-barril) | 🦂 Desert | 13 a 15 | ~18 |
+| `Desert_Tumbleweed` | bola de feno do deserto | 🦂 Desert | ~3 | ~4 |
+| `Desert_Skull` | esqueleto gigante deitado: crânio, coluna e costelas (crânio olhando para +X) | 🦂 Desert | ~11 | ~60 de comprimento |
 | `Desert_Bone` | osso solto no chão | 🦂 Desert | ~1 | ~2 × 6 |
-| `Desert_Mesa` | rocha em degraus (mesa) | não aparece agora (o deserto ficou mais limpo; a pirâmide é `Desert_Pyramid`) | 11 a 14 | 14 a 27 |
-| `Desert_Pyramid` | pirâmide em degraus | 🦂 Desert | ~19 | ~34 |
-| `Jungle_Tree` | árvore alta com copa sobre o caminho (frente = caminho) | 🦖 Jungle | 31 a 42 | ~36 × 51 |
-| `Jungle_Fern` | samambaia | 🦖 Jungle | ~3,3 | 15 a 19 |
-| `Jungle_Log` | tronco caído (comprimento ao longo do X) | 🦖 Jungle | ~3 | ~18 |
-| `Lava_Volcano` | vulcão encostado na parede (frente = caminho) | 🌋 Lava Fields | ~21 | ~24 |
-| `Lava_Rock` | rocha de basalto (com magma) | 🌋 Lava Fields | 2,4 a 4,3 | 6 a 13 |
-| `Lava_Obsidian` | espeto de obsidiana | 🌋 Lava Fields | 5 a 11 | 5 a 13 |
-| `Snow_Pine` | pinheiro com neve | ❄️ Snow Peaks | 13 a 21 | 19 a 37 |
-| `Snow_Snowman` | boneco de neve (frente = -X, olhando para quem chega) | ❄️ Snow Peaks | ~13 | ~9 |
-| `Snow_Crystal` | grupo de cristais de gelo | ❄️ Snow Peaks | 4 a 9 | 6 a 14 |
-| `Space_Planet` | planeta no céu (o apoio é o ponto mais baixo da esfera) | 👽 Deep Space | 22 a 38 | 30 a 95 |
-| `Space_Crystal` | grupo de cristais neon | 👽 Deep Space | 7 a 13 | 9 a 20 |
-| `Space_Asteroid` | asteroide flutuando | 👽 Deep Space | 4 a 10 | 5 a 13 |
-| `Space_Mushroom` | cogumelo alienígena neon | 👽 Deep Space | 4 a 8 | 6 a 8 |
-| `Space_UFO` | disco voador (o feixe de luz embaixo continua) | 👽 Deep Space | ~16 | ~29 |
-| `Spirit_Torii` | portal torii vermelho atravessando o corredor | ⛩️ Spirit Garden | ~55 | ~196 |
-| `Spirit_Lantern` | lanterna de pedra (frente = caminho) | ⛩️ Spirit Garden | ~7 | ~6 |
-| `Spirit_CherryTree` | cerejeira inclinada sobre o caminho (frente = caminho) | ⛩️ Spirit Garden | 18 a 22 | ~27 a 37 |
+| `Desert_Mesa` | rocha em degraus (mesa) | não aparece agora (a pirâmide é `Desert_Pyramid`) | 11 a 14 | 14 a 27 |
+| `Jungle_Waterfall` | penhasco de pedra com musgo e uma cachoeira (o lago na frente continua do jogo) (frente = caminho) | 🦖 Jungle | ~40 | ~100 |
+| `Jungle_Ruins` | ruínas: cabeça de pedra gigante, altar em degraus com porta, colunas com cipó (frente = caminho) | 🦖 Jungle | ~25 | ~120 |
+| `Jungle_Tree` | árvore gigante com raízes, copa em camadas e cipós (frente = caminho) | 🦖 Jungle | 39 a 49 | ~36 a 52 |
+| `Jungle_Bamboo` | moita de bambu | 🦖 Jungle | 16 a 25 | 11 a 17 |
+| `Jungle_Fern` | planta de folhas gigantes | 🦖 Jungle | 7 a 10 | 32 a 40 |
+| `Jungle_Bush` | arbusto da selva (às vezes com frutinhas) | 🦖 Jungle | 5 a 6 | 14 a 19 |
+| `Jungle_Log` | tronco caído com musgo e cogumelos (comprimento ao longo do X) | 🦖 Jungle | ~6 | ~25 |
+| `Lava_Volcano` | altar-vulcão em degraus encostado na parede, com a lava descendo em zigue-zague e fogo de verdade no topo (o fogo, a fumaça e a luz passam para o seu modelo) (frente = caminho) | 🌋 Lava Fields | ~27 | ~73 |
+| `Lava_Terraces` | três terraços de pedra com lava escorrendo de um para o outro e fogo no de cima (frente = caminho) | 🌋 Lava Fields | ~22 | ~57 |
+| `Lava_Basalt` | grupo de colunas de basalto (frente = caminho) | 🌋 Lava Fields | 18 a 25 | 23 a 32 |
+| `Lava_DeadTree` | árvore morta carbonizada | 🌋 Lava Fields | 24 a 37 | 12 a 25 |
+| `Lava_Vent` | respiradouro de lava: cone baixo de pedra com lava e fogo no topo (o fogo e a luz passam para o seu modelo) | 🌋 Lava Fields | ~5,5 | ~22 |
+| `Lava_Rock` | rocha de basalto | 🌋 Lava Fields | 7 a 10 | 16 a 27 |
+| `Lava_Obsidian` | espeto de obsidiana | não aparece agora | 5 a 11 | 5 a 13 |
+| `Snow_Cliff` | penhasco de gelo em degraus, com neve, pingentes e (um deles) uma cachoeira congelada (frente = caminho) | ❄️ Snow Peaks | 28 a 37 | 73 a 99 |
+| `Snow_Igloo` | iglu (frente = caminho) | ❄️ Snow Peaks | ~13 | ~41 |
+| `Snow_Pine` | pinheiro com neve | ❄️ Snow Peaks | 19 a 28 | 28 a 48 |
+| `Snow_Snowman` | boneco de neve (frente = -X, olhando para quem chega) | ❄️ Snow Peaks | 12 a 15 | ~11 |
+| `Snow_Crystal` | grupo de cristais de gelo que brilham | ❄️ Snow Peaks | 9 a 12 | 12 a 15 |
+| `Space_UFO` | disco voador levando uma vaca (o feixe de luz embaixo continua) | 👽 Deep Space | ~25 | ~32 |
+| `Space_Crater` | cratera: anel de pedra lunar em volta de uma poça que brilha | 👽 Deep Space | ~3 | 24 a 33 |
+| `Space_Rocket` | foguete na torre de lançamento (frente = caminho) | 👽 Deep Space | ~39 | ~32 |
+| `Space_Planet` | planeta de blocos no céu, alguns com anel (o apoio é o ponto mais baixo) | 👽 Deep Space | 34 a 58 | 43 a 57 |
+| `Space_Crystal` | grupo de cristais neon numa pedra | 👽 Deep Space | 17 a 26 | 23 a 32 |
+| `Space_Asteroid` | asteroide flutuando | 👽 Deep Space | 7 a 8 | 9 a 12 |
+| `Space_Mushroom` | planta alienígena com bulbos que brilham | 👽 Deep Space | 6,5 a 9 | 7 a 9 |
+| `Space_Rock` | pedra lunar | 👽 Deep Space | 4 a 6,5 | 9 a 15 |
+| `Spirit_Shrine` | santuário pequeno: base de pedra, postes vermelhos, telhado em degraus, caixa de oferendas e sino (frente = caminho) | ⛩️ Spirit Garden | ~20 | ~35 |
+| `Spirit_Lantern` | lanterna de pedra com luz (frente = caminho) | ⛩️ Spirit Garden | ~10 | ~10 |
+| `Spirit_CherryTree` | cerejeira florida inclinada sobre o caminho (frente = caminho) | ⛩️ Spirit Garden | 23 a 27 | 30 a 36 |
+| `Spirit_Bamboo` | moita de bambu | ⛩️ Spirit Garden | 21 a 26 | 11 a 15 |
+| `Spirit_Rock` | pedra do jardim | ⛩️ Spirit Garden | 3,5 a 5 | 8 a 12 |
+| `Spirit_Torii` | portal torii vermelho atravessando o corredor | não aparece agora (o dono tirou os portais) | ~55 | ~196 |
 
 ### Ninhos (um por zona)
 

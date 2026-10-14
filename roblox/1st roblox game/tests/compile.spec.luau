@@ -6,12 +6,17 @@ local luau = require("@lune/luau")
 local H = require("./harness")
 
 local files: { string } = {}
-for _, dir in { "src/client", "src/server", "src/shared" } do
+local function collect(dir: string)
 	for _, entry in fs.readDir(dir) do
 		if string.match(entry, "%.luau$") then
 			table.insert(files, dir .. "/" .. entry)
+		elseif fs.isDir(dir .. "/" .. entry) then -- sub-folders too (src/server/Zones)
+			collect(dir .. "/" .. entry)
 		end
 	end
+end
+for _, dir in { "src/client", "src/server", "src/shared" } do
+	collect(dir)
 end
 table.sort(files)
 

@@ -54,6 +54,21 @@ H.test("lighting: a clear, natural day that doesn't glare, and night stays reada
 	H.ok(nightAmbient.B > nightAmbient.R and (nightAmbient.R + nightAmbient.G + nightAmbient.B) / 3 > 0.5, "night ambient is blue and bright")
 end)
 
+H.test("lighting: at night the far zones still read from the spawn (a brighter night, still no fog)", function()
+	-- Owner: at night the dark Lava Fields and Deep Space vanished into the black sky. The night's sun-and-sky
+	-- light stays bright enough to show them (the zones' bright wall caps and glowing lava, crystals and
+	-- lanterns do the rest), without any fog or haze.
+	local L = LightingLook.LIGHTING
+	local function avg(c: any): number
+		return (c.R + c.G + c.B) / 3
+	end
+	H.ok(L.Brightness[2] >= 1.6, `night Brightness {L.Brightness[2]}`)
+	H.ok(avg(L.OutdoorAmbient[2]) >= 0.6, `night OutdoorAmbient {L.OutdoorAmbient[2]}`)
+	H.ok(avg(L.Ambient[2]) >= 0.45, `night Ambient {L.Ambient[2]}`)
+	H.ok(L.ExposureCompensation[2] >= 0.2 and L.ExposureCompensation[2] <= 0.4, "a little exposure lift, not washed out")
+	H.eq(LightingLook.EFFECTS.Atmosphere.Density[2], 0, "no fog")
+end)
+
 H.test("lighting: default.project.json ships the day look", function()
 	local project = serde.decode("json", fs.readFile("default.project.json"))
 	local lighting = project.tree.Lighting

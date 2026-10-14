@@ -24,13 +24,14 @@ end
 -- Every slot the game knows, in the order the guide lists them.
 Assets.SLOTS = {
 	"Tree", "BlossomTree", "Bush", "Rock", "Flower", "Lamp", "FencePost", "FenceSection",
-	"Meadow_Flower", "Meadow_Mushroom",
-	"Desert_Cactus", "Desert_Skull", "Desert_Bone", "Desert_Mesa", "Desert_Pyramid",
-	"Jungle_Tree", "Jungle_Fern", "Jungle_Log",
-	"Lava_Volcano", "Lava_Rock", "Lava_Obsidian",
-	"Snow_Pine", "Snow_Snowman", "Snow_Crystal",
-	"Space_Planet", "Space_Crystal", "Space_Asteroid", "Space_Mushroom", "Space_UFO",
-	"Spirit_Torii", "Spirit_Lantern", "Spirit_CherryTree",
+	"Meadow_Flower", "Meadow_Mushroom", "Meadow_Tree", "Meadow_Bush", "Meadow_FlowerBed", "Meadow_Rock",
+	"Desert_Cactus", "Desert_Skull", "Desert_Bone", "Desert_Mesa", "Desert_Pyramid", "Desert_Ruins", "Desert_Palm", "Desert_Rock",
+	"Desert_Tumbleweed",
+	"Jungle_Tree", "Jungle_Fern", "Jungle_Log", "Jungle_Waterfall", "Jungle_Ruins", "Jungle_Bamboo", "Jungle_Bush",
+	"Lava_Volcano", "Lava_Rock", "Lava_Obsidian", "Lava_Terraces", "Lava_Basalt", "Lava_DeadTree", "Lava_Vent",
+	"Snow_Pine", "Snow_Snowman", "Snow_Crystal", "Snow_Cliff", "Snow_Igloo",
+	"Space_Planet", "Space_Crystal", "Space_Asteroid", "Space_Mushroom", "Space_UFO", "Space_Crater", "Space_Rocket", "Space_Rock",
+	"Spirit_Torii", "Spirit_Lantern", "Spirit_CherryTree", "Spirit_Shrine", "Spirit_Bamboo", "Spirit_Rock",
 	"Treadmill", "UpgradeSign", "ShopStall", "ShopStall_Shop", "ShopStall_Trails", "ShopStall_Index", "ShopStall_Sell",
 	"MoneyBoard",
 } :: { string }

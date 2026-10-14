@@ -35,5 +35,7 @@ Marcar com `[x]` quando estiver feito e junto ao jogo.
 
 - [ ] **11. Boss 1 em forma de planta.** O dono vai pedir o design ao Claude Design (prompt já feito). Animações: dormir, acordar, perseguir, apanhar o jogador e voltar. Sem estado de atordoado: o Bat é para usar em jogadores, não no boss.
 
+- [x] **12. Enfeites das zonas bonitos (arte do mapa).** Cada zona com 3 a 6 cenários grandes e detalhes espalhados, tudo de blocos com studs iguais ao chão e às paredes (Neon só na lava, nos cristais e nas luzes). Lava Fields como a referência: altar-vulcão em degraus com a lava descendo em zigue-zague, poças no chão e fogo de verdade no topo, cachoeira de lava, terraços, respiradouros, colunas de basalto e árvores mortas. As paredes de cada zona são um tom mais escuro do chão, todas diferentes, com a faixa de cima na cor da zona. À noite as zonas do fundo aparecem (noite um pouco mais clara, sem neblina) e a parede do fim do corredor é clara, com cachoeira e lanternas acesas. Os portais torii do Spirit Garden saíram. Ref: `12-zone-art-reference.png` (antes: `12-our-lava-before.png`) e `12-corridor-reference.png`.
+
 ## Em andamento
 - Ícones do Free Icon Pack (pasta `icons/`, 22 ícones), com um agente a trabalhar neles. Falta o dono enviar os ícones para o Roblox (chave de API ou Bulk Import).

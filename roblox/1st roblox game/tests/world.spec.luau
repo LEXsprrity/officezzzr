@@ -313,11 +313,12 @@ end)
 H.test("world: no zone gates, arches, threshold lines, zone name signs or STEAL A SEED sign anywhere", function()
 	local banned = { GatePillar = true, GateBeam = true, GateCap = true, GateTie = true, GateTrim = true, GateStrut = true,
 		PillarFoot = true, PillarTop = true, Threshold = true, Garland = true, PillarBush = true, PillarOrb = true,
-		GateLeaves = true, GateCapEnd = true, GoldFinial = true, PaperLantern = true, OrbitRing = true, SnowCap = true }
+		GateLeaves = true, GateCapEnd = true, GoldFinial = true, PaperLantern = true, OrbitRing = true, SnowCap = true,
+		ToriiPillar = true, ToriiFoot = true, ToriiBeam = true, ToriiCap = true } -- (the owner removed the Spirit Garden's torii too)
 	for _, d in world:GetDescendants() do
 		H.ok(not banned[d.Name], `{d:GetFullName()}: a gate piece`)
 		local slot = d:GetAttribute("AssetSlot")
-		H.ok(not (slot and (string.match(slot, "^Arch_") or slot == "SpawnSign")), `{d:GetFullName()}: the {slot} slot`)
+		H.ok(not (slot and (string.match(slot, "^Arch_") or slot == "SpawnSign" or slot == "Spirit_Torii")), `{d:GetFullName()}: the {slot} slot`)
 		H.ok(not string.match(d.Name, "^Arch_") and d.Name ~= "SpawnSign", `{d:GetFullName()}: an arch or the spawn sign`)
 		if d:IsA("TextLabel") then
 			local text = string.upper(d.Text)
@@ -541,17 +542,62 @@ H.test("world: no finish line: the Spirit Garden's back wall ends the corridor, 
 	end
 end)
 
-H.test("world: no neon on the corridor's floor or edges (no glowing strips, lines, rings or rivers)", function()
+-- The only glow on the floor is lava (and the Deep Space craters' goo) pooling in ragged blobs: rows of a
+-- pool side by side, its brighter spots on them. No glowing strips, lines, rings or rivers anywhere.
+local FLOOR_GLOW = { LavaPool = true, LavaHot = true, CraterGoo = true, GooHot = true }
+H.test("world: no neon on the corridor's floor or edges but lava pools (no glowing strips, lines, rings or rivers)", function()
+	local pools = {}
 	for _, p in parts(world.Corridor) do
 		if p.Material == Enum.Material.Neon then
 			local s = p.Size
 			local thinnest = math.min(s.X, s.Y, s.Z)
 			local longest = math.max(s.X, s.Y, s.Z)
 			local onFloor = p.CFrame.Position.Y - thinnest / 2 < Config.GROUND_Y + 1 and thinnest <= 0.6
-			H.ok(not onFloor, `{p:GetFullName()}: neon on the floor`)
 			local dims = { s.X, s.Y, s.Z }
 			table.sort(dims)
-			H.ok(not (longest >= 20 and dims[2] <= 3), `{p:GetFullName()}: a neon strip`)
+			if onFloor then
+				H.ok(FLOOR_GLOW[p.Name], `{p:GetFullName()}: neon on the floor`)
+				if p.Name ~= "LavaHot" and p.Name ~= "GooHot" then -- a pool's rows (not its bright spots), gathered by zone and height
+					local key = `{p.Parent:GetFullName()}/{p.Name}/{math.round((p.CFrame.Position.Y + s.Y / 2) * 100)}`
+					local pos = p.CFrame.Position
+					pools[key] = pools[key] or {}
+					table.insert(pools[key], { pos.X - s.X / 2, pos.X + s.X / 2, pos.Z - s.Z / 2, pos.Z + s.Z / 2 })
+				end
+			else
+				H.ok(not (longest >= 20 and dims[2] <= 3), `{p:GetFullName()}: a neon strip`)
+			end
+		end
+	end
+	-- each pool (the rows touching one another) makes a blob, not a line
+	for key, rows in pools do
+		local group = {}
+		local function root(i: number): number
+			while group[i] ~= i do
+				i = group[i]
+			end
+			return i
+		end
+		for i = 1, #rows do
+			group[i] = i
+		end
+		for i = 1, #rows do
+			for j = i + 1, #rows do
+				local a, b = rows[i], rows[j]
+				if a[1] <= b[2] + 0.01 and b[1] <= a[2] + 0.01 and a[3] <= b[4] + 0.01 and b[3] <= a[4] + 0.01 then
+					group[root(i)] = root(j)
+				end
+			end
+		end
+		local boxes = {}
+		for i, r in rows do
+			local g = root(i)
+			local b = boxes[g] or { math.huge, -math.huge, math.huge, -math.huge }
+			b[1], b[2], b[3], b[4] = math.min(b[1], r[1]), math.max(b[2], r[2]), math.min(b[3], r[3]), math.max(b[4], r[4])
+			boxes[g] = b
+		end
+		for _, b in boxes do
+			local w, d = b[2] - b[1], b[4] - b[3]
+			H.ok(math.max(w, d) / math.min(w, d) <= 4 and math.min(w, d) >= 4, `{key}: a pool, not a strip ({w} x {d})`)
 		end
 	end
 end)
@@ -616,7 +662,7 @@ H.test("world: ponds are sunken: the water sits below the floor in a hole cut th
 	local function top(p: any): number
 		return p.CFrame.Position.Y + p.Size.Y / 2
 	end
-	local ON_WATER = { LilyCut = true, LilyPetal = true, LilyHeart = true }
+	local ON_WATER = { LilyCut = true, LilyPetal = true, LilyHeart = true, Koi = true }
 	local rows = 0
 	for _, folder in world.Corridor:GetChildren() do
 		local floors, water, pads = {}, {}, {}
@@ -628,7 +674,7 @@ H.test("world: ponds are sunken: the water sits below the floor in a hole cut th
 					table.insert(water, p)
 				elseif p.Name == "LilyPad" then
 					table.insert(pads, p)
-				elseif not ON_WATER[p.Name] and p.Transparency < 1 and p.Size.Y < 0.6 then -- any other flat overlay
+				elseif not ON_WATER[p.Name] and p.Transparency < 1 and p.Size.Y < 0.6 and p.CFrame.Position.Y < ground + 1 then -- any other flat overlay
 					table.insert(floors, p)
 				end
 			end
@@ -684,36 +730,8 @@ H.test("world: every zone wall has a cap", function()
 	end
 end)
 
--- Decoration in a zone: everything visible but the floor, walls, their checker and caps, the nest and the
--- Speed plank (the Spirit Garden's roof is its cap; the zone edge and pond water are flat floor overlays).
-local STRUCTURE = { Floor = true, FloorTile = true, Wall = true, WallTile = true, WallCap = true,
-	Roof = true, RoofTile = true, RoofTrim = true, ZoneEdge = true, Pond = true, PondTile = true }
-local function propParts(folder: any): number
-	local id = string.match(folder.Name, "^%d+_(.+)$")
-	local n = 0
-	for _, p in parts(folder) do
-		local inNest = p:FindFirstAncestor("Nest_" .. id)
-		local inSign = p:FindFirstAncestor("SpeedSign")
-		if not STRUCTURE[p.Name] and not inNest and not inSign and p.Transparency < 1 then
-			n += 1
-		end
-	end
-	return n
-end
-
-H.test("world: the early stages are clean, with only a few props", function()
-	local counts = {}
-	for k, zone in Config.ZONES do
-		counts[k] = propParts(world.Corridor:FindFirstChild(string.format("%d_%s", k, zone.id)))
-	end
-	print(`        prop parts per zone: {table.concat(counts, ", ")}`)
-	H.ok(counts[1] <= 60, `the Meadow is nearly empty ({counts[1]} prop parts)`)
-	H.ok(counts[2] <= 80, `the Desert has few props ({counts[2]} prop parts)`)
-	for k = 1, #Config.ZONES do
-		local per100 = counts[k] / Config.ZONES[k].length * 100
-		H.ok(per100 <= 30, `{Config.ZONES[k].id}: {per100} prop parts per 100 studs`)
-	end
-end)
+-- (Each zone's props, set pieces and their part, emitter and light budgets: tests/zones.spec.luau. The
+-- owner's art pass made every zone rich, the Meadow included, so the old "few props early" rule is gone.)
 
 H.test("world: the base is wider than the corridor and its front walls close the corners of the corridor mouth", function()
 	local halfW = Config.CORRIDOR_WIDTH / 2

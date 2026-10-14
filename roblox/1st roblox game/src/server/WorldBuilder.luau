@@ -611,13 +611,12 @@ local function buildCorridor(world: Folder)
 	local corridor = Instance.new("Folder")
 	corridor.Name = "Corridor"
 	corridor.Parent = world
-	local rng = Random.new(20260930)
 
 	for k, zone in Config.ZONES do
 		local zoneFolder = Instance.new("Folder")
 		zoneFolder.Name = string.format("%d_%s", k, zone.id)
 		zoneFolder.Parent = corridor
-		ZoneThemes.build(zoneFolder, k, rng)
+		ZoneThemes.build(zoneFolder, k)
 		buildSpeedSign(zoneFolder, k)
 		buildNest(zoneFolder, k)
 	end
