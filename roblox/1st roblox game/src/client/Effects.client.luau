@@ -1,14 +1,17 @@
 -- Local-only effects: "+$1.2M" income popups, event sounds, camera shake, the treadmill belt scroll,
--- rainbow mutations, and hiding other players' plot prompts. Nothing here affects game state.
+-- rainbow mutations, hiding other players' plot prompts, and the treadmill lock, sprint and Speed popups.
+-- Nothing here affects game state.
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local RunService = game:GetService("RunService")
 local SoundService = game:GetService("SoundService")
 local TweenService = game:GetService("TweenService")
+local UserInputService = game:GetService("UserInputService")
 
 local Shared = ReplicatedStorage:WaitForChild("Shared")
 local Config = require(Shared:WaitForChild("Config"))
 local Format = require(Shared:WaitForChild("Format"))
+local Icons = require(Shared:WaitForChild("Icons"))
 local Treadmill = require(Shared:WaitForChild("Treadmill"))
 
 local player = Players.LocalPlayer
@@ -364,27 +367,59 @@ RunService.Heartbeat:Connect(function()
 end)
 
 ----------------------------------------------------------------------------------------------------
--- Treadmill run-in-place: belts no longer push, so standing still on one would just idle. While the
--- local character stands on its OWN plot's belt without walking, loop the character's own run animation
--- from its Animate script (Shared/Treadmill.shouldRun). Other players' treadmills pay nothing (the
--- server only checks your plot's belt and toasts "This isn't your treadmill"), so they don't animate.
+-- Treadmill: step on your OWN plot's belt and you are locked on it (Shared/Treadmill.stepLock): the
+-- character is held in place (its root anchored on this client only, centred on the belt, facing the
+-- front) and sprints in place (its own run animation from the Animate script, sped up), with a "+X" Speed
+-- popup over it about every second. The only way off is jumping (Space / the mobile jump button), which
+-- puts you just beside the belt; you can't be locked again for a moment. Dying, a respawn or the server
+-- moving you off the belt just unlocks. The server sees a player standing still on their belt: the AFK
+-- treadmill gain, well inside the movement check. Other players' treadmills pay nothing (the server only
+-- checks your plot's belt and toasts "This isn't your treadmill"), so they don't lock or animate.
 ----------------------------------------------------------------------------------------------------
 local runTrack: AnimationTrack? = nil
 local runHumanoid: Humanoid? = nil
-local lastBeltCheck = 0
+local lock = Treadmill.newLock()
+local lockedBelt: BasePart? = nil
+local lockedRoot: BasePart? = nil
+local jumpQueued = false
+local nextPopup = 0
+-- What the Speed popups need from the stats (StatsUpdate sends partial tables).
+local stats = { speed = 0, walkSpeed = 0, equippedTrail = nil :: string?, treadmillMult = 1 }
 
 StatsUpdate.OnClientEvent:Connect(function(partial: { [string]: any })
-	if type(partial) == "table" and partial.plot ~= nil then
+	if type(partial) ~= "table" then
+		return
+	end
+	if partial.plot ~= nil then
 		myPlot = if type(partial.plot) == "number" then partial.plot else nil
+	end
+	for _, key in { "speed", "walkSpeed", "treadmillMult" } do
+		if type(partial[key]) == "number" then
+			(stats :: any)[key] = partial[key]
+		end
+	end
+	if type(partial.equippedTrail) == "string" then
+		stats.equippedTrail = partial.equippedTrail
 	end
 end)
 
-local function standingOn(pos: Vector3): ("own" | "other")?
+UserInputService.JumpRequest:Connect(function()
+	if lock.mode == "locked" then
+		jumpQueued = true
+	end
+end)
+
+-- The belt `pos` stands on if it is our own plot's.
+local function ownBeltAt(pos: Vector3): BasePart?
 	local list = {}
 	for belt in belts do
 		table.insert(list, belt)
 	end
-	return Treadmill.standing(list, pos, myPlot)
+	local belt, plot = Treadmill.beltAt(list, pos)
+	if belt and myPlot ~= nil and plot == myPlot then
+		return belt
+	end
+	return nil
 end
 
 local function runAnimation(char: Model): Animation?
@@ -393,16 +428,115 @@ local function runAnimation(char: Model): Animation?
 	return run and run:FindFirstChildWhichIsA("Animation") or nil
 end
 
-RunService.Heartbeat:Connect(function()
-	if os.clock() - lastBeltCheck < 0.15 then
+-- The middle of our plot (the side of the belt we jump off to), if its floor has streamed in.
+local function myPlotCenter(): Vector3?
+	for _, d in workspace:GetDescendants() do
+		if d:IsA("Model") and d:GetAttribute("Role") == "Plot" and d:GetAttribute("PlotIndex") == myPlot then
+			local floor = d.PrimaryPart
+			return if floor then floor.Position else nil
+		end
+	end
+	return nil
+end
+
+local function release()
+	if lockedRoot and lockedRoot.Parent then
+		lockedRoot.Anchored = false
+	end
+	lockedRoot, lockedBelt = nil, nil
+end
+
+-- "[sneaker] +1.6K" over the character, floating up and fading: the Speed a second on the treadmill pays.
+local POPUP_LIFE = 2
+local function speedPopup(root: BasePart)
+	local amount = Treadmill.perSecond(stats.walkSpeed, stats.speed, stats.equippedTrail, stats.treadmillMult)
+	if amount <= 0 then
 		return
 	end
-	lastBeltCheck = os.clock()
+	local attachment = Instance.new("Attachment")
+	attachment.WorldPosition = root.Position + Vector3.new((math.random() - 0.5) * 4, 3.5 + math.random() * 0.8, (math.random() - 0.5) * 4)
+	attachment.Parent = workspace.Terrain
+	local gui = Instance.new("BillboardGui")
+	gui.Size = UDim2.fromScale(6.5, 1.7) -- studs, so the far ones look smaller
+	gui.AlwaysOnTop = true
+	gui.LightInfluence = 0
+	gui.Adornee = attachment
+	gui.Parent = attachment
+	local label = Instance.new("TextLabel")
+	label.BackgroundTransparency = 1
+	label.Size = UDim2.fromScale(1, 1)
+	label.Font = Enum.Font.FredokaOne
+	label.TextScaled = true
+	label.TextColor3 = Color3.fromRGB(122, 58, 235)
+	local stroke = Instance.new("UIStroke")
+	stroke.Thickness = 3
+	stroke.Color = Color3.fromRGB(32, 12, 70)
+	stroke.Parent = label
+	label.Parent = gui
+	Icons.set(label, "Speed", "⚡ " .. Treadmill.gainText(amount))
+
+	local info = TweenInfo.new(POPUP_LIFE, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
+	TweenService:Create(gui, info, { StudsOffsetWorldSpace = Vector3.new(0, 5, 0) }):Play()
+	-- Fade only the last part of the rise, so several stay readable stacked above the runner.
+	local fade = TweenInfo.new(POPUP_LIFE * 0.45, Enum.EasingStyle.Quad, Enum.EasingDirection.In, 0, false, POPUP_LIFE * 0.55)
+	for _, d in gui:GetDescendants() do
+		if d:IsA("TextLabel") then
+			TweenService:Create(d, fade, { TextTransparency = 1 }):Play()
+		elseif d:IsA("ImageLabel") then
+			TweenService:Create(d, fade, { ImageTransparency = 1 }):Play()
+		elseif d:IsA("UIStroke") then
+			TweenService:Create(d, fade, { Transparency = 1 }):Play()
+		end
+	end
+	task.delay(POPUP_LIFE + 0.05, function()
+		attachment:Destroy()
+	end)
+end
+
+player.CharacterAdded:Connect(function()
+	release()
+	lock = Treadmill.newLock()
+	jumpQueued = false
+end)
+
+RunService.Heartbeat:Connect(function()
+	local now = os.clock()
 	local char = player.Character
 	local humanoid = char and char:FindFirstChildOfClass("Humanoid")
 	local root = char and char:FindFirstChild("HumanoidRootPart") :: BasePart?
-	local want = humanoid ~= nil and root ~= nil
-		and Treadmill.shouldRun(standingOn(root.Position), humanoid.Health > 0, humanoid.MoveDirection.Magnitude)
+	local alive = humanoid ~= nil and root ~= nil and humanoid.Health > 0
+
+	-- Locked: still on the belt we were locked to (a server teleport moves us off it)?
+	local belt: BasePart? = nil
+	if lock.mode == "locked" and lockedBelt and lockedBelt.Parent and root and root == lockedRoot then
+		if Treadmill.onBelt(lockedBelt.CFrame, lockedBelt.Size, root.Position) then
+			belt = lockedBelt
+		end
+	elseif root then
+		belt = ownBeltAt(root.Position)
+	end
+	local action = Treadmill.stepLock(lock, { now = now, onOwnBelt = belt ~= nil, alive = alive, jumped = jumpQueued })
+	jumpQueued = false
+	if action == "lock" and root and belt then
+		lockedBelt, lockedRoot = belt, root
+		root.AssemblyLinearVelocity = Vector3.zero
+		root.CFrame = Treadmill.lockCFrame(belt.CFrame, belt.Size, root.Position)
+		root.Anchored = true
+		nextPopup = now + 0.5
+	elseif action == "exit" and root and lockedBelt then
+		local from = lockedBelt
+		release()
+		root.CFrame = CFrame.new(Treadmill.exitPosition(from.CFrame, from.Size, root.Position, myPlotCenter())) * root.CFrame.Rotation
+		if humanoid then
+			humanoid:ChangeState(Enum.HumanoidStateType.Jumping)
+		end
+	elseif action == "unlock" or action == "exit" then
+		release()
+	end
+
+	-- Sprint in place while locked.
+	local standing: ("own" | "other")? = if lock.mode == "locked" then "own" else nil
+	local want = humanoid ~= nil and Treadmill.shouldRun(standing, alive)
 	if humanoid ~= runHumanoid then
 		if runTrack then
 			runTrack:Stop(0)
@@ -417,10 +551,16 @@ RunService.Heartbeat:Connect(function()
 			local track = runTrack :: AnimationTrack
 			track.Looped = true
 			track.Priority = Enum.AnimationPriority.Action
-			track:Play(0.2)
+			track:Play(0.15)
+			track:AdjustSpeed(Treadmill.RUN_ANIM_SPEED)
 		end
 	elseif not want and runTrack then
 		runTrack:Stop(0.2)
 		runTrack = nil
+	end
+
+	if want and root and now >= nextPopup then
+		nextPopup = now + 1
+		speedPopup(root)
 	end
 end)
