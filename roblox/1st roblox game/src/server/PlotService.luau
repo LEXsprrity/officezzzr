@@ -219,6 +219,7 @@ local function pushPlants(s: Sessions.Session, now: number)
 			slot = plant.slot, zone = plant.zone, rarity = plant.rarity, mutation = plant.mutation, weight = weight, income = income,
 			x = plant.x, z = plant.z,
 			name = PlotService.plantName(plant), -- "Gold Daisy": its flower model's name (the Plants panel, the Sell cards)
+			flower = CreatureModels.flowerOf(plant.zone, plant.rarity, plant.variant, plant.slot), -- its model ("Daisy"): the HUD's 3D picture
 			sell = Selling.price(plant, now, mult),
 		})
 	end
@@ -229,6 +230,7 @@ local function pushPlants(s: Sessions.Session, now: number)
 		table.insert(inventory, {
 			id = entry.id, zone = entry.zone, rarity = entry.rarity, mutation = entry.mutation, weight = Inventory.weight(entry),
 			name = PlotService.plantName(plant), sell = Selling.price(plant, now, mult),
+			flower = CreatureModels.flowerOf(plant.zone, plant.rarity, plant.variant, plant.slot),
 		})
 	end
 	Sessions.push(s.player, { plants = view, inventory = inventory, slots = Sessions.maxSlots(s) })
