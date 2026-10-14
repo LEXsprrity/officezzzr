@@ -11,6 +11,14 @@ local Format = require(Shared:WaitForChild("Format"))
 
 local Treadmill = {}
 
+-- A CFrame at `pos` facing horizontal direction `dir`, like CFrame.lookAt, built with fromMatrix (Lune's
+-- CFrame.lookAt, used when the map is baked and in the tests, points the wrong way for some directions).
+local function facingCFrame(pos: Vector3, dir: Vector3): CFrame
+	local look = dir.Unit
+	local right = look:Cross(Vector3.yAxis).Unit
+	return CFrame.fromMatrix(pos, right, right:Cross(look))
+end
+
 -- The belt's front end (where the runner faces: the treadmill's console) is its local +Z end. WorldBuilder
 -- turns the belt to look into the plot and puts the stop at the end nearest the entrance.
 Treadmill.FRONT = 1
@@ -108,7 +116,7 @@ function Treadmill.boardCFrame(beltCF: CFrame, beltSize: Vector3, plotCenter: Ve
 	local pos = flat - along * reach + Vector3.new(0, groundY + Treadmill.BOARD_LIFT + Treadmill.BOARD_SIZE.Y / 2, 0)
 	local away = flat - Vector3.new(plotCenter.X, 0, plotCenter.Z)
 	local facing = lateral * (if lateral:Dot(away) < 0 then -1 else 1)
-	return CFrame.lookAt(pos, pos + facing)
+	return facingCFrame(pos, facing)
 end
 
 -- What the board says: the owner's tier ("Level 7 > Level 8"), "MAX" at the last tier (no buttons), or
@@ -180,7 +188,7 @@ function Treadmill.lockCFrame(beltCF: CFrame, beltSize: Vector3, rootPos: Vector
 	local pos = beltCF:PointToWorldSpace(Vector3.new(0, rel.Y, 0))
 	local front = beltCF:VectorToWorldSpace((if alongZ then Vector3.zAxis else Vector3.xAxis) * Treadmill.FRONT)
 	front = Vector3.new(front.X, 0, front.Z).Unit
-	return CFrame.lookAt(pos, pos + front)
+	return facingCFrame(pos, front)
 end
 
 -- Where a character that jumped off is put: just beside the belt (past its rails), on the side of

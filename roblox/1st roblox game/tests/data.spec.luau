@@ -33,9 +33,9 @@ local function richProfile()
 	p.treadmillTier = 3
 	p.plotLevel = 10
 	p.plants = {
-		{ slot = 1, zone = 1, rarity = 1, mutation = nil, plantedAt = 1790000000 },
-		{ slot = 2, zone = 4, rarity = 5, mutation = "Gold", plantedAt = 1790000123 },
-		{ slot = 7, zone = 7, rarity = 3, mutation = "Rainbow", plantedAt = 1790000456 },
+		{ slot = 1, zone = 1, rarity = 1, mutation = nil, plantedAt = 1790000000, x = -13.5, z = 20.25 },
+		{ slot = 2, zone = 4, rarity = 5, mutation = "Gold", plantedAt = 1790000123, x = 30, z = -36 },
+		{ slot = 7, zone = 7, rarity = 3, mutation = "Rainbow", plantedAt = 1790000456, x = 21.07, z = 4 },
 	}
 	p.index = { ["1:1"] = true, ["4:5"] = true, ["4:Gold"] = true, ["7:3"] = true, ["7:Rainbow"] = true }
 	p.items = {}
@@ -62,11 +62,11 @@ H.test("data: save then load through a (JSON) DataStore round-trips", function()
 	H.ok(same, why)
 end)
 
-H.test("data: only the plant timestamp is stored, not weight or income", function()
+H.test("data: only the plant timestamp (and its spot) is stored, not weight or income", function()
 	local data = ProfileStore.serialize(richProfile())
 	for _, plant in data.plants do
 		for key in plant do
-			H.ok(key == "s" or key == "z" or key == "r" or key == "m" or key == "t", "unexpected plant field " .. key)
+			H.ok(key == "s" or key == "z" or key == "r" or key == "m" or key == "t" or key == "px" or key == "pz", "unexpected plant field " .. key)
 		end
 	end
 end)

@@ -277,10 +277,31 @@ H.test("treadmill prompts: only the plot's owner, standing near the board, can b
 	H.ok(not Treadmill.canUseBoard(false, near, board), "not the owner: rejected")
 	H.ok(not Treadmill.canUseBoard(true, board + Vector3.new(60, 0, 0), board), "too far away")
 	H.ok(not Treadmill.canUseBoard(true, nil, board), "no character")
-	-- the server re-checks with it, and the client hides other players' prompts by OwnerUserId
+	-- the server re-checks with it, and the client hides other players' prompts and buttons by OwnerUserId
 	local plot = fs.readFile("src/server/PlotService.luau")
 	H.ok(string.find(plot, "Treadmill.canUseBoard(state.owner == player", 1, true) ~= nil, "PlotService checks the owner")
-	H.ok(string.find(plot, "beltPrompt:SetAttribute(\"OwnerUserId\", s.player.UserId)", 1, true) ~= nil, "prompts carry their owner")
+	H.ok(string.find(plot, "setButtonsOwner(state, s.player.UserId)", 1, true) ~= nil, "prompts and buttons carry their owner")
+	H.ok(string.find(plot, "setButtonsOwner(state, 0)", 1, true) ~= nil, "...and lose it when the owner leaves")
+end)
+
+H.test("board buttons: no black prompt popups; the painted $ and R$ buttons are clickable/tappable; E/F still work", function()
+	local plot = fs.readFile("src/server/PlotService.luau")
+	-- one helper builds both boards' buttons (the plot's Upgrade board and the treadmill's)
+	H.ok(string.find(plot, "addBoardButtons(board, ", 1, true) ~= nil, "the plot's Upgrade board")
+	H.ok(string.find(plot, "addBoardButtons(panel, state.treadmill.model, TREADMILL_PROMPTS", 1, true) ~= nil, "the treadmill's board")
+	H.ok(string.find(plot, "prompt.Style = Enum.ProximityPromptStyle.Custom", 1, true) ~= nil, "prompts show no popup")
+	H.ok(string.find(plot, "prompt.KeyboardKeyCode = spec.key", 1, true) ~= nil, "...but keep their E/F key")
+	H.ok(string.find(plot, "Instance.new(\"ClickDetector\")", 1, true) ~= nil and string.find(plot, "click.MouseClick:Connect", 1, true) ~= nil,
+		"a ClickDetector over each painted button (mouse and touch)")
+	local _, uses = string.gsub(plot, "if canUse%(player%) then", "")
+	H.eq(uses, 2, "both the prompt and the click are re-checked on the server (owner, distance)")
+	H.eq(select(2, string.gsub(plot, "Enum%.ProximityPromptStyle%.Default", "")), 0, "no default-style prompt on the boards")
+	-- only the owner's client can click them (others get reach 0), like the owner-only prompts
+	local effects = fs.readFile("src/client/Effects.client.luau")
+	H.ok(string.find(effects, "watchClick(inst)", 1, true) ~= nil and string.find(effects, "detector.MaxActivationDistance = if owner == player.UserId then reach else 0", 1, true) ~= nil,
+		"Effects.client opens the buttons for the owner only")
+	-- the hit areas sit over the painted buttons: red (money) on the panel's +X side, purple (Robux) on -X
+	H.ok(string.find(plot, "Cash = { x = 0.158", 1, true) ~= nil and string.find(plot, "Robux = { x = -0.233", 1, true) ~= nil, "hit areas over the buttons")
 end)
 
 ----------------------------------------------------------------------------------------------------
@@ -301,23 +322,25 @@ local function overlaps(alo: any, ahi: any, blo: any, bhi: any, pad: number): bo
 		and alo.Y < bhi.Y and ahi.Y > blo.Y
 end
 
--- Builds every plot's board in `plots` and checks where it stands.
+-- Builds every plot's board in `plots` and checks where it stands: in line with its treadmill, in front of
+-- its plot (between the front fence and the walkway, within the plot's width), clear of everything.
 local function checkBoards(plots: { any }, label: string): { any }
-	local half = Config.PLOT_SIZE / 2
 	local boards = {}
 	for i, plot in plots do
 		local board = TreadmillBoard.build(plot.model, plot.belt, plot.center, plot.treadmillLabel)
 		boards[i] = board
-		H.ok(board.model.Parent == plot.model, `{label}: plot {i} board in its plot`)
+		H.ok(board.model.Parent == plot.model, `{label}: plot {i} board in its plot model`)
 		local count = 0
 		for _, child in plot.model:GetChildren() do
 			count += if child.Name == "TreadmillBoard" then 1 else 0
 		end
 		H.eq(count, 1, `{label}: plot {i} has one treadmill board`)
 		local lo, hi = box(board.model)
+		local x0, x1, z0, z1 = Layout.frontStrip(plot, 0.5)
+		H.ok(lo.X >= x0 and hi.X <= x1 and lo.Z >= z0 and hi.Z <= z1,
+			`{label}: plot {i} board {lo}..{hi} in front of its plot, off the walkway and the neighbours' fronts`)
 		local c = plot.center
-		H.ok(lo.X >= c.X - half + 1 and hi.X <= c.X + half - 1 and lo.Z >= c.Z - half + 1 and hi.Z <= c.Z + half - 1,
-			`{label}: plot {i} board {lo}..{hi} inside its plot, clear of the fence`)
+		H.ok(lo.X > c.X + 7 or hi.X < c.X - 7, `{label}: plot {i} board off the entrance path`)
 		-- not on the belt, nor in the treadmill (its model or frame)
 		local bp, bh = plot.belt.CFrame.Position, plot.belt.Size / 2
 		local blo, bhi = Assets.bounds(plot.belt)
@@ -333,22 +356,21 @@ local function checkBoards(plots: { any }, label: string): { any }
 			local tlo, thi = Assets.bounds(tm)
 			H.ok(not overlaps(lo, hi, Vector3.new(tlo.X, -1e9, tlo.Z), Vector3.new(thi.X, 1e9, thi.Z), 0.2), `{label}: plot {i} board clear of the treadmill model {tlo}..{thi}`)
 		end
-		-- nor in the plant rows, the pad or the plot's own Upgrade board
-		for s, cf in plot.slotCFrames do
-			local p = cf.Position
-			local reach = Config.SLOT_SPACING / 2
-			H.ok(not overlaps(lo, hi, p - Vector3.new(reach, 1e9, reach), p + Vector3.new(reach, 1e9, reach), 0), `{label}: plot {i} board clear of slot {s}`)
+		-- nor in the beds, the owner's sign or the plot's own Upgrade board
+		for b, bed in plot.beds do
+			local dlo, dhi = Assets.bounds(bed)
+			H.ok(not overlaps(lo, hi, Vector3.new(dlo.X, -1e9, dlo.Z), Vector3.new(dhi.X, 1e9, dhi.Z), 0), `{label}: plot {i} board clear of bed {b}`)
 		end
-		local plo, phi = Assets.bounds(plot.pad)
-		H.ok(not overlaps(lo, hi, Vector3.new(plo.X, -1e9, plo.Z), Vector3.new(phi.X, 1e9, phi.Z), 1), `{label}: plot {i} board clear of the pad`)
 		local ulo, uhi = Assets.bounds(plot.upgradeBoard)
 		H.ok(not overlaps(lo, hi, Vector3.new(ulo.X, -1e9, ulo.Z), Vector3.new(uhi.X, 1e9, uhi.Z), 1), `{label}: plot {i} board clear of the plot's Upgrade board`)
-		-- it stands on the ground, faces the plot's middle side, and is close enough to the belt to read
-		H.ok(lo.Y >= plot.center.Y and lo.Y <= plot.center.Y + 2, `{label}: plot {i} board post on the ground ({lo.Y})`)
+		local slo, shi = Assets.bounds(plot.signLabel:FindFirstAncestorWhichIsA("BasePart"))
+		H.ok(not overlaps(lo, hi, Vector3.new(slo.X, -1e9, slo.Z), Vector3.new(shi.X, 1e9, shi.Z), 1), `{label}: plot {i} board clear of the owner's sign`)
+		-- it stands on the ground, faces the walkway, and is next to the treadmill
+		H.ok(lo.Y >= plot.center.Y - 0.01 and lo.Y <= plot.center.Y + 2, `{label}: plot {i} board post on the ground ({lo.Y})`)
 		local toBelt = (board.panel.CFrame.Position - bp)
-		H.ok(Vector3.new(toBelt.X, 0, toBelt.Z).Magnitude < 14, `{label}: plot {i} board beside the treadmill`)
-		local toMiddle = Vector3.new(plot.center.X - board.panel.CFrame.Position.X, 0, plot.center.Z - board.panel.CFrame.Position.Z)
-		H.ok(board.panel.CFrame.LookVector:Dot(toMiddle) > 0, `{label}: plot {i} board faces into the plot`)
+		H.ok(Vector3.new(toBelt.X, 0, toBelt.Z).Magnitude < 14, `{label}: plot {i} board next to the treadmill`)
+		local side = if c.Z > 0 then 1 else -1
+		H.ok(board.panel.CFrame.LookVector.Z * -side > 0.99, `{label}: plot {i} board faces the walkway`)
 		-- the old "TREADMILL" billboard is off; the step text floats over the belt's front end
 		local old = plot.treadmillLabel:FindFirstAncestorWhichIsA("BillboardGui")
 		H.ok(old == nil or old.Enabled == false, `{label}: plot {i} "TREADMILL" billboard hidden`)
@@ -362,7 +384,7 @@ local function checkBoards(plots: { any }, label: string): { any }
 	return boards
 end
 
-H.test("treadmill board: one per plot on the generated map, beside the treadmill and clear of everything", function()
+H.test("treadmill board: one per plot on the generated map, next to its treadmill in front of the plot, clear of everything", function()
 	local world = H.workspace:FindFirstChild("World")
 	H.ok(world ~= nil, "world.spec built the map")
 	local plots = WorldBuilder.adopt(world)
@@ -543,35 +565,44 @@ H.test("treadmill lock: death, a respawn or a teleport off the belt just unlocks
 	H.eq(Treadmill.newLock().mode, "free")
 end)
 
-H.test("treadmill lock: held centred on the belt facing its front; a jump lands just beside it", function()
+H.test("treadmill lock: held at the CENTRE of the belt (wherever you stepped on), facing its front; a jump lands just beside it", function()
 	local b = belt(1, Vector3.new(40, 1.5, -20))
-	local onIt = (b.CFrame * CFrame.new(1.8, 3.5, -8.5)).Position
-	local held = Treadmill.lockCFrame(b.CFrame, b.Size, onIt)
+	b.Size = Vector3.new(4.5, 1, 9) -- the map's character-sized belt
+	local walk = Config.walkSpeedFor(0)
+	local SpeedLogic = H.server("SpeedLogic")
+	local held
+	-- stepping on at either end, either edge or the middle: always held at the same spot, the belt's centre
+	for _, contact in { Vector3.new(1.8, 3.5, -4.3), Vector3.new(-2.1, 3.5, 4.4), Vector3.new(0, 3.5, 0), Vector3.new(2.2, 3.5, 3.9) } do
+		local onIt = (b.CFrame * CFrame.new(contact)).Position
+		held = Treadmill.lockCFrame(b.CFrame, b.Size, onIt)
+		local rel = b.CFrame:PointToObjectSpace(held.Position)
+		H.ok(math.abs(rel.X) < 1e-4 and math.abs(rel.Z) < 1e-4, `centred on the belt from {contact} ({rel})`)
+		H.ok(math.abs(rel.Y - 3.5) < 1e-4, "at its own height")
+		H.ok(Treadmill.onBelt(b.CFrame, b.Size, held.Position), "still on the belt")
+		local front = b.CFrame:VectorToWorldSpace(Vector3.new(0, 0, Treadmill.FRONT))
+		H.ok(held.LookVector:Dot(front) > 0.999, "facing the front")
+		H.ok((held.Position - onIt).Magnitude <= SpeedLogic.allowedPerTick(walk, Config.TICK), "a small nudge, inside the movement check")
+	end
 	local rel = b.CFrame:PointToObjectSpace(held.Position)
-	H.ok(math.abs(rel.X) < 1e-4, "centred across the belt")
-	H.ok(math.abs(rel.Y - 3.5) < 1e-4, "at its own height")
-	H.ok(math.abs(rel.Z) <= b.Size.Z / 2 - 2.4, "kept off the end")
-	H.ok(Treadmill.onBelt(b.CFrame, b.Size, held.Position), "still on the belt")
-	local front = b.CFrame:VectorToWorldSpace(Vector3.new(0, 0, Treadmill.FRONT))
-	H.ok(held.LookVector:Dot(front) > 0.999, "facing the front")
-	H.ok((held.Position - onIt).Magnitude <= Config.MOVE_EPSILON + 2, "a small nudge, well inside the movement check")
 
 	local out = Treadmill.exitPosition(b.CFrame, b.Size, held.Position, b.CFrame.Position + b.CFrame.RightVector * -30)
 	local orel = b.CFrame:PointToObjectSpace(out)
 	H.ok(not Treadmill.onBelt(b.CFrame, b.Size, out), "off the belt")
 	H.ok(orel.X < 0 and math.abs(orel.X) >= b.Size.X / 2 + 2, "past the rails, toward the plot's middle")
 	H.ok(math.abs(orel.Z - rel.Z) < 1e-4, "beside where it ran")
-	local walk = Config.walkSpeedFor(0)
-	H.ok((out - held.Position).Magnitude <= H.server("SpeedLogic").allowedPerTick(walk, Config.TICK), "within one tick of the movement check")
+	H.ok((out - held.Position).Magnitude <= SpeedLogic.allowedPerTick(walk, Config.TICK), "within one tick of the movement check")
 	H.ok(Treadmill.exitPosition(b.CFrame, b.Size, held.Position, nil) ~= nil, "no plot centre yet: still leaves")
+	-- Effects.client holds the character with this (not where it touched the belt)
+	local effects = fs.readFile("src/client/Effects.client.luau")
+	H.ok(string.find(effects, "Treadmill.lockCFrame(belt.CFrame, belt.Size, root.Position)", 1, true) ~= nil, "Effects.client uses the shared lock spot")
 	b:Destroy()
 end)
 
 ----------------------------------------------------------------------------------------------------
 -- Saves
 ----------------------------------------------------------------------------------------------------
-H.test("treadmill saves: v1-v4 tiers keep their multiplier (x2, Robux x3, Robux x5); v5 keeps the tier", function()
-	H.eq(ProfileStore.VERSION, 5)
+H.test("treadmill saves: v1-v4 tiers keep their multiplier (x2, Robux x3, Robux x5); v5+ keeps the tier", function()
+	H.eq(ProfileStore.VERSION, 6)
 	for old, mult in { 2, 3, 5 } do
 		for _, v in { 1, 2, 3, 4 } do
 			local data = { v = v, money = 1, speed = 2, treadmillTier = old, plotLevel = 1, slots = 5, trails = { "Grey" }, trail = "Grey" }

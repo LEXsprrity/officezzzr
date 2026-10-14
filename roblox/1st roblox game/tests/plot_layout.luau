@@ -1,6 +1,6 @@
 -- Layout checks for the base, shared by world.spec (the map built from code) and map.spec (the committed
 -- map/World.rbxm): plot fences are clean (no rail laid twice, no post twice, no post in a prop), plots have
--- no gate arch, there is no "FASTEST HERE" board, and each treadmill fits inside its plot.
+-- no gate arch, there is no "FASTEST HERE" board, and each treadmill stands in front of its plot.
 local H = require("./harness")
 
 local Config = H.shared("Config")
@@ -58,12 +58,12 @@ function Layout.fencesDontOverlap(world: any, label: string)
 	end
 end
 
--- No fence post pokes into a plot's treadmill, pad, Upgrade board or the plaza's stalls (footprints).
+-- No fence post pokes into a plot's treadmill, its boards, the owner's sign or the plaza's stalls (footprints).
 function Layout.postsClearOfProps(world: any, plots: { any }, label: string)
 	local props = {}
 	for _, plot in plots do
 		for _, child in plot.model:GetChildren() do
-			if child.Name == "Treadmill" or child.Name == "UpgradeSign" or child.Name == "UpgradeBoard" or child.Name == "PlantPad" or child.Name == "PadRim" then
+			if child.Name == "Treadmill" or child.Name == "UpgradeSign" or child.Name == "UpgradeBoard" or child.Name == "OwnerSign" or child.Name == "TreadmillBoard" then
 				table.insert(props, child)
 			end
 		end
@@ -119,27 +119,36 @@ function Layout.noFastestBoard(world: any, label: string)
 	end
 end
 
--- Each treadmill (its model and the belt) stands inside its plot, clear of the fence and in front of the
--- first row of plants.
-function Layout.treadmillsFit(plots: { any }, label: string)
+-- The strip in front of a plot, between its front fence and the walkway (where its treadmill and boards
+-- stand), as world X/Z bounds with `margin` studs kept clear of the fence, the walkway and the neighbours'
+-- strips. Returns (loX, hiX, loZ, hiZ).
+function Layout.frontStrip(plot: any, margin: number): (number, number, number, number)
 	local half = Config.PLOT_SIZE / 2
+	local c = plot.center
+	local side = if c.Z > 0 then 1 else -1
+	local fence, walk = c.Z - side * half, side * Config.WALKWAY_WIDTH / 2
+	local z0, z1 = math.min(fence, walk), math.max(fence, walk)
+	return c.X - half + margin, c.X + half - margin, z0 + margin, z1 - margin
+end
+
+-- Each treadmill (its model and the belt) stands OUTSIDE its plot, in front of it: between the front fence
+-- and the walkway, within its own plot's width (never in front of a neighbour), off the entrance path, and
+-- about a character's size.
+function Layout.treadmillsFit(plots: { any }, label: string)
 	for i, plot in plots do
 		local tm = plot.model:FindFirstChild("Treadmill")
 		H.ok(tm ~= nil, `{label}: plot {i} has its treadmill`)
 		local lo, hi = Assets.bounds(tm)
+		local x0, x1, z0, z1 = Layout.frontStrip(plot, 0.5)
+		H.ok(lo.X >= x0 and hi.X <= x1 and lo.Z >= z0 and hi.Z <= z1,
+			`{label}: plot {i} treadmill {lo}..{hi} in front of its plot (x {x0}..{x1}, z {z0}..{z1}), clear of the fence and walkway`)
 		local c = plot.center
-		H.ok(lo.X >= c.X - half + 1 and hi.X <= c.X + half - 1 and lo.Z >= c.Z - half + 1 and hi.Z <= c.Z + half - 1,
-			`{label}: plot {i} treadmill {lo}..{hi} inside its plot, clear of the fence`)
-		local side = if c.Z > 0 then 1 else -1
-		local entranceZ = c.Z - side * half
-		local far = math.max(math.abs(lo.Z - entranceZ), math.abs(hi.Z - entranceZ))
-		local firstRow = 46 - Config.SLOT_SPACING / 2
-		H.ok(far <= firstRow, `{label}: plot {i} treadmill reaches {far} studs in, before the plants ({firstRow})`)
-		H.ok(hi.X - lo.X <= 9 and hi.Z - lo.Z <= 21 and hi.Y - lo.Y <= 14, `{label}: plot {i} treadmill is plot-sized ({hi - lo})`)
+		H.ok(lo.X > c.X + 7 or hi.X < c.X - 7, `{label}: plot {i} treadmill beside the entrance path, not on it`)
+		local w, d = hi.X - lo.X, hi.Z - lo.Z
+		H.ok(math.max(w, d) <= 13 and math.min(w, d) <= 8 and hi.Y - lo.Y <= 10, `{label}: plot {i} treadmill is character-sized ({hi - lo})`)
 		local belt = plot.belt
-		local bp, bh = belt.CFrame.Position, belt.Size / 2
-		H.ok(bp.X - bh.X >= lo.X - 0.5 and bp.X + bh.X <= hi.X + 0.5 and bp.Z - bh.Z >= lo.Z - 0.5 and bp.Z + bh.Z <= hi.Z + 0.5,
-			`{label}: plot {i} belt lies on its treadmill`)
+		local bp = belt.CFrame.Position
+		H.ok(bp.X >= lo.X - 0.5 and bp.X <= hi.X + 0.5 and bp.Z >= lo.Z - 0.5 and bp.Z <= hi.Z + 0.5, `{label}: plot {i} belt lies on its treadmill`)
 	end
 end
 

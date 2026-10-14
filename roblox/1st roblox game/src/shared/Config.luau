@@ -249,7 +249,6 @@ end
 Config.PODS_PER_NEST = 4
 Config.POD_REGROW = 8
 Config.PICKUP_DISTANCE = 12
-Config.PLANT_DISTANCE = 16
 
 export type Rarity = { id: string, color: Color3, income: number, weight: number, spawn: number }
 Config.RARITIES = {
