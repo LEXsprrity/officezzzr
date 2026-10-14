@@ -742,6 +742,41 @@ function Config.nightBlend(now: number): number
 end
 
 ----------------------------------------------------------------------------------------------------
+-- Community rewards (Server/Rewards, Server/RewardService, Client/Rewards)
+----------------------------------------------------------------------------------------------------
+-- The Free Gift: FREE_GIFT_SPEED Speed, once per account, for members of the owner's Roblox community
+-- (group). Likes can't be checked in game, and rewarding likes or favourites goes against Roblox's
+-- Community Rules (no prizes in exchange for something), so the window only *asks* for a like and a
+-- favourite: the reward depends on the group membership alone (Player:IsInGroupAsync). 0 = no community yet:
+-- the window says "coming soon" and never opens by itself. PUT THE GROUP ID HERE (the number in the
+-- community's URL: roblox.com/communities/<id>/...).
+Config.COMMUNITY_GROUP_ID = 0
+Config.COMMUNITY_NAME = "Steal a Seed Community" -- what the window tells players to search for
+Config.FREE_GIFT_SPEED = 10_000
+Config.FREE_GIFT_AUTO_OPEN = 20 -- seconds after joining: the window opens by itself, once per account
+
+-- The free chest in the base: money worth FREE_CHEST_MINUTES of the player's income ($/s with every
+-- multiplier, what the HUD shows), at least FREE_CHEST_MIN, every FREE_CHEST_COOLDOWN seconds per player
+-- (saved, so rejoining doesn't reset it).
+Config.FREE_CHEST_COOLDOWN = 15 * 60
+Config.FREE_CHEST_MINUTES = 5
+Config.FREE_CHEST_MIN = 1_000
+Config.FREE_CHEST_DISTANCE = 14 -- studs from the chest the player must stand within
+
+function Config.freeChestAmount(income: number): number
+	if type(income) ~= "number" or income ~= income or income < 0 then
+		income = 0
+	end
+	return math.floor(math.max(Config.FREE_CHEST_MIN, income * Config.FREE_CHEST_MINUTES * 60))
+end
+
+-- The "MOST MONEY/s" board: the global top players by current income (an OrderedDataStore), written
+-- and read every minute by each server.
+Config.MONEY_BOARD_STORE = "MostMoneyPerSecond_v1"
+Config.MONEY_BOARD_ROWS = 10
+Config.MONEY_BOARD_INTERVAL = 60
+
+----------------------------------------------------------------------------------------------------
 -- Data
 ----------------------------------------------------------------------------------------------------
 Config.DATASTORE_NAME = "StealASeed_v1"

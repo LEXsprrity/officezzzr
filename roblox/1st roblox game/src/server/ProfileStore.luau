@@ -12,7 +12,10 @@ ProfileStore.__index = ProfileStore
 -- v2 added the seed bag and Robux receipt history; v1 saves load with both empty.
 -- v3 (economy rework) replaced the Speed Gain tier with owned/equipped trails and bought slots with the
 -- plot level; v1/v2 saves are migrated on load (see migrateSpeedMult and the plot level below).
-ProfileStore.VERSION = 3
+-- v4 added the community rewards: the Free Gift flag, whether its window has opened by itself, and the
+-- free chest's last claim. Older saves load with the gift unclaimed, the window not shown yet and the
+-- chest ready.
+ProfileStore.VERSION = 4
 
 -- Items removed from the game (the potions, the guards' sleep item) may still be in saves of any version.
 -- Only ids listed in Config.START_ITEMS are loaded; anything else in `items` is dropped, and old potion
@@ -50,6 +53,9 @@ export type Profile = {
 	receipts: { string }, -- last Config.RECEIPT_HISTORY processed Robux PurchaseIds
 	reachedEnd: boolean,
 	lastSeen: number,
+	freeGift: boolean, -- the Free Gift (community Speed) was claimed: never again on this account
+	giftShown: boolean, -- the Free Gift window already opened by itself once
+	chestAt: number, -- unix seconds of the last free chest claim (0 = never)
 }
 
 function ProfileStore.defaultProfile(): Profile
@@ -71,6 +77,9 @@ function ProfileStore.defaultProfile(): Profile
 		receipts = {},
 		reachedEnd = false,
 		lastSeen = 0,
+		freeGift = false,
+		giftShown = false,
+		chestAt = 0,
 	}
 end
 
@@ -148,6 +157,9 @@ function ProfileStore.serialize(p: Profile): { [string]: any }
 		receipts = table.clone(p.receipts),
 		reachedEnd = p.reachedEnd,
 		lastSeen = p.lastSeen,
+		freeGift = p.freeGift,
+		giftShown = p.giftShown,
+		chestAt = p.chestAt,
 	}
 end
 
@@ -183,6 +195,10 @@ function ProfileStore.deserialize(data: any): Profile
 	end
 	p.reachedEnd = data.reachedEnd == true
 	p.lastSeen = num(data.lastSeen, 0, 0, math.huge)
+	-- v4 fields (absent before: gift unclaimed, window not shown, chest ready)
+	p.freeGift = data.freeGift == true
+	p.giftShown = data.giftShown == true
+	p.chestAt = num(data.chestAt, 0, 0, math.huge)
 
 	local used = {}
 	if type(data.plants) == "table" then
