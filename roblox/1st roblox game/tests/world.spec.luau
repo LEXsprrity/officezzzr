@@ -248,7 +248,13 @@ H.test("world: beside each nest a small wooden plank on a post says the zone's r
 		local plank, post = sign:FindFirstChild("Plank"), sign:FindFirstChild("PlankPost")
 		H.ok(plank and post, `{zone.id}: a plank on a post`)
 		-- small and chunky, wooden orange/brown, studded, decoration only
-		H.ok(plank.Size.X <= 12 and plank.Size.Y <= 6 and plank.Size.Z >= 1, `{zone.id}: a small chunky plank`)
+		-- owner's reference: a ~6 x 3.5 board at about a player's chest height on a short thick post
+		H.ok(plank.Size.X >= 5.5 and plank.Size.X <= 6.5 and plank.Size.Y >= 3 and plank.Size.Y <= 4 and plank.Size.Z >= 0.8, `{zone.id}: a small chunky plank ({plank.Size})`)
+		local plankTop = plank.CFrame.Position.Y + plank.Size.Y / 2 - Config.GROUND_Y
+		H.ok(plankTop >= 4.5 and plankTop <= 6, `{zone.id}: about chest height (top {plankTop} studs up)`)
+		H.ok(post.Size.Y <= 2.5 and post.Size.X >= 1.2 and post.Size.Z >= 1.2, `{zone.id}: a short thick post ({post.Size})`)
+		H.eq(plank:GetAttribute("Role"), "SpeedPlank", `{zone.id}: the plank is tagged for the client`)
+		H.eq(plank:GetAttribute("ZoneIndex"), k, `{zone.id}: with its zone`)
 		for _, p in { plank, post } do
 			H.ok(p.Color.R > p.Color.G and p.Color.G > p.Color.B and p.Color.R > 0.6, `{zone.id}: {p.Name} is orange/brown wood`)
 			H.ok(not p.CanCollide and p.Anchored, `{zone.id}: {p.Name} is decoration`)
@@ -267,8 +273,13 @@ H.test("world: beside each nest a small wooden plank on a post says the zone's r
 		for _, l in gui:GetDescendants() do
 			if l:IsA("TextLabel") then
 				table.insert(texts, l.Text)
+				H.ok(l.FontFace.Style == Enum.FontStyle.Italic and l.FontFace.Weight.Value >= Enum.FontWeight.Bold.Value, `{zone.id}: bold italic`)
+				local stroke = l:FindFirstChildOfClass("UIStroke")
+				H.ok(stroke and stroke.Thickness >= 3 and stroke.Color.R < 0.2, `{zone.id}: a dark outline`)
+				H.eq(l.TextColor3, Config.speedPlankColor(0, k), `{zone.id}: a new player's colour`)
 			end
 		end
+		H.eq(#texts, 2, `{zone.id}: two lines`)
 		local all = table.concat(texts, " ")
 		if zone.req > 0 then
 			H.ok(string.find(all, "👟 " .. Format.short(zone.req), 1, true) and string.find(all, "recommended", 1, true), `{zone.id}: says "{all}"`)
@@ -278,6 +289,25 @@ H.test("world: beside each nest a small wooden plank on a post says the zone's r
 	end
 	local top = WorldBuilder.speedSignText(3)
 	H.eq(top, "👟 500K")
+end)
+
+H.test("world: the Speed plank reads GREEN from the recommended Speed up and RED below it (per player, client-side)", function()
+	for k, zone in Config.ZONES do
+		H.eq(Config.speedPlankColor(zone.req, k), Config.PLANK_GREEN, `{zone.id}: green right at the threshold`)
+		H.eq(Config.speedPlankColor(zone.req * 10 + 1, k), Config.PLANK_GREEN, `{zone.id}: green above it`)
+		if zone.req > 0 then
+			H.eq(Config.speedPlankColor(zone.req - 1, k), Config.PLANK_RED, `{zone.id}: red just below it`)
+			H.eq(Config.speedPlankColor(0, k), Config.PLANK_RED, `{zone.id}: red for a new player`)
+		else
+			H.eq(Config.speedPlankColor(0, k), Config.PLANK_GREEN, `{zone.id}: the start zone is always green`)
+		end
+	end
+	local g, r = Config.PLANK_GREEN, Config.PLANK_RED
+	H.ok(g.G > g.R and g.G > g.B and r.R > r.G and r.R > r.B, "green is green, red is red")
+	local fs = require("@lune/fs")
+	local src = fs.readFile("src/client/SpeedPlanks.client.luau")
+	H.ok(string.find(src, "\"SpeedPlank\"", 1, true) and string.find(src, "GetAttribute(\"ZoneIndex\")", 1, true), "finds the planks by attribute")
+	H.ok(string.find(src, "Config.speedPlankColor(speed, k)", 1, true) and string.find(src, "StatsUpdate.OnClientEvent", 1, true), "recolours from the player's Speed")
 end)
 
 H.test("world: every zone has particle ambience", function()
@@ -461,6 +491,69 @@ H.test("world: ponds are flat studded checker water with notched lily pads, a fl
 	H.ok(pads >= 4 and cuts == pads, `each lily pad has its wedge cut ({pads} pads, {cuts} cuts)`)
 	H.ok(petals >= 2, "a flower on a pad")
 	H.ok(reeds >= 3, "reeds")
+end)
+
+H.test("world: ponds are sunken: the water sits below the floor in a hole cut through it, on a solid bed", function()
+	local ZoneThemes = H.server("ZoneThemes")
+	local sink = ZoneThemes.POND_SINK
+	H.ok(sink >= 0.3 and sink <= 0.5, `the water sits 0.3-0.5 studs down ({sink})`)
+	local ground = Config.GROUND_Y
+	local function rect(p: any): (number, number, number, number)
+		local pos, size = p.CFrame.Position, p.Size
+		return pos.X - size.X / 2, pos.X + size.X / 2, pos.Z - size.Z / 2, pos.Z + size.Z / 2
+	end
+	local function top(p: any): number
+		return p.CFrame.Position.Y + p.Size.Y / 2
+	end
+	local ON_WATER = { LilyCut = true, LilyPetal = true, LilyHeart = true }
+	local rows = 0
+	for _, folder in world.Corridor:GetChildren() do
+		local floors, water, pads = {}, {}, {}
+		for _, p in folder:GetDescendants() do
+			if p:IsA("BasePart") then
+				if p.Name == "Floor" or p.Name == "FloorTile" or p.Name == "ZoneEdge" then
+					table.insert(floors, p)
+				elseif p.Name == "Pond" or p.Name == "PondTile" then
+					table.insert(water, p)
+				elseif p.Name == "LilyPad" then
+					table.insert(pads, p)
+				elseif not ON_WATER[p.Name] and p.Transparency < 1 and p.Size.Y < 0.6 then -- any other flat overlay
+					table.insert(floors, p)
+				end
+			end
+		end
+		for _, w in water do
+			local wx0, wx1, wz0, wz1 = rect(w)
+			local wtop = top(w)
+			H.ok(wtop < ground - sink + 0.1 and wtop > ground - sink - 0.1, `{w:GetFullName()}: water top {wtop} sits below the floor`)
+			local bed = false
+			for _, f in floors do
+				local fx0, fx1, fz0, fz1 = rect(f)
+				local overlaps = wx0 < fx1 - 1e-3 and wx1 > fx0 + 1e-3 and wz0 < fz1 - 1e-3 and wz1 > fz0 + 1e-3
+				if overlaps and top(f) > wtop - 0.06 then
+					error(`{f:GetFullName()} (top {top(f)}) covers the sunken water of {w:GetFullName()}`)
+				end
+				if f.Name == "Floor" and f.CanCollide and fx0 <= wx0 + 1e-3 and fx1 >= wx1 - 1e-3 and fz0 <= wz0 + 1e-3 and fz1 >= wz1 - 1e-3
+					and math.abs(top(f) - (w.CFrame.Position.Y - w.Size.Y / 2)) < 1e-3 then
+					bed = true
+				end
+			end
+			H.ok(bed, `{w:GetFullName()}: a solid bed right under the water`)
+			if w.Name == "Pond" then
+				rows += 1
+			end
+		end
+		for _, pad in pads do
+			local bottom = pad.CFrame.Position.Y - pad.Size.X / 2 -- a cylinder lies on its X axis
+			H.ok(bottom > ground - sink - 0.05 and bottom < ground - sink + 0.2, `{pad:GetFullName()} floats on the water ({bottom})`)
+		end
+	end
+	H.ok(rows >= 5, `sunken pond rows {rows}`)
+	-- the zone's first Floor is still the full-width ground (the cut keeps it whole across Z)
+	for k, zone in Config.ZONES do
+		local floor = world.Corridor:FindFirstChild(string.format("%d_%s", k, zone.id)):FindFirstChild("Floor")
+		H.ok(math.abs(top(floor) - ground) < 1e-3, `{zone.id}: the first Floor is the ground`)
+	end
 end)
 
 H.test("world: every zone wall has a cap", function()

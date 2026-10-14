@@ -1,15 +1,16 @@
 -- Day/night lighting (the phase itself is derived from the clock in Config, so the client's timer
 -- needs no remote). The base's only leaderboard is RewardService's "MOST MONEY/s" board.
 --
--- Lighting blends between the bright, vivid DAY look and the clear blue NIGHT look in LightingLook by
--- Config.nightBlend, so night never collapses into grey and dusk/dawn fade instead of snapping.
+-- Each phase has one fixed look (LightingLook: the sun still all day, the moon still all night). It
+-- switches at the flip, which Client/DayNight hides behind a short fade to black; clients switch their own
+-- (local) Lighting at the same server time, so this write only keeps late joiners and the server in step.
 local Lighting = game:GetService("Lighting")
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Shared = ReplicatedStorage:WaitForChild("Shared")
 local Config = require(Shared:WaitForChild("Config"))
+local LightingLook = require(Shared:WaitForChild("LightingLook"))
 local Net = require(script.Parent:WaitForChild("Net"))
-local LightingLook = require(script.Parent:WaitForChild("LightingLook"))
 
 local AmbientService = {}
 
@@ -33,8 +34,8 @@ local function ensureEffects(): { [string]: Instance }
 	return out
 end
 
-function AmbientService.applyLighting(now: number, effects: { [string]: Instance })
-	LightingLook.apply(Lighting, effects, now)
+function AmbientService.applyLighting(night: boolean, effects: { [string]: Instance })
+	LightingLook.applyPhase(Lighting, effects, night)
 end
 
 function AmbientService.start()
@@ -42,16 +43,17 @@ function AmbientService.start()
 	local wasNight: boolean? = nil
 	task.spawn(function()
 		while true do
-			local t = workspace:GetServerTimeNow()
-			local night = Config.dayPhase(t)
-			AmbientService.applyLighting(t, effects)
-			if wasNight ~= nil and night ~= wasNight then
-				for _, player in Players:GetPlayers() do
-					Net.LootEvent:FireClient(player, "DayNight", { night = night })
+			local night, left = Config.dayPhase(workspace:GetServerTimeNow())
+			if night ~= wasNight then -- only on a flip: the look never changes inside a phase
+				AmbientService.applyLighting(night, effects)
+				if wasNight ~= nil then
+					for _, player in Players:GetPlayers() do
+						Net.LootEvent:FireClient(player, "DayNight", { night = night })
+					end
 				end
+				wasNight = night
 			end
-			wasNight = night
-			task.wait(1)
+			task.wait(math.clamp(left + 0.05, 0.1, 1)) -- wake right after the next flip
 		end
 	end)
 end
