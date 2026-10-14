@@ -745,6 +745,200 @@ local function buildShops(world: Folder)
 end
 
 ----------------------------------------------------------------------------------------------------
+-- Community rewards corner (docs/references/06-free-chest-and-leaderboard.png): the FREE chest on a green
+-- glowing circle and the tall "MOST MONEY/s" board, against the inside of the front wall on the -Z side
+-- of the corridor mouth, by the spawn. Every run to the corridor passes it, and it is off the walkway,
+-- the plots and the plaza. RewardService finds both by their Role (WorldBuilder.rewardPoints).
+----------------------------------------------------------------------------------------------------
+local CHEST_POS = Vector3.new(Config.CORRIDOR_START_X - 10, GROUND, -(HALF_W + 32)) -- ground point under the chest
+local MONEY_BOARD_POS = Vector3.new(Config.CORRIDOR_START_X - 4, GROUND, -(HALF_W + 14)) -- ground point under the board
+local MONEY_PANEL = Vector2.new(12, 18) -- the list panel (studs); its bottom edge is 4 studs up
+local MONEY_PPS = 40
+local CHEST_RED = Color3.fromRGB(205, 45, 40)
+local CHEST_GOLD = Color3.fromRGB(255, 196, 40)
+local FREE_GREEN = Color3.fromRGB(90, 255, 70)
+local BOARD_CYAN = Color3.fromRGB(95, 205, 255)
+local BOARD_BLUE = Color3.fromRGB(40, 125, 235)
+
+-- The chest's look (asset slot FreeChest): a red chest with a round lid, gold bands, lock and a green gem.
+-- `cf` is the ground point under it, front (-Z) toward the base.
+local function freeChest(into: Instance, cf: CFrame)
+	local function piece(name: string, size: Vector3, offset: CFrame, color: Color3, shape: Enum.PartType?)
+		local p = deco(into, name, size, cf * offset, color)
+		if shape then
+			p.Shape = shape
+		end
+		return p
+	end
+	piece("ChestBody", Vector3.new(6.4, 3.2, 4.2), CFrame.new(0, 1.9, 0), CHEST_RED)
+	piece("ChestLid", Vector3.new(6.4, 4.2, 4.2), CFrame.new(0, 3.5, 0), CHEST_RED, Enum.PartType.Cylinder) -- along X: a half-round lid
+	piece("ChestBase", Vector3.new(6.8, 0.5, 4.6), CFrame.new(0, 0.55, 0), CHEST_GOLD)
+	piece("ChestRim", Vector3.new(6.8, 0.4, 4.6), CFrame.new(0, 3.4, 0), CHEST_GOLD)
+	for _, x in { -2.2, 2.2 } do
+		piece("ChestBand", Vector3.new(0.6, 3.2, 4.5), CFrame.new(x, 1.9, 0), CHEST_GOLD)
+		piece("LidBand", Vector3.new(0.6, 4.5, 4.5), CFrame.new(x, 3.5, 0), CHEST_GOLD, Enum.PartType.Cylinder)
+	end
+	piece("ChestLock", Vector3.new(1.4, 1.6, 0.3), CFrame.new(0, 3.0, -2.2), CHEST_GOLD)
+	piece("Keyhole", Vector3.new(0.35, 0.7, 0.1), CFrame.new(0, 2.85, -2.38), Color3.fromRGB(40, 25, 20))
+	piece("ChestGem", Vector3.new(1, 0.5, 1), CFrame.new(0, 5.75, 0), Color3.fromRGB(60, 220, 80))
+end
+
+-- The board's frame (asset slot MoneyBoard): a studded cyan frame with a stepped blue cap on a pedestal.
+-- `panelCF` is the panel's centre, front toward the base.
+local function moneyBoardFrame(into: Instance, panelCF: CFrame)
+	local w, h, rim = MONEY_PANEL.X, MONEY_PANEL.Y, 1
+	local back = CFrame.new(0, 0, 0.2)
+	for _, s in { -1, 1 } do
+		studs(deco(into, "BoardRim", Vector3.new(rim, h + 2 * rim, 1.2), panelCF * back * CFrame.new(s * (w + rim) / 2, 0, 0), BOARD_CYAN), { "FrontSurface" })
+		studs(deco(into, "BoardRim", Vector3.new(w, rim, 1.2), panelCF * back * CFrame.new(0, s * (h + rim) / 2, 0), BOARD_CYAN), { "FrontSurface", "TopSurface" })
+	end
+	studs(deco(into, "BoardCap", Vector3.new(w + 4, 1.6, 1.8), panelCF * back * CFrame.new(0, h / 2 + rim + 0.8, 0), BOARD_BLUE), { "FrontSurface", "TopSurface" })
+	studs(deco(into, "BoardCap", Vector3.new(w - 3, 1.2, 1.6), panelCF * back * CFrame.new(0, h / 2 + rim + 2.2, 0), BOARD_CYAN), { "FrontSurface", "TopSurface" })
+	local foot = panelCF.Position.Y - h / 2 - rim -- the frame's bottom, above the pedestal
+	studs(box(into, "BoardPedestal", Vector3.new(w + 1, foot - GROUND, 4), panelCF * CFrame.new(0, -(h / 2 + rim) - (foot - GROUND) / 2, 0.4),
+		Color3.fromRGB(165, 222, 255)), { "FrontSurface", "TopSurface" })
+end
+
+-- The board's SurfaceGui: the green "MOST MONEY/s" title, a dark list of Config.MONEY_BOARD_ROWS white rows
+-- (Rank, Name, a green "Money/s" tag and the Value) and a Status line ("Loading...", then where the list
+-- comes from). RewardService finds them by name and writes them (WorldBuilder.setMoneyBoard).
+local function buildMoneyBoardGui(panel: BasePart)
+	local gui = Instance.new("SurfaceGui")
+	gui.Face = Enum.NormalId.Front
+	gui.SizingMode = Enum.SurfaceGuiSizingMode.PixelsPerStud
+	gui.PixelsPerStud = MONEY_PPS
+	gui.LightInfluence = 0
+	gui.MaxDistance = 160
+	gui.Parent = panel
+	local function label(parent: Instance, name: string, value: string, color: Color3, size: UDim2, pos: UDim2, stroke: number): TextLabel
+		local l = Instance.new("TextLabel")
+		l.Name = name
+		l.BackgroundTransparency = 1
+		l.Size = size
+		l.Position = pos
+		l.Font = Enum.Font.FredokaOne
+		l.TextScaled = true
+		l.Text = value
+		l.TextColor3 = color
+		if stroke > 0 then
+			local s = Instance.new("UIStroke")
+			s.Thickness = stroke
+			s.Color = Color3.fromRGB(15, 40, 20)
+			s.Parent = l
+		end
+		l.Parent = parent
+		return l
+	end
+	label(gui, "Title", "MOST MONEY/s", Color3.fromRGB(140, 255, 60), UDim2.fromScale(0.96, 0.1), UDim2.fromScale(0.02, 0.01), 4)
+	local list = Instance.new("Frame")
+	list.Name = "List"
+	list.BackgroundColor3 = Color3.fromRGB(18, 22, 38)
+	list.Size = UDim2.fromScale(0.92, 0.82)
+	list.Position = UDim2.fromScale(0.04, 0.12)
+	list.Parent = gui
+	local corner = Instance.new("UICorner")
+	corner.CornerRadius = UDim.new(0, 10)
+	corner.Parent = list
+	local rows = Config.MONEY_BOARD_ROWS
+	for i = 1, rows do
+		local row = Instance.new("Frame")
+		row.Name = "Row" .. i
+		row.BackgroundColor3 = Color3.fromRGB(245, 247, 252)
+		row.Size = UDim2.new(0.94, 0, 1 / rows, -6)
+		row.Position = UDim2.new(0.03, 0, (i - 1) / rows, 3)
+		row.Visible = false
+		row.Parent = list
+		local rc = Instance.new("UICorner")
+		rc.CornerRadius = UDim.new(0, 6)
+		rc.Parent = row
+		label(row, "Rank", tostring(i), Color3.fromRGB(255, 205, 40), UDim2.fromScale(0.12, 0.8), UDim2.fromScale(0.01, 0.1), 2)
+		local name = label(row, "Name", "", Color3.fromRGB(25, 25, 35), UDim2.fromScale(0.5, 0.62), UDim2.fromScale(0.14, 0.19), 0)
+		name.TextXAlignment = Enum.TextXAlignment.Left
+		local tag = Instance.new("Frame")
+		tag.Name = "Tag"
+		tag.BackgroundColor3 = Color3.fromRGB(70, 205, 90)
+		tag.Size = UDim2.fromScale(0.32, 0.36)
+		tag.Position = UDim2.fromScale(0.66, 0.06)
+		tag.Parent = row
+		local tc = Instance.new("UICorner")
+		tc.CornerRadius = UDim.new(0, 4)
+		tc.Parent = tag
+		label(tag, "TagText", "Money/s", Color3.new(1, 1, 1), UDim2.fromScale(0.9, 0.9), UDim2.fromScale(0.05, 0.05), 0)
+		label(row, "Value", "", Color3.fromRGB(25, 25, 35), UDim2.fromScale(0.32, 0.5), UDim2.fromScale(0.66, 0.46), 0)
+	end
+	label(gui, "Status", "Loading...", Color3.new(1, 1, 1), UDim2.fromScale(0.9, 0.05), UDim2.fromScale(0.05, 0.945), 2)
+end
+
+local function buildRewards(world: Folder)
+	local model = Instance.new("Model")
+	model.Name = "Rewards"
+	model.ModelStreamingMode = Enum.ModelStreamingMode.Atomic
+	model.Parent = world
+	local toBase = -Vector3.xAxis
+
+	-- The chest on its green circle, "FREE!" above it and a countdown under that (written on each client:
+	-- the cooldown is per player). The prompt sits on an invisible part, so it stays when re-modelled.
+	local chestCF = Assets.facing(CHEST_POS + Vector3.new(0, 0.3, 0), toBase)
+	local rimDisc = Props.disc(model, "ChestCircle", 11, CHEST_POS, FREE_GREEN, Enum.Material.Neon, 0.15)
+	rimDisc.Transparency = 0.25
+	local fill = Props.disc(model, "ChestCircleFill", 9, CHEST_POS, Color3.fromRGB(170, 255, 190), Enum.Material.SmoothPlastic, 0.25)
+	fill.Transparency = 0.45
+	Assets.swap("FreeChest", model, chestCF, function(into)
+		freeChest(into, chestCF)
+	end, Vector3.new(1.3, 1.3, 1.3))
+	local host = hidden(model, "FreeChestPrompt", Vector3.new(6.4, 5, 4.4), chestCF * CFrame.new(0, 2.8, 0))
+	host:SetAttribute("Role", "FreeChest")
+	local prompt = Instance.new("ProximityPrompt")
+	prompt.ActionText = "Claim"
+	prompt.ObjectText = "Free Chest"
+	prompt.KeyboardKeyCode = Enum.KeyCode.E
+	prompt.HoldDuration = 0.3
+	prompt.MaxActivationDistance = 10
+	prompt.RequiresLineOfSight = false
+	prompt:SetAttribute("FreeChest", true)
+	prompt.Parent = host
+	local gui = Instance.new("BillboardGui")
+	gui.Name = "ChestSign"
+	gui.Size = UDim2.fromScale(10, 4.6)
+	gui.StudsOffsetWorldSpace = Vector3.new(0, 6.6, 0)
+	gui.MaxDistance = 120
+	gui.LightInfluence = 0
+	gui.Adornee = host
+	gui.Parent = host
+	for _, spec in {
+		{ name = "ChestFree", text = "FREE!", color = FREE_GREEN, y = 0, h = 0.68, stroke = 5, visible = true },
+		{ name = "ChestTimer", text = "", color = Color3.new(1, 1, 1), y = 0.7, h = 0.3, stroke = 3, visible = false },
+	} do
+		local l = Instance.new("TextLabel")
+		l.Name = spec.name
+		l.BackgroundTransparency = 1
+		l.Size = UDim2.fromScale(1, spec.h)
+		l.Position = UDim2.fromScale(0, spec.y)
+		l.Font = Enum.Font.FredokaOne
+		l.TextScaled = true
+		l.Text = spec.text
+		l.TextColor3 = spec.color
+		l.Visible = spec.visible
+		local stroke = Instance.new("UIStroke")
+		stroke.Thickness = spec.stroke
+		stroke.Color = Color3.fromRGB(10, 60, 15)
+		stroke.Parent = l
+		l.Parent = gui
+	end
+
+	-- The board: the panel with the list is the gameplay piece; its frame, cap and pedestal are the
+	-- MoneyBoard slot.
+	local panelPos = MONEY_BOARD_POS + Vector3.new(0, 4 + MONEY_PANEL.Y / 2, 0)
+	local panelCF = Props.lookAt(panelPos, panelPos + toBase) -- front face toward the base
+	Assets.swap("MoneyBoard", model, Assets.facing(MONEY_BOARD_POS, toBase), function(into)
+		moneyBoardFrame(into, panelCF)
+	end, Vector3.new(1.2, 1.2, 0))
+	local panel = studs(deco(model, "MoneyBoard", Vector3.new(MONEY_PANEL.X, MONEY_PANEL.Y, 0.6), panelCF, Color3.fromRGB(30, 60, 120)), { "BackSurface" })
+	panel:SetAttribute("Role", "MoneyBoard")
+	buildMoneyBoardGui(panel)
+end
+
+----------------------------------------------------------------------------------------------------
 -- Adopting a (hand-edited) map
 ----------------------------------------------------------------------------------------------------
 local function worldCFrame(a: Attachment): CFrame
@@ -912,6 +1106,7 @@ function WorldBuilder.build(): ({ PlotInfo }, { NestInfo })
 		buildPlot(world, i)
 	end
 	buildShops(world)
+	buildRewards(world)
 	buildCorridor(world)
 	world.Parent = workspace
 	local plots, nests, problems = WorldBuilder.adopt(world)
@@ -939,6 +1134,62 @@ function WorldBuilder.sellPoints(world: Instance?): { BasePart }
 		warn(`[WorldBuilder] the map has no SELL stall (a ProximityPrompt with OpensShop = "Sell"), so plants can't be sold at a stall`)
 	end
 	return out
+end
+
+-- What RewardService writes on the "MOST MONEY/s" board: one entry per row (Rank, Name, Value labels and
+-- the row frame, hidden when empty) and the Status line.
+export type MoneyBoardLabels = { rows: { { frame: GuiObject, name: TextLabel, value: TextLabel } }, status: TextLabel }
+
+-- The community rewards' pieces, wherever the map has them: the free chest's prompt part (Role
+-- "FreeChest", holding a ProximityPrompt) and the board's labels (the Role "MoneyBoard" part's Row1..RowN
+-- and Status). A map without one is warned about and the game runs without that reward.
+function WorldBuilder.rewardPoints(world: Instance?): (BasePart?, MoneyBoardLabels?)
+	local chest: BasePart?, board: BasePart? = nil, nil
+	local all: { Instance } = if world then world:GetDescendants() else {}
+	for _, d in all do
+		local role = d:GetAttribute("Role")
+		if role == "FreeChest" and d:IsA("BasePart") and d:FindFirstChildOfClass("ProximityPrompt") then
+			chest = chest or d
+		elseif role == "MoneyBoard" and d:IsA("BasePart") then
+			board = board or d
+		end
+	end
+	local labels: MoneyBoardLabels? = nil
+	if board then
+		local rows = {}
+		for i = 1, Config.MONEY_BOARD_ROWS do
+			local row = board:FindFirstChild("Row" .. i, true)
+			local name = row and row:FindFirstChild("Name")
+			local value = row and row:FindFirstChild("Value")
+			if not (row and row:IsA("GuiObject") and name and name:IsA("TextLabel") and value and value:IsA("TextLabel")) then
+				break
+			end
+			table.insert(rows, { frame = row, name = name, value = value })
+		end
+		local status = findLabel(board, "Status")
+		if #rows > 0 and status then
+			labels = { rows = rows, status = status }
+		end
+	end
+	if not chest then
+		warn(`[WorldBuilder] the map has no free chest (a part with Role = "FreeChest" holding a ProximityPrompt)`)
+	end
+	if not labels then
+		warn(`[WorldBuilder] the map has no "MOST MONEY/s" board (a part with Role = "MoneyBoard" and its Row1.. / Status labels)`)
+	end
+	return chest, labels
+end
+
+-- Writes the board: `rows` already ranked and formatted (Rewards.formatRow), `status` the line under the
+-- list. Rows past the list are hidden.
+function WorldBuilder.setMoneyBoard(labels: MoneyBoardLabels, rows: { { name: string, value: string } }, status: string)
+	for i, row in labels.rows do
+		local r = rows[i]
+		row.frame.Visible = r ~= nil
+		row.name.Text = if r then r.name else ""
+		row.value.Text = if r then r.value else ""
+	end
+	labels.status.Text = status
 end
 
 -- The fixed sign texts that show an icon once it is uploaded (Config.ICONS), matched by their exact text so

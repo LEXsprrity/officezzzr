@@ -19,6 +19,7 @@ local PlotService = require(Server:WaitForChild("PlotService"))
 local ShopService = require(Server:WaitForChild("ShopService"))
 local TrailService = require(Server:WaitForChild("TrailService"))
 local AmbientService = require(Server:WaitForChild("AmbientService"))
+local RewardService = require(Server:WaitForChild("RewardService"))
 
 -- Guards pass through players (the catch is a distance check) and each other.
 PhysicsService:RegisterCollisionGroup("Guards")
@@ -31,9 +32,11 @@ PlotService.init(plotInfos, WorldBuilder.sellPoints(workspace:FindFirstChild("Wo
 SeedService.init(nestInfos)
 GuardService.init(nestInfos)
 ShopService.init()
+RewardService.init(workspace:FindFirstChild("World"))
 SpeedService.start()
 PlotService.start()
 AmbientService.start()
+RewardService.start()
 
 -- DataStore (unavailable in Studio unless "Enable Studio Access to API Services" is on)
 local store: ProfileStore.Store? = nil
@@ -117,6 +120,7 @@ local function onPlayerAdded(player: Player)
 	PlotService.grantOffline(s)
 	Sessions.pushFull(s)
 	Sessions.pushCore(s)
+	RewardService.playerReady(s)
 	if not canSave then
 		Net.toast(player, if store then "⚠️ Couldn't load your save; progress this session won't be saved." else "⚠️ Saving is off (no DataStore access).", "red")
 	end

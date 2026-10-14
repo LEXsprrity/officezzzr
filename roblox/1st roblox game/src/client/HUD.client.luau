@@ -177,7 +177,7 @@ local carryLabel = text(carryBanner, { Size = UDim2.new(1, -16, 1, -8), Position
 ----------------------------------------------------------------------------------------------------
 local SPEED_PINK = Color3.fromRGB(255, 70, 150)
 local MONEY_GREEN = Color3.fromRGB(85, 240, 70)
-local STATS_H, LEVEL_H, LEFT_H = 124, 124, 276
+local STATS_H, LEVEL_H, LEFT_H = 124, 124, 358 -- LEFT_H: 4 side buttons (Rewards.client adds the Gift one) + Slow Mode
 local STATS_BOTTOM = 10
 local LEVEL_BOTTOM = STATS_BOTTOM + STATS_H + 8
 local LEFT_BOTTOM = LEVEL_BOTTOM + LEVEL_H + 10
@@ -290,9 +290,10 @@ for i, q in QUICK_BUY do
 	end)
 end
 
--- Shop / Index / Trails, then the Slow Mode switch, above the level bar.
+-- Shop / Index / Trails, then the Slow Mode switch, above the level bar. Rewards.client puts the Gift
+-- button on top (it finds the column by name).
 local leftColumn = new("Frame", {
-	BackgroundTransparency = 1, AnchorPoint = Vector2.new(0, 1), Position = UDim2.new(0, 14, 1, -LEFT_BOTTOM),
+	Name = "LeftColumn", BackgroundTransparency = 1, AnchorPoint = Vector2.new(0, 1), Position = UDim2.new(0, 14, 1, -LEFT_BOTTOM),
 	Size = UDim2.fromOffset(180, LEFT_H), Parent = gui,
 }, {
 	new("UIListLayout", { Padding = UDim.new(0, 8), SortOrder = Enum.SortOrder.LayoutOrder, VerticalAlignment = Enum.VerticalAlignment.Bottom }),

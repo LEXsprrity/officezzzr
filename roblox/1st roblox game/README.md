@@ -23,6 +23,8 @@ The Meadow is deliberately short (200 studs) so a new player grabs a first seed 
 | **E** / **F** at your gate's board | Upgrade your plot one level: **E** for money (red button), **F** for Robux (purple button). Only the owner sees the prompts |
 | **R** (hold) | Remove one of your plants (refunds 30 s of its income) |
 | **E** at the SELL stall | Opens the Sell window: sell your plants for 2 min of their income each (see "Selling plants") |
+| **E** (hold) at the FREE chest | Claims the free chest: 5 min of your income (at least $1K), every 15 min (see "Community rewards") |
+| Gift (left, top) | Opens the Free Gift window: 10,000 Speed once for joining the game's community |
 | **1** | Bat: stuns a nearby awake guard for 2 s (4 s cooldown) |
 | Shop / Index / Trails (left) | Shop (seed packs, plot upgrade, Speed, money, treadmill, passes) / Index (collection book) / Trail Shop (buy trails for $ or R$, equip one) |
 | **+** on the Speed icon (bottom left) | Opens the Shop at its Speed section |
@@ -130,8 +132,41 @@ The shop plaza's 4th stall (like `docs/references/09-sell-stall-reference.png`) 
 - **Server checks** (`SellPlants(slots)`, rate-limited like the other remotes): a plain list of at most 40 whole numbers, only slots you have a plant in (others are skipped), each slot sold once even if named twice, and you must stand within `SELL_STALL_DISTANCE` (20 studs) of a SELL stall's prompt part (`WorldBuilder.sellPoints`). Selling frees the slots, removes the creatures, refreshes income and the plants view (saved by the autosave, like a removal), and the client gets a "💰 +$X for N plants" toast, the cash sound and a +$ popup over the stall.
 - The stall is the `ShopStall_Sell` asset slot, with no `ShopStall` fallback: it keeps its own look until it gets its own model. The circle and the SELL text stay from code.
 
-### Old saves (format v3)
-Saves from before the rework (v1/v2) are migrated on load, once (the next save is v3):
+### 🎁 Community rewards: Free Gift, free chest, MOST MONEY/s
+Like `docs/references/06-free-gift-like-favorite-join.png` and `06-free-chest-and-leaderboard.png`. Rules in `Rewards` (pure, tested), Roblox side in `RewardService`, UI in `Rewards.client` (its own script: `HUD.client` is near Luau's 200-locals limit; same window style, drawn inside the HUD's ScreenGui so it shares its scale and the toasts show over it).
+
+**Free Gift window.** A **Gift** button on top of the left column (Gift icon, red **!** until claimed) opens it, and it opens by itself once per account, `FREE_GIFT_AUTO_OPEN` = 20 s after joining. Cyan title bar "Free Gift!" with the red X, a big Speed bag, "~ LIMITED TIME! ~" in red and "10,000 SPEED!" in cyan-to-green, three step panels and a big **CLAIM!** button (grey **CLAIMED!** once done).
+1. **Like the game!** Text only ("Tap 👍 on the game page"): a like can't be prompted or checked in game.
+2. **Favorite the game!** A ⭐ Favorite button opens Roblox's own favourite prompt, `AvatarEditorService:PromptSetFavorite(game.PlaceId, Enum.AvatarItemType.Asset, true)` (the place is an asset; pcall'd; if it can't open, e.g. in Studio, the window says where the button is).
+3. **Join the community!** A Join Community button. A group join can't be prompted in game, so it says how: game page → Community → Join `Config.COMMUNITY_NAME`.
+
+**What the reward depends on: only the community (group).** CLAIM! sends `ClaimReward("Gift")`. The server checks `Player:IsInGroupAsync(Config.COMMUNITY_GROUP_ID)` (pcall'd; the deprecated `IsInGroup` as a fallback). Roblox can answer that from a per-session cache, so a "no" is re-checked with `GroupService:GetGroupsAsync`, which sees a group joined a minute ago. A "yes" is cached for the session and a "no" for 10 s. It grants `FREE_GIFT_SPEED` = **10,000 Speed** once per account (the saved `freeGift` flag) and toasts. With `COMMUNITY_GROUP_ID = 0` (the repo default) the button says **COMING SOON**, the **!** is hidden and the window doesn't open by itself.
+
+Why the like and favourite are only asked for:
+- **Likes can't be verified.** There is no API for them, so a "reward for liking" would pay everyone who clicks.
+- **Paying for an action can break Roblox's rules.** Roblox's Community Rules don't allow prizes or giveaways "in exchange for something". Favourites can't be checked safely server-side either: a client-side check can be faked.
+- **Community rewards are the usual, accepted case.** Rewarding a group join is the common way games promote their community, and it is checked on the server.
+
+So a player who never likes or favourites still gets the gift by joining the community, and nobody gets it for a like or favourite alone. This follows the Community Rules and developer-forum consensus, not an official Roblox ruling: if Roblox's policy changes, `Rewards.claimGift` is the one place to change.
+
+**Free chest.** A red-and-gold chest (asset slot `FreeChest`) on a green glowing circle, with a big green outlined **FREE!** over it, stands against the inside of the front wall, left of the corridor mouth, by the spawn. Hold **E** (prompt "Claim"):
+- **Pay:** `Config.freeChestAmount` = max(**$1K**, **5 min** of your current income), using the HUD's $/s with day/night, plot level and 2x Money.
+- **Cooldown:** `FREE_CHEST_COOLDOWN` = **15 min** per player. It is saved as the unix time of your last claim (`chestAt`), so rejoining doesn't reset it. A claim time from a server whose clock is ahead waits one cooldown at most.
+- **Server checks:** you stand within 14 studs, at most one claim attempt a second, and the cooldown.
+- **What you see:** a toast, the cash sound and a +$ popup.
+- **Countdown:** the cooldown is per player, so each client writes its own countdown: "Ready in 12:34" under FREE!, with the time as the prompt's action text.
+
+**MOST MONEY/s board.** A tall studded cyan board (frame slot `MoneyBoard`) right of the chest. Green "MOST MONEY/s" title, then the **top 10 of all servers**, each row with rank, name, a green "Money/s" tag and the value ("$54.8T").
+- **Writing:** every 60 s each server writes its players' current $/s to the OrderedDataStore `MostMoneyPerSecond_v1`. A player who never earned isn't written, and one who drops to $0 is written once. Values are stored as log10(1 + $/s) in fixed point, because OrderedDataStore only takes whole numbers and income goes past 2^63. The order is kept and it reads back to about 6 digits.
+- **Reading:** each server then reads the top 10 back (`GetSortedAsync`), with every call pcall'd. Players in the server show their live value.
+- **Status line:** "All servers · updates every minute".
+- **Fallbacks:** until the first update the board says "Loading...". If the DataStore can't be used (Studio without API access, an outage), it shows the last list it read. If there is none, it shows this server's players with "This server · updates every minute".
+
+The old "⚡ FASTEST HERE" board (Speed, this server, at the other side of the corridor mouth) stays: it ranks a different stat, and the two stand on opposite sides of the walkway, so they don't clash.
+
+### Old saves (format v4)
+v4 added the community rewards: v3 saves load with the Free Gift unclaimed, its window not shown yet and the free chest ready.
+Saves from before the rework (v1/v2) are migrated on load, once (the next save is the current format):
 - **Speed Gain tier → trail**, the nearest multiplier at or below it, owned and equipped: x1 → Grey (x1.5), x2 → Green (x2), x3 → Purple (x3), x5 → Rainbow (x5). Nobody's multiplier goes down, except that x10 and x25 are above the best trail: those players get Rainbow (x5) **and the money they paid for the x10/x25 tiers back** ($250M, and $250M + $10B).
 - **Slots → plot level** = slots − 5 + 1 (clamped to 1–26), so everyone keeps exactly their slots. The plot's income multiplier comes with the level.
 - Treadmill tier, plants, Index, seed bag and receipts are kept as they are. Removed items (potions, Sleep Dust) are dropped from the inventory.
@@ -188,6 +223,7 @@ luau-lsp analyze --definitions=globalTypes.d.luau --sourcemap=sourcemap.json src
 - Game Settings → Security → **Enable Studio Access to API Services**. Without it saving is off, and the game tells you so in a toast.
 - Game Settings → Places → **Max Players = 5**, one plot each. A 6th player is kicked with a "server full" message.
 - Gamepasses are stubs. Put real ids in `Config.GAMEPASSES` to turn them on.
+- **The Free Gift needs the community's id.** Create the game's Roblox community (group), then set `Config.COMMUNITY_GROUP_ID` to the number in its URL (`roblox.com/communities/<id>/...`) and `Config.COMMUNITY_NAME` to its name. Link the community on the experience page so players can join it from there. While the id is `0`, the Free Gift says "coming soon".
 - Everything sold for Robux except the 2 gamepasses is a developer-product stub. Create the **29 developer products** below on the Creator Dashboard (your experience → Monetization → Developer Products) and paste each id into its `Config.DEVELOPER_PRODUCTS` key. The price comes from the Dashboard (the placeholders are only shown until then). The place must be published for `PromptProductPurchase`/`GetProductInfo` to work.
 
   | ✅ | `Config.DEVELOPER_PRODUCTS` key | Dashboard name | Price (placeholder) | Grants |
@@ -278,6 +314,7 @@ lune run tools/upload_icons.luau             # upload every icon whose id is sti
 9. HUD: bottom left shows only the Speed icon with a yellow **+** and the Speed in pink, the money icon and the money in green. **+** opens the Shop scrolled to -- SPEED --. Above them, the level bar ("Level N", "current / next", green fill, "<Speed> SPEED" and "x<trail> Multiplier" over it) and the +10K / +100K / +1M buttons ("coming soon" with stub ids; with a real id the Robux prompt, and the Speed lands once). Above those, Shop / Index / Trails and the Slow Mode switch. A Speed pack that jumps several levels shows one "LEVEL N!" with the highest. Try a phone in the device emulator: nothing overlaps.
 10. Shop windows: Trails opens the purple Trail Shop. Scroll it right with the wheel, the bottom scrollbar, a drag and the `>` arrow, until the Rainbow card shows; the arrows hide at each end. Money ticking up doesn't reset the scroll or swallow a click. Shop (green) scrolls down to -- PASSES -- with nothing cut off; the Speed "+" still lands on -- SPEED --. Index (blue) lists every zone. On a phone (device emulator), each window fits on screen and scrolls by touch.
 11. SELL stall: the plaza's 4th stall has the red-and-white awning, the green circle and the red SELL text. Press E: the red-orange Sell window lists your plants. Click Sell on one: it says "Sure? Sell"; click again: the plant disappears from your plot, its soil is free, "+$X for 1 plant" pops up with the cash sound, and income drops. Try "Sell all Common": a confirm bar asks first; Cancel keeps them, "Yes, sell!" sells every non-mutated Common. Walk away from the stall with the window open and click Sell: "Walk up to the SELL stall" and nothing is sold. R on a plant still refunds 30 s.
+12. Community rewards. With `COMMUNITY_GROUP_ID = 0`, the Gift button (top of the left column) has no **!** and opens the cyan "Free Gift!" window with a grey COMING SOON button. With a real id and a new account, the window opens by itself about 20 s after joining (once: rejoin and it doesn't). ⭐ Favorite opens Roblox's favourite prompt (published place). CLAIM! while not in the community says to join first and grants nothing. Join the community on the game page, wait a minute, press CLAIM!: +10,000 Speed, a toast, CLAIMED! in grey, and the **!** goes away. Rejoin: still CLAIMED!. Walk to the FREE chest by the corridor mouth and hold E: +$ (at least $1K), "Ready in 14:59" appears under FREE!, and E again says when it's ready. Rejoin: the countdown continues. The MOST MONEY/s board next to it shows "Loading...", then within a minute the top earners (with API access: "All servers"; without: "This server").
 
 ## Rules the code enforces
 - **Server-authoritative.** Money, Speed, pickup, carry, planting and purchases all live on the server. The client only draws the HUD and VFX and runs Slow Mode. Every prompt and remote re-checks distance, ownership and state, and remotes are rate-limited.
@@ -291,7 +328,7 @@ lune run tools/upload_icons.luau             # upload every icon whose id is sti
 - **Growth.** Only `plantedAt` is saved. `weight = sprout × variance × (1 + 4·ease(age/20 min))` grows to 5× and stops. `income = seedIncome(zone) × rarity × mutation × sqrt(weight/sprout)`. A single 3 s payout loop evaluates the formula. There is no per-plant tick.
 - **Day and night plants.** Every zone is either ☀️ day (Meadow, Desert, Lava, Spirit) or 🌙 night (Jungle, Snow, Space), set by `Zone.active`. Its plants pay `ACTIVE_TIME_MULT` (1.5×) during their phase and 1× otherwise (`Config.timeMult`, from the shared `dayPhase` clock). The payout loop applies it, and the plant's billboard shows ☀️/🌙 plus a gold "1.5x!" while it is active. `plantIncome`/`incomeOf` stay the plain base, and the 30 s removal refund and the SELL stall's price use the base too. Offline income uses the cycle average: 300 s day and 150 s night give ×4/3 for day plants and ×7/6 for night plants.
 - **Economy** is formulas in `Config` (see "Economy" above). `seedIncome(k) = req[k+1] / (ECONOMY_SLOTS × 300 s)` with `ECONOMY_SLOTS = 10`: a 10-plant plot of zone-k Commons earns zone k+1's recommended Speed, in dollars, in about 5 minutes (the same money scale as before the rework). Money buys trails and plot levels (`Config.priceOf`); plot levels cost `500 × 3.1^(L−2)` and multiply income by `1 + 0.06 × (L−1)`.
-- **Data** (`ProfileStore`, format v3). `UpdateAsync` with retries and exponential backoff, autosave every 90 s, `BindToClose`. If a load fails, that session never saves, so it can't overwrite real data with defaults. Saved fields: money, Speed, owned trails + the equipped one, treadmill tier, plot level, plants (slot, zone, rarity, mutation, plantedAt), Index, items (none are sold right now; only ids in `Config.START_ITEMS` load), the seed bag, the last 100 Robux receipt ids and `lastSeen`. v1 saves load with an empty bag and no receipts; v1/v2 saves get their Speed Gain tier turned into a trail and their slots into a plot level (see "Old saves" above). Potions and Sleep Dust were removed: potion timers and both items in old saves are dropped on load. Offline income is capped at 1 h.
+- **Data** (`ProfileStore`, format v4; v4 added `freeGift`, `giftShown` and `chestAt`, see "Community rewards"). `UpdateAsync` with retries and exponential backoff, autosave every 90 s, `BindToClose`. If a load fails, that session never saves, so it can't overwrite real data with defaults. Saved fields: money, Speed, owned trails + the equipped one, treadmill tier, plot level, plants (slot, zone, rarity, mutation, plantedAt), Index, items (none are sold right now; only ids in `Config.START_ITEMS` load), the seed bag, the last 100 Robux receipt ids and `lastSeen`. v1 saves load with an empty bag and no receipts; v1/v2 saves get their Speed Gain tier turned into a trail and their slots into a plot level (see "Old saves" above). Potions and Sleep Dust were removed: potion timers and both items in old saves are dropped on load. Offline income is capped at 1 h.
 - **Art.** The map is generated from primitives by `WorldBuilder` (base, plots), `ZoneThemes` (the 7 zones) and the `Props` kit, then hand-edited in `map/World.rbxm`, and any piece can be swapped for a model from `assets/` (see "Drop-in models"). Only floors, walls and the wall-flush arch pillars collide. All props are anchored and non-colliding (no Touched, no raycasts), so they never block runners, guards or the camera. The base is kept plain so the plants are the show (like a simulator base): a studded lawn in big checker tiles of two close greens, a sand walkway and plot paths, plain tan checker walls with a grass top, and simple wooden fences (dark posts, two warm rails) around each plot; no trees, bushes, flowers, lamps or rocks outside the corridor (tested). The base area is about 1.18k parts (tested below 1.25k), the corridor about 2.3k and the whole map about 3.5k (tested below 6k/8k). Lighting (`LightingLook`, blended by `Config.nightBlend`): a bright day with a strong high sun (ClockTime 9:00–15:00), the default blue sky with clouds, crisp ShadowMap shadows, thin light-blue air and saturated colour (ColorCorrection +0.28); sunset and sunrise happen inside the night fades, and the night is a clear, readable blue (bright blue ambient, stars, a little more bloom on the neon). `default.project.json` ships the day look (a test keeps the two in step), and the client adds a per-zone colour grade.
 
 ### Soft gates: how soft they are
@@ -371,8 +408,11 @@ Each planted seed grows into its zone's creature (`CreatureModels`). The creatur
 | `src/server/AmbientService.luau` | 〃 | Day/night lighting (applies `LightingLook`), "Fastest here" board |
 | `src/server/LightingLook.luau` | 〃 | *Pure*: the day and night looks (Lighting, Atmosphere, ColorCorrection, Bloom, SunRays) and the clock |
 | `src/client/HUD.client.luau` | `StarterPlayerScripts.Client` | All UI, Slow Mode |
+| `src/server/Rewards.luau` | `ServerScriptService.Server` | *Pure*: Free Gift claim (group only, once), free chest cooldown/payout, MOST MONEY/s encoding, merging and formatting |
+| `src/server/RewardService.luau` | 〃 | Group check (`IsInGroupAsync` + `GroupService`), `ClaimReward`, the chest's prompt, the OrderedDataStore board loop |
+| `src/client/Rewards.client.luau` | `StarterPlayerScripts.Client` | Gift button, the Free Gift window, the chest's per-player countdown |
 | `src/client/Effects.client.luau` | 〃 | Income popups, sounds, shake, belt scroll, rainbow mutation, creature idle sway, owner-only prompts, per-zone colour grade |
-| `tests/` | — | Lune harness + specs (guard, speed, data, economy, world, lighting, packs, legendary odds + announcements, shop, progression + its free-player simulation, creatures, assets, map, mole, icons + uploader) |
+| `tests/` | — | Lune harness + specs (guard, speed, data, economy, world, lighting, packs, legendary odds + announcements, shop, progression + its free-player simulation, creatures, assets, map, mole, icons + uploader, SELL stall, community rewards) |
 
 ## Networking
 `ReplicatedStorage.Remotes`:
@@ -381,6 +421,7 @@ Each planted seed grows into its zone's creature (`CreatureModels`). The creatur
   - `RequestUseItem` ids: `Bat`, `Seed:<bagKey>` (plant from the seed bag), `Equip:<trailId>` (an owned trail).
 - Server → client: `StatsUpdate(partialStats)` (the client merges it), `LootEvent(kind, data)`, `IncomePopup(amount, position)`. Pack openings are `LootEvent("PackRoll", { packId, name, zone, result })`.
 - Client → server: `SellPlants(slots)`, the Sell window's list of plant slots (see "Selling plants").
+- Client → server: `ClaimReward("Gift")`, the Free Gift's CLAIM! button (rate-limited; the server checks the community). The free chest is a server-side ProximityPrompt. Server → client: `LootEvent("OpenFreeGift")` (the once-per-account auto-open), `LootEvent("FreeGift", { result, claimed })`, `LootEvent("FreeChest", { amount, cooldown })`; `StatsUpdate` carries `freeGift` and `chestAt`.
 - Stealing, planting and removing plants use server-side ProximityPrompts. Day/night is computed from the shared clock (`Config.dayPhase`), so it needs no remote.
 
 ## Known limits

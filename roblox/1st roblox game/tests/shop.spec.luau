@@ -512,13 +512,13 @@ H.test("migration: bought slots become the plot level with the same slots", func
 	H.eq(ProfileStore.levelForSlots(12), 8)
 end)
 
-H.test("migration: a migrated save is written as v3 and isn't migrated (or refunded) again", function()
+H.test("migration: a migrated save is written in the current format and isn't migrated (or refunded) again", function()
 	local old = { v = 2, money = 1000, speed = 5, speedMultTier = 6, treadmillTier = 2, slots = 12, plants = {}, index = {}, items = { SleepDust = 1 } }
 	local p = ProfileStore.deserialize(serde.decode("json", serde.encode("json", old)))
 	local refunded = p.money
 	H.eq(refunded, 1000 + 250e6 + 10e9)
 	local data = serde.decode("json", serde.encode("json", ProfileStore.serialize(p)))
-	H.eq(data.v, 3)
+	H.eq(data.v, ProfileStore.VERSION)
 	H.eq(data.speedMultTier, nil, "the legacy field is dropped")
 	H.eq(data.slots, nil)
 	H.eq(data.plotLevel, 8)

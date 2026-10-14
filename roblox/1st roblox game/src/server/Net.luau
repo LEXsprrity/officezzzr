@@ -4,6 +4,7 @@
 --       Robux), "Pass:<name>" (gamepasses)
 --     RequestUseItem ids: "Bat", "Seed:<bagKey>" (plant from the seed bag), "Equip:<trailId>"
 --   client -> server: SellPlants(slots) (a list of plant slots, sold at the SELL stall; PlotService checks)
+--   client -> server: ClaimReward(kind) ("Gift": the Free Gift window's CLAIM button; RewardService checks)
 --   server -> client: StatsUpdate(stats), LootEvent(kind, data), IncomePopup(amount, position)
 --     LootEvent "Announce" { text, color } goes to every client (Net.announce)
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -22,6 +23,7 @@ local Net = {
 	RequestBuy = remote("RequestBuy"),
 	RequestUseItem = remote("RequestUseItem"),
 	SellPlants = remote("SellPlants"),
+	ClaimReward = remote("ClaimReward"),
 	StatsUpdate = remote("StatsUpdate"),
 	LootEvent = remote("LootEvent"),
 	IncomePopup = remote("IncomePopup"),

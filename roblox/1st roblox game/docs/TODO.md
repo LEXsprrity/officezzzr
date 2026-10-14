@@ -16,10 +16,11 @@ Marcar com `[x]` quando estiver feito e junto ao jogo.
 
 - [x] **5. Lojas bonitas e com scroll para a direita.** As lojas atuais estão feias e não dá para deslizar para a direita. Copiar o estilo da referência na Trail Shop: barra de título colorida com X vermelho, cartões grandes da cor do trail, raridade, "x2 Speed", botão verde de `$` e botão roxo de Robux, e barra de scroll horizontal. Ref: `05-trail-shop-reference.png` (antes: `05-our-trail-shop-before.png`).
 
-- [ ] **6. Recompensas para incentivar Like, Favorito e Comunidade.**
+- [x] **6. Recompensas para incentivar Like, Favorito e Comunidade.**
   - Janela "Free Gift!": "LIMITED TIME! 10,000 SPEED!" com 3 passos (dar Like, Favoritar, Entrar na comunidade) e botão para resgatar.
   - Baú grátis "FREE!" no mapa e quadro "MOST MONEY/s" (ranking).
   - Ref: `06-free-gift-like-favorite-join.png`, `06-free-chest-and-leaderboard.png`.
+  - **Falta o dono:** criar a comunidade (grupo) do jogo no Roblox e pôr o número dela em `Config.COMMUNITY_GROUP_ID` (e o nome em `Config.COMMUNITY_NAME`). Enquanto for `0`, o Free Gift diz "coming soon". A recompensa depende só de estar na comunidade: o Roblox não deixa verificar Likes nem dar prémios em troca de Like/Favorito (ver README, "Community rewards").
 
 - [x] **7. Iluminação e cores mais vivas.** O nosso jogo está escuro e lavado. Queremos um céu azul limpo, sol forte, verde muito saturado e brilho. Ref: `07-lighting-reference.png` (antes: `07-our-lighting-before.png`).
 
