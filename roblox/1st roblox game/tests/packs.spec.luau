@@ -165,8 +165,8 @@ H.test("odds: rarity odds sum to 100% and mutations + none sum to 100% for both 
 	end
 end)
 
-H.test("odds: packs roll with night luck and double Gold/Rainbow (8%, 2%), Celestial 0.5%, never Night", function()
-	H.eq(Config.PACK_LUCK, Config.NIGHT_LUCK, "packs roll rarities like a night pod")
+H.test("odds: packs roll with double luck and double Gold/Rainbow (8%, 2%), Celestial 0.5%, never Night", function()
+	H.eq(Config.PACK_LUCK, 2, "packs roll rarities with double luck (night pods are x1.5)")
 	H.eq(Config.PACK_MUTATION_MULT, 2)
 	H.eq(Config.PACK_EXCLUSIVE, "Celestial")
 	H.eq(Config.PACK_EXCLUSIVE_CHANCE, 0.005)

@@ -5,7 +5,7 @@ local Config = H.shared("Config")
 local Format = H.shared("Format")
 
 H.test("zones: 7 zones with the agreed recommended speeds (the flat-gain scale, v7)", function()
-	local want = { 0, 25e3, 500e3, 2e6, 7.5e6, 25e6, 75e6 }
+	local want = { 0, 25e3, 500e3, 2.5e6, 7.5e6, 25e6, 75e6 }
 	H.eq(#Config.ZONES, 7)
 	for k, req in want do
 		H.eq(Config.ZONES[k].req, req, Config.ZONES[k].id)
