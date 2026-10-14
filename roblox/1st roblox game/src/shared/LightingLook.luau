@@ -35,10 +35,10 @@ LightingLook.LIGHTING = {
 
 LightingLook.EFFECTS = {
 	Atmosphere = {
-		Density = { 0.05, 0.08 }, -- thin: from the base you see down the whole corridor, day and night
+		Density = { 0, 0 }, -- no air fog at all: from the spawn you see down the whole corridor, day and night
 		Color = { rgb(200, 228, 255), rgb(96, 120, 200) },
 		Decay = { rgb(110, 160, 220), rgb(54, 70, 150) },
-		Haze = { 0, 0.2 }, -- no haze by day (clear blue sky), a little at night
+		Haze = { 0, 0 }, -- no haze day or night
 	},
 	ColorCorrectionEffect = {
 		TintColor = { rgb(255, 255, 255), rgb(208, 220, 255) },

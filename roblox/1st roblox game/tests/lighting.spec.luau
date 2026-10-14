@@ -89,6 +89,7 @@ H.test("lighting: from spawn you see to the end of the map (no streaming cut-off
 	local atmosphere = LightingLook.EFFECTS.Atmosphere
 	for i, phase in { "day", "night" } do
 		H.ok(atmosphere.Density[i] <= 0.1, `{phase}: thin air ({atmosphere.Density[i]})`)
+		H.eq(atmosphere.Density[i], 0, `{phase}: no fog`)
 		H.ok(atmosphere.Haze[i] <= 0.3, `{phase}: little haze ({atmosphere.Haze[i]})`)
 	end
 	H.eq(atmosphere.Haze[1], 0, "a clear day")
