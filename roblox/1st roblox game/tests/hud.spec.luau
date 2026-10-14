@@ -231,4 +231,199 @@ H.test("ZoneBanner.client: entering a zone flashes its name and a face for ~2 s 
 	end
 end)
 
+----------------------------------------------------------------------------------------------------
+-- The day/night timer (DayTimer.client) and the shared UI juice (Shared/UiFx)
+----------------------------------------------------------------------------------------------------
+H.test("Format.countdown: \"in 2m 58s\" style", function()
+	H.eq(Format.countdown(178), "2m 58s")
+	H.eq(Format.countdown(178.9), "2m 58s")
+	H.eq(Format.countdown(60), "1m 00s")
+	H.eq(Format.countdown(45), "45s")
+	H.eq(Format.countdown(0), "0s")
+	H.eq(Format.countdown(-3), "0s")
+	H.eq(Format.countdown(3725), "1h 2m")
+end)
+
+H.test("DayTimer.client: top right, a translucent dark strip, a phase icon and bold italic relief text", function()
+	H.ok(fs.isFile("src/client/DayTimer.client.luau"), "the script exists")
+	local TIMER = fs.readFile("src/client/DayTimer.client.luau")
+	local strip = string.match(TIMER, "local strip = new%(\"Frame\", (%b{})")
+	H.ok(strip ~= nil, "the strip")
+	H.ok(strip and string.find(strip, "AnchorPoint = Vector2.new(1, 0), Position = UDim2.new(1, -TIMER_RIGHT, 0, TIMER_TOP)", 1, true),
+		"anchored at the top-right corner")
+	local right, top = string.match(TIMER, "local TIMER_RIGHT, TIMER_TOP = (%d+), (%d+)")
+	H.ok(right and tonumber(right) <= 20 and top and tonumber(top) <= 10, "hugging the top-right edge")
+	H.ok(string.find(TIMER, "IgnoreGuiInset = true", 1, true), "in the top bar's row, clear of the player list")
+	H.ok(strip and string.find(strip, "BackgroundTransparency = 0.4", 1, true), "translucent")
+	H.ok(string.find(TIMER, "Enum.FontStyle.Italic", 1, true) and string.find(TIMER, "Enum.FontWeight.Heavy", 1, true), "heavy italic")
+	H.ok(string.find(TIMER, "UiFx.relief(timeLabel", 1, true), "the time has relief")
+	H.ok(string.find(TIMER, "`in {Format.countdown(remaining)}`", 1, true), "\"in 2m 58s\"")
+	H.ok(string.find(TIMER, "\"☀️\"", 1, true) and string.find(TIMER, "\"🌙\"", 1, true) and string.find(TIMER, "\"☁️\"", 1, true), "sun / cloud-moon")
+	H.ok(string.find(TIMER, "Config.dayPhase(workspace:GetServerTimeNow())", 1, true), "the shared clock")
+	-- the old flat yellow box at the bottom right is gone from the HUD
+	for _, gone in { "bottomRight", "dayFrame", "dayLabel", "Night in" } do
+		H.ok(not string.find(HUD, gone, 1, true), `"{gone}" is gone from the HUD`)
+	end
+end)
+
+H.test("HUD: Speed and money readouts have relief", function()
+	H.ok(string.find(HUD, "UiFx.relief(speedValue", 1, true), "Speed")
+	H.ok(string.find(HUD, "UiFx.relief(moneyValue", 1, true), "money")
+end)
+
+H.test("HUD: every button gets the shared hover pop (UiFx.watch on the HUD's ScreenGui, Rewards inside it)", function()
+	H.ok(string.find(HUD, "local UiFx = require(Shared:WaitForChild(\"UiFx\"))", 1, true), "HUD requires UiFx")
+	local a = string.find(HUD, "local gui = new(\"ScreenGui\"", 1, true)
+	local w = string.find(HUD, "UiFx.watch(gui)", 1, true)
+	local first = string.find(HUD, "new(\"TextButton\"", (a or 1), true)
+	H.ok(a and w and first and a < w and w < first, "watching before the first button is made")
+	H.ok(string.find(REWARDS, "WaitForChild(\"SeedHUD\")", 1, true), "the Rewards window lives in the HUD's ScreenGui")
+	-- Shop and Index sit centred in a holder so they pop from the middle
+	H.ok(string.find(HUD, "local holder = new(\"Frame\", { Name = label", 1, true), "side buttons in holders")
+	H.ok(string.find(HUD, "AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.5), Size = UDim2.fromScale(1, 1)", 1, true),
+		"centred in them")
+	H.ok(string.find(HUD, "closeButton:SetAttribute(\"NoPop\", true)", 1, true), "not the full-screen \"Click to continue\"")
+	local FX = fs.readFile("src/shared/UiFx.luau")
+	for _, event in { "MouseEnter", "MouseLeave", "MouseButton1Down", "MouseButton1Up", "InputBegan", "InputEnded" } do
+		H.ok(string.find(FX, `b.{event}:Connect`, 1, true), `UiFx.pop hooks {event}`)
+	end
+	H.ok(string.find(FX, "Enum.EasingStyle.Back", 1, true) and string.find(FX, "Enum.EasingStyle.Elastic", 1, true), "springy easing")
+end)
+
+-- UiFx.pop on fake buttons: the tweens it plays as the mouse / a finger comes and goes.
+do
+	local luau = require("@lune/luau")
+	local roblox = require("@lune/roblox")
+
+	local function signal()
+		local s = { handlers = {} }
+		function s.Connect(self, f)
+			table.insert(self.handlers, f)
+			return { Disconnect = function() end }
+		end
+		function s.Fire(self, ...)
+			for _, f in self.handlers do
+				f(...)
+			end
+		end
+		return s
+	end
+
+	type Fake = any
+	local function loadFx(lastInput: string)
+		local tweens = {}
+		local env = {
+			game = {
+				GetService = function(_, name)
+					if name == "TweenService" then
+						return {
+							Create = function(_, inst, info, goal)
+								local t = { info = info, goal = goal, Completed = signal() }
+								function t.Play()
+									table.insert(tweens, t)
+								end
+								function t.Cancel() end
+								return t
+							end,
+						}
+					elseif name == "UserInputService" then
+						return {
+							GetLastInputType = function()
+								return (roblox.Enum.UserInputType :: any)[lastInput]
+							end,
+							IsMouseButtonPressed = function()
+								return true
+							end,
+						}
+					end
+					return { RenderStepped = signal() }
+				end,
+			},
+			Instance = {
+				new = function(class)
+					return { ClassName = class, Scale = 1 }
+				end,
+			},
+			TweenInfo = {
+				new = function(time, style, direction)
+					return { time = time, style = style, direction = direction }
+				end,
+			},
+			Enum = roblox.Enum, Vector2 = roblox.Vector2, UDim2 = roblox.UDim2, Color3 = roblox.Color3,
+			ColorSequence = roblox.ColorSequence, ColorSequenceKeypoint = roblox.ColorSequenceKeypoint,
+			task = { defer = function(f, ...) f(...) end },
+			math = math, string = string, table = table, assert = assert, ipairs = ipairs, pairs = pairs,
+		}
+		local Fx = luau.load(fs.readFile("src/shared/UiFx.luau"), { debugName = "UiFx", environment = env })()
+		return Fx, tweens
+	end
+
+	local function fakeButton(inLayout: boolean): Fake
+		local parent = {
+			FindFirstChildWhichIsA = function(_, class)
+				return if class == "UIGridStyleLayout" and inLayout then {} else nil
+			end,
+		}
+		local b: Fake = {
+			AnchorPoint = roblox.Vector2.new(0, 0), Position = roblox.UDim2.fromOffset(100, 50), Size = roblox.UDim2.fromOffset(80, 40),
+			Parent = parent, children = {},
+		}
+		for _, e in { "MouseEnter", "MouseLeave", "MouseButton1Down", "MouseButton1Up", "InputBegan", "InputEnded" } do
+			b[e] = signal()
+		end
+		function b.GetAttribute()
+			return nil
+		end
+		function b.FindFirstChildWhichIsA(self, class)
+			for _, c in self.children do
+				if c.ClassName == class then
+					return c
+				end
+			end
+			return nil
+		end
+		return b
+	end
+
+	H.test("UiFx.pop: hover inflates to 1.1 (Back), leaving shrinks back, a click squashes then springs", function()
+		local Fx, tweens = loadFx("MouseMovement")
+		local b = fakeButton(false)
+		Fx.pop(b)
+		b.MouseEnter:Fire()
+		H.eq(#tweens, 1)
+		H.eq(tweens[1].goal.Scale, 1.1)
+		H.eq(tweens[1].info.style, roblox.Enum.EasingStyle.Back)
+		-- scaled about its centre while popped
+		H.eq(b.AnchorPoint, roblox.Vector2.new(0.5, 0.5))
+		H.eq(b.Position, roblox.UDim2.fromOffset(140, 70))
+		b.MouseButton1Down:Fire()
+		H.eq(tweens[2].goal.Scale, Fx.PRESS)
+		H.ok(Fx.PRESS < 1, "squash")
+		b.MouseButton1Up:Fire()
+		H.eq(tweens[3].goal.Scale, 1.1)
+		H.eq(tweens[3].info.style, roblox.Enum.EasingStyle.Elastic)
+		b.MouseLeave:Fire()
+		H.eq(tweens[4].goal.Scale, 1)
+		tweens[4].Completed:Fire(roblox.Enum.PlaybackState.Completed)
+		H.eq(b.AnchorPoint, roblox.Vector2.new(0, 0), "back to its own anchor at rest")
+		H.eq(b.Position, roblox.UDim2.fromOffset(100, 50))
+	end)
+
+	H.test("UiFx.pop: a finger press inflates, lifting it springs back; taps don't stick as hovers", function()
+		local Fx, tweens = loadFx("Touch")
+		local b = fakeButton(true)
+		Fx.pop(b)
+		b.MouseEnter:Fire() -- a tap sends MouseEnter but never MouseLeave
+		b.MouseButton1Down:Fire()
+		H.eq(#tweens, 0, "no hover and no squash from a tap")
+		local touch = { UserInputType = roblox.Enum.UserInputType.Touch }
+		b.InputBegan:Fire(touch)
+		H.eq(tweens[1].goal.Scale, 1.1)
+		H.eq(b.AnchorPoint, roblox.Vector2.new(0, 0), "a layout places it: never re-anchored")
+		b.InputEnded:Fire(touch)
+		H.eq(tweens[2].goal.Scale, 1)
+		H.eq(tweens[2].info.style, roblox.Enum.EasingStyle.Elastic)
+	end)
+end
+
 return nil
