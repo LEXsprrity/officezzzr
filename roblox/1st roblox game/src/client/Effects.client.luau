@@ -109,7 +109,7 @@ RunService:BindToRenderStep("SeedShake", Enum.RenderPriority.Camera.Value + 1, f
 end)
 
 local SOUND_FOR = {
-	Pickup = "Pickup", Planted = "Plant", Caught = "Caught", GuardWake = "Wake",
+	Pickup = "Pickup", Planted = "Plant", Stored = "Pickup", Caught = "Caught", GuardWake = "Wake",
 	Bat = "Bat", Bought = "Buy", End = "Pickup", PackRoll = "Buy", Announce = "Pickup", SoldPlants = "Buy", FreeChest = "Buy",
 }
 

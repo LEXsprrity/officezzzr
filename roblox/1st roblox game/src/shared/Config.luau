@@ -595,7 +595,8 @@ Config.PASS_EXTRA_SLOTS = 10 -- the ExtraSlots pass adds this many slots, on top
 ----------------------------------------------------------------------------------------------------
 -- Seed packs: our "eggs with odds". Two premium, late-game packs, Robux only: each is a developer
 -- product, never sold for in-game money, with no Speed gate (a premium shortcut). A pack rolls one
--- seed of its zone into the player's seed bag, which they plant from the Seeds menu at their pad.
+-- seed of its zone into the player's seed bag, which they plant from the Inventory (the Plants panel) on
+-- their dirt.
 -- Rolls live in Shared/SeedPacks, purchase rules in Server/Shop.
 ----------------------------------------------------------------------------------------------------
 Config.PACK_LUCK = Config.NIGHT_LUCK -- packs roll Common..Epic like a night pod in their zone...

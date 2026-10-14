@@ -38,9 +38,8 @@ local function totalIncome(profile: ProfileStore.Profile): number
 	return sum
 end
 
-H.test("sell: the stall pays SELL_STALL_SECONDS of the plant's income x the money multiplier, more than the R refund", function()
-	H.ok(Config.SELL_STALL_SECONDS > Config.SELL_SECONDS, "walking to the stall is worth it")
-	H.ok(Config.SELL_STALL_SECONDS <= 10 * 60, "but it is only minutes of what the plant earns by staying")
+H.test("sell: the stall pays SELL_STALL_SECONDS of the plant's income x the money multiplier", function()
+	H.ok(Config.SELL_STALL_SECONDS <= 10 * 60, "only minutes of what the plant earns by staying")
 	local mult = Config.moneyMult(7, true) -- plot level 7 and the 2x Money pass
 	for zone = 1, #Config.ZONES do
 		for rarity = 1, #Config.RARITIES do
@@ -58,8 +57,6 @@ H.test("sell: the stall pays SELL_STALL_SECONDS of the plant's income x the mone
 	H.ok(Selling.price(grown, NOW, 1) > Selling.price(sprout, NOW, 1), "grown > sprout")
 	H.ok(Selling.price(plant(1, 4, 3, 0), NOW, 1) > Selling.price(plant(1, 4, 2, 0), NOW, 1), "Rare > Uncommon")
 	H.near(Selling.price(grown, NOW, 2.5), Selling.price(grown, NOW, 1) * 2.5, 1e-6, "x the money multiplier")
-	H.near(Selling.price(grown, NOW, 1) / (income(grown) * Config.SELL_SECONDS), Config.SELL_STALL_SECONDS / Config.SELL_SECONDS, 1e-9,
-		"stall vs refund ratio")
 end)
 
 H.test("sell: selling removes the plants, pays their price, frees the slots and lowers the income", function()
@@ -141,38 +138,37 @@ H.test("sell: only your own plants, real slots and a plain list; nothing changes
 	H.eq(#profile.plants, 0)
 end)
 
-H.test("remove (RemovePlant, the Plants panel): only one of your own plants, by a whole slot number; refunds SELL_SECONDS", function()
+H.test("remove (RemovePlant, the Plants panel): only one of your own plants, by a whole slot number; into the inventory, never money", function()
+	local Inventory = H.server("Inventory")
 	local mine = profileWith({ plant(1, 2, 3, 600), plant(2, 4, 1, 3600, "Gold") })
 	local theirs = profileWith({ plant(5, 1, 1, 60) })
 	-- refused: nothing changes
 	for _, bad in { "1", 1.5, 0 / 0, math.huge, {}, true } :: { any } do
-		local refund, why = Selling.remove(mine, bad, NOW, 2)
-		H.eq(refund, nil, `slot {tostring(bad)}`)
+		local entry, why = Inventory.take(mine, bad, NOW)
+		H.eq(entry, nil, `slot {tostring(bad)}`)
 		H.eq(why, "bad", `slot {tostring(bad)}`)
 	end
-	local refund, why = Selling.remove(mine, 5, NOW, 2) -- another player's plant (not in your profile)
-	H.eq(refund, nil)
+	local entry, why = Inventory.take(mine, 5, NOW) -- another player's plant (not in your profile)
+	H.eq(entry, nil)
 	H.eq(why, "none")
 	H.eq(#mine.plants, 2, "nothing removed")
-	H.eq(mine.money, 1000, "nothing paid")
 	H.eq(#theirs.plants, 1, "theirs untouched")
-	-- your plant: removed, refunded SELL_SECONDS of its income x the multiplier (less than the stall pays)
-	local gold = mine.plants[2]
-	local paid = Selling.remove(mine, 2, NOW, 2)
-	H.near(paid :: number, income(gold) * Config.SELL_SECONDS * 2, 1e-6, "refund")
-	H.ok((paid :: number) < Selling.price(gold, NOW, 2), "the stall pays more")
+	-- your plant: off the plot, into your inventory, no money
+	H.ok(Inventory.take(mine, 2, NOW) ~= nil)
 	H.eq(#mine.plants, 1)
 	H.eq(mine.plants[1].slot, 1)
-	H.near(mine.money, 1000 + (paid :: number), 1e-6)
-	H.eq(select(2, Selling.remove(mine, 2, NOW, 2)), "none", "gone: a second click removes nothing")
-	-- the remote: its own RemoteEvent, rate-limited, through Selling.remove; no Remove prompt on the plants
+	H.eq(#mine.inventory, 1)
+	H.eq(mine.money, 1000, "Remove never pays")
+	H.eq(select(2, Inventory.take(mine, 2, NOW)), "none", "gone: a second click removes nothing")
+	-- the remote: its own RemoteEvent, rate-limited, through Inventory.take; no Remove prompt on the plants
 	local fs = require("@lune/fs")
 	local net = fs.readFile("src/server/Net.luau")
 	local plot = fs.readFile("src/server/PlotService.luau")
 	H.ok(string.find(net, "RemovePlant = remote(\"RemovePlant\")", 1, true) ~= nil, "Net.RemovePlant")
 	H.ok(string.find(plot, "Net.RemovePlant.OnServerEvent:Connect(PlotService.removePlant)", 1, true) ~= nil, "PlotService handles it")
 	H.ok(string.find(plot, "not Sessions.allowRequest(s, REMOVES_PER_SECOND)", 1, true) ~= nil, "rate-limited")
-	H.ok(string.find(plot, "Selling.remove(s.profile, slot, now, Sessions.moneyMult(s))", 1, true) ~= nil, "checked against your own profile")
+	H.ok(string.find(plot, "Inventory.take(s.profile, slot, now)", 1, true) ~= nil, "checked against your own profile")
+
 	local a = string.find(plot, "local function buildPlantModel", 1, true)
 	local b = string.find(plot, "local function removePlantModel", 1, true)
 	local build = a and b and string.sub(plot, a, b) or ""

@@ -7,6 +7,7 @@
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Config = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("Config"))
 local ProfileStore = require(script.Parent:WaitForChild("ProfileStore"))
+local SeedPacks = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("SeedPacks"))
 
 local Inventory = {}
 
@@ -86,6 +87,27 @@ end
 -- The plant it stands for at `now` (for prices: Selling.price), never put in the profile.
 function Inventory.asPlant(entry: ProfileStore.InvPlant, now: number): ProfileStore.Plant
 	return Inventory.toPlant(entry, 0, now, 0, 0)
+end
+
+-- A stolen seed carried home (`home`: in the base, out of the corridor) while every plot slot is taken
+-- (`maxSlots`) goes into the seed bag by itself (owner request), so it never stays on the thief's back:
+-- "store". Otherwise why not: "away" (still in the corridor), "room" (a free slot: plant it as usual) or
+-- "bagFull" (SEED_BAG_MAX: it stays carried, and the Inventory says so).
+export type CarryHome = "store" | "away" | "room" | "bagFull"
+function Inventory.carryHome(profile: ProfileStore.Profile, maxSlots: number, home: boolean): CarryHome
+	if not home then
+		return "away"
+	elseif #profile.plants < maxSlots then
+		return "room"
+	elseif SeedPacks.bagCount(profile.seedBag) >= Config.SEED_BAG_MAX then
+		return "bagFull"
+	end
+	return "store"
+end
+
+-- Whether a player standing at `pos` is home: in the base, out of the corridor (where the guards stop).
+function Inventory.isHome(pos: Vector3): boolean
+	return pos.X < Config.CORRIDOR_START_X
 end
 
 return Inventory
