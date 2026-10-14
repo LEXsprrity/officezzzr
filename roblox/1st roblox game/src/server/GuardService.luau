@@ -136,9 +136,10 @@ local function step(g: Guard, now: number)
 	local targets = {}
 	for player, s in Sessions.all() do
 		if s.carry and s.carry.zone == g.zone then
-			local root = SpeedService.rootOf(player)
-			if root then
-				table.insert(targets, { id = player, pos = root.Position, safe = root.Position.X < Config.CORRIDOR_START_X })
+			-- (where the server saw the thief get to: a teleport home doesn't make them safe)
+			local pos = SpeedService.seenPosition(player)
+			if pos then
+				table.insert(targets, { id = player, pos = pos, safe = pos.X < Config.CORRIDOR_START_X })
 			end
 		end
 	end
@@ -209,9 +210,10 @@ local function nearestGuard(pos: Vector3, range: number, filter: (Guard) -> bool
 	return best
 end
 
--- Bat: stun the nearest awake guard in reach. The distance is measured on the server.
+-- Bat: stun the nearest awake guard in reach. The distance is measured on the server, from where the
+-- player could have walked to (SpeedService.trustedRoot).
 function GuardService.batHit(player: Player): boolean
-	local root = SpeedService.rootOf(player)
+	local root = SpeedService.trustedRoot(player)
 	if not root then
 		return false
 	end

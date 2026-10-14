@@ -264,6 +264,15 @@ local Net = H.stubServer("Net", { StatsUpdate = { FireClient = function() end },
 Net.announce = Net.announce or function() end
 local Sessions = H.server("Sessions")
 local SeedService = H.server("SeedService")
+local SpeedLogic = H.server("SpeedLogic")
+
+-- Puts the thief's root at `at`, where the server's movement check has seen it (SpeedService.trustedRoot):
+-- they walked there.
+local function arrive(s: any, at: Vector3)
+	s.player.Character:FindFirstChild("HumanoidRootPart").CFrame = roblox.CFrame.new(at)
+	SpeedLogic.teleported(s.tracker, at)
+	s.tracker.at = os.clock()
+end
 
 local function nestInfos(): { any }
 	local infos = {}
@@ -297,6 +306,7 @@ local function thief(at: Vector3): (any, any)
 	hum.Parent = char
 	local player = { Name = "Thief", UserId = math.random(1, 1e9), DisplayName = "Thief", Character = char, Parent = nil }
 	local s = Sessions.create(player :: any, ProfileStore.defaultProfile(), false)
+	arrive(s, at)
 	return player, s
 end
 
@@ -388,8 +398,7 @@ H.test("pods: every visible pod has its name tag, from the start and after every
 	-- stolen -> stored on arrival -> regrown
 	player, s, pod = stealFrom(4, 3)
 	carry = s.carry
-	local char = player.Character
-	char:FindFirstChild("HumanoidRootPart").CFrame = roblox.CFrame.new(Config.CORRIDOR_START_X - 1, 3, 0)
+	arrive(s, Vector3.new(Config.CORRIDOR_START_X - 1, 3, 0))
 	H.ok(SeedService.storeCarried(player), "stored on arrival")
 	local key = SeedPacks.bagKey(carry.zone, carry.rarity, carry.mutation, carry.gene)
 	H.eq(s.profile.seedBag[key], 1, "in the bag with its gene")

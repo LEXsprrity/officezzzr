@@ -66,12 +66,17 @@ local function claimGift(player: Player)
 	if now < (s.cooldowns.Gift or 0) then
 		return
 	end
-	s.cooldowns.Gift = now + GIFT_CLAIM_GAP
-	local result = Rewards.claimGift(s.profile, Config.COMMUNITY_GROUP_ID, function()
+	s.cooldowns.Gift = math.huge -- one check at a time: it waits on Roblox's web API (Rewards.claimGift re-checks too)
+	local ok, result = pcall(Rewards.claimGift, s.profile, Config.COMMUNITY_GROUP_ID, function()
 		return Rewards.cachedMember(members, player.UserId, os.time(), function()
 			return inCommunity(player)
 		end)
 	end)
+	s.cooldowns.Gift = os.clock() + GIFT_CLAIM_GAP
+	if not ok then
+		warn("[RewardService] gift claim:", result)
+		result = "error"
+	end
 	if not player.Parent then
 		return
 	end

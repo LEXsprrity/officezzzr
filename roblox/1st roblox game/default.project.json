@@ -22,7 +22,8 @@
     "Workspace": {
       "World": { "$path": "map/World.rbxm" },
       "$properties": {
-        "StreamingEnabled": false
+        "StreamingEnabled": false,
+        "RejectCharacterDeletions": "Enabled"
       },
       "SpawnLocation": {
         "$className": "SpawnLocation",

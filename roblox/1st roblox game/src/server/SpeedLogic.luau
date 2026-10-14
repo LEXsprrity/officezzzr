@@ -10,6 +10,7 @@ export type State = {
 	lastPos: Vector3?,
 	lastGood: Vector3?,
 	bucket: number, -- movement budget (studs) for the rubber-band check
+	at: number?, -- os.clock() of the tick (or server move) that saw lastPos; SpeedService keeps it (plausible)
 }
 
 export type Verdict = "ok" | "reset" | "ignored" | "rubberband"
@@ -23,7 +24,13 @@ export type Opts = {
 }
 
 function SpeedLogic.newState(): State
-	return { lastPos = nil, lastGood = nil, bucket = 0 }
+	return { lastPos = nil, lastGood = nil, bucket = 0, at = nil }
+end
+
+-- A position a character can really have: no NaN or infinity (what a broken or hostile client might send)
+-- and within a million studs of the origin.
+function SpeedLogic.finite(v: Vector3): boolean
+	return v.X == v.X and v.Y == v.Y and v.Z == v.Z and math.abs(v.X) < 1e6 and math.abs(v.Y) < 1e6 and math.abs(v.Z) < 1e6
 end
 
 -- Server moved the character (spawn, knockback, rubber-band): restart tracking from here.
@@ -52,8 +59,22 @@ function SpeedLogic.allowedPerTick(walkSpeed: number, dt: number): number
 	return walkSpeed * dt * Config.MOVE_SLACK + Config.MOVE_EPSILON
 end
 
+-- Leaky budget: a single laggy tick is fine, but going too fast for over a second is not.
+local function bucketMax(walkSpeed: number): number
+	return walkSpeed * Config.MOVE_BUCKET_SECONDS * Config.MOVE_SLACK + Config.MOVE_EPSILON
+end
+
 -- One tick. Returns the Speed to grant, a verdict, and (for "rubberband") where to put the player back.
 function SpeedLogic.step(state: State, pos: Vector3, dt: number, opts: Opts): (number, Verdict, Vector3?)
+	if not SpeedLogic.finite(pos) then
+		-- Never let a NaN in: a NaN budget is never below 0, so the check would never rubber-band again.
+		local back = state.lastGood or state.lastPos
+		if back then
+			SpeedLogic.teleported(state, back)
+			return 0, "rubberband", back
+		end
+		return 0, "ignored", nil
+	end
 	local last = state.lastPos
 	if last == nil then
 		SpeedLogic.teleported(state, pos)
@@ -64,9 +85,7 @@ function SpeedLogic.step(state: State, pos: Vector3, dt: number, opts: Opts): (n
 	state.lastPos = pos
 
 	local allowed = SpeedLogic.allowedPerTick(opts.walkSpeed, dt)
-	-- Leaky budget: a single laggy tick is fine, but going too fast for over a second is not.
-	local bucketMax = opts.walkSpeed * Config.MOVE_BUCKET_SECONDS * Config.MOVE_SLACK + Config.MOVE_EPSILON
-	state.bucket = math.min(bucketMax, state.bucket + allowed) - dist
+	state.bucket = math.min(bucketMax(opts.walkSpeed), state.bucket + allowed) - dist
 	if state.bucket < 0 then
 		local back = state.lastGood or last
 		SpeedLogic.teleported(state, back)
@@ -82,6 +101,19 @@ function SpeedLogic.step(state: State, pos: Vector3, dt: number, opts: Opts): (n
 		return SpeedLogic.treadmillGain(dt, opts.treadmillTier, opts.trailMult), "ok", nil
 	end
 	return SpeedLogic.walkGain(dist, opts.mult), "ok", nil
+end
+
+-- Could the character have got from where the last tick saw it to `pos` in the `dt` seconds since, without
+-- the next tick rubber-banding it (the same budget as step, changing nothing)? The client moves its own
+-- character, so a position check made between ticks (a seed stolen, a seed home, a sale) uses this: a
+-- teleport, or a client that ignores the rubber-band, gets nothing done. False before the first tick.
+function SpeedLogic.plausible(state: State, pos: Vector3, dt: number, walkSpeed: number): boolean
+	local last = state.lastPos
+	if last == nil or not SpeedLogic.finite(pos) then
+		return false
+	end
+	local budget = math.min(bucketMax(walkSpeed), state.bucket + SpeedLogic.allowedPerTick(walkSpeed, math.max(dt, 0)))
+	return horizontal(pos - last) <= budget
 end
 
 return SpeedLogic

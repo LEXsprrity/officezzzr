@@ -20,6 +20,7 @@ local Shop = require(script.Parent:WaitForChild("Shop"))
 local Selling = require(script.Parent:WaitForChild("Selling"))
 local Inventory = require(script.Parent:WaitForChild("Inventory"))
 local PlantGhosts = require(script.Parent:WaitForChild("PlantGhosts"))
+local SpeedService = require(script.Parent:WaitForChild("SpeedService"))
 
 local TreadmillBoard = require(script.Parent:WaitForChild("TreadmillBoard"))
 
@@ -368,8 +369,7 @@ function PlotService.plantAt(player: Player, pos: any, bagKey: any)
 		Net.toast(player, if hasBag then "Steal a seed, or plant one from your Inventory!" else "Steal a seed from the corridor first!", "red")
 		return
 	end
-	local char = player.Character
-	local root = char and char:FindFirstChild("HumanoidRootPart") :: BasePart?
+	local root = SpeedService.trustedRoot(player) -- (the reach from where they could have walked to)
 	if not zone or not rarity or not root then
 		return
 	end
@@ -473,16 +473,15 @@ end
 
 -- The SELL stall (the HUD's Sell window, remote SellPlants): sells the plants in `slots` for
 -- SELL_STALL_SECONDS of their income each (Selling). The player must stand within SELL_STALL_DISTANCE of
--- a SELL stall. Like removePlant: frees the slots, refreshes income and the plants view (saved by the
--- autosave).
+-- a SELL stall (measured from where they could have walked to: SpeedService.trustedRoot). Like removePlant:
+-- frees the slots, refreshes income and the plants view (saved by the autosave).
 function PlotService.sellPlants(player: Player, slots: any, ids: any?)
 	local s = Sessions.get(player)
 	local state = plotOf(player)
 	if not s or not state then
 		return
 	end
-	local char = player.Character
-	local root = char and char:FindFirstChild("HumanoidRootPart") :: BasePart?
+	local root = SpeedService.trustedRoot(player)
 	local distance: number?, stall: BasePart? = nil, nil -- to the nearest stall
 	for _, part in sellStalls do
 		local d = if root and part.Parent then (root.Position - part.Position).Magnitude else nil
@@ -750,8 +749,7 @@ local function addTreadmillPrompts(state: PlotState)
 	local panel = state.treadmill.panel
 	-- the click targets ride in the board's model, so they follow it when the belt moves (TreadmillBoard.follow)
 	local clicks = addBoardButtons(panel, state.treadmill.model, TREADMILL_PROMPTS, Treadmill.BOARD_PROMPT_DISTANCE, function(player: Player)
-		local char = player.Character
-		local root = char and char:FindFirstChild("HumanoidRootPart") :: BasePart?
+		local root = SpeedService.trustedRoot(player)
 		return Treadmill.canUseBoard(state.owner == player, if root then root.Position else nil, panel.Position)
 	end)
 	table.move(clicks, 1, #clicks, #state.clicks + 1, state.clicks)
@@ -867,8 +865,7 @@ function PlotService.init(infos: { WorldBuilder.PlotInfo }, stalls: { BasePart }
 		plots[i] = state
 		local board = info.upgradeBoard
 		local clicks = addBoardButtons(board, board.Parent or info.model, UPGRADE_PROMPTS, UPGRADE_PROMPT_DISTANCE, function(player: Player)
-			local char = player.Character
-			local root = char and char:FindFirstChild("HumanoidRootPart") :: BasePart?
+			local root = SpeedService.trustedRoot(player)
 			return state.owner == player and root ~= nil and (root.Position - board.Position).Magnitude <= 16
 		end)
 		table.move(clicks, 1, #clicks, 1, state.clicks)

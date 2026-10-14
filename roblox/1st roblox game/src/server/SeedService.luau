@@ -16,6 +16,7 @@ local WorldBuilder = require(script.Parent:WaitForChild("WorldBuilder"))
 local Inventory = require(script.Parent:WaitForChild("Inventory"))
 local Assets = require(script.Parent:WaitForChild("Assets"))
 local PlantGhosts = require(script.Parent:WaitForChild("PlantGhosts"))
+local SpeedService = require(script.Parent:WaitForChild("SpeedService"))
 
 local SeedService = {}
 
@@ -265,10 +266,11 @@ local function steal(player: Player, zone: number, podIndex: number)
 		Net.toast(player, "You can only carry one seed at a time!", "red")
 		return
 	end
+	-- The prompt can be fired from anywhere: the server measures the reach, from where the thief could have
+	-- walked to (SpeedService.trustedRoot: alive, and not just teleported here).
 	local char = player.Character
-	local root = char and char:FindFirstChild("HumanoidRootPart") :: BasePart?
-	local hum = char and char:FindFirstChildOfClass("Humanoid")
-	if not char or not root or not hum or hum.Health <= 0 then
+	local root = SpeedService.trustedRoot(player)
+	if not char or not root then
 		return
 	end
 	if (root.CFrame.Position - pod.part.CFrame.Position).Magnitude > Config.PICKUP_DISTANCE then
@@ -399,15 +401,22 @@ end
 -- planted. They plant it from the hotbar's seed slot or the Inventory. A Legendary from the last zones is
 -- announced now (planting from the bag never announces). With the bag full it stays carried (the Inventory
 -- and the planting hint say so). PlotService's homecoming loop checks every plot owner several times a
--- second. Returns whether it stored the seed.
+-- second. Home counts only where the thief could have walked to (SpeedService.trustedRoot: not a teleport
+-- home). A thief out over the corridor's walls (Inventory.offCourse: flying or clipping, where no guard can
+-- follow) loses the seed back to its pod. Returns whether it stored the seed.
 function SeedService.storeCarried(player: Player): boolean
 	local s = Sessions.get(player)
 	local char = player.Character
-	local root = char and char:FindFirstChild("HumanoidRootPart") :: BasePart?
-	if not s or not s.carry or not root then
+	local body = char and char:FindFirstChild("HumanoidRootPart") :: BasePart?
+	if not s or not s.carry or not body then
 		return false
 	end
-	if Inventory.carryHome(s.profile, Inventory.isHome(root.CFrame.Position)) ~= "store" then
+	if Inventory.offCourse(body.CFrame.Position) then
+		SeedService.returnCarry(player)
+		return false
+	end
+	local root = SpeedService.trustedRoot(player)
+	if not root or Inventory.carryHome(s.profile, Inventory.isHome(root.CFrame.Position)) ~= "store" then
 		return false
 	end
 	local carry = SeedService.consumeCarry(player)

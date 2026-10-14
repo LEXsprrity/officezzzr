@@ -62,6 +62,27 @@ function ShopService.checkPasses(s: Sessions.Session)
 	VipService.apply(s.player, s.passes.VIP == true)
 end
 
+-- A gamepass bought in game. The event only passes on what the buyer's client reported, and an exploit can
+-- report a purchase that never happened (any pass id, purchased = true), so nothing is granted until Roblox
+-- confirms the player owns that pass; a pass that isn't set up yet (id 0) is never granted this way.
+local function onPassPurchased(player: Player, passId: any, purchased: any)
+	if purchased ~= true or type(passId) ~= "number" or passId <= 0 then
+		return
+	end
+	local s = Sessions.get(player)
+	if not s then
+		return
+	end
+	for name, pass in Config.GAMEPASSES do
+		if pass.id == passId and not s.passes[name] then
+			local ok, owns = pcall(MarketplaceService.UserOwnsGamePassAsync, MarketplaceService, player.UserId, passId)
+			if ok and owns == true and Sessions.get(player) == s then
+				grantPass(s, name)
+			end
+		end
+	end
+end
+
 -- The equipped trail changed: rebuild the visual and tell the client.
 local function trailChanged(s: Sessions.Session)
 	TrailService.apply(s.player.Character, s.profile.equippedTrail)
@@ -246,20 +267,7 @@ function ShopService.init()
 	Net.SellPlants.OnServerEvent:Connect(onSell)
 	Net.PlantSeed.OnServerEvent:Connect(onPlant)
 	MarketplaceService.ProcessReceipt = processReceipt
-	MarketplaceService.PromptGamePassPurchaseFinished:Connect(function(player: Player, passId: number, purchased: boolean)
-		if not purchased then
-			return
-		end
-		local s = Sessions.get(player)
-		if not s then
-			return
-		end
-		for name, pass in Config.GAMEPASSES do
-			if pass.id == passId then
-				grantPass(s, name)
-			end
-		end
-	end)
+	MarketplaceService.PromptGamePassPurchaseFinished:Connect(onPassPurchased)
 end
 
 return ShopService

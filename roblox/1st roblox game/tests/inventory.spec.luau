@@ -188,16 +188,24 @@ H.test("inventory: SeedService.storeCarried puts a carried seed in the bag as so
 	H.stubServer("Net", { StatsUpdate = { FireClient = function() end }, LootEvent = { FireClient = function() end }, toast = function() end })
 	local Sessions = H.server("Sessions")
 	local SeedService = H.server("SeedService")
+	local SpeedLogic = H.server("SpeedLogic")
 	local function setup(plants: number, x: number): (any, any)
 		local root = { Position = Vector3.new(x, 3, 0), CFrame = roblox.CFrame.new(x, 3, 0) }
+		local hum = roblox.Instance.new("Humanoid")
+		hum.Health = 100
 		local char = {
 			FindFirstChild = function(_, name: string)
 				return if name == "HumanoidRootPart" then root else nil
+			end,
+			FindFirstChildOfClass = function(_, class: string)
+				return if class == "Humanoid" then hum else nil
 			end,
 		}
 		local player = { Name = "Thief", UserId = math.random(1, 1e9), DisplayName = "Thief", Character = char, Parent = nil }
 		local profile = ProfileStore.defaultProfile()
 		local s = Sessions.create(player :: any, profile, false)
+		SpeedLogic.teleported(s.tracker, root.Position) -- (the movement check has seen them walk there)
+		s.tracker.at = os.clock()
 		for i = 1, plants do
 			table.insert(profile.plants, plant(i, 1, 1, 60))
 		end

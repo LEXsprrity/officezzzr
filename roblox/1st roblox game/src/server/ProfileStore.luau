@@ -139,6 +139,10 @@ function ProfileStore.defaultProfile(): Profile
 	}
 end
 
+-- The most money or Speed a save may hold: finite, so an infinite amount (never earned, but a broken save)
+-- can't pay for everything forever.
+ProfileStore.MAX_AMOUNT = 1e300
+
 local function num(v: any, default: number, lo: number, hi: number): number
 	if type(v) ~= "number" or v ~= v then
 		return default
@@ -285,8 +289,8 @@ function ProfileStore.deserialize(data: any): Profile
 		return p
 	end
 	local maxSlots = Config.SLOTS_MAX + Config.PASS_EXTRA_SLOTS
-	p.money = num(data.money, 0, 0, math.huge)
-	p.speed = num(data.speed, 0, 0, math.huge)
+	p.money = num(data.money, 0, 0, ProfileStore.MAX_AMOUNT)
+	p.speed = num(data.speed, 0, 0, ProfileStore.MAX_AMOUNT)
 	if not (type(data.v) == "number" and data.v >= 7) then
 		p.speed = ProfileStore.migrateSpeed(p.speed) -- v1-v6: the old Speed scale
 	end
@@ -331,7 +335,7 @@ function ProfileStore.deserialize(data: any): Profile
 				local zone = int(raw.z, 0, 0, #Config.ZONES)
 				local rarity = int(raw.r, 0, 0, #Config.RARITIES)
 				local mutation = if type(raw.m) == "string" and Config.mutationById(raw.m) then raw.m else nil
-				if slot >= 1 and zone >= 1 and rarity >= 1 and not used[slot] and type(raw.t) == "number" then
+				if slot >= 1 and zone >= 1 and rarity >= 1 and not used[slot] and type(raw.t) == "number" and math.abs(raw.t) < 1e12 then
 					used[slot] = true
 					-- v6: its saved spot (kept when it is a sane number on the plot; PlotService.assign still checks it
 					-- against the real beds). Older saves, or a bad spot: the old slot's spot on the new beds.
@@ -422,10 +426,42 @@ end
 ----------------------------------------------------------------------------------------------------
 -- DataStore wrapper
 ----------------------------------------------------------------------------------------------------
-export type Store = typeof(setmetatable({} :: { store: any, retries: number, backoff: number }, ProfileStore))
+-- Session lock. A profile in use is stored with `lock = { id, t, n, done }`: the session that loaded it (an
+-- id of its own), when that session last saved (unix seconds), how many saves it has made, and whether it
+-- has let the profile go. load() claims it; each save writes only while the lock is still that session's,
+-- not let go, and not newer than this save (otherwise nothing is written: another server has the profile
+-- now, this session already let it go, or a later save already landed); the last save (the player left)
+-- marks it `done`. Loading a profile another session still holds waits for that session's last save (a
+-- player who just hopped servers: LOCK_TRIES loads LOCK_WAIT seconds apart), then takes it over (that server
+-- died); a lock older than LOCK_STALE is taken at once. So an older server's late save, or an autosave that
+-- lands after a newer save, can never write over newer progress or a confirmed Robux purchase. (Data with no
+-- lock at all, written by a server from before locks, is simply claimed again by the next save.)
+ProfileStore.LOCK_TRIES = 5
+ProfileStore.LOCK_WAIT = 2
+ProfileStore.LOCK_STALE = 3 * Config.AUTOSAVE_INTERVAL
 
-function ProfileStore.new(dataStore: any, retries: number?, backoff: number?): Store
-	return setmetatable({ store = dataStore, retries = retries or Config.SAVE_RETRIES, backoff = backoff or 1 }, ProfileStore)
+export type Store = typeof(setmetatable({} :: { store: any, retries: number, backoff: number, jobId: string, now: () -> number }, ProfileStore))
+
+-- `jobId`: this server's game.JobId (in its sessions' lock ids).
+function ProfileStore.new(dataStore: any, retries: number?, backoff: number?, jobId: string?): Store
+	return setmetatable({
+		store = dataStore, retries = retries or Config.SAVE_RETRIES, backoff = backoff or 1, jobId = jobId or "", now = os.time,
+	}, ProfileStore)
+end
+
+-- The session each loaded profile belongs to (weak: a dropped profile goes): its lock id and saves so far.
+type Lock = { id: string, n: number }
+local sessions: { [Profile]: Lock } = setmetatable({}, { __mode = "k" }) :: any
+local lockSerial = 0
+local lockRng = Random.new()
+
+-- The lock in stored data: (session id or nil, last save time, saves made, let go).
+local function lockIn(data: any): (string?, number, number, boolean)
+	local lock = if type(data) == "table" then data.lock else nil
+	if type(lock) == "table" and type(lock.id) == "string" then
+		return lock.id, num(lock.t, 0, 0, math.huge), num(lock.n, 0, 0, math.huge), lock.done == true
+	end
+	return nil, 0, 0, false
 end
 
 local function keyFor(userId: number): string
@@ -447,34 +483,78 @@ function ProfileStore.retry(self: Store, fn: () -> ()): (boolean, string?)
 	return false, lastErr
 end
 
--- Returns (profile, loadedOk). If loading failed, the caller must NOT save over the real data.
+-- Returns (profile, loadedOk), and claims the profile for this session (the lock above). If loading failed,
+-- the caller must NOT save over the real data.
 function ProfileStore.load(self: Store, userId: number): (Profile, boolean)
-	local raw: any = nil
-	local ok, err = self:retry(function()
-		-- UpdateAsync that returns nil just reads, without writing.
-		self.store:UpdateAsync(keyFor(userId), function(old: any)
-			raw = old
-			return nil
+	lockSerial += 1
+	local id = `{self.jobId}/{userId}/{lockSerial}/{lockRng:NextInteger(1, 1e9)}`
+	local attempt = 0
+	while true do
+		attempt += 1
+		local raw: any, busy = nil, false
+		local ok, err = self:retry(function()
+			self.store:UpdateAsync(keyFor(userId), function(old: any)
+				raw = old
+				local holder, at, _, done = lockIn(old)
+				busy = holder ~= nil and not done and holder ~= id and attempt < ProfileStore.LOCK_TRIES
+					and self.now() - at < ProfileStore.LOCK_STALE
+				if busy then
+					return nil -- (returning nil only reads) another session still has it
+				end
+				local claimed = if type(old) == "table" then table.clone(old) else {}
+				claimed.lock = { id = id, t = self.now(), n = 0 }
+				return claimed
+			end)
 		end)
-	end)
-	if not ok then
-		warn(`[ProfileStore] load failed for {userId}: {err}`)
-		return ProfileStore.defaultProfile(), false
+		if not ok then
+			warn(`[ProfileStore] load failed for {userId}: {err}`)
+			return ProfileStore.defaultProfile(), false
+		end
+		if not busy then
+			local profile = ProfileStore.deserialize(raw)
+			sessions[profile] = { id = id, n = 0 }
+			return profile, true
+		end
+		task.wait(ProfileStore.LOCK_WAIT)
 	end
-	return ProfileStore.deserialize(raw), true
 end
 
-function ProfileStore.save(self: Store, userId: number, profile: Profile): boolean
+-- Saves the profile; `release` lets it go (the player left). Returns (saved, why): why = "locked" when
+-- the profile is no longer this session's to write (see the lock above; nothing was written, and nothing
+-- this session saves will be), or "error" when the DataStore failed. A profile that wasn't loaded through
+-- load() (tests, tools) is written as it is, without a lock.
+function ProfileStore.save(self: Store, userId: number, profile: Profile, release: boolean?): (boolean, string?)
 	local data = ProfileStore.serialize(profile)
+	local lock = sessions[profile]
+	local n = 0
+	if lock then
+		lock.n += 1
+		n = lock.n
+	end
+	local lost = false
 	local ok, err = self:retry(function()
-		self.store:UpdateAsync(keyFor(userId), function(_old: any)
+		self.store:UpdateAsync(keyFor(userId), function(old: any)
+			lost = false
+			if lock then
+				local holder, _, saved, done = lockIn(old)
+				if holder ~= nil and (holder ~= lock.id or done or saved > n) then
+					lost = true
+					return nil
+				end
+				data.lock = { id = lock.id, t = self.now(), n = n, done = if release then true else nil }
+			end
 			return data
 		end)
 	end)
+	if lost then
+		warn(`[ProfileStore] not saving {userId}: the profile is no longer this session's`)
+		return false, "locked"
+	end
 	if not ok then
 		warn(`[ProfileStore] save failed for {userId}: {err}`)
+		return false, "error"
 	end
-	return ok
+	return true, nil
 end
 
 return ProfileStore

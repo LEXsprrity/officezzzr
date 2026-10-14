@@ -33,7 +33,8 @@ end
 export type GiftResult = "granted" | "soon" | "claimed" | "notMember" | "error"
 
 -- Claims the Free Gift. `isMember()` checks the community (true / false, or nil when the check failed)
--- and is only called when it matters. Grants Config.FREE_GIFT_SPEED once per profile.
+-- and is only called when it matters. Grants Config.FREE_GIFT_SPEED once per profile. The check waits on
+-- Roblox's web API, so the claimed flag is read again after it: another claim may have landed meanwhile.
 function Rewards.claimGift(p: Profile, groupId: number, isMember: () -> boolean?): GiftResult
 	if not Rewards.groupReady(groupId) then
 		return "soon"
@@ -42,6 +43,9 @@ function Rewards.claimGift(p: Profile, groupId: number, isMember: () -> boolean?
 		return "claimed"
 	end
 	local member = isMember()
+	if p.freeGift then
+		return "claimed"
+	end
 	if member == nil then
 		return "error"
 	end
