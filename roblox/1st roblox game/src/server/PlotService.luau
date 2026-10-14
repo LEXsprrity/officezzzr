@@ -159,7 +159,6 @@ local function buildPlantModel(state: PlotState, plant: ProfileStore.Plant, weig
 		return label
 	end
 	line("Name", PlotService.plantName(plant), if mut then mut.color else rarity.color, 1)
-	line("Weight", Format.weight(weight), Color3.new(1, 1, 1), 2)
 	local isNight = Config.dayPhase(os.time())
 	setIncomeLabel(line("Income", "", INCOME_GREEN, 3), plant.zone, income * Config.timeMult(plant.zone, isNight), isNight)
 	-- No prompt on the plant: it is removed from the HUD's Plants panel (remote RemovePlant).

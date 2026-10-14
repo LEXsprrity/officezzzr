@@ -741,7 +741,7 @@ do
 
 		local function update()
 			local now = plantIn(slot) or p
-			info.Text = `{rarity.id}{if mut then ` · <font color="#{mut.color:ToHex()}">{mut.id}</font>` else ""} · {Format.weight(now.weight)}`
+			info.Text = `{rarity.id}{if mut then ` · <font color="#{mut.color:ToHex()}">{mut.id}</font>` else ""}`
 			local bonus = Config.bonusLabel(now.zone, (Config.dayPhase(workspace:GetServerTimeNow())))
 			income.Text = `{Format.money(now.income)}/s{if bonus then ` · <font color="#{GOLD_INK:ToHex()}">{bonus}</font>` else ""}`
 		end
@@ -1550,7 +1550,7 @@ do
 		if mut then
 			bold(c, 2, { Text = mut.id, Size = UDim2.new(1, -14, 0, 24), Position = UDim2.fromOffset(7, 78), TextColor3 = mut.color })
 		end
-		local weightLabel = text(c, { Text = Format.weight(p.weight), Size = UDim2.new(1, -14, 0, 22), Position = UDim2.fromOffset(7, 106) })
+		local weightLabel = text(c, { Visible = false, Text = "", Size = UDim2.new(1, -14, 0, 22), Position = UDim2.fromOffset(7, 106) })
 		local incomeLabel = bold(c, 2, { Size = UDim2.new(1, -14, 0, 22), Position = UDim2.fromOffset(7, 132) })
 		-- What the stall pays, and the button (a second click confirms)
 		local priceLabel = bold(c, 3, { Size = UDim2.new(1, -14, 0, 34), Position = UDim2.fromOffset(7, 158), TextColor3 = MONEY_GREEN })
@@ -1565,7 +1565,6 @@ do
 		end).Position = UDim2.new(0, 8, 1, -56)
 		local function update()
 			local now = plantInSlot(p.slot) or p
-			weightLabel.Text = Format.weight(now.weight)
 			incomeLabel.Text, incomeLabel.TextColor3 = sellIncomeText(now)
 			priceLabel.Text = Format.money(now.sell or 0)
 		end
