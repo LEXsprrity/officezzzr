@@ -9,12 +9,13 @@ local Format = require(Shared:WaitForChild("Format"))
 local Icons = require(Shared:WaitForChild("Icons"))
 local Treadmill = require(Shared:WaitForChild("Treadmill"))
 local Config = require(Shared:WaitForChild("Config"))
+local BoardButton = require(Shared:WaitForChild("BoardButton"))
 local Props = require(script.Parent:WaitForChild("Props"))
 local Assets = require(script.Parent:WaitForChild("Assets"))
 
 local TreadmillBoard = {}
 
-export type Labels = { level: TextLabel, cash: TextLabel, robux: TextLabel, buttons: Frame }
+export type Labels = { level: TextLabel, rate: TextLabel, cash: TextLabel, robux: TextLabel, buttons: Frame }
 export type Board = {
 	model: Model,
 	panel: BasePart, -- the board with the text; PlotService puts the prompts on it
@@ -25,9 +26,10 @@ export type Board = {
 	belt: BasePart,
 	center: Vector3,
 }
--- What the board shows: the owner's tier (nil: nobody owns the plot), the next tier's prices, and what
--- a second on the belt pays the owner right now (Treadmill.perSecond, like the popups over the runner).
-export type View = { tier: number?, cash: number?, robux: number?, perSecond: number? }
+-- What the board shows: the owner's tier (nil: nobody owns the plot), the next tier's prices, what
+-- a second on the belt pays the owner now (Treadmill.perSecond, like the popups over the runner) and what
+-- it will pay at the next tier (nil at the last).
+export type View = { tier: number?, cash: number?, robux: number?, perSecond: number?, nextPerSecond: number? }
 
 local NAVY = Color3.fromRGB(30, 36, 60)
 local CORNER = Color3.fromRGB(44, 54, 92)
@@ -40,7 +42,7 @@ local TEXT = {
 	empty = Color3.fromRGB(190, 195, 210), -- nobody owns the plot
 }
 local BUTTONS = {
-	{ name = "Cash", fill = Color3.fromRGB(225, 40, 40), edge = Color3.fromRGB(90, 10, 10), width = 0.58 },
+	{ name = "Cash", fill = BoardButton.RED.fill, edge = BoardButton.RED.edge, width = 0.58 }, -- green when affordable (Effects.client)
 	{ name = "Robux", fill = Color3.fromRGB(165, 45, 230), edge = Color3.fromRGB(55, 10, 80), width = 0.38 },
 }
 local STEP_COLOR = Color3.fromRGB(196, 168, 255) -- light purple, dark outline (owner's reference)
@@ -82,7 +84,7 @@ local function list(parent: Instance, direction: Enum.FillDirection, gap: number
 	layout.Parent = parent
 end
 
--- The panel's SurfaceGui: "Upgrade", "Level X > Level Y" and the row of two buttons.
+-- The panel's SurfaceGui: "Upgrade", "Level X > Level Y", "+X/s > +Y/s" and the row of two buttons.
 local function buildGui(panel: BasePart): Labels
 	local gui = Instance.new("SurfaceGui")
 	gui.Name = "Board"
@@ -100,13 +102,14 @@ local function buildGui(panel: BasePart): Labels
 	padding.PaddingBottom = inset
 	padding.Parent = gui
 	list(gui, Enum.FillDirection.Vertical, 0.03)
-	text(gui, "Title", "Upgrade", Color3.new(1, 1, 1), UDim2.fromScale(1, 0.3), 1)
-	local level = text(gui, "Level", "Empty plot", TEXT.empty, UDim2.fromScale(1, 0.22), 2)
+	text(gui, "Title", "Upgrade", Color3.new(1, 1, 1), UDim2.fromScale(1, 0.22), 1)
+	local level = text(gui, "Level", "Empty plot", TEXT.empty, UDim2.fromScale(1, 0.2), 2)
+	local rate = text(gui, "Rate", "", STEP_COLOR, UDim2.fromScale(1, 0.15), 3)
 	local row = Instance.new("Frame")
 	row.Name = "Buttons"
 	row.BackgroundTransparency = 1
-	row.Size = UDim2.fromScale(1, 0.4)
-	row.LayoutOrder = 3
+	row.Size = UDim2.fromScale(1, 0.34)
+	row.LayoutOrder = 4
 	row.Visible = false
 	row.Parent = gui
 	list(row, Enum.FillDirection.Horizontal, 0.04)
@@ -134,7 +137,7 @@ local function buildGui(panel: BasePart): Labels
 		labels[spec.name] = label
 		button.Parent = row
 	end
-	return { level = level, cash = labels.Cash, robux = labels.Robux, buttons = row }
+	return { level = level, rate = rate, cash = labels.Cash, robux = labels.Robux, buttons = row }
 end
 
 -- The frame, corner blocks and post around a panel at `cf` (built in the panel's own space, so a pivot
@@ -292,7 +295,7 @@ function TreadmillBoard.showTier(board: Board, tier: number): boolean
 	return true
 end
 
--- Writes the board and the "+X/s" text. Below the last tier: "Level X > Level Y" and both buttons
+-- Writes the board and the "+X/s" text. Below the last tier: "Level X > Level Y", "+X/s > +Y/s" and both buttons
 -- (the red one with the money price and the Treadmill icon, the purple one with the Robux icon); at the
 -- last tier "MAX" and no buttons; with no owner "Empty plot", no buttons and no step text.
 function TreadmillBoard.render(board: Board, view: View)
@@ -300,8 +303,19 @@ function TreadmillBoard.render(board: Board, view: View)
 	local labels = board.labels
 	labels.level.Text = line
 	labels.level.TextColor3 = TEXT[kind]
+	labels.rate.Text = Treadmill.boardRateText(view.perSecond, view.nextPerSecond)
 	local open = kind == "open" and view.cash ~= nil
 	labels.buttons.Visible = open
+	-- the money price on the red button, so the owner's client can turn it green when affordable
+	local cashButton = labels.cash.Parent
+	if cashButton then
+		cashButton:SetAttribute(BoardButton.PRICE_ATTRIBUTE, if open then view.cash else nil)
+	end
+	-- the money price the red button shows, for the owner's client to turn it green when affordable
+	local cashButton = labels.cash.Parent
+	if cashButton then
+		cashButton:SetAttribute(BoardButton.PRICE_ATTRIBUTE, if open then view.cash else nil)
+	end
 	if open then
 		Icons.set(labels.cash, "Treadmill", Format.money(view.cash :: number), 0.8)
 		Icons.set(labels.robux, "Robux", if view.robux then Format.robux(view.robux) else "R$ ?", 0.8)
