@@ -1,10 +1,14 @@
 -- Exports the owner's bought rigged pets (models/bosses/Pets.rbxl, Workspace.PetTemplates: one Model per
 -- pet, skinned MeshParts + Bones under a "RootPart") into the zone guardians' slots, assets/Guard_<Name>.rbxm,
 -- with BossRigs.BY_ZONE picking the pet for each zone. Each asset is a single Model holding only the pet's
--- MeshParts (with their SurfaceAppearances) and its RootPart with the Bones; the kit's
--- AnimationController, saved animations and poses, Motor6Ds and helper parts are dropped (the game
--- poses the Bones by code: BossRigs + GuardAnimator.client). It is:
---   * scaled by the profile's `scale` (part sizes and bone offsets alike), lowered by its `drop`;
+-- MeshParts (with their SurfaceAppearances), its RootPart with the Bones, and one Motor6D per MeshPart
+-- joining it to the RootPart; the kit's AnimationController, saved animations and poses and helper parts
+-- are dropped (the game poses the Bones by code: BossRigs + GuardAnimator.client).
+-- The Motor6Ds are what makes the Bones deform the meshes: a skinned MeshPart only binds to Bones of
+-- another part that is joined to it by a skinning-enabled joint (Motor6D, Weld, BallSocket, Hinge; not a
+-- WeldConstraint) inside the same Model. Without them every mesh stays in its bind pose, whatever the
+-- Bones do. It is:
+--   * scaled by the profile's `scale` (part sizes, bone offsets and joint offsets alike), lowered by its `drop`;
 --   * placed with the RootPart's ground point at the origin, front = -Z, anchored and non-colliding;
 --   * tagged BossRig (the pet), RigScale, Pivot = (0, 0, 0) (Assets.place puts that point, not the
 --     bottom centre of its bounds, at the guard's feet), KeepScale = true and Source.
@@ -50,6 +54,8 @@ local function export(zone: any, profile: any, source: any): (any, string)
 			d:Destroy()
 		end
 	end
+	-- (the kit's Motor6Ds are dropped with the rest and made again below, one per MeshPart: one of the
+	-- RedMole's is a Weld to a helper part instead)
 
 	local lo, hi = Vector3.one * math.huge, -Vector3.one * math.huge
 	local meshes = 0
@@ -80,6 +86,16 @@ local function export(zone: any, profile: any, source: any): (any, string)
 	end
 	host.Transparency = 1
 	model.PrimaryPart = host
+	for _, d in model:GetChildren() do
+		if d:IsA("MeshPart") then
+			local joint = roblox.Instance.new("Motor6D")
+			joint.Name = d.Name .. "Motor6D"
+			joint.Part0 = host
+			joint.Part1 = d
+			joint.C0 = host.CFrame:Inverse() * d.CFrame
+			joint.Parent = d
+		end
+	end
 
 	model:SetAttribute("BossRig", profile.pet)
 	model:SetAttribute("RigScale", s)

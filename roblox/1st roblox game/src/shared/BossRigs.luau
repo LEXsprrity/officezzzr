@@ -28,6 +28,24 @@ export type Leg = {
 
 export type Wing = { bones: { string }, side: number }
 
+-- How it lies asleep (angles in radians, distances in source studs). Legs: `hip`/`knee` swing the front
+-- and rear legs (positive: the foot goes forward; a splayed leg turns about Y instead), `tuck` rolls them
+-- in under the body.
+export type Lie = {
+	drop: number, -- the body sinks this much (onto its belly)
+	tilt: number?, -- the body pitches (positive: front down; the gorilla lies on its front)
+	neck: { number }?, -- pitch of each neck bone (positive: tips forward and down)
+	pull: Vector3?, -- the first neck bone moves (the turtle pulls its head into the shell)
+	head: number?, -- the head's pitch (positive: nose down)
+	headDrop: number?, -- the head moves down
+	turn: number?, -- the head turns aside (positive: to its left)
+	hip: { front: number, rear: number }?,
+	knee: { front: number, rear: number }?,
+	tuck: number?,
+	curl: number?, -- the tail curls round to its left (spread along it)
+	spine: { number }?, -- snake: yaw of each body bone on the ground (the coil)
+}
+
 export type Profile = {
 	pet: string, -- the Model's name in Pets.rbxl (Workspace.PetTemplates)
 	kind: "quad" | "ape" | "snake" | "shark" | "dragon",
@@ -51,9 +69,9 @@ export type Profile = {
 	hop: number, -- the wake-up hop (source studs)
 	lunge: number, -- the catch lunge (source studs)
 	bite: number?, -- the head's dip in the catch (radians, default 0.3; negative rears up)
-	nod: number?, -- the head's droop asleep (radians, default 0.25)
 	wobble: number?, -- the head's dizzy wobble when stunned (radians, default 0.3)
-	sleepDrop: number, -- how far the body sinks asleep (source studs)
+	lie: Lie, -- asleep
+	eyes: { string }, -- the eyeball MeshParts (not the lids), hidden asleep: eyes closed
 	rest: { [string]: CFrame }?, -- a fixed pose under everything (the gorilla's T-pose arms come down)
 	halfWidth: number?, -- half its width as posed, when the rest bounds say otherwise (source studs)
 }
@@ -97,7 +115,12 @@ BossRigs.PROFILES = {
 			leg("Leg.L", "Leg.L.001", "Leg.L.001-IKTarget", -1, false),
 			leg("Leg.R", "Leg.R.001", "Leg.R.001-IKTarget", 1, false),
 		},
-		swing = 0.55, bend = 0.6, bob = 0.07, hop = 0.35, lunge = 0.7, sleepDrop = 0.04,
+		swing = 0.75, bend = 0.8, bob = 0.1, hop = 0.35, lunge = 0.7,
+		lie = {
+			drop = 0.12, pull = Vector3.new(0, -0.1, 0.5), neck = { 0.55, 0.25, -0.2 }, head = 0.35, curl = 0.5,
+			hip = { front = -0.35, rear = 0.35 }, knee = { front = 0.6, rear = -0.6 }, tuck = 0.45,
+		},
+		eyes = { "Icosphere.009", "Icosphere.022", "Icosphere.023", "Icosphere.024", "Icosphere.025", "Icosphere.026" },
 	},
 	-- Desert: a red mole with splayed digging paws and whiskers.
 	RedMole = {
@@ -110,7 +133,9 @@ BossRigs.PROFILES = {
 			leg("Leg.L", "Leg.L.001", "Leg.L.001-IKTarget", -1, false, { splay = true }),
 			leg("Leg.R", "Leg.R.001", "Leg.R.001-IKTarget", 1, false, { splay = true }),
 		},
-		swing = 0.5, bend = 0.45, bob = 0.07, hop = 0.35, lunge = 0.8, sleepDrop = 0.12, nod = 0.04, bite = -0.15, wobble = 0.1,
+		swing = 0.65, bend = 0.6, bob = 0.1, hop = 0.35, lunge = 0.8, bite = -0.15, wobble = 0.1,
+		lie = { drop = 0.08, head = 0.05, headDrop = 0.04, hip = { front = 0.3, rear = -0.3 }, tuck = 0.15, curl = 0.4 },
+		eyes = { "Plane.019", "Plane.020" },
 	},
 	-- Jungle: a snake reared up like a cobra, its tail along the ground. Slithers; strikes.
 	GiantSnake = {
@@ -119,7 +144,9 @@ BossRigs.PROFILES = {
 		neck = { "Root.M.011", "Root.M.012", "Root.M.013", "Root.M.014", "Root.M.015", "Root.M.016", "Root.M.017", "Root.M.018" },
 		head = "Root.M.019", jaw = "Root.M.021", twitch = { "Root.M.022" },
 		tail = { "Root.M.004", "Root.M.033", "Root.M.032", "Root.M.005", "Root.M.006", "Root.M.007", "Root.M.008", "Root.M.009" },
-		swing = 0.22, bend = 0, bob = 0, hop = 0.12, lunge = 1.6, sleepDrop = 0,
+		swing = 0.3, bend = 0, bob = 0, hop = 0.12, lunge = 1.6,
+		lie = { drop = 0, neck = { 0.8, 0.45, 0.2, -0.1, -0.3, -0.3, -0.3, -0.25 }, head = -0.3, spine = { 0.5, -0.6, 0.6 }, curl = 1.4 },
+		eyes = { "Plane.027", "Plane.028" },
 	},
 	-- Lava Fields: a lava gorilla. The kit holds it in a T-pose, so its arms come down (rest); it
 	-- knuckle-gallops, beats its chest awake and smashes down on a catch.
@@ -140,7 +167,9 @@ BossRigs.PROFILES = {
 			["Root.L.001-IKTarget"] = swing(1.2), -- knuckles down, fingers forward
 			["Root.R.001-IKTarget"] = swing(1.2),
 		},
-		swing = 0.5, bend = 0.5, bob = 0.12, hop = 0.45, lunge = 0.9, sleepDrop = 0.45,
+		swing = 0.7, bend = 0.7, bob = 0.15, hop = 0.45, lunge = 0.9,
+		lie = { drop = 0, tilt = 1.4, neck = { -0.1, -0.2 }, head = -0.7, hip = { front = 2.5, rear = 0.6 }, knee = { front = 0.3, rear = 0 } },
+		eyes = { "eye2", "eye3", "eye4", "Body.014" },
 		halfWidth = 5.6, -- with its arms down (its rest bounds are the T-pose)
 	},
 	-- Snow Peaks: an ice shark gliding just over the snow: tail sweeps, fins paddle, jaws snap.
@@ -150,7 +179,9 @@ BossRigs.PROFILES = {
 		tail = { "Body.M.001", "Body.M.002", "Body.M.003", "Body.M.007" },
 		fins = { { bones = { "Body.L" }, side = -1 }, { bones = { "Body.R" }, side = 1 } },
 		twitch = { "Body.M.011" },
-		swing = 0.3, bend = 0, bob = 0.08, hop = 0.4, lunge = 0.9, sleepDrop = 0.2,
+		swing = 0.4, bend = 0, bob = 0.1, hop = 0.4, lunge = 0.9,
+		lie = { drop = 0.75, head = 0.08, curl = 0.6 },
+		eyes = { "Ice Shark Eye Neon", "Ice Shark Body.036", "Ice Shark Body.037", "Ice Shark Body.038" },
 	},
 	-- Deep Space: a two-legged void dragon with big wings: flaps as it runs, folds them asleep.
 	VoidDragon = {
@@ -165,7 +196,9 @@ BossRigs.PROFILES = {
 			leg("Root.L.003", "Root.L.007", "Root.L.016-IKTarget", -1, false, { tip = "Root.L.016" }),
 			leg("Root.R.003", "Root.R.007", "Root.R.016-IKTarget", 1, false, { tip = "Root.R.016" }),
 		},
-		swing = 0.55, bend = 0.6, bob = 0.12, hop = 0.5, lunge = 0.9, sleepDrop = 0.8,
+		swing = 0.7, bend = 0.8, bob = 0.15, hop = 0.5, lunge = 0.9,
+		lie = { drop = 1.5, neck = { 0.9, 0.9, 0.5 }, head = -0.3, hip = { front = 0.5, rear = 0.5 }, knee = { front = -0.9, rear = -0.9 }, curl = 1.2 },
+		eyes = { "DragonPurple.009", "DragonPurple.012", "DragonPurple.013", "DragonPurple.014", "DragonPurple.015" },
 	},
 	-- Spirit Garden: a glowing stag with antlers. Gallops in bounds, lies down to sleep, rams on a catch.
 	Lumistag = {
@@ -178,7 +211,9 @@ BossRigs.PROFILES = {
 			leg("Leg.L", "Leg.L.001", "Leg.L.001-IKTarget", -1, false),
 			leg("Leg.R", "Leg.R.001", "Leg.R.001-IKTarget", 1, false),
 		},
-		swing = 0.55, bend = 0.9, bob = 0.25, hop = 0.6, lunge = 1.2, sleepDrop = 1.25,
+		swing = 0.7, bend = 1.0, bob = 0.3, hop = 0.6, lunge = 1.2,
+		lie = { drop = 1.9, head = 0.5, headDrop = 0.6, turn = 0.5, hip = { front = -1.3, rear = 1.8 }, knee = { front = 2.4, rear = -2.6 } },
+		eyes = { "PalpBottom.012", "PalpBottom.013", "PalpBottom.014", "PalpBottom.017" },
 	},
 } :: { [string]: Profile }
 
@@ -263,70 +298,49 @@ local function sides(pose: Pose, list: { Wing }?, f: (side: number) -> CFrame)
 	end
 end
 
--- Asleep: lying down, breathing slowly.
+-- Asleep: lying down (the profile's `lie`), breathing slowly. The eyes close too (GuardAnimator hides the
+-- profile's eye meshes).
+BossRigs.BREATH = 1.6 -- radians per second: a breath every ~4 s
 local function sleep(pose: Pose, p: Profile, t: number)
-	local breathe = sin(t * 1.7)
-	local kind = p.kind
-	add(pose, p.body, move(0, -p.sleepDrop + 0.03 * breathe, 0))
-	add(pose, p.head, pitch((p.nod or 0.25) + 0.03 * breathe))
-	add(pose, p.jaw, pitch(0.04 + 0.04 * breathe))
-	wave(pose, p.tail, t * 0.6, 0.06, 0.6, 0.2, yaw)
-	if kind == "quad" then
-		if p.pet == "Turtle" then
-			-- head pulled into the shell, legs tucked
-			add(pose, p.neck and p.neck[1], move(0, -0.12, 0.45) * pitch(0.35))
-			for _, l in p.legs or {} do
-				add(pose, l.hip, roll(-l.side * 0.35))
-			end
-		elseif p.pet == "Lumistag" then
-			-- folded legs under the body, neck curled round
-			for _, l in p.legs or {} do
-				add(pose, l.hip, swing(if l.front then -1.25 else 1.15))
-				add(pose, l.knee, swing(if l.front then 2.3 else -2.0))
-			end
-			add(pose, p.head, pitch(0.35) * yaw(0.35))
+	local lie = p.lie
+	local breathe = sin(t * BossRigs.BREATH)
+	add(pose, p.body, move(0, -lie.drop + 0.025 * breathe, 0) * pitch((lie.tilt or 0) + 0.015 * breathe))
+	if lie.pull then
+		add(pose, p.neck and p.neck[1], CFrame.new(lie.pull))
+	end
+	for i, b in p.neck or {} do
+		add(pose, b, pitch(((lie.neck or {})[i] or 0) * (1 + 0.03 * breathe)))
+	end
+	add(pose, p.head, move(0, -(lie.headDrop or 0), 0) * yaw(lie.turn or 0) * pitch((lie.head or 0) + 0.02 * breathe))
+	add(pose, p.jaw, pitch(0.02 + 0.02 * breathe))
+	for _, l in p.legs or {} do
+		local hip = if lie.hip then (if l.front then lie.hip.front else lie.hip.rear) else 0
+		local knee = if lie.knee then (if l.front then lie.knee.front else lie.knee.rear) else 0
+		if l.splay then
+			add(pose, l.hip, yaw(l.side * hip) * roll(-l.side * (lie.tuck or 0)))
 		else
-			add(pose, p.body, pitch(0.06))
-			for _, l in p.legs or {} do
-				add(pose, l.hip, yaw(l.side * (if l.front then -0.25 else 0.25)))
-			end
+			add(pose, l.hip, roll(-l.side * (lie.tuck or 0)) * swing(hip))
+			add(pose, l.knee, swing(knee))
 		end
-	elseif kind == "ape" then
-		-- sat down, slumped forward, arms hanging
-		add(pose, p.body, pitch(0.2))
-		each(pose, p.neck, pitch(0.12))
-		for _, l in p.legs or {} do
-			if l.front then
-				add(pose, l.hip, swing(0.35))
-			else
-				add(pose, l.hip, swing(0.9))
-				add(pose, l.knee, swing(-0.9))
-			end
-		end
-	elseif kind == "snake" then
-		-- coiled down: the reared neck lowered to the ground, the head resting on it
-		local lower = { 0.3, 0.35, 0.3, 0.25, -0.15, -0.15, -0.1, -0.1 }
-		for i, b in p.neck or {} do
-			add(pose, b, pitch((lower[i] or 0) * (1 + 0.02 * breathe)))
-		end
-		wave(pose, p.spine, 1.2, 0.3, 1.2, 0, yaw)
-		wave(pose, p.tail, t * 0.4 + 1.5, 0.12, 0.9, 0, yaw)
-	elseif kind == "shark" then
-		sides(pose, p.fins, function(side)
-			return roll(-side * 0.2)
-		end)
-		wave(pose, p.tail, t * 0.9, 0.08, 0.8, 0.5, yaw)
-	elseif kind == "dragon" then
-		-- wings folded back along the body, crouched, head down on the ground, tail curled round
-		sides(pose, p.wings, function(side)
-			return yaw(-side * 0.75) * roll(-side * 0.55)
-		end)
-		each(pose, p.neck, pitch(0.3))
-		wave(pose, p.tail, 1.5, 0.12, 0, 0, yaw)
-		for _, l in p.legs or {} do
-			add(pose, l.hip, swing(0.14)) -- crouched: these keep the ankles where they stand
-			add(pose, l.knee, swing(-0.44))
-		end
+	end
+	-- the tail curls round to one side, swaying a little with each breath
+	local tail = p.tail or {}
+	for _, b in tail do
+		add(pose, b, yaw((lie.curl or 0) / max(#tail, 1) + 0.03 * sin(t * 0.5)))
+	end
+	for i, b in p.spine or {} do
+		add(pose, b, yaw((lie.spine or {})[i] or 0))
+	end
+	-- wings folded back along the body; fins flat on the ground
+	sides(pose, p.wings, function(side)
+		return yaw(-side * 0.75) * roll(-side * 0.55)
+	end)
+	sides(pose, p.fins, function(side)
+		return roll(-side * (0.35 + 0.03 * breathe))
+	end)
+	for i, b in p.twitch or {} do
+		local k = sin(t * (1.3 + 0.4 * i) + i)
+		add(pose, b, yaw(0.06 * k * k * k)) -- a lazy twitch now and then
 	end
 end
 
@@ -376,7 +390,7 @@ local function awake(pose: Pose, p: Profile, s: Input, amp: number)
 		local flapRate = 5 + 5 * amp
 		local flap = sin(t * flapRate)
 		sides(pose, p.wings, function(side)
-			return roll(side * ((0.15 + 0.5 * amp) * flap + 0.1))
+			return roll(side * ((0.2 + 0.6 * amp) * flap + 0.1))
 		end)
 		wave(pose, p.tail, phase, 0.12 * amp + 0.05 * still, 0.6, 0.2, yaw)
 	end
