@@ -595,7 +595,7 @@ local function buildNest(folder: Folder, k: number)
 	-- Non-colliding so neither runners nor the giant snag on it.
 	Assets.swap("Nest_" .. zone.id, model, Assets.facing(center, -Vector3.xAxis), function(into)
 		studs(cylinder(into, "Mound", 1, 22, center + Vector3.new(0, 0.2, 0), theme.mound))
-		Props.disc(into, "GlowRing", 26, center, zone.seedColor, Enum.Material.Neon, 0.15)
+		studs(Props.disc(into, "NestRing", 26, center, zone.seedColor, Enum.Material.Plastic, 0.15))
 		for i = 1, 8 do
 			local a = i / 8 * math.pi * 2
 			Props.rock(into, center + Vector3.new(math.cos(a) * 12.5, 0, math.sin(a) * 12.5), Vector3.new(3, 2.2, 2.6), theme.nestStone, Enum.Material.SmoothPlastic, a, false)

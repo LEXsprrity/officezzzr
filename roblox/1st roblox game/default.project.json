@@ -43,16 +43,16 @@
         "Technology": "ShadowMap",
         "ClockTime": 12,
         "GeographicLatitude": 30,
-        "Brightness": 3,
-        "Ambient": [0.392, 0.408, 0.463],
-        "OutdoorAmbient": [0.541, 0.557, 0.612],
-        "ColorShift_Top": [1.0, 0.957, 0.871],
+        "Brightness": 2,
+        "Ambient": [0.275, 0.282, 0.322],
+        "OutdoorAmbient": [0.502, 0.51, 0.541],
+        "ColorShift_Top": [0.925, 0.894, 0.831],
         "ColorShift_Bottom": [0.157, 0.216, 0.314],
-        "EnvironmentDiffuseScale": 1,
-        "EnvironmentSpecularScale": 0.2,
+        "EnvironmentDiffuseScale": 0.5,
+        "EnvironmentSpecularScale": 0.1,
         "GlobalShadows": true,
         "ShadowSoftness": 0.1,
-        "ExposureCompensation": 0
+        "ExposureCompensation": -0.1
       },
       "Sky": {
         "$className": "Sky",
@@ -77,24 +77,24 @@
       "Bloom": {
         "$className": "BloomEffect",
         "$properties": {
-          "Intensity": 0.35,
+          "Intensity": 0.15,
           "Size": 20,
-          "Threshold": 1.8
+          "Threshold": 2.5
         }
       },
       "ColorCorrection": {
         "$className": "ColorCorrectionEffect",
         "$properties": {
-          "Saturation": 0.28,
-          "Contrast": 0.12,
-          "Brightness": 0.03,
-          "TintColor": [1.0, 0.992, 0.973]
+          "Saturation": 0.12,
+          "Contrast": 0.04,
+          "Brightness": 0,
+          "TintColor": [1.0, 1.0, 1.0]
         }
       },
       "SunRays": {
         "$className": "SunRaysEffect",
         "$properties": {
-          "Intensity": 0.04,
+          "Intensity": 0.02,
           "Spread": 0.6
         }
       }
