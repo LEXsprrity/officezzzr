@@ -44,7 +44,6 @@ local COLORS = {
 	shop = Color3.fromRGB(255, 195, 40),
 	index = Color3.fromRGB(170, 100, 255),
 	slow = Color3.fromRGB(150, 150, 160),
-	slowOn = Color3.fromRGB(255, 120, 60),
 	panel = Color3.fromRGB(255, 250, 235),
 	red = Color3.fromRGB(240, 70, 70),
 	gold = Color3.fromRGB(255, 205, 50),
@@ -112,15 +111,6 @@ local function button(parent: Instance, label: string, color: Color3, size: UDim
 	return b
 end
 
-local function setLabel(b: GuiObject, value: string, icon: (string | { string })?)
-	local label = b:FindFirstChild("Label") :: TextLabel?
-	if label and icon then
-		Icons.set(label, icon, value, ICON.medium)
-	elseif label then
-		label.Text = value
-	end
-end
-
 local gui = new("ScreenGui", { Name = "SeedHUD", ResetOnSpawn = false, ZIndexBehavior = Enum.ZIndexBehavior.Sibling })
 local uiScale = new("UIScale", { Parent = gui })
 local function rescale()
@@ -178,60 +168,184 @@ local carryBanner = new("Frame", {
 local carryLabel = text(carryBanner, { Size = UDim2.new(1, -16, 1, -8), Position = UDim2.fromOffset(8, 4), TextColor3 = WHITE })
 
 ----------------------------------------------------------------------------------------------------
--- Bottom-left: buttons, speed (+), money
+-- Bottom-left, stacked bottom-up with no panels behind the numbers:
+--   * Speed (with a "+" that opens the Shop's Speed section) in pink, money in green;
+--   * the Speed level bar (Config.speedLevel) with the +10K / +100K / +1M quick-buy buttons;
+--   * the Shop / Index / Trails buttons and the Slow Mode switch.
+-- Sizes are design pixels: the screen is 900 tall at UIScale 1, about 680 on a landscape phone (the
+-- 0.55 minimum scale). The button column shrinks on its own if it would run into the top of the screen.
 ----------------------------------------------------------------------------------------------------
-local bottomLeft = new("Frame", {
-	BackgroundTransparency = 1, AnchorPoint = Vector2.new(0, 1), Position = UDim2.new(0, 14, 1, -14),
-	Size = UDim2.fromOffset(330, 240), Parent = gui,
-})
+local SPEED_PINK = Color3.fromRGB(255, 70, 150)
+local MONEY_GREEN = Color3.fromRGB(85, 240, 70)
+local STATS_H, LEVEL_H, LEFT_H = 124, 124, 276
+local STATS_BOTTOM = 10
+local LEVEL_BOTTOM = STATS_BOTTOM + STATS_H + 8
+local LEFT_BOTTOM = LEVEL_BOTTOM + LEVEL_H + 10
 
-local moneyPanel = new("Frame", {
-	AnchorPoint = Vector2.new(0, 1), Position = UDim2.new(0, 0, 1, 0), Size = UDim2.fromOffset(330, 62),
-	BackgroundColor3 = COLORS.money, Parent = bottomLeft,
-}, deco(12))
-local moneyLabel = text(moneyPanel, { Text = "$0", Size = UDim2.new(0.62, -10, 1, -10), Position = UDim2.fromOffset(10, 5), TextXAlignment = Enum.TextXAlignment.Left })
-Icons.set(moneyLabel, "Money", "$0", ICON.medium)
-local incomeLabel = text(moneyPanel, { Text = "+$0/s", Size = UDim2.new(0.38, -10, 0.6, 0), Position = UDim2.new(0.62, 0, 0.2, 0),
-	TextXAlignment = Enum.TextXAlignment.Right, TextColor3 = Color3.fromRGB(220, 255, 210) })
+local openModal: (name: string) -> ()
+local openShopAt: (section: string) -> ()
 
-local speedPanel = new("Frame", {
-	AnchorPoint = Vector2.new(0, 1), Position = UDim2.new(0, 0, 1, -72), Size = UDim2.fromOffset(330, 62),
-	BackgroundColor3 = COLORS.speed, Parent = bottomLeft,
-}, deco(12))
-local speedLabel = text(speedPanel, { Text = "⚡ 0", Size = UDim2.new(0.6, -10, 0.72, 0), Position = UDim2.fromOffset(10, 4), TextXAlignment = Enum.TextXAlignment.Left })
-Icons.set(speedLabel, "Speed", "⚡ 0", ICON.medium)
-local walkLabel = text(speedPanel, { Text = "WalkSpeed 16", Size = UDim2.new(0.8, -10, 0.26, 0), Position = UDim2.new(0, 10, 0.72, -3),
-	TextXAlignment = Enum.TextXAlignment.Left, TextColor3 = Color3.fromRGB(215, 235, 255) })
--- "+0.5", "+12.3", "+1.2K": the Speed one step (stud) pays right now (Config.speedPerStud)
-local function perStepText(): string
-	local x = Config.speedPerStud(stats.speed or 0, stats.equippedTrail)
-	return "+" .. (if x < 100 then string.format("%.1f", x) else Format.short(x))
+-- An uploaded icon as an image, or its emoji as text while it isn't uploaded (Config.ICONS id 0).
+local function iconLabel(parent: Instance, key: string, emoji: string, props: { [string]: any }): GuiObject
+	local image = Icons.image(key)
+	local g: GuiObject = if image
+		then new("ImageLabel", { BackgroundTransparency = 1, Image = image, ScaleType = Enum.ScaleType.Fit, Parent = parent })
+		else text(parent, { Text = emoji })
+	for k, v in props do
+		(g :: any)[k] = v
+	end
+	return g
 end
 
-local multLabel = text(speedPanel, { Text = "x1", Size = UDim2.new(0.18, 0, 0.5, 0), Position = UDim2.new(0.6, 0, 0.25, 0), TextColor3 = COLORS.gold })
+-- Text with a thicker dark outline, for the big numbers and button captions.
+local function bold(parent: Instance, thickness: number, props: { [string]: any }): TextLabel
+	local label = text(parent, props)
+	local stroke = label:FindFirstChildOfClass("UIStroke")
+	if stroke then
+		stroke.Thickness = thickness
+	end
+	return label
+end
 
--- The 🏃 button opens the Trail Shop (trails multiply the Speed you gain; money can't buy Speed itself)
-local openModal: (name: string) -> ()
-button(speedPanel, "🏃", COLORS.index, UDim2.fromOffset(52, 52), function()
-	openModal("Trails")
-end, "TrailShop").Position = UDim2.new(1, -57, 0, 5)
+-- Speed and money
+local statsFrame = new("Frame", {
+	BackgroundTransparency = 1, AnchorPoint = Vector2.new(0, 1), Position = UDim2.new(0, 14, 1, -STATS_BOTTOM),
+	Size = UDim2.fromOffset(360, STATS_H), Parent = gui,
+})
+iconLabel(statsFrame, "Speed", "⚡", { Size = UDim2.fromOffset(60, 60) })
+local speedValue = bold(statsFrame, 4, {
+	Text = "0", Size = UDim2.new(1, -76, 0, 54), Position = UDim2.fromOffset(76, 3), TextXAlignment = Enum.TextXAlignment.Left, TextColor3 = SPEED_PINK,
+})
+iconLabel(statsFrame, "Money", "💰", { Size = UDim2.fromOffset(60, 60), Position = UDim2.fromOffset(0, 64) })
+local moneyValue = bold(statsFrame, 4, {
+	Text = "$0", Size = UDim2.new(1, -76, 0, 54), Position = UDim2.fromOffset(76, 67), TextXAlignment = Enum.TextXAlignment.Left, TextColor3 = MONEY_GREEN,
+})
+-- The Speed icon and its yellow "+" badge both open the Shop on the Speed section.
+new("TextButton", { BackgroundTransparency = 1, Text = "", Size = UDim2.fromOffset(60, 60), Parent = statsFrame }).Activated:Connect(function()
+	openShopAt("Speed")
+end)
+local plusBadge = new("TextButton", {
+	Size = UDim2.fromOffset(28, 28), Position = UDim2.fromOffset(40, 34), BackgroundColor3 = Color3.fromRGB(255, 210, 40), Text = "",
+	AutoButtonColor = true, Parent = statsFrame,
+}, deco(7, 3))
+bold(plusBadge, 3, { Text = "+", Size = UDim2.new(1, -4, 1, -2), Position = UDim2.fromOffset(2, 0) })
+plusBadge.Activated:Connect(function()
+	openShopAt("Speed")
+end)
 
--- Shop / Index / Slow Mode row, above the speed panel
-local rowButtons = new("Frame", {
-	AnchorPoint = Vector2.new(0, 1), Position = UDim2.new(0, 0, 1, -134), Size = UDim2.fromOffset(330, 48),
-	BackgroundTransparency = 1, Parent = bottomLeft,
-}, { new("UIListLayout", { FillDirection = Enum.FillDirection.Horizontal, Padding = UDim.new(0, 8) }) })
+-- Speed level bar: "<Speed> SPEED" and "x<trail> Multiplier" above, "Level N" and "current / next"
+-- on the bar, the quick-buy buttons under it.
+local levelPanel = new("Frame", {
+	BackgroundTransparency = 1, AnchorPoint = Vector2.new(0, 1), Position = UDim2.new(0, 14, 1, -LEVEL_BOTTOM),
+	Size = UDim2.fromOffset(360, LEVEL_H), Parent = gui,
+})
+iconLabel(levelPanel, "Speed", "⚡", { Size = UDim2.fromOffset(22, 22), Rotation = -12 })
+local levelSpeedLabel = text(levelPanel, {
+	Text = "0 SPEED", Size = UDim2.new(0.6, -28, 0, 20), Position = UDim2.fromOffset(28, 1), TextXAlignment = Enum.TextXAlignment.Left, TextColor3 = COLORS.gold,
+})
+local levelMultLabel = text(levelPanel, {
+	Text = "x1 Multiplier", Size = UDim2.new(0.4, 0, 0, 20), Position = UDim2.new(0.6, 0, 0, 1), TextXAlignment = Enum.TextXAlignment.Right, TextColor3 = COLORS.gold,
+})
+local levelBar = new("Frame", {
+	Size = UDim2.new(1, 0, 0, 40), Position = UDim2.fromOffset(0, 26), BackgroundColor3 = Color3.fromRGB(226, 228, 236), Parent = levelPanel,
+}, deco(12, 3))
+local levelFill = new("Frame", {
+	Size = UDim2.fromScale(0.03, 1), BackgroundColor3 = Color3.fromRGB(95, 215, 60), BorderSizePixel = 0, Parent = levelBar,
+}, { new("UICorner", { CornerRadius = UDim.new(0, 12) }) })
+local levelLabel = bold(levelBar, 3, {
+	Text = "Level 1", Size = UDim2.new(0.5, -12, 0, 26), Position = UDim2.new(0, 12, 0.5, -13), TextXAlignment = Enum.TextXAlignment.Left, ZIndex = 2,
+})
+local levelProgress = bold(levelBar, 3, {
+	Text = "0 / 1K", Size = UDim2.new(0.5, -12, 0, 22), Position = UDim2.new(0.5, 0, 0.5, -11), TextXAlignment = Enum.TextXAlignment.Right, ZIndex = 2,
+})
 
-button(rowButtons, "🛒 Shop", COLORS.shop, UDim2.fromOffset(100, 48), function()
+-- Quick-buy: Robux Speed packs (Config.DEVELOPER_PRODUCTS, granted by ProcessReceipt like the Shop's).
+-- While a product's id is 0 the server answers "coming soon".
+local QUICK_BUY = {
+	{ product = "Speed10K", label = "+10K", color = Color3.fromRGB(255, 200, 30) },
+	{ product = "Speed100K", label = "+100K", color = Color3.fromRGB(235, 65, 65) },
+	{ product = "Speed1M", label = "+1M", rainbow = true },
+}
+local quickRow = new("Frame", {
+	BackgroundTransparency = 1, Size = UDim2.new(1, 0, 0, 52), Position = UDim2.fromOffset(0, 72), Parent = levelPanel,
+}, { new("UIListLayout", { FillDirection = Enum.FillDirection.Horizontal, Padding = UDim.new(0, 9), SortOrder = Enum.SortOrder.LayoutOrder }) })
+local quickPrices: { [string]: TextLabel } = {}
+for i, q in QUICK_BUY do
+	local b = new("TextButton", {
+		Size = UDim2.new(1 / 3, -6, 1, 0), BackgroundColor3 = if q.rainbow then WHITE else q.color, Text = "", AutoButtonColor = true,
+		LayoutOrder = i, Parent = quickRow,
+	}, deco(10, 3))
+	if q.rainbow then
+		new("UIGradient", { Color = Config.trailColors(Config.trailById("Rainbow") :: Config.Trail), Parent = b })
+	else
+		new("UIGradient", { Rotation = 90, Color = ColorSequence.new(WHITE, Color3.fromRGB(205, 205, 205)), Parent = b })
+	end
+	iconLabel(b, "Speed", "⚡", { Size = UDim2.fromOffset(34, 34), Position = UDim2.fromOffset(-6, -12), Rotation = -20, ZIndex = 2 })
+	bold(b, 3, { Text = q.label, Size = UDim2.new(1, -30, 0, 28), Position = UDim2.fromOffset(24, 6) })
+	quickPrices[q.product] = text(b, {
+		Size = UDim2.fromOffset(60, 15), AnchorPoint = Vector2.new(1, 1), Position = UDim2.new(1, -5, 1, -3), TextXAlignment = Enum.TextXAlignment.Right,
+	})
+	b.Activated:Connect(function()
+		RequestBuy:FireServer("Product:" .. q.product)
+	end)
+end
+
+-- Shop / Index / Trails, then the Slow Mode switch, above the level bar.
+local leftColumn = new("Frame", {
+	BackgroundTransparency = 1, AnchorPoint = Vector2.new(0, 1), Position = UDim2.new(0, 14, 1, -LEFT_BOTTOM),
+	Size = UDim2.fromOffset(180, LEFT_H), Parent = gui,
+}, {
+	new("UIListLayout", { Padding = UDim.new(0, 8), SortOrder = Enum.SortOrder.LayoutOrder, VerticalAlignment = Enum.VerticalAlignment.Bottom }),
+})
+local leftScale = new("UIScale", { Parent = leftColumn })
+
+-- Red notification bubbles on the side buttons: setBadge("Index", "!") or ("Shop", "3"); nil hides it.
+local badges: { [string]: Frame } = {}
+local function setBadge(name: string, value: string?)
+	local badge = badges[name]
+	if badge then
+		badge.Visible = value ~= nil
+		(badge:FindFirstChild("Label") :: TextLabel).Text = value or ""
+	end
+end
+
+local function sideButton(order: number, label: string, icon: string, emoji: string, color: Color3, onClick: () -> ())
+	local b = new("TextButton", {
+		Size = UDim2.fromOffset(92, 74), BackgroundColor3 = color, Text = "", AutoButtonColor = true, LayoutOrder = order, Parent = leftColumn,
+	}, deco(14, 4))
+	new("UIGradient", { Rotation = 90, Color = ColorSequence.new(WHITE, Color3.fromRGB(200, 200, 200)), Parent = b })
+	iconLabel(b, icon, emoji, { Size = UDim2.fromOffset(46, 46), AnchorPoint = Vector2.new(0.5, 0), Position = UDim2.new(0.5, 0, 0, 2) })
+	bold(b, 3, { Text = label, Size = UDim2.new(1, -6, 0, 26), Position = UDim2.new(0, 3, 1, -28) })
+	local badge = new("Frame", {
+		Size = UDim2.fromOffset(26, 26), AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.new(1, -4, 0, 4), BackgroundColor3 = COLORS.red,
+		Visible = false, ZIndex = 3, Parent = b,
+	}, { new("UICorner", { CornerRadius = UDim.new(1, 0) }), new("UIStroke", { Thickness = 2, Color = WHITE }) })
+	text(badge, { Name = "Label", Size = UDim2.new(1, -6, 1, -6), Position = UDim2.fromOffset(3, 3), ZIndex = 3 })
+	badges[label] = badge
+	b.Activated:Connect(onClick)
+end
+
+sideButton(1, "Shop", "Shop", "🛒", Color3.fromRGB(70, 210, 70), function()
 	openModal("Shop")
-end, "Shop")
-button(rowButtons, "📖 Index", COLORS.index, UDim2.fromOffset(100, 48), function()
+end)
+sideButton(2, "Index", "Index", "📖", Color3.fromRGB(40, 200, 235), function()
 	openModal("Index")
-end, "Index")
+end)
+sideButton(3, "Trails", "TrailShop", "🏃", Color3.fromRGB(255, 145, 40), function()
+	openModal("Trails")
+end)
 
 -- Slow Mode: purely local, clamps our own WalkSpeed so we can potter around the base.
 local slowMode = false
-local slowButton: TextButton
+local slowRow = new("TextButton", { Size = UDim2.new(1, 0, 0, 30), BackgroundTransparency = 1, Text = "", LayoutOrder = 4, Parent = leftColumn })
+local slowTrack = new("Frame", {
+	Size = UDim2.fromOffset(54, 28), Position = UDim2.fromOffset(0, 1), BackgroundColor3 = Color3.fromRGB(80, 80, 92), Parent = slowRow,
+}, { new("UICorner", { CornerRadius = UDim.new(1, 0) }), new("UIStroke", { Thickness = 3, Color = INK }) })
+local slowKnob = new("Frame", {
+	Size = UDim2.fromOffset(22, 22), Position = UDim2.fromOffset(3, 3), BackgroundColor3 = Color3.fromRGB(195, 195, 205), Parent = slowTrack,
+}, { new("UICorner", { CornerRadius = UDim.new(1, 0) }), new("UIStroke", { Thickness = 2, Color = INK }) })
+bold(slowRow, 3, { Text = "Slow Mode", Size = UDim2.new(1, -62, 0, 24), Position = UDim2.fromOffset(62, 3), TextXAlignment = Enum.TextXAlignment.Left })
+
 local function applySlow()
 	local char = player.Character
 	local hum = char and char:FindFirstChildOfClass("Humanoid")
@@ -241,10 +355,14 @@ local function applySlow()
 		hum.WalkSpeed = stats.walkSpeed
 	end
 end
-slowButton = button(rowButtons, "🐢 Slow: OFF", COLORS.slow, UDim2.fromOffset(114, 48), function()
+slowRow.Activated:Connect(function()
 	slowMode = not slowMode
-	setLabel(slowButton, if slowMode then "🐢 Slow: ON" else "🐢 Slow: OFF")
-	slowButton.BackgroundColor3 = if slowMode then COLORS.slowOn else COLORS.slow
+	local info = TweenInfo.new(0.15, Enum.EasingStyle.Quad)
+	TweenService:Create(slowKnob, info, {
+		Position = UDim2.fromOffset(if slowMode then 29 else 3, 3),
+		BackgroundColor3 = if slowMode then Color3.fromRGB(80, 225, 70) else Color3.fromRGB(195, 195, 205),
+	}):Play()
+	TweenService:Create(slowTrack, info, { BackgroundColor3 = if slowMode then Color3.fromRGB(40, 110, 45) else Color3.fromRGB(80, 80, 92) }):Play()
 	applySlow()
 end)
 local function hookHumanoid(char: Model)
@@ -259,6 +377,73 @@ end
 player.CharacterAdded:Connect(hookHumanoid)
 if player.Character then
 	task.spawn(hookHumanoid, player.Character)
+end
+
+-- Short screens (phones): shrink the button column so it stays below the top of the screen.
+local function fitLeftColumn()
+	local height = gui.AbsoluteSize.Y / uiScale.Scale
+	leftScale.Scale = math.clamp((height - LEFT_BOTTOM - 8) / LEFT_H, 0.5, 1)
+end
+
+----------------------------------------------------------------------------------------------------
+-- "LEVEL N!" (centred low, above the hotbar): pops in, holds, fades. Only one at a time: a new level
+-- while it shows replaces it (Config.levelUp already picks the highest).
+----------------------------------------------------------------------------------------------------
+local levelUpLabel = bold(gui, 5, {
+	Name = "LevelUp", Text = "", AnchorPoint = Vector2.new(0.5, 1), Position = UDim2.new(0.5, 0, 1, -150), Size = UDim2.fromOffset(420, 76),
+	Visible = false, ZIndex = 15,
+})
+new("UIGradient", { Rotation = 90, Color = ColorSequence.new(Color3.fromRGB(255, 238, 70), Color3.fromRGB(255, 150, 25)), Parent = levelUpLabel })
+local levelUpSub = bold(levelUpLabel, 3, { Text = "", Size = UDim2.new(1, 0, 0, 30), Position = UDim2.new(0, 0, 1, 0), ZIndex = 15 })
+local levelUpScale = new("UIScale", { Parent = levelUpLabel })
+local levelUpSound = new("Sound", { SoundId = Config.SOUNDS.LevelUp, Volume = 0.6, Parent = SoundService })
+local levelUpToken = 0
+local levelUpFades: { Tween } = {}
+
+local function setLevelUpTransparency(t: number, info: TweenInfo?)
+	for _, label in { levelUpLabel, levelUpSub } do
+		local stroke = label:FindFirstChildOfClass("UIStroke") :: UIStroke
+		if info then
+			local a = TweenService:Create(label, info, { TextTransparency = t })
+			local b = TweenService:Create(stroke, info, { Transparency = t })
+			a:Play()
+			b:Play()
+			table.insert(levelUpFades, a)
+			table.insert(levelUpFades, b)
+		else
+			label.TextTransparency = t
+			stroke.Transparency = t
+		end
+	end
+end
+
+local function announceLevel(level: number)
+	levelUpToken += 1
+	local token = levelUpToken
+	for _, tween in levelUpFades do
+		tween:Cancel()
+	end
+	table.clear(levelUpFades)
+	if not levelUpLabel.Visible then
+		levelUpSound:Play() -- one ping per pop-up, not per level
+	end
+	levelUpLabel.Text = `LEVEL {level}!`
+	levelUpSub.Text = `x{Config.trailMult(stats.equippedTrail)} Multiplier`
+	setLevelUpTransparency(0)
+	levelUpLabel.Visible = true
+	levelUpScale.Scale = 0.3
+	TweenService:Create(levelUpScale, TweenInfo.new(0.3, Enum.EasingStyle.Back, Enum.EasingDirection.Out), { Scale = 1 }):Play()
+	task.delay(0.3 + 1.2, function()
+		if token ~= levelUpToken then
+			return
+		end
+		setLevelUpTransparency(1, TweenInfo.new(0.4))
+		task.delay(0.45, function()
+			if token == levelUpToken then
+				levelUpLabel.Visible = false
+			end
+		end)
+	end)
 end
 
 ----------------------------------------------------------------------------------------------------
@@ -476,6 +661,17 @@ openModal = function(name: string)
 	renderModal()
 end
 
+-- Opens the Shop (or re-renders it) scrolled to a section (see renderShop's `shopSections`).
+local shopFocus: string? = nil
+openShopAt = function(sectionName: string)
+	shopFocus = sectionName
+	if modalName == "Shop" then
+		renderModal()
+	else
+		openModal("Shop")
+	end
+end
+
 -- Walk-up stalls in the base's shop plaza: their prompts say which menu to open ("Shop", "Trails" or
 -- "Index"). Always opens (never toggles shut).
 game:GetService("ProximityPromptService").PromptTriggered:Connect(function(prompt: ProximityPrompt)
@@ -506,11 +702,39 @@ local function heading(label: string, order: number, centered: boolean?, height:
 	if icon then
 		Icons.set(h, icon, label, ICON.medium, textSize)
 	end
+	return h
 end
 
 -- "-- SPEED --" style section title (the icon goes in front once uploaded)
-local function section(label: string, order: number, icon: string?)
-	heading(`-- {label} --`, order, true, 36, icon, 30)
+local function section(label: string, order: number, icon: string?): TextLabel
+	return heading(`-- {label} --`, order, true, 36, icon, 30)
+end
+
+-- Scrolls the modal body so `target` sits at its top, once the layout has placed it. Measured from
+-- the target's on-screen position and corrected over a few frames, so it holds under any UIScale.
+local function scrollModalTo(target: GuiObject)
+	task.spawn(function()
+		local ratio = 1 -- on-screen pixels per CanvasPosition pixel, learnt from the first step
+		for _ = 1, 4 do
+			task.wait()
+			if not target.Parent or not modal.Visible then
+				return
+			end
+			local off = target.AbsolutePosition.Y - modalBody.AbsolutePosition.Y
+			if math.abs(off) < 2 then
+				return
+			end
+			local before, beforeY = modalBody.CanvasPosition.Y, target.AbsolutePosition.Y
+			modalBody.CanvasPosition = Vector2.new(0, math.max(0, before + off / ratio))
+			task.wait()
+			local moved = beforeY - target.AbsolutePosition.Y
+			local applied = modalBody.CanvasPosition.Y - before
+			if applied == 0 or moved == 0 then
+				return -- at the end of the canvas
+			end
+			ratio = moved / applied
+		end
+	end)
 end
 
 -- Robux prices. Developer products' real prices are set on the Creator Dashboard, so each is fetched
@@ -519,6 +743,7 @@ end
 local robuxPrices: { [number]: number } = {}
 local priceFetching: { [number]: boolean } = {}
 local priceRerender = false
+local refreshQuickBuy: () -> ()
 local function robuxPrice(product: Config.DevProduct): number
 	local cached = robuxPrices[product.id]
 	if cached then
@@ -534,6 +759,7 @@ local function robuxPrice(product: Config.DevProduct): number
 					priceRerender = true
 					task.delay(0.3, function()
 						priceRerender = false
+						refreshQuickBuy()
 						if modal.Visible and (modalName == "Shop" or modalName == "Trails") then
 							renderModal()
 						end
@@ -556,6 +782,16 @@ local function robuxCaption(product: Config.DevProduct): string
 	end
 	return Format.robux(robuxPrice(product))
 end
+
+-- The small R$ prices on the quick-buy buttons: the placeholder until the product has an id, then
+-- the Dashboard price once fetched.
+refreshQuickBuy = function()
+	for name, label in quickPrices do
+		local product = Config.DEVELOPER_PRODUCTS[name]
+		Icons.set(label, "Robux", Format.robux(if product.id == 0 then product.robux else robuxPrice(product)), 1)
+	end
+end
+refreshQuickBuy()
 
 local function giftButton(parent: Instance): TextButton
 	-- Gifting needs extra work (choosing a player, granting to them): shown, but not live yet.
@@ -708,11 +944,17 @@ local function renderShop()
 			RequestBuy:FireServer("PlotUpgrade")
 		end).Position = UDim2.new(0, 8, 1, -52)
 
-	-- Speed (Robux)
-	section("SPEED", nextOrder(), "Speed")
+	-- Speed (Robux); the HUD's "+" on the Speed icon opens the Shop here
+	local shopSections: { [string]: GuiObject } = {}
+	shopSections.Speed = section("SPEED", nextOrder(), "Speed")
 	local grid = cardGrid(nextOrder())
 	for i, entry in Config.products("Speed") do
 		productCard(grid, i, entry.name, entry.product, COLORS.speed, `⚡ {entry.product.label}`, "Added to your Speed right away", "Speed")
+	end
+	local focus = shopFocus and shopSections[shopFocus]
+	shopFocus = nil
+	if focus then
+		scrollModalTo(focus)
 	end
 
 	-- Money (Robux): the card shows what you'd get right now (fixed, or minutes of your income)
@@ -752,6 +994,12 @@ end
 -- Trail Shop: one card per trail, scrolling sideways, in the trail's colour. Money ($) or Robux (R$),
 -- or Equip / Equipped once owned.
 ----------------------------------------------------------------------------------------------------
+-- "+0.5", "+12.3", "+1.2K": the Speed one step (stud) pays right now (Config.speedPerStud)
+local function perStepText(): string
+	local x = Config.speedPerStud(stats.speed or 0, stats.equippedTrail)
+	return "+" .. (if x < 100 then string.format("%.1f", x) else Format.short(x))
+end
+
 local function trailFill(f: GuiObject, t: Config.Trail)
 	if t.rainbow then
 		f.BackgroundColor3 = WHITE
@@ -1070,14 +1318,37 @@ end
 -- Refresh from stats
 ----------------------------------------------------------------------------------------------------
 local lastUnlocked = -1
+local barLevel = 0 -- the level the bar shows (its fill jumps instead of sliding back on a level-up)
+local bestLevel: number? = nil -- highest level seen; nil until the server first sends our Speed
 local function refresh(changed: { [string]: any })
-	Icons.set(moneyLabel, "Money", Format.money(stats.money), ICON.medium)
-	incomeLabel.Text = "+" .. Format.money(stats.income) .. "/s"
-	Icons.set(speedLabel, "Speed", "⚡ " .. Format.short(stats.speed), ICON.medium)
-	walkLabel.Text = `WalkSpeed {math.floor(stats.walkSpeed)} · {perStepText()} Speed/step`
-	local trail = Config.trailById(stats.equippedTrail)
-	multLabel.Text = `x{stats.speedMult or 1}`
-	multLabel.TextColor3 = if trail and not trail.rainbow then trail.color:Lerp(WHITE, 0.3) else COLORS.gold
+	speedValue.Text = Format.short(stats.speed)
+	moneyValue.Text = Format.money(stats.money)
+
+	local level, start, nextAt = Config.speedLevel(stats.speed)
+	levelSpeedLabel.Text = `{Format.short(stats.speed)} SPEED`
+	levelMultLabel.Text = `x{Config.trailMult(stats.equippedTrail)} Multiplier`
+	levelLabel.Text = `Level {level}`
+	levelProgress.Text = `{Format.short(stats.speed)} / {Format.short(nextAt)}`
+	local fill = UDim2.fromScale(math.clamp((stats.speed - start) / (nextAt - start), 0.03, 1), 1)
+	if level == barLevel then
+		TweenService:Create(levelFill, TweenInfo.new(0.25), { Size = fill }):Play()
+	else
+		levelFill.Size = fill
+		barLevel = level
+	end
+	-- "!" on Trails while there's a trail we can afford but don't own
+	local canBuyTrail = false
+	for _, t in Config.TRAILS do
+		canBuyTrail = canBuyTrail or (t.price > 0 and not stats.trails[t.id] and stats.money >= t.price)
+	end
+	setBadge("Trails", if canBuyTrail then "!" else nil)
+	if changed.speed ~= nil then
+		local announce
+		bestLevel, announce = Config.levelUp(bestLevel, level)
+		if announce then
+			announceLevel(announce)
+		end
+	end
 
 	local c = stats.carrying
 	carryBanner.Visible = c ~= false and c ~= nil
@@ -1210,7 +1481,12 @@ end)
 
 rescale()
 gui.Parent = player:WaitForChild("PlayerGui")
+fitLeftColumn()
 local camera = workspace.CurrentCamera
 if camera then
-	camera:GetPropertyChangedSignal("ViewportSize"):Connect(rescale)
+	camera:GetPropertyChangedSignal("ViewportSize"):Connect(function()
+		rescale()
+		fitLeftColumn()
+	end)
 end
+gui:GetPropertyChangedSignal("AbsoluteSize"):Connect(fitLeftColumn)

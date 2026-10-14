@@ -23,9 +23,10 @@ The Meadow is deliberately short (200 studs) so a new player grabs a first seed 
 | **E** at your gate's board | ⬆️ Upgrade Plot (next level for money; only the owner sees the prompt) |
 | **R** (hold) | Remove one of your plants (refunds 30 s of its income) |
 | **1** | Bat: stuns a nearby awake guard for 2 s (4 s cooldown) |
-| 🏃 (on the Speed panel) | Trail Shop: buy trails for $ or R$, equip one. The panel shows your WalkSpeed and **+X Speed/step** |
-| 🛒 / 📖 | Shop (seed packs, plot upgrade, Speed, money, treadmill, passes) / Index (collection book) |
-| 🐢 Slow | Slow Mode: clamps your own WalkSpeed to 16 for moving around the base |
+| Shop / Index / Trails (left) | Shop (seed packs, plot upgrade, Speed, money, treadmill, passes) / Index (collection book) / Trail Shop (buy trails for $ or R$, equip one) |
+| **+** on the Speed icon (bottom left) | Opens the Shop at its Speed section |
+| +10K / +100K / +1M (under the level bar) | Quick-buy Robux Speed packs |
+| Slow Mode switch (left) | Clamps your own WalkSpeed to 16 for moving around the base |
 | 🌱 🪴 (right) | Seeds (incl. your 🎒 seed bag: **Plant** at your pad) / Plants menus |
 
 ## Seed packs
@@ -61,7 +62,7 @@ A trail is a coloured `Trail` that streams behind your character (two Attachment
 | Red | Mythic | x4 | $20B | `TrailRed` | 100 R$ |
 | Rainbow | Secret | x5 | $1T | `TrailRainbow` | 180 R$ |
 
-The 🏃 button on the Speed panel (it replaced the old "+" Speed menu) and the 🏃 TRAIL SHOP stall open the Trail Shop: one card per trail, scrolling sideways, in the trail's colour, with name, rarity, "xN Speed" and a green **$** button plus a purple **R$** button, or **Equip** / **Equipped** once owned.
+The **Trails** button on the left of the HUD and the 🏃 TRAIL SHOP stall open the Trail Shop: one card per trail, scrolling sideways, in the trail's colour, with name, rarity, "xN Speed" and a green **$** button plus a purple **R$** button, or **Equip** / **Equipped** once owned.
 
 ### ⬆️ Plot upgrades (money only)
 Every plot has a level. Level 1 has `SLOTS_START` = 5 slots. Each level adds **one slot** (30 at level 26, the last) and **+6%** to a multiplier on all the plot's plant income (x1.06 at level 2, x2.5 at level 26). The multiplier applies in the payout loop, to offline income and to removal refunds, together with the day/night multiplier and the 2x Money pass (`Config.moneyMult`). The ExtraSlots gamepass still adds +10 slots on top.
@@ -93,7 +94,7 @@ Every developer product ships as an `id = 0` stub with a placeholder price: clic
 
 | Section | Products | What a receipt grants |
 |---|---|---|
-| -- SPEED -- | `Speed150K` 64 R$, `Speed1M` 200, `Speed10M` 560, `Speed50M` 1,200, `Speed500M` 1,600, `Speed1B` 2,400 | adds to your Speed stat |
+| -- SPEED -- (and the HUD's quick-buy) | `Speed10K` 9 R$, `Speed100K` 36, `Speed150K` 64, `Speed1M` 76, `Speed10M` 560, `Speed50M` 1,200, `Speed500M` 1,600, `Speed1B` 2,400 | adds to your Speed stat |
 | -- MONEY -- | `Money24K` 40 R$, `Money200K` 80, `Money800K` 200, `Money4M` 400, `Money8M` 640 | **max(fixed amount, N minutes of your current income)**: $24K / 10 min, $200K / 30 min, $800K / 60 min, $4M / 180 min, $8M / 360 min. Fixed amounts go worthless late, so late players get the income share. The card shows what you'd get right now. |
 | -- TREADMILL -- | `TreadmillX3` 60 R$, `TreadmillX5` 200 | your treadmill at x3 / x5 (`TREADMILL_TIERS`; x5 can be bought directly; owned tiers aren't prompted) |
 | trails | `TrailGreen` … `TrailRainbow` | owns and equips the trail (owned trails aren't prompted) |
@@ -117,7 +118,7 @@ Speed per step     = gainPerStud(Speed) × trail              (Config.speedPerSt
 treadmill          = WalkSpeed × Speed per step × tier, per second
 ```
 
-With the trail a free player typically has by then: 0.48/step for a new player (Grey), 1.2 at 100K (Blue), 50 at 50M (Golden), 1.2K at 5B (Rainbow). Players see it: the Speed panel shows **"+X Speed/step"**, the Trail Shop repeats it, and the sign over each treadmill shows its owner's **"TREADMILL x2 · +X Speed/s"**, refreshed every payout. The zone reqs, guard speeds and escape thresholds are unchanged.
+With the trail a free player typically has by then: 0.48/step for a new player (Grey), 1.2 at 100K (Blue), 50 at 50M (Golden), 1.2K at 5B (Rainbow). Players see it: the Trail Shop shows **"+X Speed per step"**, and the sign over each treadmill shows its owner's **"TREADMILL x2 · +X Speed/s"**, refreshed every payout. The zone reqs, guard speeds and escape thresholds are unchanged.
 
 **Tuning: a simulated free player** (`tests/progression_sim.luau`, asserted in `tests/progression.spec.luau`). The player is active and spends no Robux. They steal from the furthest zone their Speed allows and plant it (filling free slots, then replacing the plant worth least once grown). When the plot is full of good plants, they stand on the free x2 treadmill. Whenever affordable, they buy the cheaper of the next trail and the next plot level. Each steal trip costs the run there and back plus 10 s. Arrival times (cumulative play):
 
@@ -131,6 +132,8 @@ With the trail a free player typically has by then: 0.48/step for a new player (
 | ⛩️ Spirit Garden | 5B | 10–15 h | **12h 06m** | 6h 15m – 18h 45m | 5h 36m | 4h 43m |
 
 The times hold across RNG seeds (tested). The x5 treadmill roughly halves them (tested ≤ 70%). Speed packs help on top.
+
+**Speed levels** (`Config.SPEED_LEVELS`, `Config.speedLevel`) are milestones of the Speed stat, shown on the HUD's level bar with a "LEVEL N!" pop-up. They are purely visual: no bonus. Every zone's recommended Speed is a level (Desert 5, Jungle 10, Lava 13, Snow 17, Space 23, Spirit Garden 30), and the thresholds are round numbers: 1K, 2.5K, 5K, 10K, 25K, … 1M, 2.5M, 5M, 10M, 15M, 25M, 50M, 75M, 100M, 150M, 250M, 400M, 500M, 750M, 1B, 1.5B, 2B, 3B, 4B, 5B, then 10B, 20B, 50B, 100B, … forever. The steps shrink from x2.5 to x1.25 because each decade of Speed takes longer, so the free player above levels up every 1–8 minutes in the first half hour and every 8–66 minutes after that (tested: ≤ 10 min in the first 30 min, ≤ 75 min always).
 
 **Money stays a sink all game.** The owner's trail prices Green–Golden ($5K / $75K / $1.5M / $30M) are bought in the first 40 minutes. Red ($20B, bought at ~3h, around Snow) and Rainbow ($1T, ~6h 47m, between Deep Space and Spirit) were retuned from $600M / $15B, which the free player bought at 1h 19m and 2h 38m. Plot levels are bought all along, the last at 10h 13m (level 23). At the Spirit Garden the player still has levels 24–26 ahead ($443T in total; level 26 alone is several hours of late-game income).
 
@@ -201,7 +204,7 @@ The HUD and the world signs use the 21 PNG icons in `icons/` (256x256, "Free Ico
 - **`0` = not uploaded yet: the emoji stays.** Every icon stands in for an emoji (or `R$`) in some text (`Icons.TOKENS`). While its id is 0 the text is shown exactly as before, so with every id at 0 (the repo default) the game looks the same as without icons.
 - **One helper.** `Icons.image(key)` gives `"rbxassetid://<id>"` or nil. `Icons.set(label, keys, text, size?, textSize?)` writes every icon label: with no uploaded icon it is just `label.Text = text`; with one it empties the label and lays out an `IconRow` inside it: square `ImageLabel`s (`ScaleType.Fit`, `size` x the label height) and the text pieces, styled like the label (font, colour, stroke). The emoji can be in front (`🛒 Shop`), inline (`Buy · R$ 2,000` → Buy · [R$] 2,000), at both ends (`⚡ FASTEST HERE ⚡`), or above the text (`🏏\nBat`). One key whose emoji isn't in the text puts the icon in front (`$1.2K` → [Money] $1.2K, `-- SEED PACKS --`); a list of keys only replaces emoji that are there (so `{ "Lock" }` on "✅ Rec. Speed" adds nothing).
 - **Sizes per context** (`ICON` in the HUD, x the label height): shop card titles big (1), HUD buttons, panels and section titles medium (0.85), R$ price buttons and inline lines small (0.7).
-- **Where:** Shop/Index buttons, stalls and modal titles; the 🏃 Trail Shop button, stall and title; Speed and money panels; Speed/Money/Treadmill/pass cards and their sections; SEED PACKS (section, card band) and PLOT UPGRADE (section, card, gate board); every R$ button (Robux icon before the number); 🎁 gift buttons; 🌱/🪴 tabs, side titles, the carry banner and Plant buttons; the hotbar Bat; 🔒 on locked zones; the ✖ close button; ✨/🌟 mutation highlights (pack cards, Index, reel, reveal); 🎒 seed bag lines; the "Fastest here" board; the 🏠 plot and 🏃 treadmill signs. Emoji inside sentences (toasts, hints that mention "the 🛒 Shop") and the zone emoji stay text.
+- **Where:** Shop/Index buttons, stalls and modal titles; the Trails button, 🏃 stall and title; the Speed and money icons (bottom left), the level bar and the quick-buy buttons; Speed/Money/Treadmill/pass cards and their sections; SEED PACKS (section, card band) and PLOT UPGRADE (section, card, gate board); every R$ button (Robux icon before the number); 🎁 gift buttons; 🌱/🪴 tabs, side titles, the carry banner and Plant buttons; the hotbar Bat; 🔒 on locked zones; the ✖ close button; ✨/🌟 mutation highlights (pack cards, Index, reel, reveal); 🎒 seed bag lines; the "Fastest here" board; the 🏠 plot and 🏃 treadmill signs. Emoji inside sentences (toasts, hints that mention "the 🛒 Shop") and the zone emoji stay text.
 - **World signs** are set at runtime, so `map/World.rbxm` is untouched and keeps the emoji: `WorldBuilder.applyIcons` (end of `WorldBuilder.load`) gives the icon to the sign labels whose text is exactly one of `WorldBuilder.SIGN_ICONS` (the 3 stalls, each plot's Upgrade Plot title, plot sign and treadmill sign; hand-edited texts are left alone), and `PlotService`/`AmbientService` write the plot, treadmill and leaderboard signs through `Icons.set`.
 
 **Uploading** (Portuguese step by step: [icons/COMO_SUBIR_ICONES.md](icons/COMO_SUBIR_ICONES.md)):
@@ -231,12 +234,13 @@ lune run tools/upload_icons.luau             # upload every icon whose id is sti
 ### Manual acceptance test (Studio → Test → Local Server, 2 players)
 1. Both players spawn on their own plot. The sign shows "🏠 Name's Plot".
 2. Each player walks into the corridor, steals a Meadow seed (E), gets chased, gets home and plants it on the pad. `+$` popups appear.
-3. Stand on the treadmill: you run in place without being pushed, and Speed climbs even when AFK. A grey trail streams behind you (the other player sees it too). The sign over your treadmill shows "TREADMILL x2 · +X Speed/s", and the Speed panel shows "+X Speed/step"; both grow as your Speed grows.
+3. Stand on the treadmill: you run in place without being pushed, and Speed climbs even when AFK. A grey trail streams behind you (the other player sees it too). The sign over your treadmill shows "TREADMILL x2 · +X Speed/s" and grows as your Speed grows. The level bar fills; at 1K Speed "LEVEL 2!" pops up above the hotbar and fades (rejoining doesn't show it again).
 4. Earn $5K and buy the Green trail in the 🏃 Trail Shop: it turns green at once (and stays green after a respawn), and Speed climbs faster. Equip Grey again from its card. Walk to the ⬆️ UPGRADE PLOT board at your gate: only you get the prompt; buy level 2, a 6th soil patch appears and the board shows "Level 2 → 3".
 5. Get Speed (treadmill, or a Speed pack once its id is set), then try the Desert at about 3K Speed and at 10K Speed. At 3K: caught, seed back at the nest, knocked back. At 10K: the guard wakes at once and chases exactly as fast as you; run straight home and it never closes the gap. In the Spirit Garden (5B), the dragon shows ❗ for half a second first.
 6. Both players leave, then rejoin: money, Speed, plants, Index, owned/equipped trail and plot level are intact (API access must be on).
 7. Shop → -- SEED PACKS --: two cards, Starpetal and Lotus Wyrm. With stub ids, clicking either says "coming soon" and no money is charged. With real ids, buy a Starpetal Pack at 0 Speed: Studio shows a test purchase dialog (no real Robux) and the button shows the Dashboard price. The reel spins and lands, and a Deep Space seed shows up in 🌱 Seeds → 🎒 bag. Stand on your pad and press Plant. Rejoin: the bag is intact.
 8. Shop → every other section (Speed, Money, Treadmill) and the R$ buttons on trail cards: with stub ids, "coming soon" and nothing charged; the 🎁 gift button says "Gifting is coming soon!". With real ids: a Speed pack adds Speed, a Money card pays exactly the amount it showed, Treadmill x5 makes the treadmill x5 and its card says Owned. No R$ item ever costs in-game money.
+9. HUD: bottom left shows only the Speed icon with a yellow **+** and the Speed in pink, the money icon and the money in green. **+** opens the Shop scrolled to -- SPEED --. Above them, the level bar ("Level N", "current / next", green fill, "<Speed> SPEED" and "x<trail> Multiplier" over it) and the +10K / +100K / +1M buttons ("coming soon" with stub ids; with a real id the Robux prompt, and the Speed lands once). Above those, Shop / Index / Trails and the Slow Mode switch. A Speed pack that jumps several levels shows one "LEVEL N!" with the highest. Try a phone in the device emulator: nothing overlaps.
 
 ## Rules the code enforces
 - **Server-authoritative.** Money, Speed, pickup, carry, planting and purchases all live on the server. The client only draws the HUD and VFX and runs Slow Mode. Every prompt and remote re-checks distance, ownership and state, and remotes are rate-limited.

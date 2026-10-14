@@ -342,7 +342,7 @@ H.test("robux: the agreed Speed, Money and Treadmill products, all id = 0 stubs;
 		end
 		return table.concat(out, " ")
 	end
-	H.eq(amounts("Speed", "amount"), "150000/64 1000000/200 10000000/560 50000000/1200 500000000/1600 1000000000/2400")
+	H.eq(amounts("Speed", "amount"), "10000/9 100000/36 150000/64 1000000/76 10000000/560 50000000/1200 500000000/1600 1000000000/2400")
 	H.eq(amounts("Money", "amount"), "24000/40 200000/80 800000/200 4000000/400 8000000/640")
 	H.eq(amounts("Money", "minutes"), "10/40 30/80 60/200 180/400 360/640")
 	H.eq(amounts("Treadmill", "tier"), "2/60 3/200")
