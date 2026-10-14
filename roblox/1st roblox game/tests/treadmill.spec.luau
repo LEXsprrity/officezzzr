@@ -612,9 +612,9 @@ H.test("treadmill step: what a second on it pays, as text", function()
 	H.eq(Treadmill.boardRateText(1500, nil), "+1.5K/s")
 	-- the text floats over the front end (the console head), above head height
 	local off = Treadmill.stepTextOffset(Vector3.new(5.2, 1, 18))
-	H.ok(off.Z * Treadmill.FRONT >= 9 and off.Y >= 6, `{off}`)
+	H.ok(off.Z * Treadmill.FRONT >= 11 and off.Y >= 6, `{off}`)
 	local wide = Treadmill.stepTextOffset(Vector3.new(18, 1, 5.2))
-	H.ok(wide.X * Treadmill.FRONT >= 9 and wide.Z == 0, `a belt turned in its own axes: {wide}`)
+	H.ok(wide.X * Treadmill.FRONT >= 11 and wide.Z == 0, `a belt turned in its own axes: {wide}`)
 	-- the front is where WorldBuilder puts the stop
 	local world = H.workspace:FindFirstChild("World")
 	local plots = WorldBuilder.adopt(world)
