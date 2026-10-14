@@ -100,13 +100,30 @@ H.test("Shop: bright cards with light rays, green R$ buttons, no filler text or 
 	end
 end)
 
-H.test("HUD: no zone / recommended-Speed banner at the top; the carry banner takes its place", function()
-	for _, gone in { "zoneBanner", "zoneLabel", "lastZone", "zoneAtX" } do
+H.test("HUD: no zone / recommended-Speed banner and no carry banner at the top", function()
+	for _, gone in { "zoneBanner", "zoneLabel", "lastZone", "zoneAtX", "carryBanner", "carryLabel", "run home & plant it" } do
 		H.ok(not string.find(HUD, gone, 1, true), `"{gone}" is gone from the HUD`)
 	end
 	H.ok(not string.find(HUD, "string.upper(z.name)", 1, true), "no \"SNOW PEAKS · Rec. Speed\" text")
-	local carry = string.match(HUD, "local carryBanner = new%(\"Frame\", (%b{})")
-	H.ok(carry and string.find(carry, "Position = UDim2.new(0.5, 0, 0, 8)", 1, true), "the carry banner sits at the top")
+end)
+
+H.test("HUD toasts: at the top under Roblox's bar, below the zone banner while it shows; essentials only", function()
+	local top, under = string.match(HUD, "local TOAST_TOP, TOAST_UNDER_BANNER = (%d+), (%d+)")
+	H.ok(top and tonumber(top) <= 10, "just under the top bar")
+	local BANNER = fs.readFile("src/client/ZoneBanner.client.luau")
+	local bannerTop = tonumber(string.match(BANNER, "local TOP = (%d+)"))
+	local stripH = tonumber(string.match(BANNER, "local STRIP_W, STRIP_H = %d+, (%d+)"))
+	H.ok(bannerTop and stripH and under and tonumber(under) >= bannerTop + stripH, "moved under the zone banner's strip")
+	H.ok(top and bannerTop and tonumber(top) + 36 <= bannerTop, "one toast fits above the banner")
+	H.ok(string.find(HUD, "WaitForChild(\"ZoneBanner\"", 1, true) and string.find(HUD, "strip:GetPropertyChangedSignal(\"Visible\")", 1, true), "follows the banner")
+	local holder = string.match(HUD, "local toastHolder = new%(\"Frame\", (%b{})")
+	H.ok(holder and string.find(holder, "Position = UDim2.new(0.5, 0, 0, TOAST_TOP)", 1, true), "starts at the top")
+	-- purely informational toasts are gone (sounds and the world show those)
+	for _, gone in { "You stole a", "woke up!", "You escaped", "Planted {data.name}", "New Index entry", "Removed plant:", "Bought {data.label}", "WHACK", "for {data.count} plant" } do
+		H.ok(not string.find(HUD, gone, 1, true), `no "{gone}" toast`)
+	end
+	H.ok(string.find(HUD, "\"The sun is up.\"", 1, true), "day/night still told, in words")
+	H.ok(string.find(HUD, "caught you!", 1, true), "getting caught is still told")
 end)
 
 H.test("HUD: Shop / Index / Slow Mode are centred on the left edge; Speed and money stay bottom-left", function()
@@ -136,11 +153,120 @@ H.test("ZoneBanner.client: entering a zone flashes its name and a face for ~1 s 
 	H.ok(string.find(BANNER, "{ GroupTransparency = 1, Position", 1, true), "fades and slides out")
 	H.ok(string.find(BANNER, "NumberSequenceKeypoint.new(0, 1)", 1, true) and string.find(BANNER, "NumberSequenceKeypoint.new(1, 1)", 1, true),
 		"the strip fades out at both ends")
-	H.ok(string.find(BANNER, "\"Your Base\"", 1, true), "back at the base")
+	H.ok(not string.find(BANNER, "Your Base", 1, true) and not string.find(BANNER, "🏠", 1, true), "walking back into the base shows nothing")
 	for _, zone in Config.ZONES do
 		H.ok(string.find(BANNER, `%s{zone.id} = \{ color = Color3.fromRGB%(%d+, %d+, %d+%), face = "[^"]+" \}`), `{zone.id} has a colour and a face`)
 	end
 end)
+
+----------------------------------------------------------------------------------------------------
+-- The owner's playtest: plants removed from the Plants panel, roomier left column, plain-text windows
+----------------------------------------------------------------------------------------------------
+H.test("HUD Plants panel: a card per plant (flower name, rarity, $/s, day/night bonus, no Kg) with a Remove that asks once", function()
+	local a = string.find(HUD, "-- Plants panel (right side)", 1, true)
+	local b = string.find(HUD, "-- Trail Shop strip scrolling", 1, true)
+	local block = a and b and string.sub(HUD, a, b) or ""
+	H.ok(block ~= "", "the Plants panel block")
+	H.ok(string.find(block, "remotes:WaitForChild(\"RemovePlant\")", 1, true) and string.find(block, "RemovePlant:FireServer(slot)", 1, true), "Remove asks the server")
+	H.ok(string.find(block, "local SURE_SECONDS = 2", 1, true) and string.find(block, "\"Sure?\"", 1, true), "\"Sure?\" for 2 s first")
+	H.ok(string.find(block, "remove = chunky(f, \"Remove\"", 1, true), "a chunky (Shop-style) button on every card")
+	H.ok(string.find(block, "p.name or SeedPacks.seedName", 1, true), "the plant's flower name")
+	H.ok(string.find(block, "Config.bonusLabel(", 1, true) and not string.find(block, "Format.weight(", 1, true), "the day/night bonus, and no Kg")
+	H.ok(string.find(block, "accent = if mut then mut.color else rarity.color", 1, true), "a rarity (or mutation) accent")
+	H.ok(string.find(block, "`🪴 Plants {#plants}/{stats.slots} · {Format.money(stats.income)}/s`", 1, true), "\"Plants 1/5 · $5/s\"")
+	H.ok(string.find(block, "if not full and signature == shown then", 1, true), "a payout updates the cards in place (no rebuild under the cursor)")
+	H.ok(not string.find(HUD, "R on a plant", 1, true), "no mention of the old R-key remove")
+end)
+
+H.test("HUD: more room between Shop, Index and Slow Mode", function()
+	local gap = tonumber(string.match(HUD, "local LEFT_GAP = (%d+)"))
+	H.ok(gap and gap >= 16, "a gap of 16+ design pixels")
+	local column = string.match(HUD, "local leftColumn = new%(\"Frame\", %b{}, (%b{})")
+	H.ok(column and string.find(column, "Padding = UDim.new(0, LEFT_GAP)", 1, true), "the column's layout uses it")
+	H.ok(string.find(HUD, "LEFT_H = 100, 74 * 2 + 30 + 2 * LEFT_GAP", 1, true), "and the column's height counts it")
+end)
+
+H.test("HUD Sell window: mutation only on mutated plants, no \"no mutation\", no emoji; flower names on the cards", function()
+	local a = string.find(HUD, "-- SELL window", 1, true)
+	local b = string.find(HUD, "end of SELL", 1, true)
+	local block = a and b and string.gsub(string.sub(HUD, a, b), "\r", "") or ""
+	H.ok(block ~= "", "the Sell block")
+	H.ok(not string.find(block, "\"no mutation\"", 1, true), "nothing on a plant without a mutation")
+	H.ok(string.find(block, "if mut then\n\t\t\tbold(c, 2, { Text = mut.id", 1, true), "the mutation's name in its colour on a mutated one")
+	H.ok(string.find(block, "\"Quick sells skip mutated plants.\"", 1, true), "the short quick-sell note")
+	H.ok(string.find(block, "p.name or SeedPacks.seedName", 1, true), "the plant's flower name")
+end)
+
+H.test("HUD Index: zone names as row titles (no emoji), a cell per flower from the server's catalog", function()
+	local a = string.find(HUD, "local function renderIndex()", 1, true)
+	local b = string.find(HUD, "-- SELL window", 1, true)
+	local block = a and b and string.sub(HUD, a, b) or ""
+	H.ok(string.find(block, "local title = zone.name", 1, true), "the row title is the zone's name")
+	H.ok(string.find(block, "stats.catalog", 1, true) and string.find(block, "`{k}:{r}:{model}`", 1, true), "a cell per flower, lit by its Index key")
+	H.ok(string.find(block, "Format.plantName(model)", 1, true), "named like the plants")
+end)
+
+H.test("Trail Shop: the R$ price button is the Shop's bright green", function()
+	local a = string.find(HUD, "local function trailCard", 1, true)
+	local b = string.find(HUD, "function renderTrails()", 1, true)
+	local block = a and b and string.sub(HUD, a, b) or ""
+	H.ok(string.find(block, "robuxColor(product.id, ROBUX_GREEN)", 1, true), "green")
+	H.ok(not string.find(HUD, "COLORS.robux", 1, true), "no purple R$ left")
+end)
+
+-- Emoji: the owner keeps only the window / panel header icons, the HUD's icon buttons and the lock. Every
+-- other emoji in the UI's text is gone (where one meant something, words or colour say it now).
+do
+	local function isEmoji(c: number): boolean
+		return (c >= 0x2300 and c <= 0x23FF) or (c >= 0x2600 and c <= 0x27BF) or (c >= 0x2B00 and c <= 0x2BFF) or (c >= 0x1F000 and c <= 0x1FAFF)
+	end
+	-- Per file: the code (Lua patterns on the line) where an icon may stand in its emoji.
+	local ALLOWED: { [string]: { string } } = {
+		["src/client/HUD.client.luau"] = {
+			"^%s*iconLabel%(statsFrame", "^sideButton%(", "button%(hotbar", "Icons%.set%(sideTitle", "^for _, tab in", "Icons%.set%(modalSubtitle",
+			"chunky%(parent, \"🎁\"", "Text = \"🏃\"",
+		},
+		["src/client/Rewards.client.luau"] = { "iconLabel%(" },
+		["src/client/ZoneBanner.client.luau"] = { "face = \"" }, -- the zone banner's faces (owner-approved design)
+		["src/client/DayTimer.client.luau"] = { "emoji%(" }, -- the timer's phase icon
+		["src/client/Planting.client.luau"] = { "cancel%.Text = \"✖\"" }, -- the cancel button's X
+	}
+
+	H.test("UI text has no decorative emoji (header icons, icon buttons and the lock 🔒 only)", function()
+		for file, allowed in ALLOWED do
+			local source = string.gsub(fs.readFile(file), "\r", "")
+			local n = 0
+			for _, line in string.split(source, "\n") do
+				n += 1
+				if string.match(line, "^%s*%-%-") then
+					continue -- a comment
+				end
+				local code = string.gsub(line, "%s%-%-%s[^\"`]*$", "") -- a trailing comment
+				local found = {}
+				for _, c in utf8.codes(code) do
+					if isEmoji(c) and utf8.char(c) ~= "🔒" then
+						table.insert(found, utf8.char(c))
+					end
+				end
+				if #found > 0 then
+					local ok = false
+					for _, pattern in allowed do
+						ok = ok or string.find(code, pattern) ~= nil
+					end
+					H.ok(ok, `{file}:{n}: emoji {table.concat(found, " ")} in "{string.match(code, "^%s*(.-)%s*$")}"`)
+				end
+			end
+		end
+		-- emoji that come from data: the zones' icons and the day/night icons stay out of the UI's text
+		for _, file in { "src/client/HUD.client.luau", "src/client/Rewards.client.luau", "src/client/Planting.client.luau" } do
+			local source = fs.readFile(file)
+			H.ok(not string.find(source, "zone.icon", 1, true) and not string.find(source, ".icon}", 1, true), `{file}: no zone icons in text`)
+			H.ok(not string.find(source, "ACTIVE_ICONS", 1, true), `{file}: no day/night icons in text`)
+		end
+		-- the server's texts (toasts, announcements) show in words too: the toast drops emoji but the lock
+		H.ok(string.find(HUD, "return if emoji and ch ~= \"🔒\" then \"\" else nil", 1, true) ~= nil, "toasts drop emoji")
+	end)
+end
 
 ----------------------------------------------------------------------------------------------------
 -- The day/night timer (DayTimer.client) and the shared UI juice (Shared/UiFx)

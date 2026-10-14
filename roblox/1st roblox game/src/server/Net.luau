@@ -1,9 +1,12 @@
--- The fixed remote contract. Pickup and removing go through ProximityPrompts.
+-- The fixed remote contract. Pickup goes through ProximityPrompts.
 --   client -> server: RequestBuy(itemId), RequestUseItem(itemId)
 --     RequestBuy ids: "PlotUpgrade", "TreadmillUpgrade" and "Trail:<id>" (money), "Product:<name>"
 --       (developer products, Robux), "Pass:<name>" (gamepasses)
 --     RequestUseItem ids: "Bat", "Seed:<bagKey>" (plant from the seed bag), "Equip:<trailId>"
 --   client -> server: SellPlants(slots) (a list of plant slots, sold at the SELL stall; PlotService checks)
+--   client -> server: RemovePlant(slot) (the HUD Plants panel's Remove button: one of your own plants, from
+--     anywhere, for a small refund; PlotService.removePlant rate-limits it, Selling.remove checks it)
+--   server -> client: StatsUpdate "catalog" (catalog[zone][rarity] = the flower model names the Index lists)
 --   client -> server: PlantSeed(position, bagKey?) (plant the carried seed, or a bagged one, on your own dirt
 --     bed at `position`, from the planting preview; PlotService.plantAt checks it all)
 --   server -> client: LootEvent "PlaceSeed" { key, zone, rarity, name } (the Seeds menu's Plant button: show the
@@ -27,6 +30,7 @@ local Net = {
 	RequestBuy = remote("RequestBuy"),
 	RequestUseItem = remote("RequestUseItem"),
 	SellPlants = remote("SellPlants"),
+	RemovePlant = remote("RemovePlant"),
 	PlantSeed = remote("PlantSeed"),
 	ClaimReward = remote("ClaimReward"),
 	StatsUpdate = remote("StatsUpdate"),

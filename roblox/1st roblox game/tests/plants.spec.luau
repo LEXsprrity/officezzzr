@@ -88,6 +88,39 @@ H.test("plants: each fits its rarity's footprint and height (so Planting's spaci
 	end
 end)
 
+H.test("plants: each plant is named after its flower: CreatureModels.variantOf is the model build picks", function()
+	local Format = H.shared("Format")
+	for k = 1, #Config.ZONES do
+		for r = 1, #Config.RARITIES do
+			local list = variants(k, r)
+			local names = CreatureModels.variants(k, r)
+			local label = `{Config.ZONES[k].id} {Config.RARITIES[r].id}`
+			H.eq(#names, #list, label .. ": the Index lists every model")
+			for i, source in list do
+				H.eq(names[i], source.Name, `{label}: catalog order`)
+				H.eq(CreatureModels.variantOf(k, r, i), source.Name, `{label}: plant id {i}`)
+				H.eq(CreatureModels.variantOf(k, r, i + #list), source.Name, `{label}: ids wrap like build`)
+				H.ok(#`{k}:{r}:{source.Name}` < 40, `{label} {source.Name}: its Index key fits a save (< 40 chars)`)
+			end
+		end
+	end
+	H.eq(Format.plantName("Daisy"), "Daisy")
+	H.eq(Format.plantName("DesertWildFlower"), "Desert Wild Flower")
+	H.eq(Format.plantName("LaVaca"), "La Vaca")
+	H.eq(Format.plantName("SixSeven"), "Six Seven")
+end)
+
+H.test("plants: the server names plants by flower everywhere and fills the Index per flower (saves stay compatible)", function()
+	local fs = require("@lune/fs")
+	local plot = fs.readFile("src/server/PlotService.luau")
+	H.ok(string.find(plot, "line(\"Name\", PlotService.plantName(plant)", 1, true) ~= nil, "the billboard")
+	H.ok(string.find(plot, "name = PlotService.plantName(plant), --", 1, true) ~= nil, "the plants view (Plants panel, Sell cards)")
+	H.ok(string.find(plot, "`{plant.zone}:{plant.rarity}:{variant}`", 1, true) ~= nil, "an Index key per flower")
+	H.ok(string.find(plot, "`{plant.zone}:{plant.rarity}`", 1, true) ~= nil, "the old zone:rarity key is still set")
+	H.ok(string.find(plot, "discover(s.profile, plant) -- saves from before", 1, true) ~= nil, "old saves: planted flowers count")
+	H.ok(string.find(plot, "Sessions.push(s.player, { catalog = catalog() })", 1, true) ~= nil, "the client gets the flower catalog")
+end)
+
 H.test("plants: the swords (katanas) are Legendary and only in the Spirit Garden", function()
 	local swords = {}
 	for k = 1, #Config.ZONES do
