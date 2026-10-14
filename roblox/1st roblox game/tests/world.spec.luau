@@ -88,7 +88,7 @@ H.test("world: plot layout contract (two dirt beds, a grass path, origin, spawn,
 		H.eq(plot.model.PrimaryPart.Name, "Floor")
 		H.ok(plot.soil:IsA("Folder") and plot.plants:IsA("Folder"), "soil/plants folders")
 		H.ok(plot.signLabel:IsA("TextLabel"), "sign label")
-		H.ok(plot.treadmillLabel:IsA("TextLabel"), "treadmill sign label")
+		H.ok(plot.model:FindFirstChild("TreadmillSign", true) == nil, "no \"TREADMILL\" sign over the treadmill")
 	end
 end)
 

@@ -30,7 +30,6 @@ export type PlotInfo = {
 	beds: { BasePart }, -- the dirt beds players plant on (Role "PlantBed")
 	spawnCFrame: CFrame,
 	belt: BasePart,
-	treadmillLabel: TextLabel, -- the sign over the belt
 	soil: Folder,
 	plants: Folder,
 	upgradeBoard: BasePart, -- the "Upgrade" sign at the gate; PlotService adds its prompts and text
@@ -324,10 +323,6 @@ end
 ----------------------------------------------------------------------------------------------------
 -- Plots
 ----------------------------------------------------------------------------------------------------
-local PLOT_COLORS = {
-	Color3.fromRGB(255, 96, 96), Color3.fromRGB(80, 150, 255), Color3.fromRGB(255, 200, 50), Color3.fromRGB(160, 100, 255),
-	Color3.fromRGB(60, 215, 140), Color3.fromRGB(255, 120, 200), Color3.fromRGB(255, 145, 50), Color3.fromRGB(70, 210, 225),
-}
 
 local PLOT_OPENING = 16 -- the gap in the plot's front fence, around the 14-stud path
 local BED_TILES = Vector2.new(3, 8) -- light checker tiles across x along each dirt bed
@@ -388,7 +383,6 @@ local function buildPlot(world: Folder, index: number, posts: { [string]: boolea
 	model.Name = "Plot" .. index
 	model.ModelStreamingMode = Enum.ModelStreamingMode.Atomic
 	model.Parent = world
-	local color = PLOT_COLORS[index]
 
 	-- Grass floor one stud up. It carries the plot's origin (Shared/Planting keeps plants in its space) and
 	-- the spawn point (tagged Attachments), so they follow it when it is moved.
@@ -481,11 +475,7 @@ local function buildPlot(world: Folder, index: number, posts: { [string]: boolea
 		end
 		box(into, "TreadmillStop", Vector3.new(tm.wide, 2.6, 0.65), beltCF * CFrame.new(0, 0.8, tm.len / 2 + 0.35), red)
 	end, Vector3.new(1, 6, 1))
-	local tmSignPart = tag(box(model, "TreadmillSign", Vector3.new(1, 1, 1), beltCF + Vector3.new(0, 8, 0), color), "TreadmillSign", "PlotIndex", index)
-	tmSignPart.Transparency = 1
-	tmSignPart.CanCollide = false
-	-- The old sign; TreadmillBoard switches it off for its board and "+X/s" text.
-	billboard(tmSignPart, "🏃 TREADMILL", UDim2.fromScale(10, 3.6), Vector3.zero, 60)
+	-- (no big TREADMILL sign over it: TreadmillBoard's small "+X/s" text, seen up close, is all it shows)
 
 	-- "Upgrade" board just outside the fence, on the other side of the path from the treadmill: a chunky dark
 	-- navy sign on a short post, with "Level X > Level Y" and two buttons, a red one with the money price and
@@ -1022,7 +1012,6 @@ function WorldBuilder.adopt(world: Instance): ({ PlotInfo }?, { NestInfo }?, { s
 		local floor = need(scope, "PlotFloor", "BasePart", "the plot floor")
 		local belt = need(scope, "TreadmillBelt", "BasePart", "the treadmill belt")
 		local signPart = need(scope, "PlotSign", "BasePart", "the owner's sign by the entrance")
-		local tmSign = need(scope, "TreadmillSign", "BasePart", "the treadmill sign")
 		local board = need(scope, "UpgradeBoard", "BasePart", "the Upgrade Plot board")
 		local spawn = need(scope, "Spawn", "Attachment", "the spawn point")
 		local originMark = need(scope, "PlotOrigin", "Attachment", "the plot's origin (where plants are measured from)")
@@ -1037,12 +1026,8 @@ function WorldBuilder.adopt(world: Instance): ({ PlotInfo }?, { NestInfo }?, { s
 			extra += 1
 		end
 		local signLabel = signPart and findLabel(signPart)
-		local tmLabel = tmSign and findLabel(tmSign)
 		if signPart and not signLabel then
 			table.insert(problems, `{scope}: the name sign {signPart:GetFullName()} has no TextLabel`)
-		end
-		if tmSign and not tmLabel then
-			table.insert(problems, `{scope}: the treadmill sign {tmSign:GetFullName()} has no TextLabel`)
 		end
 		local labels: { [string]: any } = {}
 		for key, name in { level = "Level", cash = "Cash", robux = "Robux" } do
@@ -1053,7 +1038,7 @@ function WorldBuilder.adopt(world: Instance): ({ PlotInfo }?, { NestInfo }?, { s
 		end
 		local buttons = board and board:FindFirstChild("Buttons", true)
 		labels.buttons = if buttons and buttons:IsA("GuiObject") then buttons else nil
-		if not (model and floor and originMark and beds[1] and beds[2] and belt and signLabel and tmLabel and board and spawn and labels.level and labels.cash and labels.robux) then
+		if not (model and floor and originMark and beds[1] and beds[2] and belt and signLabel and board and spawn and labels.level and labels.cash and labels.robux) then
 			continue
 		end
 		-- The plants and soil folders are rebuilt at runtime, so they are made if missing.
@@ -1076,7 +1061,6 @@ function WorldBuilder.adopt(world: Instance): ({ PlotInfo }?, { NestInfo }?, { s
 			beds = beds,
 			spawnCFrame = worldCFrame(spawn),
 			belt = belt,
-			treadmillLabel = tmLabel,
 			soil = folder("Soil"),
 			plants = folder("Plants"),
 			upgradeBoard = board,
@@ -1226,7 +1210,6 @@ WorldBuilder.SIGN_ICONS = {
 	["🏃 TRAIL SHOP"] = "TrailShop",
 	["📖 INDEX"] = "Index",
 	["🏠 Empty Plot"] = "Home",
-	["🏃 TREADMILL"] = "Treadmill",
 } :: { [string]: string }
 
 -- Writes a plot's Upgrade board. `level` is the owner's plot level (nil: nobody owns the plot) and `robux`

@@ -786,7 +786,7 @@ function PlotService.init(infos: { WorldBuilder.PlotInfo }, stalls: { BasePart }
 	for i, info in infos do
 		local state: PlotState = {
 			info = info,
-			treadmill = TreadmillBoard.build(info.model, info.belt, info.center, info.treadmillLabel),
+			treadmill = TreadmillBoard.build(info.model, info.belt, info.center),
 			owner = nil,
 			models = {},
 			scales = {},

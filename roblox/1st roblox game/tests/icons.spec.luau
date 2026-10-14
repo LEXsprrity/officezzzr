@@ -207,7 +207,7 @@ H.test("icons: Icons.set lays out ImageLabels (Fit, square) and styled text, and
 	end)
 end)
 
-H.test("icons: world signs get their icons at runtime (stalls, Upgrade boards, plot and treadmill signs)", function()
+H.test("icons: world signs get their icons at runtime (stalls, Upgrade boards, plot signs)", function()
 	local all = {}
 	for _, key in KEYS do
 		all[key] = 1000 + #key
@@ -215,7 +215,7 @@ H.test("icons: world signs get their icons at runtime (stalls, Upgrade boards, p
 	withIds(all, function()
 		local world = roblox.deserializeModel(fs.readFile("map/World.rbxm"))[1]
 		local count = WorldBuilder.applyIcons(world)
-		H.ok(count >= 3 + 2 * Config.MAX_PLAYERS, `{count} signs got icons`)
+		H.ok(count >= 3 + Config.MAX_PLAYERS, `{count} signs got icons`) -- (no treadmill sign any more)
 		-- The Upgrade boards are written by PlotService (WorldBuilder.setUpgradeBoard): the PlotUpgrade icon
 		-- on the red button, the Robux icon on the purple one.
 		local plots = WorldBuilder.adopt(world)
@@ -234,7 +234,7 @@ H.test("icons: world signs get their icons at runtime (stalls, Upgrade boards, p
 		H.eq(seen.PlotUpgrade, Config.MAX_PLAYERS, "Upgrade boards: red button")
 		H.eq(seen.Robux, Config.MAX_PLAYERS, "Upgrade boards: purple button")
 		H.eq(seen.Home, Config.MAX_PLAYERS, "plot signs")
-		H.eq(seen.Treadmill, Config.MAX_PLAYERS, "treadmill signs")
+		H.eq(seen.Treadmill, nil, "no treadmill sign (owner playtest: removed)")
 	end)
 end)
 

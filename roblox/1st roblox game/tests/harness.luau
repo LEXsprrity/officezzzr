@@ -190,6 +190,16 @@ function Harness.server(name: string): any
 	return requireModule(serverNode.__children[name])
 end
 
+-- Stands `value` in for the server module `name` (before anything requires it), e.g. Net, whose remotes
+-- can't be parented to the mocked ReplicatedStorage. Keeps the first stand-in if called again.
+function Harness.stubServer(name: string, value: any): any
+	local file = rawget(serverNode.__children[name], "__file")
+	if cache[file] == nil then
+		cache[file] = value
+	end
+	return cache[file]
+end
+
 Harness.Vector3 = roblox.Vector3
 
 -- Runs `fn` with the assets whose names start with `prefix` set aside (e.g. "Creature_": the built-in

@@ -43,7 +43,7 @@ H.test("map: map/World.rbxm loads, has every required piece and gives usable plo
 		local top = plot.belt.CFrame * CFrame.new(0, plot.belt.Size.Y / 2 + 3, 0)
 		H.ok(WorldBuilder.onBelt(plot.belt, top.Position), `plot {i}: standing on the belt counts`)
 		H.ok(not WorldBuilder.onBelt(plot.belt, (plot.belt.CFrame * CFrame.new(0, plot.belt.Size.Y / 2 + 3, plot.belt.Size.Z)).Position), `plot {i}: past its end doesn't`)
-		H.ok(plot.signLabel:IsA("TextLabel") and plot.treadmillLabel:IsA("TextLabel"), `plot {i} labels`)
+		H.ok(plot.signLabel:IsA("TextLabel"), `plot {i} labels`)
 		H.ok(plot.upgradeLabels.level and plot.upgradeLabels.cash and plot.upgradeLabels.robux and plot.upgradeLabels.buttons, `plot {i} board labels`)
 		H.ok(plot.soil:IsA("Folder") and plot.plants:IsA("Folder"), `plot {i} folders`)
 	end

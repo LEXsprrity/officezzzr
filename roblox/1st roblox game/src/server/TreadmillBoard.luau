@@ -2,7 +2,7 @@
 -- treadmill wherever it is moved): an "Upgrade" board beside it, facing the walkway like the runner (a
 -- chunky dark navy sign on a post, like the plot's Upgrade board: "Level X > Level Y", a red button with the
 -- money price and a purple one with the Robux price) and a small "+X/s" text floating over the belt's front
--- end, seen only up close. The map's old "TREADMILL" billboard is switched off. PlotService writes them and owns the board's buttons (click/tap and E/F).
+-- end, seen only up close. An old map's "TREADMILL" sign is removed (there is none any more). PlotService writes them and owns the board's buttons (click/tap and E/F).
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Shared = ReplicatedStorage:WaitForChild("Shared")
 local Format = require(Shared:WaitForChild("Format"))
@@ -184,11 +184,17 @@ function TreadmillBoard.placement(model: Model, belt: BasePart, center: Vector3)
 end
 
 -- Builds the board and the "+X/s" text for one plot (`model` the plot Model, `center` its centre),
--- and switches off the map's "TREADMILL" billboard (`oldLabel`, the label WorldBuilder made over the belt).
-function TreadmillBoard.build(model: Model, belt: BasePart, center: Vector3, oldLabel: TextLabel?): Board
-	local old = oldLabel and oldLabel:FindFirstAncestorWhichIsA("BillboardGui")
-	if old then
-		old.Enabled = false
+-- and removes the big "TREADMILL" sign an older map has over the belt (a part with Role "TreadmillSign";
+-- owner playtest: only the small "+X/s" text stays).
+function TreadmillBoard.build(model: Model, belt: BasePart, center: Vector3): Board
+	local signs = {}
+	for _, d in model:GetDescendants() do
+		if d:GetAttribute("Role") == "TreadmillSign" then
+			table.insert(signs, d)
+		end
+	end
+	for _, sign in signs do
+		sign:Destroy()
 	end
 	local oldBoard, oldAnchor = model:FindFirstChild("TreadmillBoard"), belt:FindFirstChild("StepTextAnchor")
 	if oldBoard then
