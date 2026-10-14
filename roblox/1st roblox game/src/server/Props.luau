@@ -134,6 +134,67 @@ function Props.flat(parent: Instance, name: string, sizeX: number, sizeZ: number
 	return p
 end
 
+----------------------------------------------------------------------------------------------------
+-- Level ground (owner playtest: steps and z-fighting between floor pieces). Every walkable surface of the
+-- map (lawn, walkway, paths, plot ground, beds, entrance tiles, plaza, zone floors) has its top at the
+-- ground level, and its pieces TILE: they meet edge to edge, never overlapping on the same plane. A
+-- checker is both colours as separate tiles side by side (not light tiles laid over a dark floor), on a
+-- slab sunk TILE_THICKNESS below the ground level.
+----------------------------------------------------------------------------------------------------
+Props.TILE_THICKNESS = 0.2
+
+export type Rect = { number } -- { x0, x1, z0, z1 } in world studs, axis-aligned
+
+-- What is left of rectangle `r` once every rectangle in `holes` is cut out of it: a few rectangles that
+-- tile the rest exactly (none overlapping).
+function Props.subtract(r: Rect, holes: { Rect }): { Rect }
+	local eps = 1e-3
+	local pieces = { r }
+	for _, h in holes do
+		local nextPieces = {}
+		for _, p in pieces do
+			if h[1] < p[2] - eps and h[2] > p[1] + eps and h[3] < p[4] - eps and h[4] > p[3] + eps then
+				local mx0, mx1 = math.max(p[1], h[1]), math.min(p[2], h[2])
+				for _, q in { { p[1], h[1], p[3], p[4] }, { h[2], p[2], p[3], p[4] }, { mx0, mx1, p[3], h[3] }, { mx0, mx1, h[4], p[4] } } do
+					if q[2] - q[1] > eps and q[4] - q[3] > eps then
+						table.insert(nextPieces, q)
+					end
+				end
+			else
+				table.insert(nextPieces, p)
+			end
+		end
+		pieces = nextPieces
+	end
+	return pieces
+end
+
+-- A solid floor tile over rectangle `r`, its top at `top`, TILE_THICKNESS thick (or `thickness`).
+function Props.tile(parent: Instance, name: string, r: Rect, top: number, color: Color3, thickness: number?): Part
+	local t = thickness or Props.TILE_THICKNESS
+	local p = Props.box(parent, name, Vector3.new(r[2] - r[1], t, r[4] - r[3]), CFrame.new((r[1] + r[2]) / 2, top - t / 2, (r[3] + r[4]) / 2), color)
+	Props.studs(p)
+	p.CastShadow = false
+	return p
+end
+
+-- A level checker over rectangle `r`: cells `cellX` x `cellZ` studs counted from its -X/-Z corner,
+-- `light` where (column + row) is even and `dark` where it is odd, each a solid studded tile with its top
+-- at `top`. Whatever lies in `holes` is left out (cells there are cut to fit around it). Returns the tiles.
+function Props.checker(parent: Instance, name: string, r: Rect, cellX: number, cellZ: number, top: number,
+	light: Color3, dark: Color3, holes: { Rect }?): { Part }
+	local out = {}
+	for i = 0, math.ceil((r[2] - r[1]) / cellX - 1e-6) - 1 do
+		for j = 0, math.ceil((r[4] - r[3]) / cellZ - 1e-6) - 1 do
+			local cell = { r[1] + i * cellX, math.min(r[1] + (i + 1) * cellX, r[2]), r[3] + j * cellZ, math.min(r[3] + (j + 1) * cellZ, r[4]) }
+			for _, piece in Props.subtract(cell, holes or {}) do
+				table.insert(out, Props.tile(parent, name, piece, top, if (i + j) % 2 == 0 then light else dark))
+			end
+		end
+	end
+	return out
+end
+
 -- Flat round overlay (puddles, rugs, craters).
 function Props.disc(parent: Instance, name: string, diameter: number, pos: Vector3, color: Color3, material: Enum.Material?, thickness: number?): Part
 	local t = thickness or 0.2

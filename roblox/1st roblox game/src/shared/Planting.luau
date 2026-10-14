@@ -132,7 +132,7 @@ end
 -- The default layout (WorldBuilder builds it; old saves and auto-placing use it)
 ----------------------------------------------------------------------------------------------------
 -- The two beds in the plot's space: one each side of the grass path, from the path out to BED_FENCE_GAP
--- off the fence, front to back. Each is { center, size }; its top is BED_HEIGHT over the floor.
+-- off the fence, front to back. Each is { center, size }; its top is level with the plot's ground (the origin), BED_HEIGHT deep.
 function Planting.defaultBeds(): { { center: Vector3, size: Vector3 } }
 	local inner = Config.PLOT_PATH_WIDTH / 2
 	local outer = Config.PLOT_SIZE / 2 - Config.BED_FENCE_GAP
@@ -140,7 +140,7 @@ function Planting.defaultBeds(): { { center: Vector3, size: Vector3 } }
 	local list = {}
 	for _, s in { -1, 1 } do
 		table.insert(list, {
-			center = Vector3.new(s * (inner + outer) / 2, Config.BED_HEIGHT / 2, 0),
+			center = Vector3.new(s * (inner + outer) / 2, -Config.BED_HEIGHT / 2, 0), -- its top level with the ground
 			size = Vector3.new(outer - inner, Config.BED_HEIGHT, depth),
 		})
 	end

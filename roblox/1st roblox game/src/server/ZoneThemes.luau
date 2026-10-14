@@ -74,24 +74,16 @@ local function at(c: Ctx, f: number): number
 	return c.x0 + c.len * f
 end
 
--- The studded floor in the zone's colour with a big checker of the lighter tone over it.
+-- The studded floor: a big checker of the zone's colour and its lighter tone, every tile level with the
+-- ground and side by side (Props.checker; owner playtest: no steps, no z-fighting), on a slab sunk under it.
 local function floor(c: Ctx)
 	local zone = Config.ZONES[c.k]
-	studs(box(c.folder, "Floor", Vector3.new(c.len, 4, W), CFrame.new(c.x0 + c.len / 2, GROUND - 2, 0), zone.floor))
-	local light = theme(c).floorLight
-	for i = 0, math.ceil(c.len / FLOOR_TILE) - 1 do
-		local ax, bx = c.x0 + i * FLOOR_TILE, math.min(c.x0 + (i + 1) * FLOOR_TILE, c.x1)
-		for j = 0, 5 do
-			if (i + j) % 2 == 0 then
-				local z = -HALF_W + (j + 0.5) * FLOOR_TILE
-				studs(flat(c.folder, "FloorTile", bx - ax, FLOOR_TILE, Vector3.new((ax + bx) / 2, GROUND, z), light, nil, nil, 0.1))
-			end
-		end
-	end
+	studs(box(c.folder, "Floor", Vector3.new(c.len, 4, W), CFrame.new(c.x0 + c.len / 2, GROUND - Props.TILE_THICKNESS - 2, 0), zone.floor))
 	-- A soft border where the zone begins: a strip a shade lighter than its floor, flat and studded like
-	-- the rest (no glow). That and the new colours are the only thing marking a zone change.
-	studs(flat(c.folder, "ZoneEdge", ZoneThemes.EDGE_WIDTH, W, Vector3.new(c.x0 + ZoneThemes.EDGE_WIDTH / 2, GROUND, 0),
-		zone.floor:Lerp(Color3.new(1, 1, 1), ZoneThemes.EDGE_LIGHTEN), nil, nil, 0.15))
+	-- the rest (no glow), level with it. That and the new colours are the only thing marking a zone change.
+	local edge = { c.x0, c.x0 + ZoneThemes.EDGE_WIDTH, -HALF_W, HALF_W }
+	Props.tile(c.folder, "ZoneEdge", edge, GROUND, zone.floor:Lerp(Color3.new(1, 1, 1), ZoneThemes.EDGE_LIGHTEN))
+	Props.checker(c.folder, "FloorTile", { c.x0, c.x1, -HALF_W, HALF_W }, FLOOR_TILE, FLOOR_TILE, GROUND, theme(c).floorLight, zone.floor, { edge })
 end
 
 -- A flat wall from x0 to x1 on side `s` (its inner face at z = s * HALF_W): studded plastic in the zone's
@@ -156,7 +148,7 @@ local LILY = rgb(74, 172, 72)
 local REED = rgb(66, 168, 58)
 local POND_CELL = 5 -- the checker's cell, about
 ZoneThemes.POND_SINK = 0.4 -- the water's surface, this far below the floor
-local POND_WATER = 0.3 -- water slab thickness (its checker tiles stand 0.05 prouder)
+local POND_WATER = 0.3 -- the water tiles' thickness (both blues level, side by side)
 local CUT = { Floor = true, FloorTile = true, ZoneEdge = true } -- what a pond cuts its hole into
 
 -- Cuts the rectangle (x0..x1, z0..z1) out of every floor part in F (the floor, its checker and the zone
@@ -203,7 +195,7 @@ local function pond(F: Instance, p: Vector3, d: number, pads: number?)
 		end
 	end
 	local bedTop = p.Y - ZoneThemes.POND_SINK - POND_WATER
-	local surface = p.Y - ZoneThemes.POND_SINK + 0.05 -- the water's top (its light tiles)
+	local surface = p.Y - ZoneThemes.POND_SINK -- the water's top
 	local n = math.max(3, math.round(d / POND_CELL)) -- cells across X
 	local cell = d / n
 	local rows = math.max(3, math.round(n * 0.75))
@@ -216,11 +208,11 @@ local function pond(F: Instance, p: Vector3, d: number, pads: number?)
 		local z = p.Z + (r - (rows - 1) / 2) * cell
 		local x0, x1 = p.X + (a - n / 2) * cell, p.X + (b + 1 - n / 2) * cell
 		cutFloor(floorParts, x0, x1, z - cell / 2, z + cell / 2)
-		studs(flat(F, "Pond", x1 - x0, cell, Vector3.new((x0 + x1) / 2, bedTop, z), WATER, nil, nil, POND_WATER))
+		-- the water's checker: both blues side by side, all level (the darker cells are "Pond")
 		for col = a, b do
-			if (col + r) % 2 == 0 then
-				studs(flat(F, "PondTile", cell, cell, Vector3.new(p.X + (col + 0.5 - n / 2) * cell, bedTop, z), WATER_LIGHT, nil, nil, POND_WATER + 0.05))
-			end
+			local light = (col + r) % 2 == 0
+			studs(flat(F, if light then "PondTile" else "Pond", cell, cell, Vector3.new(p.X + (col + 0.5 - n / 2) * cell, bedTop, z),
+				if light then WATER_LIGHT else WATER, nil, nil, POND_WATER))
 		end
 	end
 	local depth = rows * cell
@@ -230,7 +222,7 @@ local function pond(F: Instance, p: Vector3, d: number, pads: number?)
 	for i = 1, pads or 0 do
 		local a = i * 2.4
 		local size = if i == 1 then math.min(7, d * 0.24) else math.min(4.5, d * 0.16)
-		local center = Vector3.new(p.X + math.cos(a) * d * 0.22, surface + 0.02, p.Z + math.sin(a) * depth * 0.2) -- floating on the water
+		local center = Vector3.new(p.X + math.cos(a) * d * 0.22, surface + 0.02 + i * 0.03, p.Z + math.sin(a) * depth * 0.2) -- floating on the water (each a little higher: overlapping pads mustn't z-fight)
 		studs(disc(F, "LilyPad", size, center, LILY, M.Plastic, 0.2))
 		-- the wedge cut: a water-coloured diamond with one corner at the pad's centre (a 90-degree notch)
 		local cut = size * 0.38
@@ -241,8 +233,8 @@ local function pond(F: Instance, p: Vector3, d: number, pads: number?)
 			WATER).CastShadow = false
 		if i == 1 then -- a pink flower with a yellow heart on the big pad
 			local top = center + Vector3.new(0, 0.35, 0)
-			for _, turn in { 0, math.pi / 2 } do
-				deco(F, "LilyPetal", Vector3.new(size * 0.34, 0.3, size * 0.12), CFrame.new(top) * CFrame.Angles(0, turn + 0.4, 0), rgb(255, 140, 200)).CastShadow = false
+			for k, turn in { 0, math.pi / 2 } do
+				deco(F, "LilyPetal", Vector3.new(size * 0.34, 0.3, size * 0.12), CFrame.new(top + Vector3.new(0, (k - 1) * 0.03, 0)) * CFrame.Angles(0, turn + 0.4, 0), rgb(255, 140, 200)).CastShadow = false
 			end
 			deco(F, "LilyHeart", Vector3.new(size * 0.12, 0.4, size * 0.12), CFrame.new(top + Vector3.new(0, 0.05, 0)) * CFrame.Angles(0, 0.4, 0), rgb(255, 222, 70)).CastShadow = false
 		end
@@ -508,8 +500,9 @@ local function buildLava(c: Ctx)
 		for i = 0, n - 1 do
 			local x = c.x0 + (i + 0.5) * c.len / n
 			local z = s * 80
-			flat(F, "RiverBank", c.len / n + 2, 14, Vector3.new(x, GROUND, z), rgb(56, 36, 44), M.SmoothPlastic, nil, 0.2)
-			local river = flat(F, "LavaRiver", c.len / n + 2, 9, Vector3.new(x, GROUND, z), LAVA, M.SmoothPlastic, nil, 0.3)
+			-- (end to end: the pieces mustn't overlap on the same plane, or they z-fight)
+			flat(F, "RiverBank", c.len / n, 14, Vector3.new(x, GROUND, z), rgb(56, 36, 44), M.SmoothPlastic, nil, 0.2)
+			local river = flat(F, "LavaRiver", c.len / n, 9, Vector3.new(x, GROUND, z), LAVA, M.SmoothPlastic, nil, 0.3)
 			if i % 3 == 0 then
 				embers(river)
 			end

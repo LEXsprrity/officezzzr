@@ -24,7 +24,7 @@ Config.WALKWAY_WIDTH = 36 -- the sand walkway down z = 0; the 24 studs between i
 -- from the entrance. Players plant anywhere on their own beds (Shared/Planting).
 Config.PLOT_PATH_WIDTH = 20 -- the grass path between the beds
 Config.BED_FENCE_GAP = 1.5 -- from a bed's outer edges to the fence line
-Config.BED_HEIGHT = 0.4 -- the beds stand this far above the plot's grass; plants stand on top
+Config.BED_HEIGHT = 0.4 -- the beds' depth: their tops are level with the plot's grass (owner: level ground); plants stand on top
 Config.SLOT_SPACING = 8 -- the default planting grid (old saves, auto-placing); creature sizes are budgeted against it
 Config.PLANT_BED_MARGIN = 2 -- a plant's centre stays at least this far inside its bed
 Config.PLANT_OVERLAP = 1 -- two full-grown neighbours may overlap this much (studs)
