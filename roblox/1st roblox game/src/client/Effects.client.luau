@@ -1,5 +1,6 @@
 -- Local-only effects: "+$1.2M" income popups, event sounds, camera shake, the treadmill belt scroll,
--- rainbow mutations, hiding other players' plot prompts, and the treadmill lock, sprint and Speed popups.
+-- rainbow mutations, hiding other players' plot prompts, the Upgrade boards' button pops, and the treadmill
+-- lock, sprint and Speed popups and the invisible walls that keep you off other players' treadmills.
 -- Nothing here affects game state.
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -13,6 +14,7 @@ local Config = require(Shared:WaitForChild("Config"))
 local Format = require(Shared:WaitForChild("Format"))
 local Icons = require(Shared:WaitForChild("Icons"))
 local Treadmill = require(Shared:WaitForChild("Treadmill"))
+local UiFx = require(Shared:WaitForChild("UiFx"))
 
 local player = Players.LocalPlayer
 local remotes = ReplicatedStorage:WaitForChild("Remotes")
@@ -133,6 +135,43 @@ local belts: { [BasePart]: boolean? } = {} -- every plot's treadmill belt (Role 
 local myPlot: number? = nil
 local rainbows: { [BasePart]: boolean? } = {}
 
+-- Other players' treadmills: an invisible solid box over each belt that isn't ours (Treadmill.blockBox), made
+-- on this client only, so we can't step onto it. Our own belt stays open. It rides inside its belt, so it
+-- streams out with it.
+local blocks: { [BasePart]: BasePart } = {}
+local function syncBlock(belt: BasePart)
+	local block = blocks[belt] or belt:FindFirstChild("TreadmillBlock") :: BasePart? -- or a belt that streamed back in
+	if not belt.Parent or (myPlot ~= nil and belt:GetAttribute("PlotIndex") == myPlot) then
+		if block then
+			block:Destroy()
+		end
+		blocks[belt] = nil
+		return
+	end
+	local wall: BasePart = block or Instance.new("Part")
+	wall.Name = "TreadmillBlock"
+	wall.Anchored = true
+	wall.CanCollide = true
+	wall.CanTouch = false
+	wall.CastShadow = false
+	wall.Transparency = 1
+	local cf, size = Treadmill.blockBox(belt.CFrame, belt.Size)
+	wall.Size = size
+	wall.CFrame = cf
+	wall.Parent = belt
+	blocks[belt] = wall
+end
+
+local function setMyPlot(index: number?)
+	if index == myPlot then
+		return
+	end
+	myPlot = index
+	for belt in belts do
+		syncBlock(belt)
+	end
+end
+
 -- Plant-creatures (PlotService tags them with RestPivot and Scale) get an idle sway, see the end of the file.
 type Creature = {
 	rest: CFrame?,
@@ -171,6 +210,8 @@ end
 
 -- The Upgrade boards' painted buttons (PlotService): a ClickDetector on an invisible part over each, with
 -- its owner's OwnerUserId and its reach in "Reach". Only the owner can click or tap it (the server re-checks).
+-- The mouse keeps its normal arrow over it, and the painted button (the hit part's "Painted" value)
+-- inflates while the mouse is over it and squashes on a click, like the HUD's buttons.
 local function watchClick(detector: ClickDetector)
 	local function apply()
 		local owner = detector:GetAttribute("OwnerUserId")
@@ -181,6 +222,29 @@ local function watchClick(detector: ClickDetector)
 	end
 	apply()
 	detector:GetAttributeChangedSignal("OwnerUserId"):Connect(apply)
+	local function pop(how: "hover" | "rest" | "press")
+		local hit = detector.Parent
+		local painted = hit and hit:FindFirstChild("Painted")
+		local button = painted and painted:IsA("ObjectValue") and painted.Value
+		if button and button:IsA("GuiObject") then
+			UiFx.worldPop(button, how)
+		end
+	end
+	detector.MouseHoverEnter:Connect(function(who: Player)
+		if who == player then
+			pop("hover")
+		end
+	end)
+	detector.MouseHoverLeave:Connect(function(who: Player)
+		if who == player then
+			pop("rest")
+		end
+	end)
+	detector.MouseClick:Connect(function(who: Player)
+		if who == player then
+			pop("press")
+		end
+	end)
 end
 
 local function consider(inst: Instance)
@@ -192,11 +256,19 @@ local function consider(inst: Instance)
 		watchClick(inst)
 	elseif inst:IsA("BasePart") and inst:GetAttribute("Role") == "TreadmillBelt" then
 		belts[inst] = true
+		syncBlock(inst)
+		for _, property in { "CFrame", "Size" } do
+			inst:GetPropertyChangedSignal(property):Connect(function()
+				if belts[inst] then
+					syncBlock(inst)
+				end
+			end)
+		end
 	elseif inst:IsA("Model") and inst:GetAttribute("Role") == "Plot" then
 		local function owner()
 			local index = inst:GetAttribute("PlotIndex")
 			if inst:GetAttribute("OwnerUserId") == player.UserId and type(index) == "number" then
-				myPlot = index
+				setMyPlot(index)
 			end
 		end
 		owner()
@@ -239,7 +311,10 @@ workspace.DescendantRemoving:Connect(function(inst)
 		stripes[inst] = nil
 	elseif inst:IsA("BasePart") then
 		rainbows[inst] = nil
-		belts[inst] = nil
+		if belts[inst] then
+			belts[inst] = nil
+			blocks[inst] = nil -- its wall goes with it
+		end
 		local c = inst.Parent and creatures[inst.Parent :: Model]
 		if c then
 			c.dirty = true
@@ -386,18 +461,19 @@ end)
 ----------------------------------------------------------------------------------------------------
 -- Treadmill: step on your OWN plot's belt and you are locked on it (Shared/Treadmill.stepLock): the
 -- character is held in place (its root anchored on this client only, centred on the belt, facing the
--- front) and sprints in place (its own run animation from the Animate script, sped up), with a "+X" Speed
--- popup over it about every second. The only way off is jumping (Space / the mobile jump button), which
--- puts you just beside the belt; you can't be locked again for a moment. Dying, a respawn or the server
+-- front, the console: held there every frame with AutoRotate off) and sprints in place (its own run
+-- animation from the Animate script, sped up), with a "+X" Speed popup over it about every second. The
+-- only way off is jumping (Space / the mobile jump button), which puts you just beside the belt; you can't be locked again for a moment. Dying, a respawn or the server
 -- moving you off the belt just unlocks. The server sees a player standing still on their belt: the AFK
 -- treadmill gain, well inside the movement check. Other players' treadmills pay nothing (the server only
--- checks your plot's belt and toasts "This isn't your treadmill"), so they don't lock or animate.
+-- checks your plot's belt) and can't be stepped on (their invisible walls, above).
 ----------------------------------------------------------------------------------------------------
 local runTrack: AnimationTrack? = nil
 local runHumanoid: Humanoid? = nil
 local lock = Treadmill.newLock()
 local lockedBelt: BasePart? = nil
 local lockedRoot: BasePart? = nil
+local lockedHumanoid: Humanoid? = nil -- its AutoRotate is off while locked
 local jumpQueued = false
 local nextPopup = 0
 -- What the Speed popups need from the stats (StatsUpdate sends partial tables).
@@ -408,7 +484,7 @@ StatsUpdate.OnClientEvent:Connect(function(partial: { [string]: any })
 		return
 	end
 	if partial.plot ~= nil then
-		myPlot = if type(partial.plot) == "number" then partial.plot else nil
+		setMyPlot(if type(partial.plot) == "number" then partial.plot else nil)
 	end
 	for _, key in { "speed", "walkSpeed", "treadmillMult" } do
 		if type(partial[key]) == "number" then
@@ -460,7 +536,10 @@ local function release()
 	if lockedRoot and lockedRoot.Parent then
 		lockedRoot.Anchored = false
 	end
-	lockedRoot, lockedBelt = nil, nil
+	if lockedHumanoid and lockedHumanoid.Parent then
+		lockedHumanoid.AutoRotate = true
+	end
+	lockedRoot, lockedBelt, lockedHumanoid = nil, nil, nil
 end
 
 -- "[sneaker] +1.6K" over the character, floating up and fading: the Speed a second on the treadmill pays.
@@ -535,11 +614,20 @@ RunService.Heartbeat:Connect(function()
 	local action = Treadmill.stepLock(lock, { now = now, onOwnBelt = belt ~= nil, alive = alive, jumped = jumpQueued })
 	jumpQueued = false
 	if action == "lock" and root and belt then
-		lockedBelt, lockedRoot = belt, root
+		lockedBelt, lockedRoot, lockedHumanoid = belt, root, humanoid
+		if humanoid then
+			humanoid.AutoRotate = false -- the walking keys mustn't turn it away from the console
+		end
 		root.AssemblyLinearVelocity = Vector3.zero
 		root.CFrame = Treadmill.lockCFrame(belt.CFrame, belt.Size, root.Position)
 		root.Anchored = true
 		nextPopup = now + 0.5
+	elseif lock.mode == "locked" and root and belt and root == lockedRoot then
+		-- Still locked: keep it facing the console (nothing may turn it while it runs).
+		local held = Treadmill.lockCFrame(belt.CFrame, belt.Size, root.Position)
+		if root.CFrame.LookVector:Dot(held.LookVector) < 0.999 then
+			root.CFrame = held
+		end
 	elseif action == "exit" and root and lockedBelt then
 		local from = lockedBelt
 		release()

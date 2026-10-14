@@ -1,9 +1,8 @@
 -- Each plot's treadmill visuals, built at runtime around whatever belt the map has (so they follow the
--- treadmill wherever it is moved): an "Upgrade" board next to it, in line past its back end (a chunky dark
--- navy sign on a post, like the plot's Upgrade board: "Level X > Level Y", a red button with the money price
--- and a purple one with the Robux price; the treadmill stands in front of its plot, so the board faces the
--- walkway) and a small "+X/step" text floating over the belt's front end. The map's old "TREADMILL"
--- billboard is switched off. PlotService writes them and owns the board's buttons (click/tap and E/F).
+-- treadmill wherever it is moved): an "Upgrade" board beside it, facing the walkway like the runner (a
+-- chunky dark navy sign on a post, like the plot's Upgrade board: "Level X > Level Y", a red button with the
+-- money price and a purple one with the Robux price) and a small "+X/s" text floating over the belt's front
+-- end, seen only up close. The map's old "TREADMILL" billboard is switched off. PlotService writes them and owns the board's buttons (click/tap and E/F).
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Shared = ReplicatedStorage:WaitForChild("Shared")
 local Format = require(Shared:WaitForChild("Format"))
@@ -27,8 +26,8 @@ export type Board = {
 	center: Vector3,
 }
 -- What the board shows: the owner's tier (nil: nobody owns the plot), the next tier's prices, and what
--- one step on the belt pays the owner right now.
-export type View = { tier: number?, cash: number?, robux: number?, perStep: number? }
+-- a second on the belt pays the owner right now (Treadmill.perSecond, like the popups over the runner).
+export type View = { tier: number?, cash: number?, robux: number?, perSecond: number? }
 
 local NAVY = Color3.fromRGB(30, 36, 60)
 local CORNER = Color3.fromRGB(44, 54, 92)
@@ -165,8 +164,8 @@ local function groundOf(model: Model, belt: BasePart): number
 	return belt.CFrame.Position.Y - belt.Size.Y / 2
 end
 
--- How far the treadmill (its model, if the plot has one) reaches past the belt's centre along the belt.
-local function clearAlong(model: Model, belt: BasePart): number?
+-- How far the treadmill (its model, if the plot has one) reaches sideways from the belt's centre line.
+local function clearSide(model: Model, belt: BasePart): number?
 	local tm = model:FindFirstChild("Treadmill")
 	if not tm then
 		return nil
@@ -175,16 +174,16 @@ local function clearAlong(model: Model, belt: BasePart): number?
 	if not lo or not hi then
 		return nil
 	end
-	local long = if belt.Size.Z >= belt.Size.X then math.max(math.abs(lo.Z), math.abs(hi.Z)) else math.max(math.abs(lo.X), math.abs(hi.X))
-	return math.max(long, math.max(belt.Size.X, belt.Size.Z) / 2)
+	local wide = if belt.Size.Z >= belt.Size.X then math.max(math.abs(lo.X), math.abs(hi.X)) else math.max(math.abs(lo.Z), math.abs(hi.Z))
+	return math.max(wide, math.min(belt.Size.X, belt.Size.Z) / 2)
 end
 
--- Where the board goes for this plot's belt right now: in line with the treadmill, past its back end.
+-- Where the board goes for this plot's belt right now: beside the treadmill, facing the walkway.
 function TreadmillBoard.placement(model: Model, belt: BasePart, center: Vector3): CFrame
-	return Treadmill.boardCFrame(belt.CFrame, belt.Size, center, groundOf(model, belt), clearAlong(model, belt))
+	return Treadmill.boardCFrame(belt.CFrame, belt.Size, center, groundOf(model, belt), clearSide(model, belt))
 end
 
--- Builds the board and the "+X/step" text for one plot (`model` the plot Model, `center` its centre),
+-- Builds the board and the "+X/s" text for one plot (`model` the plot Model, `center` its centre),
 -- and switches off the map's "TREADMILL" billboard (`oldLabel`, the label WorldBuilder made over the belt).
 function TreadmillBoard.build(model: Model, belt: BasePart, center: Vector3, oldLabel: TextLabel?): Board
 	local old = oldLabel and oldLabel:FindFirstAncestorWhichIsA("BillboardGui")
@@ -210,7 +209,7 @@ function TreadmillBoard.build(model: Model, belt: BasePart, center: Vector3, old
 	local labels = buildGui(panel)
 	boardModel.Parent = model
 
-	-- "+X/step" over the front end of the belt, on an attachment that follows it.
+	-- "+X/s" over the front end of the belt, on an attachment that follows it; only up close.
 	local anchor = Instance.new("Attachment")
 	anchor.Name = "StepTextAnchor"
 	anchor.Position = Treadmill.stepTextOffset(belt.Size)
@@ -219,12 +218,12 @@ function TreadmillBoard.build(model: Model, belt: BasePart, center: Vector3, old
 	gui.Name = "StepText"
 	gui.Size = UDim2.fromScale(7, 1.8) -- studs: small, it shrinks with distance
 	gui.LightInfluence = 0
-	gui.MaxDistance = 70
+	gui.MaxDistance = Treadmill.RATE_TEXT_DISTANCE
 	gui.Adornee = anchor
 	gui.Enabled = false
 	gui.Parent = anchor
 	local stepLabel = Instance.new("TextLabel")
-	stepLabel.Name = "PerStep"
+	stepLabel.Name = "PerSecond"
 	stepLabel.BackgroundTransparency = 1
 	stepLabel.Size = UDim2.fromScale(1, 1)
 	stepLabel.Font = Enum.Font.FredokaOne
@@ -263,7 +262,7 @@ function TreadmillBoard.follow(board: Board)
 	anchor.Position = Treadmill.stepTextOffset(board.belt.Size)
 end
 
--- Writes the board and the "+X/step" text. Below the last tier: "Level X > Level Y" and both buttons
+-- Writes the board and the "+X/s" text. Below the last tier: "Level X > Level Y" and both buttons
 -- (the red one with the money price and the Treadmill icon, the purple one with the Robux icon); at the
 -- last tier "MAX" and no buttons; with no owner "Empty plot", no buttons and no step text.
 function TreadmillBoard.render(board: Board, view: View)
@@ -280,8 +279,8 @@ function TreadmillBoard.render(board: Board, view: View)
 		Icons.set(labels.cash, {}, "")
 		Icons.set(labels.robux, {}, "")
 	end
-	board.stepGui.Enabled = view.perStep ~= nil
-	board.stepLabel.Text = if view.perStep then Treadmill.gainText(view.perStep) .. "/step" else ""
+	board.stepGui.Enabled = view.perSecond ~= nil
+	board.stepLabel.Text = if view.perSecond then Treadmill.rateText(view.perSecond) else ""
 end
 
 return TreadmillBoard

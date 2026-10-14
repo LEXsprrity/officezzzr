@@ -331,41 +331,41 @@ local PLOT_COLORS = {
 
 local PLOT_OPENING = 16 -- the gap in the plot's front fence, around the 14-stud path
 local BED_TILES = Vector2.new(3, 8) -- light checker tiles across x along each dirt bed
-local OWNER_SIGN = Vector2.new(13, 4.2) -- the owner's sign on the front fence (studs)
+local OWNER_SIGN = Vector2.new(12, 2.8) -- the owner's name plank on the front fence (studs)
+local OWNER_PLANK = Color3.fromRGB(226, 168, 104) -- light wood, so the name reads (no dark panel: owner playtest)
+local OWNER_INK = Color3.fromRGB(70, 36, 18)
 
 -- Where the treadmill stands: outside the plot, in front of it (between the front fence and the walkway),
--- beside the entrance path, running across the plot's front. `u` is its middle across the plot, `w` how
--- far out from the fence; its Upgrade board (TreadmillBoard) stands in line past its back end.
+-- beside the entrance path, running straight out toward the walkway. `u` is its middle across the plot, `w`
+-- how far out from the fence; its Upgrade board (TreadmillBoard) stands beside it, further from the path.
 local TREADMILL = { u = 15, w = 12, len = 9, wide = 4.5 } -- belt sized to a character (owner: the old 18 x 5.2 was too big)
 
--- Chunky dark sign board on the fence, its front toward the walkway: "🏠 Name's Plot" (PlotService writes it).
+-- A light wooden plank on the fence, its front toward the walkway, with the name painted straight on the
+-- wood: "🏠 Name's Plot" (PlotService writes it).
 local function ownerSign(model: Model, cf: CFrame, index: number): BasePart
-	local board = tag(studs(deco(model, "OwnerSign", Vector3.new(OWNER_SIGN.X, OWNER_SIGN.Y, 0.8), cf, FENCE_POST),
-		{ "FrontSurface", "TopSurface" }), "PlotSign", "PlotIndex", index)
-	local inner = deco(model, "OwnerSignFace", Vector3.new(OWNER_SIGN.X - 1.2, OWNER_SIGN.Y - 1.2, 0.2), cf * CFrame.new(0, 0, -0.45),
-		Color3.fromRGB(70, 46, 48))
-	inner.CastShadow = false
+	local board = tag(studs(deco(model, "OwnerSign", Vector3.new(OWNER_SIGN.X, OWNER_SIGN.Y, 0.6), cf, OWNER_PLANK)),
+		"PlotSign", "PlotIndex", index)
 	local gui = Instance.new("SurfaceGui")
 	gui.Name = "OwnerSign"
 	gui.Face = Enum.NormalId.Front
 	gui.SizingMode = Enum.SurfaceGuiSizingMode.PixelsPerStud
 	gui.PixelsPerStud = 40
 	gui.LightInfluence = 0
-	gui.MaxDistance = 110
+	gui.MaxDistance = 80
 	gui.Parent = board
 	local label = Instance.new("TextLabel")
 	label.Name = "Owner"
 	label.BackgroundTransparency = 1
 	label.AnchorPoint = Vector2.new(0.5, 0.5)
 	label.Position = UDim2.fromScale(0.5, 0.5)
-	label.Size = UDim2.fromScale(0.86, 0.6)
+	label.Size = UDim2.fromScale(0.92, 0.78)
 	label.Font = Enum.Font.FredokaOne
 	label.TextScaled = true
 	label.TextColor3 = Color3.new(1, 1, 1)
 	label.Text = "🏠 Empty Plot"
 	local stroke = Instance.new("UIStroke")
-	stroke.Thickness = 4
-	stroke.Color = Color3.fromRGB(25, 15, 20)
+	stroke.Thickness = 3
+	stroke.Color = OWNER_INK
 	stroke.Parent = label
 	label.Parent = gui
 	return board
@@ -457,12 +457,12 @@ local function buildPlot(world: Folder, index: number, posts: { [string]: boolea
 	ownerSign(model, Props.lookAt(signPos, signPos + outward), index)
 
 	-- Treadmill: stand on it to gain Speed (AFK works). It stands outside the plot, in front of it, beside the
-	-- entrance path, running across the plot's front (its front end, the console, toward the path). It doesn't
-	-- move you: the client plays the run animation in place and scrolls the belt texture. The belt is the
-	-- gameplay piece; the frame around it is the Treadmill asset slot (a model in assets/ is fitted to the
-	-- frame, and the belt then follows its belt).
+	-- entrance path, its runner facing the middle walkway (its front end, the console, toward the walkway;
+	-- owner playtest: not along the walkway toward the corridor). It doesn't move you: the client plays the
+	-- run animation in place and scrolls the belt texture. The belt is the gameplay piece; the frame around it
+	-- is the Treadmill asset slot (a model in assets/ is fitted to the frame, and the belt then follows its belt).
 	local tm = TREADMILL
-	local front = -Vector3.xAxis * math.sign(tm.u) -- toward the entrance path
+	local front = outward -- toward the walkway
 	local beltCF = Props.lookAt(at(tm.u, -tm.w, 1.1), at(tm.u, -tm.w, 1.1) - front) -- local +Z is the front end
 	local belt = tag(box(model, "TreadmillBelt", Vector3.new(tm.wide, 1, tm.len), beltCF, Color3.fromRGB(40, 40, 45)), "TreadmillBelt", "PlotIndex", index)
 	local tex = Instance.new("Texture")
@@ -484,7 +484,7 @@ local function buildPlot(world: Folder, index: number, posts: { [string]: boolea
 	local tmSignPart = tag(box(model, "TreadmillSign", Vector3.new(1, 1, 1), beltCF + Vector3.new(0, 8, 0), color), "TreadmillSign", "PlotIndex", index)
 	tmSignPart.Transparency = 1
 	tmSignPart.CanCollide = false
-	-- The old sign; TreadmillBoard switches it off for its board and "+X/step" text.
+	-- The old sign; TreadmillBoard switches it off for its board and "+X/s" text.
 	billboard(tmSignPart, "🏃 TREADMILL", UDim2.fromScale(10, 3.6), Vector3.zero, 60)
 
 	-- "Upgrade" board just outside the fence, on the other side of the path from the treadmill: a chunky dark
@@ -586,7 +586,8 @@ local function buildSpeedSign(folder: Instance, k: number)
 end
 
 -- The zone's nest. Its gameplay piece is NestCore, an invisible part where the mother bulb glows: it holds
--- the "Mother Plant" label and the tagged Attachments for the nest centre, the pods and the guard's home.
+-- the tagged Attachments for the nest centre, the pods and the guard's home (no floating "Mother Plant"
+-- title: owner playtest).
 -- The mother plant itself (mound, stones, stem, bulb, leaves) is the Nest_<zone> slot.
 local function buildNest(folder: Folder, k: number)
 	local zone = Config.ZONES[k]
@@ -627,7 +628,6 @@ local function buildNest(folder: Folder, k: number)
 
 	local core = tag(hidden(model, "NestCore", Vector3.new(2, 2, 2), CFrame.new(center + Vector3.new(0, 16, 0))), "NestCore", "ZoneIndex", k)
 	model.PrimaryPart = core
-	billboard(core, `{zone.icon} {zone.seed} Mother Plant`, UDim2.fromOffset(300, 40), Vector3.new(0, 8, 0), 250)
 	marker(core, "Center", CFrame.new(center), "NestCenter", "ZoneIndex", k)
 	-- Pods ring the mound on the -X half, so thieves grab and run home with the guard behind them.
 	for i = 1, Config.PODS_PER_NEST do

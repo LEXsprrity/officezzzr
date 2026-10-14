@@ -4,6 +4,7 @@ local H = require("./harness")
 local Layout = require("./plot_layout")
 
 local Config = H.shared("Config")
+local Treadmill = H.shared("Treadmill")
 local WorldBuilder = H.server("WorldBuilder")
 local Vector3 = H.Vector3
 local CFrame = require("@lune/roblox").CFrame
@@ -73,9 +74,13 @@ H.test("world: plot layout contract (two dirt beds, a grass path, origin, spawn,
 		H.ok((plot.spawnCFrame.Position - at(0, 12, 4)).Magnitude < 1e-3, "spawn on the middle path")
 		H.ok(not Planting.bedAt(plot.beds, plot.spawnCFrame.Position - Vector3.new(0, 3, 0)), "nobody spawns on a bed")
 		-- The treadmill stands outside, in front of the plot. With a Treadmill model in assets/, the belt takes
-		-- the model's belt: its running surface and its footprint, so it may shift a little along it.
+		-- the model's belt: its running surface and its footprint, so it may shift a little along it (it runs
+		-- straight out toward the walkway, along z).
 		local beltDelta = plot.belt.CFrame.Position - at(15, -12, 1.1)
-		H.ok(math.abs(beltDelta.Z) < 0.5 and math.abs(beltDelta.X) < 2 and beltDelta.Y > -1 and beltDelta.Y < 6, `belt position ({beltDelta})`)
+		H.ok(math.abs(beltDelta.X) < 0.5 and math.abs(beltDelta.Z) < 2 and beltDelta.Y > -1 and beltDelta.Y < 6, `belt position ({beltDelta})`)
+		-- its front end (the runner's facing, Treadmill.FRONT) points at the middle walkway, not along it
+		local front = plot.belt.CFrame:VectorToWorldSpace(Vector3.new(0, 0, Treadmill.FRONT))
+		H.ok(front.Z * -math.sign(center.Z) > 0.999, `plot {i} treadmill faces the middle walkway ({front})`)
 		H.ok(math.min(plot.belt.Size.X, plot.belt.Size.Z) <= 5 and math.max(plot.belt.Size.X, plot.belt.Size.Z) <= 10,
 			`a character-sized belt ({plot.belt.Size})`)
 		H.eq(plot.belt:GetAttribute("Role"), "TreadmillBelt")
@@ -190,6 +195,19 @@ H.test("world: plots are compact and share one clean fence (no double fences, ga
 		H.ok(math.abs(p.X - entrance.X) > 8 and math.abs(p.X - entrance.X) < 25 and p.Y > 1.5 and p.Y < 6, `plot {i} sign beside the opening, fence high`)
 		H.ok(sign.CFrame.LookVector.Z * -side > 0.999, `plot {i} sign faces the walkway`)
 		H.eq(plot.signLabel.Text, "🏠 Empty Plot")
+		-- no dark panel (owner playtest): a light wooden plank with the name straight on it, nothing in front
+		local h, s, v = sign.Color:ToHSV()
+		H.ok(v > 0.7 and s < 0.7, `plot {i} sign is light wood ({sign.Color}, {h})`)
+		local gui = plot.signLabel:FindFirstAncestorWhichIsA("SurfaceGui")
+		H.ok(gui ~= nil and gui.Parent == sign and gui.Face == Enum.NormalId.Front, `plot {i} name painted on the plank's front`)
+		H.ok(gui.MaxDistance > 0 and gui.MaxDistance <= 90, `plot {i} name reads only fairly close`)
+		for _, d in plot.model:GetDescendants() do
+			if d:IsA("BasePart") and d ~= sign and d.Transparency < 1 then
+				local rel = sign.CFrame:PointToObjectSpace(d.CFrame.Position)
+				H.ok(not (math.abs(rel.X) < sign.Size.X / 2 and math.abs(rel.Y) < sign.Size.Y / 2 and rel.Z < 0 and rel.Z > -1.5),
+					`plot {i}: {d.Name} covers the name`)
+			end
+		end
 	end
 end)
 

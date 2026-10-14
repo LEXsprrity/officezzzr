@@ -102,7 +102,7 @@ local function makeCarryModel(char: Model, carry: Sessions.Carry): Model?
 	weld.Parent = seed
 	seed.Parent = model
 	local label = WorldBuilder.billboard(seed, SeedService.seedName(carry.zone, carry.rarity, carry.mutation),
-		UDim2.fromOffset(220, 30), Vector3.new(0, 3.5, 0), 150)
+		UDim2.fromOffset(220, 30), Vector3.new(0, 3.5, 0), 60)
 	label.TextColor3 = Config.RARITIES[carry.rarity].color
 	model.PrimaryPart = seed
 	model.Parent = char
@@ -163,7 +163,7 @@ function SeedService.init(nestInfos: { WorldBuilder.NestInfo })
 			prompt.RequiresLineOfSight = false
 			prompt.KeyboardKeyCode = Enum.KeyCode.E
 			prompt.Parent = part
-			local label = WorldBuilder.billboard(part, "", UDim2.fromOffset(200, 28), Vector3.new(0, 3, 0), 80)
+			local label = WorldBuilder.billboard(part, "", UDim2.fromOffset(200, 28), Vector3.new(0, 3, 0), 45)
 			part.Parent = info.model
 			local pod: Pod = {
 				cframe = cf, part = part, prompt = prompt, label = label,

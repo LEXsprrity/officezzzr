@@ -118,8 +118,37 @@ H.test("treadmill: Effects.client locks, sprints and pops Speed with the shared 
 	H.ok(string.find(source, "CharacterAdded", 1, true) ~= nil, "a respawn resets the lock")
 	H.ok(string.find(source, "partial.plot", 1, true) ~= nil, "reads its plot from StatsUpdate")
 	H.ok(string.find(source, "onAnyBelt", 1, true) == nil, "the any-belt check is gone")
-	local speed = fs.readFile("src/server/SpeedService.luau")
-	H.ok(string.find(speed, "This isn't your treadmill", 1, true) ~= nil, "the server says why someone else's belt pays nothing")
+	-- no toast about somebody else's treadmill (owner playtest): you just can't step on it
+	for _, file in { "src/server/SpeedService.luau", "src/server/PlotService.luau", "src/client/Effects.client.luau", "src/client/HUD.client.luau" } do
+		local text = fs.readFile(file)
+		H.ok(string.find(text, "isn't your treadmill", 1, true) == nil, `{file} has no "isn't your treadmill" toast`)
+	end
+	H.ok(string.find(source, "Treadmill.blockBox(belt.CFrame, belt.Size)", 1, true) ~= nil and string.find(source, "CanCollide = true", 1, true) ~= nil,
+		"Effects.client puts a solid invisible wall over the other belts")
+	H.ok(string.find(source, "belt:GetAttribute(\"PlotIndex\") == myPlot", 1, true) ~= nil, "...but not over its own")
+	H.ok(string.find(source, "AutoRotate = false", 1, true) ~= nil, "a locked runner isn't turned by the walking keys")
+end)
+
+H.test("treadmill wall: someone else's belt is walled off; a runner on it would be inside the wall", function()
+	local b = belt(3, Vector3.new(-40, 1.5, 30))
+	b.Size = Vector3.new(4.5, 1, 9)
+	local cf, size = Treadmill.blockBox(b.CFrame, b.Size)
+	local rel = b.CFrame:PointToObjectSpace(cf.Position)
+	H.ok(math.abs(rel.X) < 1e-4 and math.abs(rel.Z) < 1e-4, "centred over the belt")
+	H.ok(size.X >= b.Size.X and size.Z >= b.Size.Z, "covers its whole footprint")
+	local bottom = rel.Y - size.Y / 2
+	H.ok(bottom >= b.Size.Y / 2 and bottom <= b.Size.Y / 2 + 0.2, `starts just above the belt ({bottom})`)
+	H.ok(size.Y >= 8, "too tall to jump onto")
+	-- every spot the belt check counts as on the belt is inside the wall
+	for _, x in { -2.2, 0, 2.2 } do
+		for _, z in { -4.4, 0, 4.4 } do
+			local pos = (b.CFrame * CFrame.new(x, b.Size.Y / 2 + 3, z)).Position
+			H.ok(Treadmill.onBelt(b.CFrame, b.Size, pos), "on the belt")
+			local p = cf:PointToObjectSpace(pos)
+			H.ok(math.abs(p.X) < size.X / 2 and math.abs(p.Y) < size.Y / 2 and math.abs(p.Z) < size.Z / 2, `({x}, {z}) inside the wall`)
+		end
+	end
+	b:Destroy()
 end)
 
 ----------------------------------------------------------------------------------------------------
@@ -302,10 +331,57 @@ H.test("board buttons: no black prompt popups; the painted $ and R$ buttons are 
 		"Effects.client opens the buttons for the owner only")
 	-- the hit areas sit over the painted buttons: red (money) on the panel's +X side, purple (Robux) on -X
 	H.ok(string.find(plot, "Cash = { x = 0.158", 1, true) ~= nil and string.find(plot, "Robux = { x = -0.233", 1, true) ~= nil, "hit areas over the buttons")
+	-- the mouse keeps the normal arrow over them (no pointing hand), and the painted button inflates instead
+	H.ok(string.find(plot, "click.CursorIcon = BUTTON_CURSOR", 1, true) ~= nil
+		and string.find(plot, "BUTTON_CURSOR = \"rbxasset://textures/Cursors/KeyboardMouse/ArrowFarCursor.png\"", 1, true) ~= nil, "the default arrow cursor")
+	H.ok(string.find(plot, "painted.Value = panel:FindFirstChild(spec.object .. \"Button\", true)", 1, true) ~= nil, "each hit area knows its painted button")
+	H.ok(string.find(effects, "MouseHoverEnter", 1, true) ~= nil and string.find(effects, "UiFx.worldPop(button, how)", 1, true) ~= nil,
+		"Effects.client pops the painted button on hover")
+end)
+
+H.test("board buttons: the painted Cash/Robux buttons the hit areas point at exist on both boards", function()
+	local TreadmillBoard = H.server("TreadmillBoard")
+	local world = H.workspace:FindFirstChild("World")
+	local plots = WorldBuilder.adopt(world)
+	for i, plot in plots do
+		local board = TreadmillBoard.build(plot.model, plot.belt, plot.center, plot.treadmillLabel)
+		for _, panel in { board.panel, plot.upgradeBoard } do
+			for _, name in { "CashButton", "RobuxButton" } do
+				local b = panel:FindFirstChild(name, true)
+				H.ok(b ~= nil and b:IsA("Frame"), `plot {i} {panel.Name} has {name}`)
+			end
+		end
+	end
+	-- UiFx.worldPop grows a button to the HUD's hover size and back, with the HUD's tweens
+	local uiFx = fs.readFile("src/shared/UiFx.luau")
+	H.ok(string.find(uiFx, "function UiFx.worldPop(", 1, true) ~= nil and string.find(uiFx, "sized(if how == \"hover\" then UiFx.HOVER else 1)", 1, true) ~= nil,
+		"the shared world pop")
+end)
+
+H.test("floating titles: no name over the guards/bosses or the mother plants; status texts stay short-range", function()
+	local guard = fs.readFile("src/server/GuardService.luau")
+	H.ok(string.find(guard, "zone.guard, UDim2", 1, true) == nil, "no guard/boss name billboard (\"Giant Mole\")")
+	H.ok(string.find(guard, "Vector3.new(0, statusY, 0), 100)", 1, true) ~= nil, "the Zzz/alert status stays, short-range")
+	local builder = fs.readFile("src/server/WorldBuilder.luau")
+	H.ok(string.find(builder, "Mother Plant`", 1, true) == nil, "no mother plant title in the code")
+	local MapFile = require("../tools/map_tool")
+	for _, which in { "built", "map" } do
+		-- (loading the map file replaces the built World, so check the built one first)
+		local world = if which == "built" then H.workspace:FindFirstChild("World") else MapFile.load(MapFile.PATH)
+		for _, d in world:GetDescendants() do
+			if d:IsA("TextLabel") then
+				H.ok(string.find(d.Text, "Mother Plant", 1, true) == nil, `{d:GetFullName()} still says "{d.Text}"`)
+				for _, zone in Config.ZONES do
+					H.ok(d.Text ~= zone.guard, `{d:GetFullName()} shows the guard's name`)
+				end
+			end
+		end
+	end
+	H.ok(string.find(fs.readFile("src/client/GuardAnimator.client.luau"), "gui.MaxDistance = 100", 1, true) ~= nil, "the boss's Zzz is short-range too")
 end)
 
 ----------------------------------------------------------------------------------------------------
--- The Upgrade board and the "+X/step" text
+-- The Upgrade board and the "+X/s" text
 ----------------------------------------------------------------------------------------------------
 local TreadmillBoard = H.server("TreadmillBoard")
 local Assets = H.server("Assets")
@@ -433,7 +509,7 @@ local function shown(label: any): string
 	return table.concat(parts, " ")
 end
 
-H.test("treadmill board: shows the tier, both prices and +X/step; MAX hides the buttons; empty plot shows nothing to buy", function()
+H.test("treadmill board: shows the tier, both prices and +X/s (the popups' number); MAX hides the buttons; empty plot shows nothing to buy", function()
 	local world = H.workspace:FindFirstChild("World")
 	local plots = WorldBuilder.adopt(world)
 	local plot = plots[1]
@@ -445,23 +521,24 @@ H.test("treadmill board: shows the tier, both prices and +X/step; MAX hides the 
 	H.eq(board.stepGui.Enabled, false, "no step text on an empty plot")
 
 	local p = profileAt(7)
-	local perStep = Treadmill.perStep(p.speed, p.equippedTrail, Config.treadmillMult(7))
-	TreadmillBoard.render(board, { tier = 7, cash = Config.priceOf("TreadmillUpgrade", p), robux = 400, perStep = perStep })
+	local perSecond = Treadmill.perSecond(Config.walkSpeedFor(p.speed), p.speed, p.equippedTrail, Config.treadmillMult(7))
+	TreadmillBoard.render(board, { tier = 7, cash = Config.priceOf("TreadmillUpgrade", p), robux = 400, perSecond = perSecond })
 	H.eq(board.labels.level.Text, "Level 7 > Level 8")
 	H.eq(board.labels.buttons.Visible, true)
 	H.ok(string.find(shown(board.labels.cash), Format.money(Config.TREADMILL_TIERS[8].price), 1, true) ~= nil, shown(board.labels.cash))
 	H.ok(string.find(shown(board.labels.robux), "400", 1, true) ~= nil, shown(board.labels.robux))
 	H.eq(board.stepGui.Enabled, true)
-	H.eq(board.stepLabel.Text, Treadmill.gainText(perStep) .. "/step")
+	H.eq(board.stepLabel.Text, Treadmill.gainText(perSecond) .. "/s")
+	H.ok(board.stepGui.MaxDistance > 0 and board.stepGui.MaxDistance <= 40, `the "+X/s" text only shows up close ({board.stepGui.MaxDistance})`)
 
 	-- a tier bought: the text follows
-	TreadmillBoard.render(board, { tier = 8, cash = Config.TREADMILL_TIERS[9].price, robux = 640, perStep = perStep * 6 / 5 })
+	TreadmillBoard.render(board, { tier = 8, cash = Config.TREADMILL_TIERS[9].price, robux = 640, perSecond = perSecond * 6 / 5 })
 	H.eq(board.labels.level.Text, "Level 8 > Level 9")
 	H.ok(string.find(shown(board.labels.cash), Format.money(Config.TREADMILL_TIERS[9].price), 1, true) ~= nil, shown(board.labels.cash))
-	H.eq(board.stepLabel.Text, Treadmill.gainText(perStep * 6 / 5) .. "/step")
+	H.eq(board.stepLabel.Text, Treadmill.rateText(perSecond * 6 / 5))
 
 	-- the last tier: MAX, no buttons, the step text stays
-	TreadmillBoard.render(board, { tier = Config.TREADMILL_MAX, cash = nil, robux = nil, perStep = perStep })
+	TreadmillBoard.render(board, { tier = Config.TREADMILL_MAX, cash = nil, robux = nil, perSecond = perSecond })
 	H.eq(board.labels.level.Text, "MAX")
 	H.eq(board.labels.buttons.Visible, false, "no buttons at the last tier")
 	H.eq(shown(board.labels.cash), "")
@@ -518,6 +595,86 @@ H.test("treadmill step: what one step pays, as text", function()
 	local walk, speed = 24, 1e5
 	local mult = Config.speedPerStud(speed, nil)
 	H.ok(math.abs(SpeedLogic.treadmillGain(walk, 1, mult, 2.5) - Treadmill.perSecond(walk, speed, nil, 2.5)) < 1e-6, "same as the server's gain")
+end)
+
+H.test("treadmill sign: the '+X/s' over the treadmill is exactly what a second on it pays (the popups' number)", function()
+	local SpeedLogic = H.server("SpeedLogic")
+	local TreadmillBoard = H.server("TreadmillBoard")
+	local world = H.workspace:FindFirstChild("World")
+	local plot = WorldBuilder.adopt(world)[2]
+	local board = TreadmillBoard.build(plot.model, plot.belt, plot.center, plot.treadmillLabel)
+	local ticks = math.round(1 / Config.TICK)
+	for _, speed in { 0, 250, 9e3, 4e5, 7e6, 3e8, 2e10 } do
+		for _, trail in { "Grey", "Blue", "Red" } do
+			for _, tier in { 1, 4, Config.TREADMILL_MAX } do
+				-- the server: SpeedService's tick on the owner's belt, SpeedLogic.treadmillGain every TICK for a second
+				local walk = Config.walkSpeedFor(speed)
+				local tm = Config.treadmillMult(tier)
+				local paid = 0
+				for _ = 1, ticks do
+					paid += SpeedLogic.treadmillGain(walk, Config.TICK, Config.speedPerStud(speed, trail), tm)
+				end
+				-- the sign (PlotService) and the popups (Effects.client) both use Treadmill.perSecond with these stats
+				local shown = Treadmill.perSecond(walk, speed, trail, tm)
+				H.ok(math.abs(shown - paid) <= 1e-9 * math.max(1, paid), `speed {speed} {trail} tier {tier}: sign {shown} vs paid {paid}`)
+				TreadmillBoard.render(board, { tier = tier, cash = 1, robux = 1, perSecond = shown })
+				H.eq(board.stepLabel.Text, Treadmill.gainText(shown) .. "/s")
+			end
+		end
+	end
+	-- the playtest numbers: a "+60.9" popup, so the sign says "+60.9/s" (not the "+0.9/step" it used to)
+	H.eq(Treadmill.rateText(60.94), "+60.9/s")
+	-- the board and the popups read the same stats: the session's WalkSpeed (sent as walkSpeed), Speed, trail, tier
+	local plotService = fs.readFile("src/server/PlotService.luau")
+	H.ok(string.find(plotService, "perSecond = Treadmill.perSecond(s.walkSpeed, s.profile.speed, s.profile.equippedTrail, Sessions.treadmillMult(s))", 1, true) ~= nil,
+		"PlotService writes the per-second gain")
+	local effects = fs.readFile("src/client/Effects.client.luau")
+	H.ok(string.find(effects, "Treadmill.perSecond(stats.walkSpeed, stats.speed, stats.equippedTrail, stats.treadmillMult)", 1, true) ~= nil,
+		"the popups use the same function")
+	local sessions = fs.readFile("src/server/Sessions.luau")
+	H.ok(string.find(sessions, "walkSpeed = s.walkSpeed", 1, true) ~= nil, "the client gets the same WalkSpeed")
+	H.ok(string.find(fs.readFile("src/server/SpeedService.luau"), "mult = Sessions.speedPerStud(s)", 1, true) ~= nil
+		and string.find(sessions, "Config.speedPerStud(s.profile.speed, s.profile.equippedTrail)", 1, true) ~= nil, "the server pays Speed per stud from the same stats")
+end)
+
+-- The treadmill's model (assets/Treadmill.rbxm) or the built-in frame, the belt, the lock and the board all
+-- agree which way it faces: the runner faces the middle walkway, the console at that end.
+local function checkFacing(plots: { any }, label: string)
+	for i, plot in plots do
+		local side = if plot.center.Z > 0 then 1 else -1
+		local b = plot.belt
+		local front = b.CFrame:VectorToWorldSpace(Vector3.new(0, 0, Treadmill.FRONT))
+		H.ok(front.Z * -side > 0.999, `{label}: plot {i} belt's front toward the walkway ({front})`)
+		local tm = plot.model:FindFirstChild("Treadmill")
+		local head
+		for _, d in tm:GetDescendants() do
+			if d:IsA("BasePart") and (string.find(d.Name, "Console", 1, true) or d.Name == "TreadmillStop") then
+				head = d
+			end
+		end
+		H.ok(head ~= nil, `{label}: plot {i} treadmill has a console (or stop)`)
+		local rel = b.CFrame:PointToObjectSpace(head.CFrame.Position)
+		H.ok(rel.Z * Treadmill.FRONT > b.Size.Z / 4, `{label}: plot {i} {head.Name} at the front end ({rel})`)
+		local held = Treadmill.lockCFrame(b.CFrame, b.Size, (b.CFrame * CFrame.new(1, 3, -2)).Position)
+		H.ok(held.LookVector.Z * -side > 0.999, `{label}: plot {i} a locked runner faces the walkway and the console`)
+		local board = TreadmillBoard.build(plot.model, b, plot.center, plot.treadmillLabel)
+		local toBoard = b.CFrame:PointToObjectSpace(board.panel.CFrame.Position)
+		H.ok(math.abs(toBoard.Z) < 1 and math.abs(toBoard.X) > b.Size.X / 2 + 2, `{label}: plot {i} board beside the treadmill ({toBoard})`)
+		local fromPath = math.abs(board.panel.CFrame.Position.X - plot.center.X)
+		H.ok(fromPath > math.abs(b.CFrame.Position.X - plot.center.X), `{label}: plot {i} board on the side away from the entrance path`)
+		H.ok(board.panel.CFrame.LookVector:Dot(front) > 0.999, `{label}: plot {i} board faces the walkway, like the runner`)
+	end
+end
+
+H.test("treadmill facing: the runner, the console and the board face the middle walkway (built and map/World.rbxm)", function()
+	checkFacing(WorldBuilder.adopt(H.workspace:FindFirstChild("World")), "built")
+	local world = MapTool.load(MapTool.PATH)
+	local plots = WorldBuilder.adopt(world)
+	Assets.refresh(world)
+	checkFacing(plots, "map")
+	-- the model's console is at its +Z end, so the asset carries Yaw = 180 (its front is then -Z, as Assets expects)
+	local model = roblox.deserializeModel(fs.readFile("assets/Treadmill.rbxm"))[1]
+	H.eq(model:GetAttribute("Yaw"), 180, "assets/Treadmill.rbxm is turned to put its console at the front")
 end)
 
 ----------------------------------------------------------------------------------------------------
