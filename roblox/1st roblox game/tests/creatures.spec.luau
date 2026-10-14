@@ -15,7 +15,15 @@ local function find(model, name: string)
 	return out
 end
 
-H.test("creatures: every zone x rarity x mutation builds within the part and footprint budget", function()
+-- The built-in creatures (the game falls back to them when assets/ has no plant model): these tests
+-- set the plant models aside (tests/plants.spec checks those).
+local function builtIn(name: string, fn: () -> ())
+	H.test(name, function()
+		H.withoutAssets("Creature_", fn)
+	end)
+end
+
+builtIn("creatures: every zone x rarity x mutation builds within the part and footprint budget", function()
 	local mutations = { false }
 	for _, m in Config.MUTATIONS do
 		table.insert(mutations, m.id)
@@ -44,7 +52,7 @@ H.test("creatures: every zone x rarity x mutation builds within the part and foo
 	end
 end)
 
-H.test("creatures: later zones stand taller, and the Info anchor sits above the top", function()
+builtIn("creatures: later zones stand taller, and the Info anchor sits above the top", function()
 	local last = 0
 	for k = 1, #Config.ZONES do
 		local model = CreatureModels.build(k, 1, nil)
@@ -58,7 +66,7 @@ H.test("creatures: later zones stand taller, and the Info anchor sits above the 
 	end
 end)
 
-H.test("creatures: rarity adds flair step by step", function()
+builtIn("creatures: rarity adds flair step by step", function()
 	local function flair(r)
 		local model = CreatureModels.build(1, r, nil)
 		local out = {
@@ -81,7 +89,7 @@ H.test("creatures: rarity adds flair step by step", function()
 	H.eq(legendary.halo, 6, "legendary halo")
 end)
 
-H.test("creatures: mutations tint, swap materials and add particles", function()
+builtIn("creatures: mutations tint, swap materials and add particles", function()
 	for _, m in Config.MUTATIONS do
 		local plain = CreatureModels.build(2, 1, nil)
 		local model = CreatureModels.build(2, 1, m.id)
@@ -131,18 +139,34 @@ H.test("creatures: the biggest creatures fit the planting spacing and the plot",
 	for k = 1, #Config.ZONES do
 		for r = 1, #Config.RARITIES do
 			local biggest = CreatureModels.scaleFor(k, r, Config.sproutWeight(k, r) * Config.GROW_MAX_FACTOR * 1.2)
-			H.ok(Planting.radius(r) >= Config.CREATURE_FOOTPRINT * biggest / 2 - 1e-6, `zone {k} rarity {r} reach`)
+			H.ok(Planting.radius(r) >= Config.creatureFootprint(r) * biggest / 2 - 1e-6, `zone {k} rarity {r} reach`)
 		end
 	end
-	local r = Planting.radius(#Config.RARITIES)
-	H.ok(math.abs(r - Config.CREATURE_FOOTPRINT * Config.CREATURE_MAX_SCALE / 2) < 0.2, "the biggest reach is about the max scale")
-	H.ok(Planting.minDistance(#Config.RARITIES, #Config.RARITIES) <= Config.SLOT_SPACING, "two max-size plants fit the default grid")
-	H.ok(2 * r - Planting.minDistance(#Config.RARITIES, #Config.RARITIES) <= 1 + 1e-6, "neighbours overlap by at most a stud")
-	-- every default spot keeps the biggest creature inside the plot's fence
-	local half = Config.PLOT_SIZE / 2
-	for i, c in Planting.candidates() do
-		H.ok(math.abs(c[1]) + r <= half - 0.5 and math.abs(c[2]) + r <= half - 0.5, `spot {i} ({c[1]}, {c[2]}) fits inside the fence`)
+	local L = #Config.RARITIES
+	H.ok(math.abs(Planting.radius(L) - Config.creatureFootprint(L) * Config.CREATURE_MAX_SCALE / 2) < 0.2, "the biggest reach is about the max scale")
+	H.ok(2 * Planting.radius(L) - Planting.minDistance(L, L) <= 1 + 1e-6, "neighbours overlap by at most a stud")
+	-- Common..Rare (the base footprint) fit the default grid, and every default spot keeps them inside the fence
+	local small = 0
+	for r = 1, L do
+		if Config.creatureFootprint(r) <= Config.CREATURE_FOOTPRINT then
+			small = r
+		end
 	end
+	H.ok(small >= 3, "Common..Rare have the base footprint")
+	H.ok(Planting.minDistance(small, small) <= Config.SLOT_SPACING, "two full-grown Rares fit the default grid")
+	local half = Config.PLOT_SIZE / 2
+	local reach = Planting.radius(small)
+	for i, c in Planting.candidates() do
+		H.ok(math.abs(c[1]) + reach <= half - 0.5 and math.abs(c[2]) + reach <= half - 0.5, `spot {i} ({c[1]}, {c[2]}) fits inside the fence`)
+	end
+	-- the bigger ones (Epic, Legendary) must stand further inside the bed, so they reach at most
+	-- PLANT_FENCE_OVERHANG past the fence line from anywhere planting allows
+	local outer = half - Config.BED_FENCE_GAP
+	for r = 1, L do
+		H.ok(outer - Planting.bedMargin(r) + Planting.radius(r) <= half + Config.PLANT_FENCE_OVERHANG + 1e-6, `rarity {r} stays off the fence`)
+		H.ok(Planting.bedMargin(r) >= Config.PLANT_BED_MARGIN, `rarity {r} margin`)
+	end
+	H.ok(Planting.bedMargin(L) > Planting.bedMargin(1), "Legendaries stand further inside the bed")
 end)
 
 H.test("creatures: applyScale keeps an uploaded template's fit (BaseScale)", function()

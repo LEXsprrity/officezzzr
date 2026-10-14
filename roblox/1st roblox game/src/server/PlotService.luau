@@ -115,7 +115,7 @@ local function buildPlantModel(state: PlotState, plant: ProfileStore.Plant, weig
 	local mut = Config.mutationById(plant.mutation)
 	-- The creature (with its rarity/mutation flair and "Mutation" attribute) comes from CreatureModels,
 	-- built at the origin; it is pivoted onto the slot below.
-	local model = CreatureModels.build(plant.zone, plant.rarity, plant.mutation)
+	local model = CreatureModels.build(plant.zone, plant.rarity, plant.mutation, plant.slot)
 	model.Name = "Plant_" .. plant.slot
 	local body = model.PrimaryPart :: BasePart
 

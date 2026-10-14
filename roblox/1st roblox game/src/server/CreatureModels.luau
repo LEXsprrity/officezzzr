@@ -8,7 +8,10 @@
 --
 -- Rarity adds flair (aura ring, recoloured trims, Neon, light, sparkles, a halo); a mutation tints and
 -- swaps materials and adds particles. A model in the assets folder (slot Creature_<Seed>, e.g. Creature_LotusWyrm)
--- replaces a zone's creature; Config.CREATURE_ASSETS (uploaded asset ids) is the next choice.
+-- replaces a zone's creature; Config.CREATURE_ASSETS (uploaded asset ids) is the next choice. The game's
+-- plants are the owner's flower pack (models/plants), exported per zone and rarity into those slots by
+-- tools/export_plants.luau; they fit Config.creatureFootprint(rarity), wider than the built-in creatures
+-- for Epic and Legendary.
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Config = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("Config"))
 local Assets = require(script.Parent:WaitForChild("Assets"))
@@ -523,7 +526,9 @@ local function decorate(b: Builder, zoneIndex: number, rarityIndex: number, mut:
 	end
 	-- Aura ring on the soil
 	if rarityIndex >= 2 then
-		local ring = shaped(b, "fx", "AuraRing", Enum.PartType.Cylinder, V(0.1, Config.CREATURE_FOOTPRINT - 0.1, Config.CREATURE_FOOTPRINT - 0.1),
+		-- (an asset plant's ring is as wide as its rarity's footprint; a built-in creature keeps the base one)
+		local d = (if b.roles[body] == "asset" then Config.creatureFootprint(rarityIndex) else Config.CREATURE_FOOTPRINT) - 0.1
+		local ring = shaped(b, "fx", "AuraRing", Enum.PartType.Cylinder, V(0.1, d, d),
 			CFrame.new(0, 0.05, 0) * CFrame.Angles(0, 0, math.pi / 2), rarity.color, NEON)
 		ring.Transparency = if rarityIndex >= 4 then 0.25 else 0.5
 		ring.CastShadow = false
@@ -641,16 +646,20 @@ end
 -- Public
 ----------------------------------------------------------------------------------------------------
 -- Builds the creature for (zone, rarity, mutation?) at the origin (see the header). The model's
--- PrimaryPart is its body and its pivot is the origin.
-function CreatureModels.build(zoneIndex: number, rarityIndex: number, mutation: string?): Model
+-- PrimaryPart is its body and its pivot is the origin. `pick` (the plant's id) chooses among the zone's
+-- plant models of that rarity, so each plant keeps its look and neighbours differ.
+function CreatureModels.build(zoneIndex: number, rarityIndex: number, mutation: string?, pick: number?): Model
 	local zone = Config.ZONES[zoneIndex]
 	local model: Model
 	local b: Builder
-	-- A model from the assets folder comes first: fitted like an uploaded one (footprint and a zone-ish
-	-- height), and its fit scale is kept as BaseScale for applyScale.
+	-- A model from the assets folder comes first: the slot's folder for this rarity (assets/Creature_<Seed>
+	-- holds a folder per rarity, see tools/export_plants.luau). The exported plants are already to size
+	-- (KeepScale); any other model is fitted to the rarity's footprint and height, and its fit scale is kept
+	-- as BaseScale for applyScale.
 	local slot = "Creature_" .. string.gsub(zone.seed, "%s", "")
+	local footprint = Config.creatureFootprint(rarityIndex)
 	local fitted = Assets.get(slot) and Assets.place(slot, nil, CFrame.identity,
-		Vector3.new(Config.CREATURE_FOOTPRINT, 4.5 + 0.5 * zoneIndex, Config.CREATURE_FOOTPRINT))
+		Vector3.new(footprint, Config.creatureHeight(zoneIndex, rarityIndex), footprint), Config.RARITIES[rarityIndex].id, pick)
 	local template = templates[zoneIndex]
 	if fitted or template then
 		if fitted then

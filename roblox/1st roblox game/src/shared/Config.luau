@@ -28,6 +28,7 @@ Config.BED_HEIGHT = 0.4 -- the beds stand this far above the plot's grass; plant
 Config.SLOT_SPACING = 8 -- the default planting grid (old saves, auto-placing); creature sizes are budgeted against it
 Config.PLANT_BED_MARGIN = 2 -- a plant's centre stays at least this far inside its bed
 Config.PLANT_OVERLAP = 1 -- two full-grown neighbours may overlap this much (studs)
+Config.PLANT_FENCE_OVERHANG = 1 -- a big full-grown plant may reach this far past its bed's fence gap (Planting.bedMargin)
 Config.PLANT_REACH = 28 -- you plant within this many studs (flat) of where you stand
 
 ----------------------------------------------------------------------------------------------------
@@ -352,9 +353,25 @@ function Config.plantIncome(k: number, rarity: number, weight: number, mutation:
 end
 
 -- Plant-creature models (CreatureModels). Sizes are studs at scale 1, and PlotService scales each creature
--- by weight. CREATURE_FOOTPRINT * CREATURE_MAX_SCALE (8.8) keeps the biggest within about one SLOT_SPACING,
--- and Shared/Planting spaces plants by their full-grown size.
+-- by weight. CREATURE_FOOTPRINT * CREATURE_MAX_SCALE (8.8) keeps a Common..Rare within about one
+-- SLOT_SPACING, and Shared/Planting spaces plants by their full-grown size.
 Config.CREATURE_FOOTPRINT = 3.4 -- widest a creature (incl. its aura ring) may be at scale 1
+-- ...per rarity: Epics are wider, and Legendaries are the big plants (the pack's 20+ stud ones), so they
+-- take more room on the bed (Planting spaces them by it and keeps them off the fence).
+Config.CREATURE_FOOTPRINTS = { 3.4, 3.4, 3.4, 4.4, 5 }
+-- The tallest a plant model may be at scale 1, per rarity (a later zone adds CREATURE_ZONE_HEIGHT per zone).
+-- Models are scaled to fit both this and the footprint (tools/export_plants.luau).
+Config.CREATURE_HEIGHTS = { 5, 5.5, 6, 7, 10 }
+Config.CREATURE_ZONE_HEIGHT = 0.3
+
+function Config.creatureFootprint(rarity: number): number
+	return Config.CREATURE_FOOTPRINTS[rarity] or Config.CREATURE_FOOTPRINT
+end
+
+function Config.creatureHeight(zone: number, rarity: number): number
+	return (Config.CREATURE_HEIGHTS[rarity] or 5) + Config.CREATURE_ZONE_HEIGHT * (zone - 1)
+end
+
 Config.CREATURE_GROWTH_EXPONENT = 0.4 -- scale ~ (weight / sprout weight) ^ this: sprout ~1x, full-grown ~1.9x
 Config.CREATURE_RARITY_SCALE = 0.07 -- +7% size per rarity step
 Config.CREATURE_MIN_SCALE = 0.85

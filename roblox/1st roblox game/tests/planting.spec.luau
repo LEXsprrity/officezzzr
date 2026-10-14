@@ -114,14 +114,17 @@ H.test("planting: ids are the smallest free number (the SELL stall, the remove p
 end)
 
 H.test("planting: every old slot lands on a bed, spaced, keeping the old arrangement; auto-placing fills the beds", function()
+	-- the old grid was budgeted for the base footprint (Common..Rare); the bigger Epics and Legendaries need more
+	-- room, so an old save of those is spread out by settle
+	local RARE = 3
 	for _, plot in plots() do
 		local placed = {}
 		for slot = 1, Config.SLOTS_MAX + Config.PASS_EXTRA_SLOTS do
 			local x, z = Planting.legacySpot(slot)
 			local pos = Planting.toWorld(plot.origin, x, z)
-			local ok, why = Planting.check({ beds = plot.beds, origin = plot.origin, plants = placed, pos = pos, rarity = #Config.RARITIES })
+			local ok, why = Planting.check({ beds = plot.beds, origin = plot.origin, plants = placed, pos = pos, rarity = RARE })
 			H.ok(ok, `plot {plot.index} old slot {slot} at ({x}, {z}): {why}`)
-			table.insert(placed, { x = x, z = z, rarity = #Config.RARITIES, slot = slot })
+			table.insert(placed, { x = x, z = z, rarity = RARE, slot = slot })
 		end
 	end
 	-- the old grid's halves are pushed out onto the beds, rows unchanged
@@ -134,10 +137,31 @@ H.test("planting: every old slot lands on a bed, spaced, keeping the old arrange
 	local plot = plots()[1]
 	local placed = {}
 	for i = 1, Config.SLOTS_MAX + Config.PASS_EXTRA_SLOTS + 20 do
-		local x, z = Planting.autoPlace(plot.beds, plot.origin, placed, #Config.RARITIES)
+		local x, z = Planting.autoPlace(plot.beds, plot.origin, placed, RARE)
 		H.ok(x ~= nil, `auto-place {i}`)
-		table.insert(placed, { x = x, z = z, rarity = #Config.RARITIES, slot = i })
+		table.insert(placed, { x = x, z = z, rarity = RARE, slot = i })
 	end
+end)
+
+H.test("planting: Legendaries (the big plants) stand further inside the bed and take more room", function()
+	local plot = plots()[1]
+	local L = #Config.RARITIES
+	local edge = Config.PLOT_SIZE / 2 - Config.BED_FENCE_GAP - Config.PLANT_BED_MARGIN
+	H.ok(Planting.check(query(plot, onBed(plot, edge - 0.1, 0))), "a Common by the fence")
+	H.eq(select(2, Planting.check(query(plot, onBed(plot, edge - 0.1, 0), { rarity = L }))), "bed", "a Legendary by the fence")
+	local inside = Config.PLOT_SIZE / 2 - Config.BED_FENCE_GAP - Planting.bedMargin(L)
+	H.ok(Planting.check(query(plot, onBed(plot, inside - 0.1, 0), { rarity = L })), "a Legendary further in")
+	-- even auto-placing on the old grid (settle) still fits a good number of them on one plot
+	local placed = {}
+	while #placed < 100 do
+		local x, z = Planting.autoPlace(plot.beds, plot.origin, placed, L)
+		if not x then
+			break
+		end
+		table.insert(placed, { x = x, z = z, rarity = L, slot = #placed + 1 })
+	end
+	print(`        a plot's beds fit {#placed} full-grown Legendaries on the old grid`)
+	H.ok(#placed >= 10, `{#placed} Legendaries`)
 end)
 
 H.test("planting: settle moves only the plants that don't fit (off a bed, overlapping), oldest id first", function()

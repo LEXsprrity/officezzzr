@@ -439,17 +439,33 @@ end
 -- slot's collision policy, puts its bottom centre at `cframe` (front = -Z of `cframe`) and, unless it has
 -- KeepScale = true, scales it uniformly so it fits inside `fitSize` (0 or math.huge = that axis is free).
 -- Returns nil when the slot has no model or the model is broken (warned once); never errors.
-function Assets.place(slot: string, parent: Instance?, cframe: CFrame, fitSize: Vector3?): Model?
+-- Optional: `group` narrows the variants to the slot folder's sub-folder of that name (a creature's
+-- rarity, e.g. "Legendary"; nil when the folder has sub-folders but not that one, while a folder without
+-- sub-folders lets all its variants count), and `pick` chooses the variant (1, 2, 3..., wrapping around)
+-- instead of `cframe`'s position.
+function Assets.place(slot: string, parent: Instance?, cframe: CFrame, fitSize: Vector3?, group: string?, pick: number?): Model?
 	local template, matched = Assets.get(slot)
 	if not template then
 		return nil
 	end
-	local variants = variantsOf(template)
+	local pool: Instance? = template
+	if group and template:IsA("Folder") and template:FindFirstChildWhichIsA("Folder") then
+		pool = nil
+		for _, child in template:GetChildren() do
+			if child:IsA("Folder") and Assets.key(child.Name) == Assets.key(group) then
+				pool = child
+			end
+		end
+	end
+	local variants = if pool then variantsOf(pool) else {}
 	if #variants == 0 then
-		warnOnce("broken:" .. template.Name, `[Assets] assets/{template.Name} is an empty folder; the game builds {slot} from code instead`)
+		if pool then
+			warnOnce("broken:" .. pool:GetFullName(), `[Assets] assets/{template.Name} has an empty folder; the game builds {slot} from code instead`)
+		end
 		return nil
 	end
-	local source = variants[math.floor(Assets.hash(cframe.Position) * #variants) + 1]
+	local index = if pick then (math.floor(pick) - 1) % #variants + 1 else math.floor(Assets.hash(cframe.Position) * #variants) + 1
+	local source = variants[index]
 	local ok, result = pcall(fitClone, matched :: string, source, template, cframe, fitSize)
 	if not ok then
 		result = string.gsub(tostring(result), "^.-:%d+: ", "") -- drop the "file:line:" prefix
