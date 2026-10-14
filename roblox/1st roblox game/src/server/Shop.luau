@@ -77,7 +77,8 @@ export type Grant = {
 
 -- Whether the server may open the Robux prompt for `productName`. Returns (product, nil) or
 -- (nil, message). A product without an id is "coming soon"; packs aren't prompted once the bag holds
--- SEED_BAG_MAX seeds, and trails/treadmill tiers the player already has aren't prompted at all. Only the
+-- SEED_BAG_MAX seeds, trails/treadmill tiers the player already has aren't prompted at all, and a plot
+-- upgrade only through the tier of the plot's level (never once maxed). Only the
 -- *prompt* is gated: a receipt that arrives is always granted (Shop.grantProduct).
 function Shop.canPrompt(p: Profile, productName: string): (Config.DevProduct?, string?)
 	local product = Config.DEVELOPER_PRODUCTS[productName]
@@ -93,6 +94,14 @@ function Shop.canPrompt(p: Profile, productName: string): (Config.DevProduct?, s
 		return nil, `You already own the {product.label}.`
 	elseif product.kind == "Treadmill" and p.treadmillTier >= (product.tier :: number) then
 		return nil, "Your treadmill is already that fast."
+	elseif product.kind == "PlotUpgrade" then
+		-- Only the tier that sells this plot's next level (a cheaper tier can't buy a late level).
+		local current = Config.plotUpgradeProduct(p.plotLevel)
+		if not current then
+			return nil, "Your plot is fully upgraded!"
+		elseif current ~= productName then
+			return nil, "That isn't the upgrade for your plot's level."
+		end
 	end
 	return product, nil
 end
@@ -139,6 +148,17 @@ local function apply(p: Profile, name: string, product: Config.DevProduct, incom
 		p.treadmillTier = math.max(p.treadmillTier, product.tier :: number)
 	elseif kind == "Trail" then
 		ownTrail(p, Config.trailById(product.trail) :: Config.Trail)
+	elseif kind == "PlotUpgrade" then
+		-- Exactly one level, from the level the plot has now (whatever the tier: the player may have bought
+		-- levels with money since the prompt). Already maxed: the last level's money price instead.
+		if p.plotLevel < Config.PLOT_LEVEL_MAX then
+			p.plotLevel += 1
+			grant.label = `Plot Level {p.plotLevel}`
+		else
+			grant.compensation = Config.plotUpgradeMaxedPay()
+			p.money += grant.compensation
+			grant.label = `Your plot is maxed: +{Format.money(grant.compensation)} instead`
+		end
 	end
 	return grant
 end

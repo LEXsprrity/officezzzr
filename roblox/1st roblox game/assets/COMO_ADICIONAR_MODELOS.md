@@ -41,7 +41,7 @@ Algumas peças fazem o jogo funcionar. Elas têm um **atributo `Role`** (veja em
 | `TreadmillBelt` | a esteira (o jogador ganha Speed em cima dela) | `PlotN → TreadmillBelt` |
 | `TreadmillSign` | a plaquinha invisível com o texto da esteira | `PlotN → TreadmillSign` |
 | `PlotSign` | a plaquinha invisível com o nome do dono | `PlotN → SignPost` |
-| `UpgradeBoard` | a placa "⬆️ UPGRADE PLOT" (com os textos Level / Perk / Price) | `PlotN → UpgradeBoard` |
+| `UpgradeBoard` | o painel da placa "Upgrade" (com os textos Level / Cash / Robux; a fila de botões `Buttons` é opcional) | `PlotN → UpgradeBoard` |
 | `Slot`, `Spawn` | pontos (Attachments) dentro do chão do lote | `PlotN → Floor` |
 | `Nest` | o modelo do ninho de cada zona | `World → Corridor → N_Zona → Nest_Zona` |
 | `NestCore` | a peça invisível no centro do ninho, com os pontos `Center`, `Pod1`...`Pod4` (as sementes) e `GuardHome` (onde o guardião dorme) | `Nest_Zona → NestCore` |
@@ -196,7 +196,7 @@ O **ninho** é a planta-mãe com o monte de terra, as pedras e a flor brilhante.
 | Nome | O que é | Onde aparece | Altura | Largura máx. |
 |---|---|---|---|---|
 | `Treadmill` | a estrutura da esteira (moldura, corrimãos, painel). A faixa preta onde se corre continua do jogo, a 1 stud do chão do lote. Frente = lado do painel, virado para o portão | cada lote | até ~24 | 12 × 32 |
-| `UpgradeSign` | o suporte da placa "UPGRADE PLOT" (postes, moldura, telhadinho). A placa com o texto continua do jogo | na frente de cada lote | ~8 | ~8 |
+| `UpgradeSign` | o suporte da placa "Upgrade" (moldura com studs e o poste curto). O painel azul-escuro com o texto e os botões continua do jogo | na frente de cada lote | ~7 | ~8 |
 | `PlotGate` | o portão do lote (dois pilares + arco), 20 studs de abertura. Não colide | entrada de cada lote | até ~16 | ~23 |
 | `ShopStall` | barraca da praça das lojas (balcão, fundo, toldo). Frente = calçada. Vale para as três barracas | praça das lojas | ~21 | 18 × 21 |
 | `ShopStall_Shop` | só a barraca 🛒 SHOP (se existir, vale mais que `ShopStall`) | praça das lojas | ~21 | 18 × 21 |

@@ -207,7 +207,7 @@ H.test("icons: Icons.set lays out ImageLabels (Fit, square) and styled text, and
 	end)
 end)
 
-H.test("icons: world signs get their icons at runtime (stalls, Upgrade Plot boards, plot and treadmill signs)", function()
+H.test("icons: world signs get their icons at runtime (stalls, Upgrade boards, plot and treadmill signs)", function()
 	local all = {}
 	for _, key in KEYS do
 		all[key] = 1000 + #key
@@ -215,7 +215,13 @@ H.test("icons: world signs get their icons at runtime (stalls, Upgrade Plot boar
 	withIds(all, function()
 		local world = roblox.deserializeModel(fs.readFile("map/World.rbxm"))[1]
 		local count = WorldBuilder.applyIcons(world)
-		H.ok(count >= 3 + 3 * Config.MAX_PLAYERS, `{count} signs got icons`)
+		H.ok(count >= 3 + 2 * Config.MAX_PLAYERS, `{count} signs got icons`)
+		-- The Upgrade boards are written by PlotService (WorldBuilder.setUpgradeBoard): the PlotUpgrade icon
+		-- on the red button, the Robux icon on the purple one.
+		local plots = WorldBuilder.adopt(world)
+		for _, plot in plots do
+			WorldBuilder.setUpgradeBoard(plot.upgradeLabels, 6)
+		end
 		local seen = {}
 		for _, d in world:GetDescendants() do
 			if d:IsA("ImageLabel") and string.match(d.Name, "^Icon_") then
@@ -225,7 +231,8 @@ H.test("icons: world signs get their icons at runtime (stalls, Upgrade Plot boar
 		H.eq(seen.Shop, 1, "SHOP stall")
 		H.eq(seen.TrailShop, 1, "TRAIL SHOP stall")
 		H.eq(seen.Index, 1, "INDEX stall")
-		H.eq(seen.PlotUpgrade, Config.MAX_PLAYERS, "Upgrade Plot boards")
+		H.eq(seen.PlotUpgrade, Config.MAX_PLAYERS, "Upgrade boards: red button")
+		H.eq(seen.Robux, Config.MAX_PLAYERS, "Upgrade boards: purple button")
 		H.eq(seen.Home, Config.MAX_PLAYERS, "plot signs")
 		H.eq(seen.Treadmill, Config.MAX_PLAYERS, "treadmill signs")
 	end)

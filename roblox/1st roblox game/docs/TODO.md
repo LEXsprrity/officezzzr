@@ -23,7 +23,7 @@ Marcar com `[x]` quando estiver feito e junto ao jogo.
 
 - [x] **7. Iluminação e cores mais vivas.** O nosso jogo está escuro e lavado. Queremos um céu azul limpo, sol forte, verde muito saturado e brilho. Ref: `07-lighting-reference.png` (antes: `07-our-lighting-before.png`).
 
-- [ ] **8. Placa de upgrade do lote mais bonita.** Placa escura com "Upgrade", "Level 6 > Level 7", um botão vermelho com o preço em `$` e um botão roxo com o preço em Robux, os dois a subir de preço com o nível. Ref: `08-upgrade-sign-reference.png`.
+- [x] **8. Placa de upgrade do lote mais bonita.** Placa escura com "Upgrade", "Level 6 > Level 7", um botão vermelho com o preço em `$` e um botão roxo com o preço em Robux, os dois a subir de preço com o nível. Ref: `08-upgrade-sign-reference.png`.
 
 - [ ] **9. Barraca de vender (SELL).** Uma barraca com toldo vermelho e branco e o texto "SELL" para vender plantas velhas. Ref: `09-sell-stall-reference.png`.
 

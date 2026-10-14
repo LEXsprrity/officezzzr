@@ -427,7 +427,7 @@ function Config.trailColors(t: Trail): ColorSequence
 	return ColorSequence.new(t.color, t.color:Lerp(Color3.new(1, 1, 1), 0.45))
 end
 
--- Plot upgrades (money only). Level 1 has SLOTS_START slots. Each level adds one slot (SLOTS_MAX at
+-- Plot upgrades (money, or Robux: PlotUpgradeT1..T6 below). Level 1 has SLOTS_START slots. Each level adds one slot (SLOTS_MAX at
 -- PLOT_LEVEL_MAX) and PLOT_MONEY_PER_LEVEL to the multiplier on all of the plot's plant income: x1.06 at
 -- level 2, x2.5 at the last level (26). Upgrading to level L costs
 -- PLOT_UPGRADE_BASE_PRICE * PLOT_UPGRADE_GROWTH ^ (L - 2): $500 for level 2, ~$40K for 6, ~$9.8M for 11,
@@ -507,6 +507,8 @@ Config.RECEIPT_HISTORY = 100 -- processed Robux PurchaseIds kept per profile, so
 --   Money     max(`amount`, `minutes` of the buyer's current income), so late-game packs stay useful
 --   Treadmill the treadmill at TREADMILL_TIERS[`tier`]
 --   Trail     owns and equips Config.TRAILS[`trail`]
+--   PlotUpgrade  one plot level, from the level the player has when the receipt arrives (`tier`: the
+--             range of levels it is sold for, Config.plotUpgradeProduct); a maxed plot gets money instead
 ----------------------------------------------------------------------------------------------------
 export type DevProduct = {
 	id: number,
@@ -516,7 +518,7 @@ export type DevProduct = {
 	zone: number?,
 	amount: number?,
 	minutes: number?,
-	tier: number?,
+	tier: number?, -- Treadmill: the TREADMILL_TIERS index; PlotUpgrade: its price tier
 	trail: string?,
 }
 Config.DEVELOPER_PRODUCTS = {
@@ -548,7 +550,46 @@ Config.DEVELOPER_PRODUCTS = {
 	TrailGolden = { id = 0, kind = "Trail", label = "Golden Trail", robux = 64, trail = "Golden" },
 	TrailRed = { id = 0, kind = "Trail", label = "Red Trail", robux = 100, trail = "Red" },
 	TrailRainbow = { id = 0, kind = "Trail", label = "Rainbow Trail", robux = 180, trail = "Rainbow" },
+
+	-- One plot level each: the Upgrade board's purple button. A product's price is fixed, so the 25
+	-- upgrades are split into tiers that cost more as the plot grows (Config.plotUpgradeProduct).
+	PlotUpgradeT1 = { id = 0, kind = "PlotUpgrade", label = "Plot Upgrade (Lv 2-5)", robux = 25, tier = 1 },
+	PlotUpgradeT2 = { id = 0, kind = "PlotUpgrade", label = "Plot Upgrade (Lv 6-9)", robux = 49, tier = 2 },
+	PlotUpgradeT3 = { id = 0, kind = "PlotUpgrade", label = "Plot Upgrade (Lv 10-13)", robux = 99, tier = 3 },
+	PlotUpgradeT4 = { id = 0, kind = "PlotUpgrade", label = "Plot Upgrade (Lv 14-17)", robux = 199, tier = 4 },
+	PlotUpgradeT5 = { id = 0, kind = "PlotUpgrade", label = "Plot Upgrade (Lv 18-21)", robux = 399, tier = 5 },
+	PlotUpgradeT6 = { id = 0, kind = "PlotUpgrade", label = "Plot Upgrade (Lv 22-26)", robux = 799, tier = 6 },
 } :: { [string]: DevProduct }
+
+-- Plot upgrades for Robux: the next level of a plot is sold by the product of its tier. Each tier covers
+-- PLOT_UPGRADE_TIER_LEVELS upgrades and the last one takes the rest (levels 22-26).
+Config.PLOT_UPGRADE_TIERS = 6
+Config.PLOT_UPGRADE_TIER_LEVELS = 4
+
+-- The Robux price tier for upgrading a plot that is at `level` now, or nil at the last level.
+function Config.plotUpgradeTier(level: number): number?
+	if level >= Config.PLOT_LEVEL_MAX then
+		return nil
+	end
+	return math.clamp((math.max(level, 1) - 1) // Config.PLOT_UPGRADE_TIER_LEVELS + 1, 1, Config.PLOT_UPGRADE_TIERS)
+end
+
+-- The developer product that sells the next level of a plot at `level`, as (name, product), or nil at the
+-- last level. The board's purple button uses it, and so can the Shop ("Product:" .. name).
+function Config.plotUpgradeProduct(level: number): (string?, DevProduct?)
+	local tier = Config.plotUpgradeTier(level)
+	if not tier then
+		return nil, nil
+	end
+	local name = `PlotUpgradeT{tier}`
+	return name, Config.DEVELOPER_PRODUCTS[name]
+end
+
+-- What a plot-upgrade receipt pays instead of a level when the plot is already at the last one (it can
+-- arrive after the player maxed the plot with money): the last level's money price.
+function Config.plotUpgradeMaxedPay(): number
+	return Config.plotUpgradePrice(Config.PLOT_LEVEL_MAX)
+end
 
 -- The products of one kind, cheapest first (the Shop's card order).
 function Config.products(kind: string): { { name: string, product: DevProduct } }
