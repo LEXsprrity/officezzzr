@@ -306,7 +306,7 @@ H.test("assets: every slot the code uses is known, and the guide lists every slo
 end)
 
 H.test("assets: a whole map built with dummy models keeps its contract (roles, prompts, no colliding props)", function()
-	local slots = { "Arch_Meadow", "Nest_Desert", "Treadmill", "UpgradeSign", "ShopStall", "SpawnSign", "FenceSection", "Spirit_Torii", "Lava_Volcano" }
+	local slots = { "Nest_Desert", "Treadmill", "UpgradeSign", "ShopStall", "FenceSection", "Spirit_Torii", "Lava_Volcano" }
 	local made = {}
 	for _, slot in slots do
 		table.insert(made, dummy(slot, { { Vector3.new(4, 6, 2), Vector3.zero }, { Vector3.new(2, 2, 2), Vector3.new(0, 4, 0) } }))
@@ -339,7 +339,7 @@ H.test("assets: a whole map built with dummy models keeps its contract (roles, p
 		end
 	end
 	H.eq(prompts, 4, "the stall prompts stay")
-	local allowed = { Floor = true, Wall = true, GatePillar = true }
+	local allowed = { Floor = true, Wall = true }
 	for _, p in partsOf(world.Corridor) do
 		H.ok(p.Anchored, p:GetFullName() .. " anchored")
 		if p.CanCollide and not allowed[p.Name] then
