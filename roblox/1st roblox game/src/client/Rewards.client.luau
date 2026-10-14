@@ -34,7 +34,7 @@ local FONT = Enum.Font.FredokaOne
 local WHITE = Color3.new(1, 1, 1)
 local INK = Color3.fromRGB(25, 25, 35)
 local FRAME_INK = Color3.fromRGB(16, 18, 26)
-local BODY_COLOR = Color3.fromRGB(44, 50, 66)
+local BODY_COLOR = Color3.fromRGB(100, 210, 250) -- a bright cyan body under the cyan title bar
 local NOTE_COLOR = Color3.fromRGB(215, 222, 240)
 local GREEN = Color3.fromRGB(60, 200, 80)
 local GREY = Color3.fromRGB(150, 152, 160)
@@ -112,7 +112,7 @@ local window = new("Frame", {
 }, {
 	new("UICorner", { CornerRadius = UDim.new(0, 18) }),
 	new("UIStroke", { Thickness = 6, Color = FRAME_INK, ApplyStrokeMode = Enum.ApplyStrokeMode.Border }),
-	new("UIGradient", { Rotation = 90, Color = ColorSequence.new(WHITE, Color3.fromRGB(190, 192, 205)) }),
+	new("UIGradient", { Rotation = 90, Color = ColorSequence.new(WHITE, Color3.fromRGB(215, 218, 232)) }),
 })
 local windowScale = new("UIScale", { Parent = window })
 
@@ -231,7 +231,7 @@ local stepsTop = TITLE_H + 290
 local function step(i: number, title: string): Frame
 	local f = new("Frame", {
 		Size = UDim2.fromOffset(STEP_W, STEP_H), Position = UDim2.fromOffset((W - 3 * STEP_W - 2 * STEP_GAP) / 2 + (i - 1) * (STEP_W + STEP_GAP), stepsTop),
-		BackgroundColor3 = FRAME_INK, BackgroundTransparency = 0.25, ZIndex = 2, Parent = window,
+		BackgroundColor3 = FRAME_INK, BackgroundTransparency = 0.5, ZIndex = 2, Parent = window,
 	}, { new("UICorner", { CornerRadius = UDim.new(0, 10) }), new("UIStroke", { Thickness = 3, Color = FRAME_INK }) })
 	bold(f, 2, { Text = `{i}. {title}`, Size = UDim2.new(1, -12, 0, 30), Position = UDim2.fromOffset(6, 6), ZIndex = 3 })
 	local screen = new("Frame", {
