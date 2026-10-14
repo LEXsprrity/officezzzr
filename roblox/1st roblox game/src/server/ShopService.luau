@@ -15,6 +15,7 @@ local SpeedService = require(script.Parent:WaitForChild("SpeedService"))
 local GuardService = require(script.Parent:WaitForChild("GuardService"))
 local PlotService = require(script.Parent:WaitForChild("PlotService"))
 local TrailService = require(script.Parent:WaitForChild("TrailService"))
+local VipService = require(script.Parent:WaitForChild("VipService"))
 
 local ShopService = {}
 
@@ -42,7 +43,10 @@ local function grantPass(s: Sessions.Session, name: string)
 	s.passes[name] = true
 	if name == "ExtraSlots" then
 		PlotService.refreshSlots(s)
+	elseif name == "VIP" then
+		VipService.apply(s.player, true)
 	end
+	-- (2x Speed, Fast Grow, 2x Money: the next tick / payout reads Sessions.passes; 2x Luck: the next steal)
 	Sessions.pushFull(s)
 end
 
@@ -55,6 +59,7 @@ function ShopService.checkPasses(s: Sessions.Session)
 			end
 		end
 	end
+	VipService.apply(s.player, s.passes.VIP == true)
 end
 
 -- The equipped trail changed: rebuild the visual and tell the client.
@@ -71,11 +76,11 @@ local function onBuy(player: Player, itemId: any)
 
 	if string.sub(itemId, 1, 5) == "Pass:" then
 		local pass = passByName(string.sub(itemId, 6))
-		if not pass then
+		if not pass or s.passes[string.sub(itemId, 6)] then -- (an owned pass is never prompted again)
 			return
 		end
 		if pass.id == 0 then
-			Net.toast(player, `{pass.label}: gamepass not set up yet (stub)`, "red")
+			Net.toast(player, `{pass.label} is coming soon!`, "blue")
 		else
 			MarketplaceService:PromptGamePassPurchase(player, pass.id)
 		end

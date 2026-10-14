@@ -663,14 +663,14 @@ H.test("treadmill sign: the '+X/s' over the treadmill is exactly what a second o
 		end
 	end
 	H.eq(Treadmill.rateText(60.94), "+60.9/s")
-	-- the board and the popups read the same stats: the owner's tier and equipped trail
+	-- the board and the popups read the same stats: the owner's tier, equipped trail and Speed passes
 	local plotService = fs.readFile("src/server/PlotService.luau")
-	H.ok(string.find(plotService, "perSecond = Treadmill.perSecond(tier, s.profile.equippedTrail)", 1, true) ~= nil,
+	H.ok(string.find(plotService, "perSecond = Treadmill.perSecond(tier, s.profile.equippedTrail, Sessions.passSpeedMult(s))", 1, true) ~= nil,
 		"PlotService writes the per-second gain")
-	H.ok(string.find(plotService, "nextPerSecond = if price then Treadmill.perSecond(tier + 1, s.profile.equippedTrail) else nil", 1, true) ~= nil,
+	H.ok(string.find(plotService, "nextPerSecond = if price then Treadmill.perSecond(tier + 1, s.profile.equippedTrail, Sessions.passSpeedMult(s)) else nil", 1, true) ~= nil,
 		"and the next level's on the board")
 	local effects = fs.readFile("src/client/Effects.client.luau")
-	H.ok(string.find(effects, "Treadmill.perSecond(stats.treadmillTier, stats.equippedTrail)", 1, true) ~= nil,
+	H.ok(string.find(effects, "Treadmill.perSecond(stats.treadmillTier, stats.equippedTrail, Config.passSpeedMult(stats.passes))", 1, true) ~= nil,
 		"the popups use the same function")
 	local sessions = fs.readFile("src/server/Sessions.luau")
 	H.ok(string.find(sessions, "treadmillTier = p.treadmillTier", 1, true) ~= nil and string.find(sessions, "equippedTrail = p.equippedTrail", 1, true) ~= nil,
