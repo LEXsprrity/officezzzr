@@ -14,7 +14,7 @@ Marcar com `[x]` quando estiver feito e junto ao jogo.
 
 - [ ] **4. Lendários muito raros no fim do jogo.** Plantas Legendary têm de ser muito, muito raras, sobretudo nas 2 últimas zonas (Deep Space e Spirit Garden). Têm de parecer exclusivas.
 
-- [ ] **5. Lojas bonitas e com scroll para a direita.** As lojas atuais estão feias e não dá para deslizar para a direita. Copiar o estilo da referência na Trail Shop: barra de título colorida com X vermelho, cartões grandes da cor do trail, raridade, "x2 Speed", botão verde de `$` e botão roxo de Robux, e barra de scroll horizontal. Ref: `05-trail-shop-reference.png` (antes: `05-our-trail-shop-before.png`).
+- [x] **5. Lojas bonitas e com scroll para a direita.** As lojas atuais estão feias e não dá para deslizar para a direita. Copiar o estilo da referência na Trail Shop: barra de título colorida com X vermelho, cartões grandes da cor do trail, raridade, "x2 Speed", botão verde de `$` e botão roxo de Robux, e barra de scroll horizontal. Ref: `05-trail-shop-reference.png` (antes: `05-our-trail-shop-before.png`).
 
 - [ ] **6. Recompensas para incentivar Like, Favorito e Comunidade.**
   - Janela "Free Gift!": "LIMITED TIME! 10,000 SPEED!" com 3 passos (dar Like, Favoritar, Entrar na comunidade) e botão para resgatar.

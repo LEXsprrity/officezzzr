@@ -124,7 +124,7 @@ end
 ----------------------------------------------------------------------------------------------------
 local toastHolder = new("Frame", {
 	BackgroundTransparency = 1, AnchorPoint = Vector2.new(0.5, 0), Position = UDim2.new(0.5, 0, 0, 120),
-	Size = UDim2.fromOffset(560, 300), Parent = gui,
+	Size = UDim2.fromOffset(560, 300), ZIndex = 12, Parent = gui, -- above the shop windows
 }, { new("UIListLayout", { HorizontalAlignment = Enum.HorizontalAlignment.Center, Padding = UDim.new(0, 6) }) })
 
 local TOAST_COLORS = { red = COLORS.red, gold = COLORS.gold, green = COLORS.money, blue = COLORS.speed }
@@ -628,36 +628,279 @@ for _, tab in { { "Seeds", "🌱" }, { "Plants", "🪴" } } do
 end
 
 ----------------------------------------------------------------------------------------------------
--- Modals: Shop, Trail Shop and Index
+-- Modals: Shop, Trail Shop and Index share one chunky window, like the reference: a coloured title bar
+-- (light diagonal stripes, a shine, the big outlined title) with a red square X, over a dark slate body
+-- with a faint stud pattern. Each window has its own bar colour (WINDOWS). The body scrolls down (Shop,
+-- Index) or sideways (Trail Shop: one row of tall cards, a scrollbar at the bottom, arrows on the sides).
+-- Sizes are design pixels; modalScale shrinks the whole window to fit small screens (fitModal).
 ----------------------------------------------------------------------------------------------------
+local MODAL_W, MODAL_H, TITLE_H = 860, 600, 84
+local MODAL_PAD = 14 -- the body's inset from the window's edges
+local SCROLLBAR = 14
+local FRAME_INK = Color3.fromRGB(16, 18, 26)
+local BODY_COLOR = Color3.fromRGB(44, 50, 66)
+local NOTE_COLOR = Color3.fromRGB(215, 222, 240)
+local NUMBER_GREEN = "#5FFF3C" -- the "x2" on the trail cards' Speed pill
+local HEADING_GOLD = Color3.fromRGB(255, 214, 50)
+local HEADING_GREEN = Color3.fromRGB(120, 245, 70)
+local SOON_GREEN = Color3.fromRGB(120, 165, 120) -- R$ buttons whose product has no id yet
+local SOON_PURPLE = Color3.fromRGB(135, 110, 165)
+local WINDOWS = {
+	Shop = { title = "Shop", icon = "Shop", from = Color3.fromRGB(115, 222, 50), to = Color3.fromRGB(28, 168, 78) },
+	Trails = { title = "Trail Shop", icon = "TrailShop", from = Color3.fromRGB(170, 60, 255), to = Color3.fromRGB(250, 80, 205) },
+	Index = { title = "Index", icon = "Index", from = Color3.fromRGB(55, 178, 255), to = Color3.fromRGB(45, 92, 235) },
+}
+
+-- Paints a frame `color` with a lit top: a WHITE background under a vertical colour gradient.
+local function shade(f: GuiObject, color: Color3, light: number?, dark: number?)
+	f.BackgroundColor3 = WHITE
+	new("UIGradient", {
+		Rotation = 90, Color = ColorSequence.new(color:Lerp(WHITE, light or 0.3), color:Lerp(Color3.new(0, 0, 0), dark or 0.15)), Parent = f,
+	})
+end
+
+-- A soft white shine over the top half of a rounded frame.
+local function shine(f: GuiObject, radius: number)
+	new("Frame", { Size = UDim2.fromScale(1, 0.5), BackgroundColor3 = WHITE, BorderSizePixel = 0, Parent = f }, {
+		new("UICorner", { CornerRadius = UDim.new(0, radius) }),
+		new("UIGradient", { Rotation = 90, Transparency = NumberSequence.new(0.7, 1) }),
+	})
+end
+
+-- An icon by its Icons key, or its emoji (Icons.TOKENS) while it isn't uploaded.
+local function bigIcon(parent: Instance, key: string, props: { [string]: any }): GuiObject
+	local tokens = Icons.TOKENS[key]
+	return iconLabel(parent, key, if tokens then tokens[1] else "", props)
+end
+
+-- A chunky button: lit top, dark outline, outlined caption (with `icon` key(s) in place of emoji/"R$").
+local function chunky(parent: Instance, label: string, color: Color3, size: UDim2, onClick: () -> (), icon: (string | { string })?, iconSize: number?): TextButton
+	local b = new("TextButton", { Size = size, BackgroundColor3 = color, Text = "", AutoButtonColor = true, Parent = parent }, deco(10, 3))
+	new("UIGradient", { Rotation = 90, Color = ColorSequence.new(WHITE, Color3.fromRGB(200, 200, 200)), Parent = b })
+	local l = bold(b, 3, { Name = "Label", Text = label, Size = UDim2.new(1, -12, 1, -12), Position = UDim2.fromOffset(6, 6) })
+	if icon then
+		Icons.set(l, icon, label, iconSize or ICON.medium)
+	end
+	b.Activated:Connect(onClick)
+	return b
+end
+
+-- A small gold "SOON" tag on the corner of a Robux button whose product has no id yet (clicking it
+-- still asks the server, which answers "coming soon").
+local function soonTag(b: GuiObject)
+	local tag = new("Frame", {
+		AnchorPoint = Vector2.new(1, 0.5), Position = UDim2.new(1, 6, 0, 0), Size = UDim2.fromOffset(50, 20), BackgroundColor3 = COLORS.gold, ZIndex = 2, Parent = b,
+	}, deco(6, 2))
+	bold(tag, 2, { Text = "SOON", Size = UDim2.new(1, -8, 1, -4), Position = UDim2.fromOffset(4, 2), ZIndex = 2 })
+end
+
 local modal = new("Frame", {
-	AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.5), Size = UDim2.fromOffset(780, 560),
-	BackgroundColor3 = COLORS.panel, Visible = false, Parent = gui,
-}, deco(16, 4))
-local modalTitle = text(modal, { Text = "", Size = UDim2.new(1, -120, 0, 44), Position = UDim2.fromOffset(16, 10), TextColor3 = INK, TextXAlignment = Enum.TextXAlignment.Left })
-modalTitle:FindFirstChildOfClass("UIStroke"):Destroy()
+	AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.5), Size = UDim2.fromOffset(MODAL_W, MODAL_H),
+	BackgroundColor3 = BODY_COLOR, Active = true, Visible = false, ZIndex = 10, Parent = gui,
+}, {
+	new("UICorner", { CornerRadius = UDim.new(0, 18) }),
+	new("UIStroke", { Thickness = 6, Color = FRAME_INK, ApplyStrokeMode = Enum.ApplyStrokeMode.Border }),
+	new("UIGradient", { Rotation = 90, Color = ColorSequence.new(WHITE, Color3.fromRGB(190, 192, 205)) }),
+})
+local modalScale = new("UIScale", { Parent = modal })
+
+-- Faint studs over the body, like the reference's plate
+local studs = new("Frame", {
+	BackgroundTransparency = 1, Position = UDim2.fromOffset(0, TITLE_H), Size = UDim2.new(1, 0, 1, -TITLE_H), ClipsDescendants = true, Parent = modal,
+}, {
+	new("UIGridLayout", { CellSize = UDim2.fromOffset(20, 20), CellPadding = UDim2.fromOffset(16, 16) }),
+	new("UIPadding", { PaddingLeft = UDim.new(0, 14), PaddingTop = UDim.new(0, 16) }),
+})
+for _ = 1, math.ceil(MODAL_W / 36) * math.ceil((MODAL_H - TITLE_H) / 36) do
+	new("Frame", { BackgroundColor3 = WHITE, BackgroundTransparency = 0.955, Parent = studs }, { new("UICorner", { CornerRadius = UDim.new(0, 5) }) })
+end
+
+-- Title bar: the window's colours left to right, square bottom corners, stripes and a shine
+local titleBar = new("Frame", {
+	Size = UDim2.new(1, 0, 0, TITLE_H), BackgroundColor3 = WHITE, BorderSizePixel = 0, ZIndex = 2, Parent = modal,
+}, { new("UICorner", { CornerRadius = UDim.new(0, 18) }) })
+local titleGradient = new("UIGradient", { Parent = titleBar })
+local barBottom = new("Frame", {
+	Position = UDim2.fromScale(0, 0.5), Size = UDim2.fromScale(1, 0.5), BackgroundColor3 = WHITE, BorderSizePixel = 0, ZIndex = 1, Parent = titleBar,
+})
+local barBottomGradient = new("UIGradient", { Parent = barBottom })
+-- Diagonal stripes: a square (so the gradient's 45° is a true 45°) seen through the bar, clipped to it
+local stripeClip = new("Frame", { BackgroundTransparency = 1, Size = UDim2.fromScale(1, 1), ClipsDescendants = true, ZIndex = 2, Parent = titleBar })
+local stripeKeys = { NumberSequenceKeypoint.new(0, 1) }
+for _, band in { { 0.53, 0.565 }, { 0.585, 0.6 }, { 0.625, 0.67 } } do
+	table.insert(stripeKeys, NumberSequenceKeypoint.new(band[1] - 0.001, 1))
+	table.insert(stripeKeys, NumberSequenceKeypoint.new(band[1], 0.8))
+	table.insert(stripeKeys, NumberSequenceKeypoint.new(band[2], 0.8))
+	table.insert(stripeKeys, NumberSequenceKeypoint.new(band[2] + 0.001, 1))
+end
+table.insert(stripeKeys, NumberSequenceKeypoint.new(1, 1))
+new("Frame", {
+	AnchorPoint = Vector2.new(0, 0.5), Position = UDim2.fromScale(0, 0.5), Size = UDim2.fromOffset(MODAL_W, MODAL_W), BackgroundColor3 = WHITE,
+	BorderSizePixel = 0, Parent = stripeClip,
+}, { new("UIGradient", { Rotation = 45, Transparency = NumberSequence.new(stripeKeys) }) })
+new("Frame", { Size = UDim2.fromScale(1, 1), BackgroundColor3 = WHITE, BorderSizePixel = 0, ZIndex = 2, Parent = titleBar }, {
+	new("UICorner", { CornerRadius = UDim.new(0, 18) }),
+	new("UIGradient", { Rotation = 90, Transparency = NumberSequence.new({
+		NumberSequenceKeypoint.new(0, 0.7), NumberSequenceKeypoint.new(0.5, 1), NumberSequenceKeypoint.new(1, 1),
+	}) }),
+})
+-- The dark line between the bar and the body
+new("Frame", { Position = UDim2.fromOffset(0, TITLE_H - 3), Size = UDim2.new(1, 0, 0, 6), BackgroundColor3 = FRAME_INK, BorderSizePixel = 0, ZIndex = 3, Parent = modal })
+
+local modalTitle = bold(titleBar, 5, {
+	Text = "", Size = UDim2.new(1, -460, 0, 60), Position = UDim2.fromOffset(22, 10), TextXAlignment = Enum.TextXAlignment.Left, ZIndex = 3,
+})
+-- Right of the title: your money (Shop, Trail Shop) or how much of the Index you've found
+local modalSubtitle = bold(titleBar, 3, {
+	Text = "", AnchorPoint = Vector2.new(1, 0.5), Position = UDim2.new(1, -94, 0.5, 0), Size = UDim2.fromOffset(340, 34),
+	TextXAlignment = Enum.TextXAlignment.Right, TextColor3 = MONEY_GREEN, ZIndex = 3,
+})
+
+-- The red square X (the Close icon inside once uploaded, a white outlined X until then)
+local modalClose = new("TextButton", {
+	AnchorPoint = Vector2.new(1, 0.5), Position = UDim2.new(1, -12, 0.5, -1), Size = UDim2.fromOffset(64, 64), BackgroundColor3 = WHITE,
+	Text = "", AutoButtonColor = true, ZIndex = 3, Parent = titleBar,
+}, deco(10, 4))
+new("UIGradient", { Rotation = 90, Color = ColorSequence.new(Color3.fromRGB(255, 85, 85), Color3.fromRGB(200, 20, 35)), Parent = modalClose })
+local closeImage = Icons.image("Close")
+if closeImage then
+	new("ImageLabel", {
+		BackgroundTransparency = 1, Image = closeImage, ScaleType = Enum.ScaleType.Fit, Size = UDim2.new(1, -10, 1, -10), Position = UDim2.fromOffset(5, 5),
+		ZIndex = 3, Parent = modalClose,
+	})
+else
+	bold(modalClose, 4, { Text = "X", Size = UDim2.new(1, -16, 1, -14), Position = UDim2.fromOffset(8, 7), ZIndex = 3 })
+end
+
+local bodyHolder = new("Frame", {
+	BackgroundTransparency = 1, Position = UDim2.fromOffset(MODAL_PAD, TITLE_H + 10), Size = UDim2.new(1, -2 * MODAL_PAD, 1, -TITLE_H - 10 - MODAL_PAD),
+	ZIndex = 2, Parent = modal,
+})
 local modalBody = new("ScrollingFrame", {
-	BackgroundTransparency = 1, Position = UDim2.fromOffset(16, 64), Size = UDim2.new(1, -32, 1, -80),
-	CanvasSize = UDim2.new(), AutomaticCanvasSize = Enum.AutomaticSize.Y, ScrollBarThickness = 6, BorderSizePixel = 0, Parent = modal,
+	BackgroundTransparency = 1, Size = UDim2.fromScale(1, 1), BorderSizePixel = 0, CanvasSize = UDim2.new(),
+	AutomaticCanvasSize = Enum.AutomaticSize.Y, ScrollingDirection = Enum.ScrollingDirection.Y, ScrollBarThickness = SCROLLBAR,
+	ScrollBarImageColor3 = Color3.fromRGB(205, 210, 228), ScrollBarImageTransparency = 0,
+	VerticalScrollBarInset = Enum.ScrollBarInset.ScrollBar, HorizontalScrollBarInset = Enum.ScrollBarInset.ScrollBar,
+	Parent = bodyHolder,
 })
 local modalName: string? = nil
 local renderModal: () -> ()
-local trailScrollX = 0 -- the Trail Shop strip's scroll: money ticks re-render the modal, the strip stays put
-button(modal, "✖", COLORS.red, UDim2.fromOffset(44, 44), function()
+
+-- Money-dependent bits of the open window (buy buttons' colours, the money in the title bar, the Money
+-- packs' amounts). Money ticks constantly: these update in place instead of rebuilding the window, so
+-- a click or a drag in progress is never cut short.
+local moneyWatchers: { () -> () } = {}
+local function watchMoney(update: () -> ())
+	update()
+	table.insert(moneyWatchers, update)
+end
+
+local function closeModal()
 	modal.Visible = false
 	modalName = nil
-end, "Close").Position = UDim2.new(1, -56, 0, 10)
+end
+modalClose.Activated:Connect(closeModal)
+
+-- Fits the window on small screens (phones): never bigger than design size, never off the screen.
+local function fitModal()
+	local s = uiScale.Scale
+	local w, h = gui.AbsoluteSize.X / s, gui.AbsoluteSize.Y / s
+	modalScale.Scale = math.clamp(math.min((w - 24) / (MODAL_W + 12), (h - 24) / (MODAL_H + 12)), 0.3, 1)
+end
+
+----------------------------------------------------------------------------------------------------
+-- Trail Shop strip scrolling: the scrollbar, drag and touch are the ScrollingFrame's own; the mouse wheel
+-- and the side arrows move it a card at a time.
+----------------------------------------------------------------------------------------------------
+local TRAIL_W, TRAIL_H, TRAIL_GAP = 250, 452, 14
+local trailCards: { GuiObject } = {}
+
+local function scrollTrails(cards: number, smooth: boolean)
+	-- Roblox clamps CanvasPosition to the canvas, so going past either end just stops there
+	local target = Vector2.new(math.max(0, modalBody.CanvasPosition.X + cards * (TRAIL_W + TRAIL_GAP)), 0)
+	if smooth then
+		TweenService:Create(modalBody, TweenInfo.new(0.25, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), { CanvasPosition = target }):Play()
+	else
+		modalBody.CanvasPosition = target
+	end
+end
+
+local function trailArrow(dir: number): TextButton
+	local b = new("TextButton", {
+		AnchorPoint = Vector2.new(if dir < 0 then 0 else 1, 0.5), Position = UDim2.new(if dir < 0 then 0 else 1, 6 * dir, 0.5, -SCROLLBAR / 2),
+		Size = UDim2.fromOffset(46, 86), BackgroundColor3 = FRAME_INK, BackgroundTransparency = 0.15, Text = "", AutoButtonColor = true,
+		Visible = false, ZIndex = 5, Parent = bodyHolder,
+	}, { new("UICorner", { CornerRadius = UDim.new(0, 10) }), new("UIStroke", { Thickness = 3, Color = WHITE, Transparency = 0.35 }) })
+	bold(b, 3, { Text = if dir < 0 then "<" else ">", Size = UDim2.new(1, -8, 0, 52), Position = UDim2.new(0, 4, 0.5, -26), ZIndex = 5 })
+	b.Activated:Connect(function()
+		scrollTrails(dir, true)
+	end)
+	return b
+end
+local arrowLeft, arrowRight = trailArrow(-1), trailArrow(1)
+
+-- Each arrow shows while there are cards hidden on its side (measured on screen, so any UIScale works).
+local function updateTrailArrows()
+	local first, last = trailCards[1], trailCards[#trailCards]
+	local show = modal.Visible and modalName == "Trails" and first ~= nil and first.Parent ~= nil and last.Parent ~= nil
+	local left = modalBody.AbsolutePosition.X
+	local right = left + modalBody.AbsoluteWindowSize.X
+	arrowLeft.Visible = show and first.AbsolutePosition.X < left - 4
+	arrowRight.Visible = show and last.AbsolutePosition.X + last.AbsoluteSize.X > right + 4
+end
+for _, prop in { "CanvasPosition", "AbsoluteCanvasSize", "AbsoluteWindowSize" } do
+	modalBody:GetPropertyChangedSignal(prop):Connect(updateTrailArrows)
+end
+
+-- The mouse wheel over the strip scrolls it sideways (unless Roblox already did it on its own).
+UserInputService.InputChanged:Connect(function(input)
+	if input.UserInputType ~= Enum.UserInputType.MouseWheel or modalName ~= "Trails" or not modal.Visible then
+		return
+	end
+	local p, a, s = input.Position, modalBody.AbsolutePosition, modalBody.AbsoluteSize
+	if p.X < a.X or p.X > a.X + s.X or p.Y < a.Y or p.Y > a.Y + s.Y then
+		return
+	end
+	local before = modalBody.CanvasPosition.X
+	local notches = -input.Position.Z -- wheel down (Z < 0) goes right
+	task.defer(function()
+		if modalBody.CanvasPosition.X == before then
+			scrollTrails(notches * 0.5, false)
+		end
+	end)
+end)
+
+-- Body layout: a vertical list (Shop, Index) or one horizontal row (Trail Shop).
+local function clearModal(padding: number, horizontal: boolean?)
+	modalBody:ClearAllChildren()
+	modalBody.ScrollingDirection = if horizontal then Enum.ScrollingDirection.X else Enum.ScrollingDirection.Y
+	modalBody.AutomaticCanvasSize = if horizontal then Enum.AutomaticSize.X else Enum.AutomaticSize.Y
+	modalBody.CanvasSize = UDim2.new()
+	new("UIListLayout", {
+		FillDirection = if horizontal then Enum.FillDirection.Horizontal else Enum.FillDirection.Vertical,
+		Padding = UDim.new(0, padding), SortOrder = Enum.SortOrder.LayoutOrder,
+		HorizontalAlignment = if horizontal then Enum.HorizontalAlignment.Left else Enum.HorizontalAlignment.Center,
+		VerticalAlignment = if horizontal then Enum.VerticalAlignment.Center else Enum.VerticalAlignment.Top,
+		Parent = modalBody,
+	})
+	new("UIPadding", {
+		PaddingTop = UDim.new(0, 4), PaddingBottom = UDim.new(0, 10), PaddingLeft = UDim.new(0, 4), PaddingRight = UDim.new(0, 4), Parent = modalBody,
+	})
+end
 
 openModal = function(name: string)
 	if modalName == name then
-		modal.Visible = false
-		modalName = nil
+		closeModal()
 		return
 	end
+	local window = WINDOWS[name]
 	modalName = name
+	titleGradient.Color = ColorSequence.new(window.from, window.to)
+	barBottomGradient.Color = titleGradient.Color
+	local tokens = Icons.TOKENS[window.icon]
+	Icons.set(modalTitle, window.icon, `{if tokens then tokens[1] .. " " else ""}{window.title}`, ICON.big)
 	modal.Visible = true
 	modalBody.CanvasPosition = Vector2.zero
-	trailScrollX = 0
 	renderModal()
 end
 
@@ -681,33 +924,31 @@ game:GetService("ProximityPromptService").PromptTriggered:Connect(function(promp
 	end
 end)
 
--- A vertical list in the modal body.
-local function clearModal(padding: number?)
-	modalBody:ClearAllChildren()
-	new("UIListLayout", {
-		Padding = UDim.new(0, padding or 10), SortOrder = Enum.SortOrder.LayoutOrder, HorizontalAlignment = Enum.HorizontalAlignment.Center, Parent = modalBody,
+-- A light info line in the modal body, with `icon` (key(s), see Icons.set) once uploaded
+local function note(label: string, order: number, icon: (string | { string })?)
+	local h = text(modalBody, {
+		Text = label, Size = UDim2.new(1, -12, 0, 26), TextColor3 = NOTE_COLOR, LayoutOrder = order, TextWrapped = true,
 	})
+	if icon then
+		Icons.set(h, icon, label, ICON.medium)
+	end
 end
 
--- Dark text line inside the modal body, with `icon` (key(s), see Icons.set) once uploaded
-local function heading(label: string, order: number, centered: boolean?, height: number?, icon: (string | { string })?, textSize: number?)
-	local h = text(modalBody, {
-		Text = label, Size = UDim2.new(1, -12, 0, height or 30), TextColor3 = INK, LayoutOrder = order, TextWrapped = true,
-		TextXAlignment = if centered then Enum.TextXAlignment.Center else Enum.TextXAlignment.Left,
-	})
-	local stroke = h:FindFirstChildOfClass("UIStroke")
-	if stroke then
-		stroke:Destroy()
-	end
+-- "-- SPEED --": a big outlined section title in gold or green (the icon goes in front once uploaded)
+local function section(label: string, order: number, color: Color3, icon: string?): TextLabel
+	local h = bold(modalBody, 4, { Text = `-- {label} --`, Size = UDim2.new(1, -12, 0, 48), TextColor3 = color, LayoutOrder = order })
 	if icon then
-		Icons.set(h, icon, label, ICON.medium, textSize)
+		Icons.set(h, icon, h.Text, ICON.big, 38)
 	end
 	return h
 end
 
--- "-- SPEED --" style section title (the icon goes in front once uploaded)
-local function section(label: string, order: number, icon: string?): TextLabel
-	return heading(`-- {label} --`, order, true, 36, icon, 30)
+-- Your money in the title bar (Shop, Trail Shop)
+local function moneySubtitle()
+	modalSubtitle.TextColor3 = MONEY_GREEN
+	watchMoney(function()
+		Icons.set(modalSubtitle, "Money", `💰 {Format.money(stats.money)}`, ICON.big, 30)
+	end)
 end
 
 -- Scrolls the modal body so `target` sits at its top, once the layout has placed it. Measured from
@@ -793,18 +1034,20 @@ refreshQuickBuy = function()
 end
 refreshQuickBuy()
 
-local function giftButton(parent: Instance): TextButton
+local function giftButton(parent: Instance, size: UDim2): TextButton
 	-- Gifting needs extra work (choosing a player, granting to them): shown, but not live yet.
-	return button(parent, "🎁", COLORS.robux, UDim2.fromOffset(46, 44), function()
+	return chunky(parent, "🎁", COLORS.robux, size, function()
 		toast("🎁 Gifting is coming soon!", "blue")
-	end, "Gift")
+	end, "Gift", ICON.big)
 end
 
 ----------------------------------------------------------------------------------------------------
 -- Shop: seed packs (premium cards with loot tables showing the exact server odds), then every other
--- Robux item as a card with a green R$ button, plus the money plot upgrade
+-- Robux item as a card with a big icon, the amount in big outlined text, a green R$ button and the
+-- purple gift button, plus the money plot upgrade
 ----------------------------------------------------------------------------------------------------
 local packShines: { Frame } = {} -- swept across the premium cards every frame while they're shown
+local SHOP_CARD_W, SHOP_CARD_H = 190, 240
 
 -- Loot table: one row per rarity with a bar as wide as its chance.
 local function lootTable(parent: Instance, pack: SeedPacks.Pack, pos: UDim2, size: UDim2)
@@ -840,7 +1083,7 @@ local function packCard(parent: Instance, order: number, productName: string, pr
 	local pack = SeedPacks.packForProduct(product)
 	local zone = Config.ZONES[pack.zone]
 	local c = new("Frame", {
-		Size = UDim2.new(0.5, -6, 1, 0), BackgroundColor3 = WHITE, ClipsDescendants = true, LayoutOrder = order, Parent = parent,
+		Size = UDim2.new(0.5, -7, 1, 0), BackgroundColor3 = WHITE, ClipsDescendants = true, LayoutOrder = order, Parent = parent,
 	}, {
 		new("UIGradient", { Rotation = 90, Color = ColorSequence.new(zone.ui:Lerp(WHITE, 0.15), zone.ui:Lerp(Color3.new(0, 0, 0), 0.55)) }),
 		new("UICorner", { CornerRadius = UDim.new(0, 16) }),
@@ -854,7 +1097,7 @@ local function packCard(parent: Instance, order: number, productName: string, pr
 	local band = new("Frame", { Size = UDim2.new(1, 0, 0, 28), BackgroundColor3 = COLORS.gold, BorderSizePixel = 0, Parent = c })
 	Icons.set(text(band, { Size = UDim2.new(1, -12, 1, -6), Position = UDim2.fromOffset(6, 3) }), "SeedPack", "💎 PREMIUM · LATE-GAME SEED")
 	text(c, { Text = zone.icon, Size = UDim2.fromOffset(60, 60), Position = UDim2.fromOffset(12, 36) })
-	text(c, { Text = pack.name, Size = UDim2.new(1, -94, 0, 34), Position = UDim2.fromOffset(82, 38), TextXAlignment = Enum.TextXAlignment.Left })
+	bold(c, 4, { Text = pack.name, Size = UDim2.new(1, -94, 0, 34), Position = UDim2.fromOffset(82, 38), TextXAlignment = Enum.TextXAlignment.Left })
 	text(c, {
 		Text = `{zone.name} seed · no Speed needed`, Size = UDim2.new(1, -94, 0, 22), Position = UDim2.fromOffset(82, 74),
 		TextXAlignment = Enum.TextXAlignment.Left, TextColor3 = Color3.fromRGB(255, 245, 210),
@@ -872,48 +1115,66 @@ local function packCard(parent: Instance, order: number, productName: string, pr
 	local live = product.id ~= 0
 	local price = robuxCaption(product)
 	local caption = if not live then `Coming soon · {Format.robux(product.robux)}` elseif bagFull then `🎒 Bag full · {price}` else `Buy · {price}`
-	button(c, caption, if live and not bagFull then COLORS.buy else COLORS.disabled, UDim2.new(1, -82, 0, 58), function()
+	chunky(c, caption, if live and not bagFull then COLORS.buy else COLORS.disabled, UDim2.new(1, -86, 0, 58), function()
 		RequestBuy:FireServer("Product:" .. productName)
 	end, { "Robux", "Bag" }, ICON.small).Position = UDim2.new(0, 12, 1, -70)
-	local gift = giftButton(c)
-	gift.Size = UDim2.fromOffset(58, 58)
-	gift.Position = UDim2.new(1, -70, 1, -70)
+	giftButton(c, UDim2.fromOffset(60, 58)).Position = UDim2.new(1, -72, 1, -70)
 end
 
 -- A grid of shop cards (4 per row), auto-sized to its contents.
 local function cardGrid(order: number): Frame
 	return new("Frame", {
-		BackgroundTransparency = 1, Size = UDim2.new(1, -12, 0, 0), AutomaticSize = Enum.AutomaticSize.Y, LayoutOrder = order, Parent = modalBody,
+		BackgroundTransparency = 1, Size = UDim2.new(1, -8, 0, 0), AutomaticSize = Enum.AutomaticSize.Y, LayoutOrder = order, Parent = modalBody,
 	}, {
 		new("UIGridLayout", {
-			CellSize = UDim2.fromOffset(176, 168), CellPadding = UDim2.fromOffset(10, 10), SortOrder = Enum.SortOrder.LayoutOrder,
+			CellSize = UDim2.fromOffset(SHOP_CARD_W, SHOP_CARD_H), CellPadding = UDim2.fromOffset(14, 14), SortOrder = Enum.SortOrder.LayoutOrder,
 			HorizontalAlignment = Enum.HorizontalAlignment.Center,
 		}),
 	})
 end
 
--- A shop card: big title (its emoji is the `icon` once uploaded), a smaller line, and the buy button (+ the
--- gift button for Robux items).
-local function shopCard(grid: Instance, order: number, color: Color3, title: string, sub: string, icon: string): Frame
-	local c = new("Frame", { BackgroundColor3 = color, LayoutOrder = order, Parent = grid }, deco(12))
-	new("UIGradient", { Rotation = 90, Color = ColorSequence.new(WHITE, Color3.fromRGB(190, 190, 190)), Parent = c })
-	Icons.set(text(c, { Size = UDim2.new(1, -12, 0, 46), Position = UDim2.fromOffset(6, 8) }), icon, title, ICON.big)
-	text(c, { Text = sub, Size = UDim2.new(1, -12, 0, 44), Position = UDim2.fromOffset(6, 58), TextColor3 = Color3.fromRGB(255, 255, 225), TextWrapped = true })
-	return c
+-- A shop card: a big icon on top, the amount in big outlined text, a smaller line under it. The caller
+-- adds the buttons (buyRow). Returns the card and its amount label.
+local function shopCard(grid: Instance, order: number, color: Color3, amount: string, sub: string, icon: string): (Frame, TextLabel)
+	local c = new("Frame", { LayoutOrder = order, Parent = grid }, {
+		new("UICorner", { CornerRadius = UDim.new(0, 14) }),
+		new("UIStroke", { Thickness = 4, Color = FRAME_INK, ApplyStrokeMode = Enum.ApplyStrokeMode.Border }),
+	})
+	shade(c, color, 0.3, 0.25)
+	shine(c, 14)
+	bigIcon(c, icon, { Size = UDim2.fromOffset(92, 92), AnchorPoint = Vector2.new(0.5, 0), Position = UDim2.new(0.5, 0, 0, 8) })
+	local amountLabel = bold(c, 4, { Text = amount, Size = UDim2.new(1, -14, 0, 40), Position = UDim2.fromOffset(7, 102) })
+	text(c, { Text = sub, Size = UDim2.new(1, -14, 0, 36), Position = UDim2.fromOffset(7, 144), TextWrapped = true, TextColor3 = Color3.fromRGB(255, 255, 225) })
+	return c, amountLabel
+end
+
+-- The bottom row of a shop card: the buy button, and the purple gift button for Robux items.
+local function buyRow(c: Frame, caption: string, color: Color3, onClick: () -> (), icon: (string | { string })?, gift: boolean): TextButton
+	local b = chunky(c, caption, color, UDim2.new(1, if gift then -76 else -16, 0, 50), onClick, icon, ICON.small)
+	b.Position = UDim2.new(0, 8, 1, -58)
+	if gift then
+		giftButton(c, UDim2.fromOffset(54, 50)).Position = UDim2.new(1, -62, 1, -58)
+	end
+	return b
 end
 
 -- A Robux card for developer product `name`; `owned` replaces the price (e.g. a treadmill tier you have).
-local function productCard(grid: Instance, order: number, name: string, product: Config.DevProduct, color: Color3, title: string, sub: string, icon: string, owned: string?)
-	local c = shopCard(grid, order, color, title, sub, icon)
-	button(c, owned or robuxCaption(product), if owned or product.id == 0 then COLORS.disabled else COLORS.buy, UDim2.new(1, -66, 0, 44), function()
+local function productCard(grid: Instance, order: number, name: string, product: Config.DevProduct, color: Color3, amount: string, sub: string, icon: string, owned: string?): (Frame, TextLabel)
+	local c, amountLabel = shopCard(grid, order, color, amount, sub, icon)
+	local soon = not owned and product.id == 0
+	local b = buyRow(c, owned or Format.robux(robuxPrice(product)), if owned then COLORS.disabled elseif soon then SOON_GREEN else COLORS.buy, function()
 		RequestBuy:FireServer("Product:" .. name)
-	end, { "Robux" }, ICON.small).Position = UDim2.new(0, 8, 1, -52)
-	giftButton(c).Position = UDim2.new(1, -54, 1, -52)
+	end, { "Robux" }, true)
+	if soon then
+		soonTag(b)
+	end
+	return c, amountLabel
 end
 
-local function renderShop()
-	Icons.set(modalTitle, "Shop", "🛒 Shop")
-	clearModal(8)
+-- Returns true when it scrolled to a section (openShopAt), so renderModal doesn't restore the old scroll.
+local function renderShop(): boolean
+	clearModal(10)
+	moneySubtitle()
 	local order = 0
 	local function nextOrder(): number
 		order += 1
@@ -921,78 +1182,106 @@ local function renderShop()
 	end
 
 	-- Seed packs (Robux)
-	section("SEED PACKS", nextOrder(), "SeedPack")
+	section("SEED PACKS", nextOrder(), HEADING_GOLD, "SeedPack")
 	local bagCount = SeedPacks.bagCount(stats.seedBag or {})
 	local bagFull = bagCount >= Config.SEED_BAG_MAX
-	local row = new("Frame", { BackgroundTransparency = 1, Size = UDim2.new(1, -12, 0, 400), LayoutOrder = nextOrder(), Parent = modalBody },
-		{ new("UIListLayout", { FillDirection = Enum.FillDirection.Horizontal, HorizontalAlignment = Enum.HorizontalAlignment.Center, Padding = UDim.new(0, 12), SortOrder = Enum.SortOrder.LayoutOrder }) })
+	local row = new("Frame", { BackgroundTransparency = 1, Size = UDim2.new(1, -8, 0, 400), LayoutOrder = nextOrder(), Parent = modalBody },
+		{ new("UIListLayout", { FillDirection = Enum.FillDirection.Horizontal, HorizontalAlignment = Enum.HorizontalAlignment.Center, Padding = UDim.new(0, 14), SortOrder = Enum.SortOrder.LayoutOrder }) })
 	for i, entry in Config.products("Pack") do
 		packCard(row, i, entry.name, entry.product, bagFull)
 	end
-	heading(`🎒 Seed bag {bagCount}/{Config.SEED_BAG_MAX}{if bagFull then " (full: plant some first!)" else ""} · plant bagged seeds from the 🌱 Seeds menu at your plot's pad`, nextOrder(), nil, nil, { "Bag" })
+	note(`🎒 Seed bag {bagCount}/{Config.SEED_BAG_MAX}{if bagFull then " (full: plant some first!)" else ""} · plant bagged seeds from the 🌱 Seeds menu at your plot's pad`, nextOrder(), { "Bag", "Seeds" })
 
-	-- Plot upgrade (money; also on the board at your plot's gate)
-	section("PLOT UPGRADE", nextOrder(), "PlotUpgrade")
+	-- Plot upgrade: money or Robux (also on the board at your plot's gate)
+	section("PLOT UPGRADE", nextOrder(), HEADING_GREEN, "PlotUpgrade")
 	local plotGrid = cardGrid(nextOrder())
+	local plotColor = Color3.fromRGB(90, 190, 90)
 	local level = stats.plotLevel or 1
 	local price = Config.priceOf("PlotUpgrade", stats :: any)
-	local plotCard = shopCard(plotGrid, 1, Color3.fromRGB(90, 190, 90),
-		if price then `🏡 Level {level} → {level + 1}` else `🏡 Level {level} · MAX`,
-		if price then `+1 slot · cash x{Config.plotMoneyMult(level)} → x{Config.plotMoneyMult(level + 1)}` else `{Config.plotSlots(level)} slots · cash x{Config.plotMoneyMult(level)}`, "PlotUpgrade")
-	button(plotCard, if price then Format.money(price) else "Maxed", if price and stats.money >= price then COLORS.buy else COLORS.disabled,
-		UDim2.new(1, -16, 0, 44), function()
-			RequestBuy:FireServer("PlotUpgrade")
-		end).Position = UDim2.new(0, 8, 1, -52)
+	local plotCard = shopCard(plotGrid, 1, plotColor, if price then `LEVEL {level + 1}` else "MAX LEVEL",
+		if price then `+1 slot · cash x{Config.plotMoneyMult(level)} → x{Config.plotMoneyMult(level + 1)}`
+			else `{Config.plotSlots(level)} slots · cash x{Config.plotMoneyMult(level)}`, "PlotUpgrade")
+	local plotButton = buyRow(plotCard, if price then Format.money(price) else "Maxed", COLORS.disabled, function()
+		RequestBuy:FireServer("PlotUpgrade")
+	end, nil, false)
+	watchMoney(function()
+		plotButton.BackgroundColor3 = if price and stats.money >= price then COLORS.buy else COLORS.disabled
+	end)
+	-- The same level for Robux: a purple R$ button beside the $ one, like the board at the gate. The
+	-- product is the one for the plot's current price tier (looked up on every render, so it follows
+	-- plotLevel); none at the last level.
+	local plotProductName, plotProduct = Config.plotUpgradeProduct(level)
+	if price and plotProductName and plotProduct then
+		plotButton.Size = UDim2.new(0.55, -10, 0, 50)
+		local robuxButton = chunky(plotCard, Format.robux(robuxPrice(plotProduct)), if plotProduct.id == 0 then SOON_PURPLE else COLORS.robux,
+			UDim2.new(0.45, -10, 0, 50), function()
+				RequestBuy:FireServer("Product:" .. plotProductName)
+			end, { "Robux" }, ICON.small)
+		robuxButton.Position = UDim2.new(0.55, 2, 1, -58)
+		if plotProduct.id == 0 then
+			soonTag(robuxButton)
+		end
+	end
 
 	-- Speed (Robux); the HUD's "+" on the Speed icon opens the Shop here
 	local shopSections: { [string]: GuiObject } = {}
-	shopSections.Speed = section("SPEED", nextOrder(), "Speed")
+	shopSections.Speed = section("SPEED", nextOrder(), HEADING_GOLD, "Speed")
 	local grid = cardGrid(nextOrder())
 	for i, entry in Config.products("Speed") do
-		productCard(grid, i, entry.name, entry.product, COLORS.speed, `⚡ {entry.product.label}`, "Added to your Speed right away", "Speed")
-	end
-	local focus = shopFocus and shopSections[shopFocus]
-	shopFocus = nil
-	if focus then
-		scrollModalTo(focus)
+		productCard(grid, i, entry.name, entry.product, COLORS.speed, string.upper(entry.product.label), "Added to your Speed right away", "Speed")
 	end
 
 	-- Money (Robux): the card shows what you'd get right now (fixed, or minutes of your income)
-	section("MONEY", nextOrder(), "Money")
+	section("MONEY", nextOrder(), HEADING_GREEN, "Money")
 	grid = cardGrid(nextOrder())
 	for i, entry in Config.products("Money") do
-		local amount = Config.moneyPackAmount(entry.product, stats.income or 0)
-		productCard(grid, i, entry.name, entry.product, COLORS.money, `💰 {Format.money(amount)}`,
+		local _, amountLabel = productCard(grid, i, entry.name, entry.product, COLORS.money, "",
 			`{entry.product.label} · at least {entry.product.minutes} min of income`, "Money")
+		watchMoney(function()
+			amountLabel.Text = Format.money(Config.moneyPackAmount(entry.product, stats.income or 0))
+		end)
 	end
 
 	-- Treadmill (Robux)
-	section("TREADMILL", nextOrder(), "Treadmill")
+	section("TREADMILL", nextOrder(), HEADING_GOLD, "Treadmill")
 	grid = cardGrid(nextOrder())
 	for i, entry in Config.products("Treadmill") do
 		local tier = entry.product.tier :: number
 		local owned = (stats.treadmillTier or 1) >= tier
-		productCard(grid, i, entry.name, entry.product, Color3.fromRGB(240, 90, 90), `🏃 Treadmill x{Config.TREADMILL_TIERS[tier].mult}`,
+		productCard(grid, i, entry.name, entry.product, Color3.fromRGB(240, 90, 90), `x{Config.TREADMILL_TIERS[tier].mult} TREADMILL`,
 			`Your treadmill: x{Config.TREADMILL_TIERS[stats.treadmillTier or 1].mult}`, "Treadmill", if owned then "Owned" else nil)
 	end
 
 	-- Gamepasses (Robux)
-	section("PASSES", nextOrder())
+	section("PASSES", nextOrder(), HEADING_GREEN)
 	grid = cardGrid(nextOrder())
 	for i, name in { "DoubleMoney", "ExtraSlots" } do
 		local pass = Config.GAMEPASSES[name]
 		local owned = stats.passes[name] == true
-		local c = shopCard(grid, i, Color3.fromRGB(0, 180, 200), `💎 {pass.label}`, if name == "DoubleMoney" then "Doubles all plant income" else "On top of your plot level's slots", name)
-		button(c, if owned then "Owned" else "Buy · R$", if owned or pass.id == 0 then COLORS.disabled else COLORS.buy, UDim2.new(1, -66, 0, 44), function()
+		local c = shopCard(grid, i, Color3.fromRGB(0, 180, 200), string.upper(pass.label),
+			if name == "DoubleMoney" then "Doubles all plant income" else "On top of your plot level's slots", name)
+		local soon = not owned and pass.id == 0
+		local b = buyRow(c, if owned then "Owned" else "Buy · R$", if owned then COLORS.disabled elseif soon then SOON_GREEN else COLORS.buy, function()
 			RequestBuy:FireServer("Pass:" .. name)
-		end, { "Robux" }, ICON.small).Position = UDim2.new(0, 8, 1, -52)
-		giftButton(c).Position = UDim2.new(1, -54, 1, -52)
+		end, { "Robux" }, true)
+		if soon then
+			soonTag(b)
+		end
 	end
+
+	local focus = shopFocus and shopSections[shopFocus]
+	shopFocus = nil
+	if focus then
+		scrollModalTo(focus)
+		return true
+	end
+	return false
 end
 
 ----------------------------------------------------------------------------------------------------
--- Trail Shop: one card per trail, scrolling sideways, in the trail's colour. Money ($) or Robux (R$),
--- or Equip / Equipped once owned.
+-- Trail Shop: one row of tall cards in the trail's colour, scrolling sideways. Name and rarity, the
+-- Trail Shop icon tinted over a ribbon of the trail's colours, an "x2 Speed" pill, then a green $ button
+-- and a purple R$ button, or Equip / Equipped once owned.
 ----------------------------------------------------------------------------------------------------
 -- "+0.5", "+12.3", "+1.2K": the Speed one step (stud) pays right now (Config.speedPerStud)
 local function perStepText(): string
@@ -1000,88 +1289,106 @@ local function perStepText(): string
 	return "+" .. (if x < 100 then string.format("%.1f", x) else Format.short(x))
 end
 
-local function trailFill(f: GuiObject, t: Config.Trail)
-	if t.rainbow then
-		f.BackgroundColor3 = WHITE
-		new("UIGradient", { Rotation = 25, Color = Config.trailColors(t), Parent = f })
-	else
-		f.BackgroundColor3 = t.color
-		new("UIGradient", { Rotation = 90, Color = ColorSequence.new(WHITE, Color3.fromRGB(150, 150, 150)), Parent = f })
-	end
-end
-
-local function trailCard(parent: Instance, order: number, t: Config.Trail)
+local function trailCard(parent: Instance, order: number, t: Config.Trail): Frame
 	local owned = stats.trails[t.id] == true
 	local equipped = stats.equippedTrail == t.id
-	local c = new("Frame", { Size = UDim2.fromOffset(200, 360), LayoutOrder = order, Parent = parent }, deco(16, if equipped then 5 else 3))
-	trailFill(c, t)
-	if equipped then
-		local stroke = c:FindFirstChildOfClass("UIStroke")
-		if stroke then
-			stroke.Color = COLORS.gold
-		end
-	end
-	text(c, { Text = string.upper(t.rarity), Size = UDim2.new(1, -16, 0, 26), Position = UDim2.fromOffset(8, 10), TextColor3 = Color3.fromRGB(255, 250, 220) })
-	text(c, { Text = t.name, Size = UDim2.new(1, -16, 0, 44), Position = UDim2.fromOffset(8, 38) })
-	-- A ribbon preview: the trail's colours fading out
-	local ribbon = new("Frame", {
-		AnchorPoint = Vector2.new(0.5, 0), Position = UDim2.new(0.5, 0, 0, 96), Size = UDim2.new(1, -36, 0, 34), BackgroundColor3 = WHITE,
-	}, { new("UICorner", { CornerRadius = UDim.new(1, 0) }), new("UIStroke", { Thickness = 2, Color = INK }) })
-	new("UIGradient", {
-		Color = Config.trailColors(t),
-		Transparency = NumberSequence.new({ NumberSequenceKeypoint.new(0, 0), NumberSequenceKeypoint.new(1, 0.7) }),
-		Parent = ribbon,
+	local c = new("Frame", { Size = UDim2.fromOffset(TRAIL_W, TRAIL_H), BackgroundColor3 = WHITE, LayoutOrder = order, Parent = parent }, {
+		new("UICorner", { CornerRadius = UDim.new(0, 14) }),
+		new("UIStroke", { Thickness = if equipped then 6 else 4, Color = if equipped then COLORS.gold else FRAME_INK, ApplyStrokeMode = Enum.ApplyStrokeMode.Border }),
 	})
-	ribbon.Parent = c
-	text(c, { Text = `x{t.mult} Speed`, Size = UDim2.new(1, -16, 0, 50), Position = UDim2.fromOffset(8, 146), TextColor3 = COLORS.gold })
-	text(c, { Text = "on Speed you gain walking and on the treadmill", Size = UDim2.new(1, -16, 0, 36), Position = UDim2.fromOffset(8, 198), TextWrapped = true })
+	if t.rainbow then
+		new("UIGradient", { Rotation = 25, Color = Config.trailColors(t), Parent = c })
+	else
+		new("UIGradient", {
+			Rotation = 90,
+			Color = ColorSequence.new({
+				ColorSequenceKeypoint.new(0, t.color:Lerp(WHITE, 0.45)),
+				ColorSequenceKeypoint.new(0.5, t.color),
+				ColorSequenceKeypoint.new(1, t.color:Lerp(Color3.new(0, 0, 0), 0.2)),
+			}),
+			Parent = c,
+		})
+	end
+	shine(c, 14)
+	bold(c, 4, { Text = t.name, Size = UDim2.new(1, -16, 0, 42), Position = UDim2.fromOffset(8, 12) })
+	bold(c, 3, { Text = t.rarity, Size = UDim2.new(1, -16, 0, 24), Position = UDim2.fromOffset(8, 54) })
 
+	-- Illustration: a soft glow, the trail streaming out behind, the Trail Shop icon tinted on top
+	new("Frame", {
+		AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.new(0.5, 0, 0, 196), Size = UDim2.fromOffset(186, 186), BackgroundColor3 = WHITE,
+		BackgroundTransparency = 0.78, Parent = c,
+	}, { new("UICorner", { CornerRadius = UDim.new(1, 0) }) })
+	new("Frame", {
+		AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.new(0.5, -8, 0, 214), Size = UDim2.new(1, -34, 0, 62), Rotation = -14,
+		BackgroundColor3 = WHITE, BorderSizePixel = 0, Parent = c,
+	}, {
+		new("UICorner", { CornerRadius = UDim.new(1, 0) }),
+		new("UIGradient", {
+			Color = if t.rainbow then Config.trailColors(t) else ColorSequence.new(t.color:Lerp(WHITE, 0.6), t.color:Lerp(Color3.new(0, 0, 0), 0.3)),
+			Transparency = NumberSequence.new(0.9, 0),
+		}),
+	})
+	local art = Icons.image("TrailShop")
+	if art then
+		new("ImageLabel", {
+			AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.new(0.5, 22, 0, 192), Size = UDim2.fromOffset(170, 170), BackgroundTransparency = 1,
+			Image = art, ScaleType = Enum.ScaleType.Fit, ImageColor3 = if t.rainbow then WHITE else t.color:Lerp(WHITE, 0.45), Parent = c,
+		})
+	else
+		text(c, { Text = "🏃", AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.new(0.5, 22, 0, 192), Size = UDim2.fromOffset(130, 130) })
+	end
+
+	-- "x2 Speed" pill, the number in bright green
+	local pill = new("Frame", {
+		Position = UDim2.new(0, 12, 1, -126), Size = UDim2.new(1, -24, 0, 50), BackgroundColor3 = Color3.fromRGB(20, 24, 34), BackgroundTransparency = 0.3, Parent = c,
+	}, { new("UICorner", { CornerRadius = UDim.new(0, 10) }), new("UIStroke", { Thickness = 3, Color = FRAME_INK, Transparency = 0.4 }) })
+	bold(pill, 3, { RichText = true, Text = `<font color="{NUMBER_GREEN}">x{t.mult}</font> Speed`, Size = UDim2.new(1, -16, 1, -8), Position = UDim2.fromOffset(8, 4) })
+
+	local y = TRAIL_H - 66
 	if owned then
-		local b = button(c, if equipped then "Equipped" else "Equip", if equipped then COLORS.disabled else COLORS.equip, UDim2.new(1, -20, 0, 50), function()
+		chunky(c, if equipped then "Equipped" else "Equip", if equipped then COLORS.disabled else COLORS.buy, UDim2.fromOffset(TRAIL_W - 24, 54), function()
 			if not equipped then
 				RequestUseItem:FireServer("Equip:" .. t.id)
 			end
-		end)
-		b.Position = UDim2.new(0, 10, 1, -64)
-		return
+		end).Position = UDim2.fromOffset(12, y)
+		return c
 	end
-	local affordable = stats.money >= t.price
-	button(c, Format.money(t.price), if affordable then COLORS.buy else COLORS.disabled, UDim2.new(1, -20, 0, 50), function()
-		RequestBuy:FireServer("Trail:" .. t.id)
-	end).Position = UDim2.new(0, 10, 1, -120)
 	local product = t.product and Config.DEVELOPER_PRODUCTS[t.product]
+	local moneyW = if product then 126 else TRAIL_W - 24
+	local moneyButton = chunky(c, Format.money(t.price), COLORS.buy, UDim2.fromOffset(moneyW, 54), function()
+		RequestBuy:FireServer("Trail:" .. t.id)
+	end)
+	moneyButton.Position = UDim2.fromOffset(12, y)
+	watchMoney(function()
+		moneyButton.BackgroundColor3 = if stats.money >= t.price then COLORS.buy else COLORS.disabled
+	end)
 	if product then
-		button(c, robuxCaption(product), if product.id == 0 then COLORS.disabled else COLORS.robux, UDim2.new(1, -20, 0, 50), function()
-			RequestBuy:FireServer("Product:" .. (t.product :: string))
-		end, { "Robux" }, ICON.small).Position = UDim2.new(0, 10, 1, -64)
+		local robuxButton = chunky(c, Format.robux(robuxPrice(product)), if product.id == 0 then SOON_PURPLE else COLORS.robux,
+			UDim2.fromOffset(TRAIL_W - 24 - moneyW - 8, 54), function()
+				RequestBuy:FireServer("Product:" .. (t.product :: string))
+			end, { "Robux" }, ICON.small)
+		robuxButton.Position = UDim2.fromOffset(12 + moneyW + 8, y)
+		if product.id == 0 then
+			soonTag(robuxButton)
+		end
 	end
+	return c
 end
 
 local function renderTrails()
-	local current = Config.trailById(stats.equippedTrail) or Config.TRAILS[1]
-	Icons.set(modalTitle, "TrailShop", "🏃 Trail Shop")
-	clearModal(10)
-	heading(`Trails multiply the Speed you gain: you get {perStepText()} Speed per step now, more as your Speed grows. Equipped: {current.name} (x{current.mult}). Any trail can be bought directly.`, 1, false, 44)
-	local strip = new("ScrollingFrame", {
-		BackgroundTransparency = 1, Size = UDim2.new(1, -12, 0, 390), LayoutOrder = 2, BorderSizePixel = 0,
-		CanvasSize = UDim2.new(), AutomaticCanvasSize = Enum.AutomaticSize.X, ScrollingDirection = Enum.ScrollingDirection.X,
-		ScrollBarThickness = 8, Parent = modalBody,
-	}, {
-		new("UIListLayout", { FillDirection = Enum.FillDirection.Horizontal, Padding = UDim.new(0, 12), SortOrder = Enum.SortOrder.LayoutOrder, VerticalAlignment = Enum.VerticalAlignment.Center }),
-		new("UIPadding", { PaddingLeft = UDim.new(0, 6), PaddingRight = UDim.new(0, 6) }),
-	})
-	for i, t in Config.TRAILS do
-		trailCard(strip, i, t)
-	end
-	task.defer(function() -- once the layout has sized the canvas
-		strip.CanvasPosition = Vector2.new(trailScrollX, 0)
-		strip:GetPropertyChangedSignal("CanvasPosition"):Connect(function()
-			trailScrollX = strip.CanvasPosition.X
-		end)
+	clearModal(TRAIL_GAP, true)
+	modalSubtitle.TextColor3 = WHITE
+	watchMoney(function() -- the Speed one step pays right now (it grows with your Speed and trail), and your money
+		Icons.set(modalSubtitle, { "Speed", "Money" }, `⚡ {perStepText()}/step  💰 {Format.money(stats.money)}`, ICON.big, 26)
 	end)
-	heading("Your trail streams behind you for everyone to see. Money can't buy Speed itself: walk, run the treadmill, or grab a Speed pack in the 🛒 Shop.", 3, false, 44)
+	for i, t in Config.TRAILS do
+		table.insert(trailCards, trailCard(modalBody, i, t))
+	end
 end
 
+----------------------------------------------------------------------------------------------------
+-- Index: one row per zone in the zone's colour, a cell per rarity (lit once discovered)
+----------------------------------------------------------------------------------------------------
 local function renderIndex()
 	local total, found = 0, 0
 	for k = 1, #Config.ZONES do
@@ -1092,38 +1399,67 @@ local function renderIndex()
 			end
 		end
 	end
-	Icons.set(modalTitle, "Index", `📖 Index · {found}/{total} discovered`)
-	modalBody:ClearAllChildren()
-	new("UIListLayout", { Padding = UDim.new(0, 8), SortOrder = Enum.SortOrder.LayoutOrder, Parent = modalBody })
+	modalSubtitle.TextColor3 = WHITE
+	Icons.set(modalSubtitle, "Star", `✨ {found}/{total} discovered`, ICON.big, 30)
+	clearModal(10)
+	local rarities = #Config.RARITIES
 	for k, zone in Config.ZONES do
-		local row = new("Frame", { Size = UDim2.new(1, -8, 0, 96), BackgroundColor3 = zone.ui, LayoutOrder = k, Parent = modalBody }, deco(12))
+		local row = new("Frame", { Size = UDim2.new(1, -12, 0, 112), LayoutOrder = k, Parent = modalBody }, {
+			new("UICorner", { CornerRadius = UDim.new(0, 14) }),
+			new("UIStroke", { Thickness = 4, Color = FRAME_INK, ApplyStrokeMode = Enum.ApplyStrokeMode.Border }),
+		})
+		shade(row, zone.ui, 0.25, 0.3)
+		shine(row, 14)
 		local mutText = ""
 		for _, m in Config.MUTATIONS do
 			if stats.index[`{k}:{m.id}`] then
 				mutText ..= " " .. m.id
 			end
 		end
-		local rowTitle = text(row, { Size = UDim2.new(1, -12, 0, 28), Position = UDim2.fromOffset(6, 4), TextXAlignment = Enum.TextXAlignment.Left })
+		local rowTitle = bold(row, 3, { Size = UDim2.new(1, -20, 0, 34), Position = UDim2.fromOffset(12, 6), TextXAlignment = Enum.TextXAlignment.Left })
 		Icons.set(rowTitle, { "Star" }, `{zone.icon} {zone.seed}{if mutText ~= "" then " ✨" .. mutText else ""}`)
-		local cells = new("Frame", { BackgroundTransparency = 1, Position = UDim2.fromOffset(6, 36), Size = UDim2.new(1, -12, 0, 52), Parent = row },
-			{ new("UIListLayout", { FillDirection = Enum.FillDirection.Horizontal, Padding = UDim.new(0, 6) }) })
+		local cells = new("Frame", { BackgroundTransparency = 1, Position = UDim2.fromOffset(12, 46), Size = UDim2.new(1, -24, 0, 56), Parent = row },
+			{ new("UIListLayout", { FillDirection = Enum.FillDirection.Horizontal, Padding = UDim.new(0, 8), SortOrder = Enum.SortOrder.LayoutOrder }) })
 		for r, rarity in Config.RARITIES do
 			local got = stats.index[`{k}:{r}`] == true
-			local cell = new("Frame", { Size = UDim2.new(0.2, -6, 1, 0), BackgroundColor3 = if got then rarity.color else Color3.fromRGB(70, 70, 80), LayoutOrder = r, Parent = cells }, deco(8, 2))
-			text(cell, { Text = if got then rarity.id else "???", Size = UDim2.new(1, -6, 1, -6), Position = UDim2.fromOffset(3, 3) })
+			local cell = new("Frame", {
+				Size = UDim2.new(1 / rarities, -8 * (rarities - 1) / rarities, 1, 0), BackgroundColor3 = Color3.fromRGB(52, 58, 76), LayoutOrder = r, Parent = cells,
+			}, deco(10, 3))
+			if got then
+				shade(cell, rarity.color, 0.3, 0.2)
+			end
+			bold(cell, if got then 3 else 2, {
+				Text = if got then rarity.id else "???", Size = UDim2.new(1, -10, 1, -12), Position = UDim2.fromOffset(5, 6),
+				TextColor3 = if got then WHITE else Color3.fromRGB(150, 156, 175),
+			})
 		end
 	end
 end
 
+-- Rebuilds the open window. The scroll position is kept (a purchase rebuilds it), except when the
+-- Shop was asked to jump to a section.
 renderModal = function()
+	local keep = modalBody.CanvasPosition
 	table.clear(packShines) -- renderShop adds the current pack cards' shines back
+	table.clear(moneyWatchers)
+	table.clear(trailCards)
+	local focused = false
 	if modalName == "Shop" then
-		renderShop()
+		focused = renderShop()
 	elseif modalName == "Trails" then
 		renderTrails()
 	elseif modalName == "Index" then
 		renderIndex()
 	end
+	if not focused then
+		modalBody.CanvasPosition = keep
+		task.defer(function() -- again once the layout has sized the new canvas
+			if modal.Visible then
+				modalBody.CanvasPosition = keep
+			end
+		end)
+	end
+	task.defer(updateTrailArrows)
 end
 
 ----------------------------------------------------------------------------------------------------
@@ -1372,22 +1708,20 @@ local function refresh(changed: { [string]: any })
 	if sidePanel.Visible and (changed.plants or changed.carrying or changed.items or changed.seedBag or sideTab == "Seeds" and unlockChanged) then
 		renderSide()
 	end
+	-- The open window is rebuilt when what it lists changes; money, income and Speed only update it in place.
 	if modal.Visible and (changed.index or changed.items or changed.slots or changed.plotLevel or changed.trails or changed.equippedTrail
-		or changed.treadmillTier or changed.passes or changed.money or changed.seedBag) then
+		or changed.treadmillTier or changed.passes or changed.seedBag) then
 		renderModal()
+	elseif modal.Visible and (changed.money or changed.income or changed.speed) then
+		for _, update in moneyWatchers do
+			update()
+		end
 	end
 end
 
-local lastModalRender = 0
 StatsUpdate.OnClientEvent:Connect(function(partial: { [string]: any })
 	for k, v in partial do
 		stats[k] = v
-	end
-	-- Money ticks constantly; throttle modal re-renders to twice a second.
-	if partial.money and modal.Visible and os.clock() - lastModalRender < 0.5 then
-		partial.money = nil
-	elseif modal.Visible then
-		lastModalRender = os.clock()
 	end
 	refresh(partial)
 end)
@@ -1481,12 +1815,16 @@ end)
 
 rescale()
 gui.Parent = player:WaitForChild("PlayerGui")
-fitLeftColumn()
+local function fitScreen()
+	fitLeftColumn()
+	fitModal()
+end
+fitScreen()
 local camera = workspace.CurrentCamera
 if camera then
 	camera:GetPropertyChangedSignal("ViewportSize"):Connect(function()
 		rescale()
-		fitLeftColumn()
+		fitScreen()
 	end)
 end
-gui:GetPropertyChangedSignal("AbsoluteSize"):Connect(fitLeftColumn)
+gui:GetPropertyChangedSignal("AbsoluteSize"):Connect(fitScreen)
