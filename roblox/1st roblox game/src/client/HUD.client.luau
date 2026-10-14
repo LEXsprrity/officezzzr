@@ -671,7 +671,7 @@ do
 	local RemovePlant = remotes:WaitForChild("RemovePlant") :: RemoteEvent
 	local CARD_H = 66
 	local SURE_SECONDS = 2
-	local GREEN_INK, GOLD_INK = Color3.fromRGB(30, 160, 55), Color3.fromRGB(215, 140, 0)
+	local GREEN_INK, MUTED_INK = Color3.fromRGB(30, 160, 55), Color3.fromRGB(120, 124, 140)
 	local shown = "" -- which plants the list shows, in order
 	local updaters: { () -> () } = {}
 	local sure: { [number]: number } = {} -- slot -> when its Remove was first clicked
@@ -743,7 +743,7 @@ do
 			local now = plantIn(slot) or p
 			info.Text = `{rarity.id}{if mut then ` · <font color="#{mut.color:ToHex()}">{mut.id}</font>` else ""}`
 			local bonus = Config.bonusLabel(now.zone, (Config.dayPhase(workspace:GetServerTimeNow())))
-			income.Text = `{Format.money(now.income)}/s{if bonus then ` · <font color="#{GOLD_INK:ToHex()}">{bonus}</font>` else ""}`
+			income.Text = `{Format.money(now.income)}/s{if bonus then ` · <font color="#{MUTED_INK:ToHex()}">{bonus}</font>` else ""}`
 		end
 		update()
 		table.insert(updaters, update)
@@ -1527,10 +1527,10 @@ do
 		renderModal()
 	end
 
-	-- "$1.2K/s · Day x1.5" in gold while the plant's phase is on, like its billboard.
+	-- "$1.2K/s · Night x0.8" in a muted grey while the plant is out of its phase (earning less), like its billboard.
 	local function sellIncomeText(p: any): (string, Color3)
 		local bonus = Config.bonusLabel(p.zone, (Config.dayPhase(workspace:GetServerTimeNow())))
-		return `{Format.money(p.income)}/s{if bonus then " · " .. bonus else ""}`, if bonus then HEADING_GOLD else MONEY_GREEN
+		return `{Format.money(p.income)}/s{if bonus then " · " .. bonus else ""}`, if bonus then Config.OFF_TIME_COLOR else MONEY_GREEN
 	end
 
 	local function sellCard(grid: Instance, order: number, p: any)

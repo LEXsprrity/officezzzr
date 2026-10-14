@@ -284,7 +284,7 @@ H.test("assets: a Creature_ model replaces the plant-creature and still gets rar
 		H.eq(model:GetAttribute("Asset"), "Creature_Sproutling")
 		H.ok(model.PrimaryPart ~= nil, "has a body")
 		H.eq(model:GetAttribute("Mutation"), "Gold")
-		H.ok(named(model, "HaloOrb") == 6 and named(model, "AuraRing") == 1, "Legendary flair")
+		H.ok(named(model, "HaloOrb") == 6 and named(model, "AuraRing") == 0, "Legendary flair (a halo, nothing flat on the ground)")
 		H.eq(named(model, "InfoAnchor"), 1, "InfoAnchor for the label")
 		local radius, height = CreatureModels.extents(model)
 		H.ok(radius <= Config.creatureFootprint(5), `within the footprint ({radius})`)

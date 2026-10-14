@@ -6,7 +6,7 @@
 -- (LookVector), and at scale 1 everything fits inside Config.CREATURE_FOOTPRINT. PlotService pivots the
 -- model onto its slot and scales it with Model:ScaleTo, which scales around that pivot.
 --
--- Rarity adds flair (aura ring, recoloured trims, Neon, light, sparkles, a halo); a mutation tints and
+-- Rarity adds flair (recoloured trims, Neon, light, sparkles, a halo); a mutation tints and
 -- swaps materials and adds particles. A model in the assets folder (slot Creature_<Seed>, e.g. Creature_LotusWyrm)
 -- replaces a zone's creature; Config.CREATURE_ASSETS (uploaded asset ids) is the next choice. The game's
 -- plants are the owner's flower pack (models/plants), exported per zone and rarity into those slots by
@@ -524,15 +524,7 @@ local function decorate(b: Builder, zoneIndex: number, rarityIndex: number, mut:
 			end
 		end
 	end
-	-- Aura ring on the soil
-	if rarityIndex >= 2 then
-		-- (an asset plant's ring is as wide as its rarity's footprint; a built-in creature keeps the base one)
-		local d = (if b.roles[body] == "asset" then Config.creatureFootprint(rarityIndex) else Config.CREATURE_FOOTPRINT) - 0.1
-		local ring = shaped(b, "fx", "AuraRing", Enum.PartType.Cylinder, V(0.1, d, d),
-			CFrame.new(0, 0.05, 0) * CFrame.Angles(0, 0, math.pi / 2), rarity.color, NEON)
-		ring.Transparency = if rarityIndex >= 4 then 0.25 else 0.5
-		ring.CastShadow = false
-	end
+	-- (No aura ring on the ground: nothing flat under a plant; it stands straight on the bed.)
 	-- Halo of glowing orbs above the head: Legendary (rarity colour) and/or Celestial (white stars).
 	-- A Legendary Celestial alternates the two, so it stays within the part budget.
 	local celestial = mut ~= nil and mut.id == "Celestial"

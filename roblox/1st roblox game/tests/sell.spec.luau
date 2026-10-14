@@ -174,7 +174,7 @@ H.test("remove (RemovePlant, the Plants panel): only one of your own plants, by 
 	H.ok(string.find(plot, "not Sessions.allowRequest(s, REMOVES_PER_SECOND)", 1, true) ~= nil, "rate-limited")
 	H.ok(string.find(plot, "Selling.remove(s.profile, slot, now, Sessions.moneyMult(s))", 1, true) ~= nil, "checked against your own profile")
 	local a = string.find(plot, "local function buildPlantModel", 1, true)
-	local b = string.find(plot, "local function addSoil", 1, true)
+	local b = string.find(plot, "local function removePlantModel", 1, true)
 	local build = a and b and string.sub(plot, a, b) or ""
 	H.ok(build ~= "" and not string.find(build, "ProximityPrompt", 1, true) and not string.find(build, "\"Remove\"", 1, true), "no Remove prompt on plants")
 	H.ok(not string.find(plot, "KeyCode.R\n", 1, true) and not string.find(plot, "KeyCode.R\r", 1, true), "no R key")

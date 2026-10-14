@@ -196,7 +196,7 @@ H.test("plants: they keep their own effects and still get rarity and mutation fl
 			ring = d
 		end
 	end
-	H.ok(ring ~= nil and math.abs(ring.Size.Y - (Config.creatureFootprint(L) - 0.1)) < 1e-4, `the aura ring is the Legendary footprint ({ring and ring.Size})`)
+	H.eq(ring, nil, "no aura ring on the ground under the plant")
 	local halo = 0
 	for _, d in cryonix:GetDescendants() do
 		if d.Name == "HaloOrb" then

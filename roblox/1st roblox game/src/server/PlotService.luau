@@ -100,13 +100,12 @@ local function labelsFor(model: Model): (TextLabel?, TextLabel?)
 	return gui:FindFirstChild("Weight") :: TextLabel?, gui:FindFirstChild("Income") :: TextLabel?
 end
 
--- "$12/s · Day x1.5" in gold while the plant's phase is on, "$8/s" in green otherwise.
+-- "$12/s" in green during the plant's phase (x1), "$8/s · Night x0.8" in a muted grey out of it.
 local INCOME_GREEN = Color3.fromRGB(120, 255, 120)
-local INCOME_GOLD = Color3.fromRGB(255, 215, 60)
 local function setIncomeLabel(label: TextLabel, zone: number, perSecond: number, isNight: boolean)
 	local bonus = Config.bonusLabel(zone, isNight)
 	label.Text = `{Format.money(perSecond)}/s{if bonus then " · " .. bonus else ""}`
-	label.TextColor3 = if bonus then INCOME_GOLD else INCOME_GREEN
+	label.TextColor3 = if bonus then Config.OFF_TIME_COLOR else INCOME_GREEN
 end
 
 -- What a plant is called: the flower model it grew into (CreatureModels.variantOf with its id, the same pick
@@ -131,8 +130,10 @@ local function buildPlantModel(state: PlotState, plant: ProfileStore.Plant, weig
 
 	-- Info billboard (text refreshed by the payout loop). It hangs on an attachment at the creature's top,
 	-- which ScaleTo moves as the creature grows; SizeOffset puts the billboard's bottom edge there.
+	-- Hidden: the client shows it only while the mouse is over the plant or a finger tapped it (PlantHover.client).
 	local gui = Instance.new("BillboardGui")
 	gui.Name = "Info"
+	gui.Enabled = false
 	gui.Size = UDim2.fromOffset(170, 66)
 	gui.Adornee = body:FindFirstChild("InfoAnchor") :: Attachment
 	gui.SizeOffset = Vector2.new(0, 0.5)
@@ -173,35 +174,11 @@ local function buildPlantModel(state: PlotState, plant: ProfileStore.Plant, weig
 	return model
 end
 
--- A dark dug-soil patch under each plant (Soil_<id> in the plot's Soil folder), the size of its full-grown
--- reach, so the beds show where the room is taken.
-local SOIL_DUG = Color3.fromRGB(120, 66, 62)
-local function addSoil(state: PlotState, plant: ProfileStore.Plant)
-	local rest = restOf(state.info, plant)
-	local d = Planting.radius(plant.rarity) * 1.2
-	local p = Instance.new("Part")
-	p.Name = "Soil_" .. plant.slot
-	p.Shape = Enum.PartType.Cylinder
-	p.Anchored = true
-	p.CanCollide = false
-	p.CanQuery = false
-	p.CanTouch = false
-	p.CastShadow = false
-	p.Size = Vector3.new(0.12, d, d)
-	p.CFrame = CFrame.new(rest.Position + Vector3.new(0, 0.06, 0)) * CFrame.Angles(0, 0, math.pi / 2)
-	p.Color = SOIL_DUG
-	p.Material = Enum.Material.Plastic
-	p.Parent = state.info.soil
-end
-
+-- Plants stand straight on the bed: no dug-soil patch under them.
 local function removePlantModel(state: PlotState, slot: number)
 	local model = state.models[slot]
 	if model then
 		model:Destroy()
-	end
-	local soil = state.info.soil:FindFirstChild("Soil_" .. slot)
-	if soil then
-		soil:Destroy()
 	end
 	state.models[slot] = nil
 	state.scales[slot] = nil
@@ -212,14 +189,12 @@ local function spawnPlant(state: PlotState, plant: ProfileStore.Plant, now: numb
 	local scale = plantScale(plant, weight)
 	state.models[plant.slot] = buildPlantModel(state, plant, weight, income, scale)
 	state.scales[plant.slot] = scale
-	addSoil(state, plant)
 end
 
 local function clearPlants(state: PlotState)
 	for _, m in state.models do
 		m:Destroy()
 	end
-	state.info.soil:ClearAllChildren()
 	state.models = {}
 	state.scales = {}
 end
@@ -898,8 +873,12 @@ function PlotService.grantOffline(s: Sessions.Session): number
 end
 
 ----------------------------------------------------------------------------------------------------
--- Payout loop: one pass over players every PAYOUT_INTERVAL; weight comes from the formula.
+-- Payout loop: one pass over players every PAYOUT_INTERVAL (1 s, so each plant's "+$X" popup is exactly
+-- the $/s on its billboard); weight comes from the formula. The Plants panel view is refreshed every
+-- PLANTS_PUSH_EVERY passes only: it is the bulkiest push and its numbers drift slowly.
 ----------------------------------------------------------------------------------------------------
+local PLANTS_PUSH_EVERY = 3
+local payoutPass = 0
 local function payout(s: Sessions.Session, state: PlotState, now: number)
 	local mult = Sessions.moneyMult(s)
 	local isNight = Config.dayPhase(now)
@@ -916,7 +895,7 @@ local function payout(s: Sessions.Session, state: PlotState, now: number)
 				weightLabel.Text = Format.weight(weight)
 			end
 			if incomeLabel then
-				setIncomeLabel(incomeLabel, plant.zone, perSecond, isNight) -- also flips the "Day x1.5" bonus on a phase change
+				setIncomeLabel(incomeLabel, plant.zone, perSecond, isNight) -- also flips the "Night x0.8" note on a phase change
 			end
 			local scale = plantScale(plant, weight)
 			if math.abs(scale - (state.scales[plant.slot] or 1)) > 0.03 then
@@ -930,7 +909,9 @@ local function payout(s: Sessions.Session, state: PlotState, now: number)
 	s.income = total / (mult * Config.PAYOUT_INTERVAL)
 	renderTreadmillSign(state)
 	Sessions.pushCore(s)
-	pushPlants(s, now)
+	if payoutPass % PLANTS_PUSH_EVERY == 0 then
+		pushPlants(s, now)
+	end
 end
 
 function PlotService.start()
@@ -938,6 +919,7 @@ function PlotService.start()
 	task.spawn(function()
 		while true do
 			task.wait(Config.PAYOUT_INTERVAL)
+			payoutPass += 1
 			local now = os.time()
 			for _, state in plots do
 				local owner = state.owner
