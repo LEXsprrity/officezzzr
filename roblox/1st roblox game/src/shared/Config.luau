@@ -13,8 +13,8 @@ Config.GUARD_HZ = 10 -- guard chase loop rate
 -- Layout (studs). Base area is at -X, the corridor runs along +X.
 Config.GROUND_Y = 0
 Config.CORRIDOR_START_X = 60 -- anything with X below this is the safe base area
-Config.CORRIDOR_WIDTH = 64
-Config.WALL_HEIGHT = 44
+Config.CORRIDOR_WIDTH = 192 -- wide and open: a big flat field between two tall walls
+Config.WALL_HEIGHT = 52
 Config.PLOT_SIZE = 84
 Config.PLOT_SPACING_X = 84 -- = PLOT_SIZE: neighbouring plots touch and share the fence between them
 Config.PLOT_FIRST_X = -6 -- the front plots end 24 studs before the corridor mouth (room for the free chest)
@@ -127,10 +127,9 @@ export type Zone = {
 	name: string,
 	req: number, -- recommended Speed stat
 	length: number,
-	floor: Color3, -- corridor floor (WorldBuilder/ZoneThemes)
-	wall: Color3,
+	floor: Color3, -- corridor floor (ZoneThemes: flat studded plastic with a lighter checker over it)
+	wall: Color3, -- side walls (with a lighter checker on their inner face)
 	ui: Color3, -- saturated card colour for the HUD
-	material: string, -- Enum.Material name
 	guard: string,
 	guardColor: Color3,
 	seed: string, -- creature name
@@ -143,31 +142,31 @@ export type Zone = {
 
 Config.ZONES = {
 	{ id = "Meadow", name = "Meadow", req = 0, length = 200, icon = "🌼", active = "day", wakeDelay = 0.5,
-		floor = Color3.fromRGB(104, 214, 70), wall = Color3.fromRGB(56, 152, 58), material = "Grass", ui = Color3.fromRGB(70, 180, 70),
+		floor = Color3.fromRGB(106, 196, 50), wall = Color3.fromRGB(196, 128, 80), ui = Color3.fromRGB(70, 180, 70),
 		guard = "Giant Mole", guardColor = Color3.fromRGB(110, 80, 60),
 		seed = "Sproutling", seedColor = Color3.fromRGB(120, 230, 90), baseWeight = 12 },
 	{ id = "Desert", name = "Desert", req = 10e3, length = 450, icon = "🦂", active = "day", wakeDelay = 0,
-		floor = Color3.fromRGB(240, 204, 124), wall = Color3.fromRGB(226, 164, 98), material = "Sand", ui = Color3.fromRGB(225, 145, 55),
+		floor = Color3.fromRGB(240, 210, 140), wall = Color3.fromRGB(226, 178, 92), ui = Color3.fromRGB(225, 145, 55),
 		guard = "Giant Scorpion", guardColor = Color3.fromRGB(190, 90, 40),
 		seed = "Cactopod", seedColor = Color3.fromRGB(60, 170, 90), baseWeight = 340 },
 	{ id = "Jungle", name = "Jungle", req = 500e3, length = 600, icon = "🦖", active = "night", wakeDelay = 0.15,
-		floor = Color3.fromRGB(66, 162, 60), wall = Color3.fromRGB(98, 126, 88), material = "LeafyGrass", ui = Color3.fromRGB(35, 140, 75),
+		floor = Color3.fromRGB(58, 168, 72), wall = Color3.fromRGB(72, 140, 74), ui = Color3.fromRGB(35, 140, 75),
 		guard = "Giant Dino", guardColor = Color3.fromRGB(70, 150, 70),
 		seed = "Fernosaur", seedColor = Color3.fromRGB(40, 200, 120), baseWeight = 9_500 },
 	{ id = "Lava", name = "Lava Fields", req = 5e6, length = 700, icon = "🌋", active = "day", wakeDelay = 0.25,
-		floor = Color3.fromRGB(58, 44, 48), wall = Color3.fromRGB(80, 44, 40), material = "Basalt", ui = Color3.fromRGB(225, 85, 30),
+		floor = Color3.fromRGB(92, 58, 66), wall = Color3.fromRGB(74, 48, 56), ui = Color3.fromRGB(225, 85, 30),
 		guard = "Lava Golem", guardColor = Color3.fromRGB(240, 100, 30),
 		seed = "Magmabloom", seedColor = Color3.fromRGB(255, 120, 40), baseWeight = 180_000 },
 	{ id = "Snow", name = "Snow Peaks", req = 50e6, length = 800, icon = "❄️", active = "night", wakeDelay = 0.3,
-		floor = Color3.fromRGB(238, 246, 255), wall = Color3.fromRGB(160, 206, 242), material = "Snow", ui = Color3.fromRGB(65, 150, 225),
+		floor = Color3.fromRGB(232, 242, 255), wall = Color3.fromRGB(160, 208, 246), ui = Color3.fromRGB(65, 150, 225),
 		guard = "Giant Yeti", guardColor = Color3.fromRGB(220, 230, 245),
 		seed = "Frostbulb", seedColor = Color3.fromRGB(120, 200, 255), baseWeight = 2_000_000 },
 	{ id = "Space", name = "Deep Space", req = 500e6, length = 900, icon = "👽", active = "night", wakeDelay = 0.3,
-		floor = Color3.fromRGB(30, 24, 70), wall = Color3.fromRGB(46, 36, 100), material = "Glass", ui = Color3.fromRGB(115, 75, 225),
+		floor = Color3.fromRGB(64, 48, 134), wall = Color3.fromRGB(48, 38, 104), ui = Color3.fromRGB(115, 75, 225),
 		guard = "Big Alien", guardColor = Color3.fromRGB(120, 255, 120),
 		seed = "Starpetal", seedColor = Color3.fromRGB(200, 120, 255), baseWeight = 45_000_000 },
 	{ id = "Spirit", name = "Spirit Garden", req = 5e9, length = 1100, icon = "⛩️", active = "day", wakeDelay = 0.5,
-		floor = Color3.fromRGB(238, 232, 220), wall = Color3.fromRGB(250, 240, 224), material = "Pebble", ui = Color3.fromRGB(225, 75, 130),
+		floor = Color3.fromRGB(112, 200, 98), wall = Color3.fromRGB(140, 140, 210), ui = Color3.fromRGB(225, 75, 130),
 		guard = "Spirit Dragon", guardColor = Color3.fromRGB(230, 50, 60),
 		seed = "Lotus Wyrm", seedColor = Color3.fromRGB(255, 150, 200), baseWeight = 900_000_000 },
 } :: { Zone }
@@ -188,7 +187,7 @@ function Config.nestX(k: number): number
 	return Config.zoneStartX(k) + Config.ZONES[k].length * Config.NEST_FRACTION
 end
 
-Config.END_X = Config.zoneStartX(#Config.ZONES + 1) -- far end of the corridor
+Config.END_X = Config.zoneStartX(#Config.ZONES + 1) -- far end of the corridor: the Spirit Garden's back wall (no finish line)
 
 function Config.zoneAtX(x: number): number?
 	if x < Config.CORRIDOR_START_X then

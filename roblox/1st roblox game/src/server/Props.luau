@@ -1,5 +1,7 @@
 -- Primitive kit for the generated world: solid blocks, non-colliding decoration, ellipsoids, floor
 -- overlays, lights, particle emitters, and a few reusable cartoon props (trees, flowers, lamps, fences).
+-- Only clean cartoony materials: SmoothPlastic (the default), studded Plastic (Props.studs), Neon for
+-- glow and Glass for water and crystals; never the realistic ones (Assets.REALISTIC).
 -- Everything is anchored. Decoration never collides, never fires Touched and is skipped by raycasts,
 -- so neither players, guards nor the camera snag on it.
 --
@@ -50,6 +52,15 @@ end
 -- Solid block (collides): floors, walls, fences.
 function Props.box(parent: Instance, name: string, size: Vector3, cf: CFrame, color: Color3, material: Enum.Material?): Part
 	return part({ Name = name, Size = size, CFrame = cf, Color = color, Material = material or Enum.Material.SmoothPlastic, Parent = parent })
+end
+
+-- The classic studded Roblox plastic on the given faces (default: the top). The map's base look.
+function Props.studs<T>(p: T, faces: { string }?): T
+	(p :: any).Material = Enum.Material.Plastic
+	for _, face in faces or { "TopSurface" } do
+		(p :: any)[face] = Enum.SurfaceType.Studs
+	end
+	return p
 end
 
 -- Non-colliding block.
@@ -209,10 +220,10 @@ Props.WOOD_LIGHT = Color3.fromRGB(196, 138, 82)
 function Props.roundTree(parent: Instance, pos: Vector3, rng: Random, leaf: Color3, height: number?, slot: Slot): Model?
 	return Assets.swap(slotOr(slot, "Tree"), parent, Assets.spin(pos), function(into)
 		local h = height or rng:NextNumber(9, 14)
-		Props.cylinder(into, "Trunk", h, 1.8, pos + Vector3.new(0, h / 2, 0), Props.WOOD, Enum.Material.Wood)
+		Props.cylinder(into, "Trunk", h, 1.8, pos + Vector3.new(0, h / 2, 0), Props.WOOD)
 		local r = rng:NextNumber(9, 12)
-		Props.ball(into, "Canopy", r, pos + Vector3.new(0, h + r * 0.2, 0), leaf, Enum.Material.Grass)
-		Props.ball(into, "Canopy", r * 0.7, pos + Vector3.new(r * 0.35, h + r * 0.55, rng:NextNumber(-2, 2)), leaf:Lerp(Color3.new(1, 1, 0.6), 0.15), Enum.Material.Grass)
+		Props.ball(into, "Canopy", r, pos + Vector3.new(0, h + r * 0.2, 0), leaf)
+		Props.ball(into, "Canopy", r * 0.7, pos + Vector3.new(r * 0.35, h + r * 0.55, rng:NextNumber(-2, 2)), leaf:Lerp(Color3.new(1, 1, 0.6), 0.15))
 	end)
 end
 
@@ -227,14 +238,14 @@ end
 
 function Props.bush(parent: Instance, pos: Vector3, size: number, color: Color3, slot: Slot): Model?
 	return Assets.swap(slotOr(slot, "Bush"), parent, Assets.spin(pos), function(into)
-		Props.blob(into, "Bush", Vector3.new(size * 1.3, size, size), CFrame.new(pos + Vector3.new(0, size * 0.35, 0)), color, Enum.Material.Grass)
+		Props.blob(into, "Bush", Vector3.new(size * 1.3, size, size), CFrame.new(pos + Vector3.new(0, size * 0.35, 0)), color)
 	end)
 end
 
 function Props.rock(parent: Instance, pos: Vector3, size: Vector3, color: Color3, material: Enum.Material?, yaw: number?, slot: Slot): Model?
 	local cf = CFrame.new(pos) * CFrame.Angles(0, yaw or 0, 0)
 	return Assets.swap(slotOr(slot, "Rock"), parent, cf, function(into)
-		Props.blob(into, "Rock", size, cf + Vector3.new(0, size.Y * 0.3, 0), color, material or Enum.Material.Slate)
+		Props.blob(into, "Rock", size, cf + Vector3.new(0, size.Y * 0.3, 0), color, material)
 	end)
 end
 
@@ -242,7 +253,7 @@ end
 function Props.lamp(parent: Instance, pos: Vector3, glow: Color3, height: number?, slot: Slot): Model?
 	return Assets.swap(slotOr(slot, "Lamp"), parent, CFrame.new(pos), function(into)
 		local h = height or 9
-		Props.cylinder(into, "LampPost", h, 0.6, pos + Vector3.new(0, h / 2, 0), Color3.fromRGB(45, 45, 55), Enum.Material.Metal)
+		Props.cylinder(into, "LampPost", h, 0.6, pos + Vector3.new(0, h / 2, 0), Color3.fromRGB(45, 45, 55))
 		local head = Props.ball(into, "LampHead", 1.8, pos + Vector3.new(0, h + 0.6, 0), glow, Enum.Material.Neon)
 		head.CastShadow = false
 		Props.light(head, glow, 22, 1.4)
@@ -271,14 +282,14 @@ function Props.fence(parent: Instance, a: Vector3, b: Vector3, height: number, s
 				posts[key] = true
 			end
 			Assets.swap("FencePost", parent, CFrame.new(p) * along, function(into)
-				Props.box(into, "FencePost", Vector3.new(1, height + 0.6, 1), CFrame.new(p + Vector3.new(0, (height + 0.6) / 2, 0)), postColor, Enum.Material.Wood)
+				Props.studs(Props.box(into, "FencePost", Vector3.new(1, height + 0.6, 1), CFrame.new(p + Vector3.new(0, (height + 0.6) / 2, 0)), postColor))
 			end, Vector3.new(2, 1, 2))
 		end
 		if i < n then
 			local mid = p + dir * (seg / 2)
 			Assets.swap("FenceSection", parent, CFrame.new(mid) * along, function(into)
 				for _, y in { height * 0.38, height * 0.82 } do
-					Props.box(into, "FenceRail", Vector3.new(0.5, 0.8, seg), CFrame.new(mid + Vector3.new(0, y, 0)) * rot, railColor, Enum.Material.WoodPlanks)
+					Props.studs(Props.box(into, "FenceRail", Vector3.new(0.5, 0.8, seg), CFrame.new(mid + Vector3.new(0, y, 0)) * rot, railColor))
 				end
 			end, Vector3.new(1, 1.3, 0))
 		end

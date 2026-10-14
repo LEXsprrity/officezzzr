@@ -1,6 +1,7 @@
--- Generates the whole map from primitives: base area with 8 fenced plots (each with a treadmill),
--- the walled corridor split into themed zones (ZoneThemes) with entry arches, a mother-plant nest
--- per zone, and the End. Decoration is anchored and non-colliding (see Props).
+-- Generates the whole map from primitives: base area with a fenced plot per player (each with a treadmill),
+-- the walled corridor split into themed zones (ZoneThemes) with a chunky gate at each entrance, a
+-- mother-plant nest per zone; the Spirit Garden's back wall ends it. Decoration is anchored and non-colliding
+-- (see Props). Clean cartoony look only: flat bright plastic, studs and checkers (ZoneThemes header).
 --
 -- The map is hand-editable: map/World.rbxm (Rojo puts it at Workspace.World) is the source of truth, and
 -- WorldBuilder.load() ADOPTS it at server start instead of rebuilding. Every piece gameplay needs carries
@@ -49,7 +50,8 @@ export type NestInfo = {
 local GROUND = Config.GROUND_Y
 local HALF_W = Config.CORRIDOR_WIDTH / 2
 local BASE_MIN_X = Config.PLOT_FIRST_X - Config.PLOT_SPACING_X * (Config.PLOT_COLUMNS - 1) - Config.PLOT_SIZE / 2 - 14
-local BASE_HALF_Z = Config.PLOT_OFFSET_Z + Config.PLOT_SIZE / 2 + 14
+-- The base is wider than the corridor mouth, so the rewards corner fits beside it against the front wall.
+local BASE_HALF_Z = math.max(Config.PLOT_OFFSET_Z + Config.PLOT_SIZE / 2 + 14, HALF_W + 48)
 
 local box, deco, ball, cylinder, flat = Props.box, Props.deco, Props.ball, Props.cylinder, Props.flat
 
@@ -153,16 +155,9 @@ local WALL_TOP = Color3.fromRGB(90, 214, 64)
 local FENCE_POST = Color3.fromRGB(84, 64, 58)
 local FENCE_RAIL = Color3.fromRGB(198, 108, 56)
 local TILE = 14 -- lawn checker; a plot (84 studs) is 6 x 6 tiles
-local WALL_ROWS = 4 -- wall checker rows (WALL_HEIGHT 44 → 11-stud tiles)
+local WALL_ROWS = 4 -- wall checker rows (WALL_HEIGHT 52 → 13-stud tiles)
 
--- The classic studded plastic look on the given faces (default: the top).
-local function studs<T>(p: T, faces: { string }?): T
-	(p :: any).Material = Enum.Material.Plastic
-	for _, face in faces or { "TopSurface" } do
-		(p :: any)[face] = Enum.SurfaceType.Studs
-	end
-	return p
-end
+local studs = Props.studs -- the classic studded plastic look on the given faces (default: the top)
 
 -- Each plot's Upgrade board (docs/references/08-upgrade-sign-reference.png): a dark navy panel in a
 -- studded frame, on a short post.
@@ -444,7 +439,7 @@ local function buildPlot(world: Folder, index: number, posts: { [string]: boolea
 	billboard(signPart, "🏠 Empty Plot", UDim2.fromScale(16, 3.6), Vector3.zero, 75)
 
 	-- Planting pad just inside the gate, on a rim in the plot's colour
-	tag(box(model, "PlantPad", Vector3.new(10, 1, 10), CFrame.new(at(0, 10, 1.2)), Color3.fromRGB(120, 80, 50), Enum.Material.Ground), "PlantPad", "PlotIndex", index)
+	tag(studs(box(model, "PlantPad", Vector3.new(10, 1, 10), CFrame.new(at(0, 10, 1.2)), Color3.fromRGB(150, 100, 64))), "PlantPad", "PlotIndex", index)
 	flat(model, "PadRim", 12, 12, at(0, 10, 1), color, Enum.Material.SmoothPlastic, nil, 0.3)
 
 	-- Treadmill: stand on it to gain Speed (AFK works). It doesn't move you: the client plays the run
@@ -454,7 +449,7 @@ local function buildPlot(world: Folder, index: number, posts: { [string]: boolea
 	local tmU, tmW0, tmLen, tmWide = 30, 12, 18, 5.2
 	local beltCenter = at(tmU, tmW0 + tmLen / 2, 1.5)
 	local belt = tag(box(model, "TreadmillBelt", Vector3.new(tmWide, 1, tmLen), CFrame.new(beltCenter) * facingIn,
-		Color3.fromRGB(40, 40, 45), Enum.Material.DiamondPlate), "TreadmillBelt", "PlotIndex", index)
+		Color3.fromRGB(40, 40, 45)), "TreadmillBelt", "PlotIndex", index)
 	local tex = Instance.new("Texture")
 	tex.Name = "Stripes"
 	tex.Texture = "rbxasset://textures/SurfaceTextures/DiamondPlate.png"
@@ -511,44 +506,24 @@ end
 ----------------------------------------------------------------------------------------------------
 -- Corridor & zones
 ----------------------------------------------------------------------------------------------------
--- The zone's entry arch: two pillars flush with the walls, a beam over the top, the name sign
--- (name + recommended Speed + guardian) and a glowing threshold line on the floor. The sign and the
--- threshold stay; the rest (with the zone's ornament) is the Arch_<zone> slot.
+-- The zone's gate (ZoneThemes.gate): chunky pillars flush with the walls, a big beam over the corridor
+-- with a cap and a tie beam, and the zone's ornament; that is the Arch_<zone> slot. The name sign (name +
+-- recommended Speed + guardian) hanging under the tie beam and the glowing threshold line on the floor stay.
 local function buildArch(folder: Instance, k: number)
 	local zone = Config.ZONES[k]
 	local theme = ZoneThemes.theme(k)
 	local x0 = Config.zoneStartX(k)
-	local h = Config.WALL_HEIGHT
-	local x = x0 + 3
+	local x = x0 + 6
 	Assets.swap("Arch_" .. zone.id, folder, Assets.facing(Vector3.new(x, GROUND, 0), -Vector3.xAxis), function(into)
-		for _, s in { -1, 1 } do
-			box(into, "GatePillar", Vector3.new(6, h + 10, 6), CFrame.new(x, GROUND + (h + 10) / 2, s * (HALF_W - 1)), theme.arch, theme.archMaterial)
-			ball(into, "PillarCap", 8, Vector3.new(x, GROUND + h + 12, s * (HALF_W - 1)), theme.accent, Enum.Material.Neon)
-		end
-		deco(into, "ArchBeam", Vector3.new(7, 5, Config.CORRIDOR_WIDTH + 10), CFrame.new(x, GROUND + h + 6, 0), theme.arch, theme.archMaterial)
-		deco(into, "ArchTrim", Vector3.new(7.4, 1, Config.CORRIDOR_WIDTH + 10.4), CFrame.new(x, GROUND + h + 3.2, 0), theme.accent, Enum.Material.Neon)
-		ZoneThemes.archOrnament(into, k, x)
+		ZoneThemes.gate(into, k, x)
 	end, Vector3.new(1, 1.5, 0))
-	sign(folder, Vector3.new(x - 3.6, GROUND + h - 4, 0), Vector2.new(Config.CORRIDOR_WIDTH - 12, 13), {
+	sign(folder, Vector3.new(x0 + 1.4, ZoneThemes.GATE_SIGN_Y, 0), ZoneThemes.GATE_SIGN_SIZE, {
 		{ text = `{zone.icon} {string.upper(zone.name)} {zone.icon}`, color = Color3.new(1, 1, 1), scale = 1.5 },
 		{ text = `⚡ Recommended Speed: {Format.short(zone.req)}`, color = Color3.fromRGB(255, 232, 90) },
 		{ text = `Guardian: {zone.guard}`, color = theme.signText },
 	} :: any, theme.sign, Enum.Material.SmoothPlastic)
-	flat(folder, "Threshold", 3, Config.CORRIDOR_WIDTH, Vector3.new(x0 + 1.5, GROUND, 0), theme.accent, Enum.Material.Neon, nil, 0.1)
+	flat(folder, "Threshold", 3, Config.CORRIDOR_WIDTH, Vector3.new(x0 + 1.5, GROUND, 0), theme.accent, Enum.Material.Neon, nil, 0.3)
 end
-
-local function torii(folder: Instance, x: number, color: Color3, height: number)
-	Assets.swap("Spirit_Torii", folder, Assets.facing(Vector3.new(x, GROUND, 0), -Vector3.xAxis), function(into)
-		for _, s in { -1, 1 } do
-			deco(into, "ToriiPillar", Vector3.new(3, height, 3), CFrame.new(x, GROUND + height / 2, s * (HALF_W - 6)), color, Enum.Material.SmoothPlastic)
-			deco(into, "ToriiFoot", Vector3.new(4, 2, 4), CFrame.new(x, GROUND + 1, s * (HALF_W - 6)), Color3.fromRGB(35, 30, 35))
-		end
-		deco(into, "ToriiBeam", Vector3.new(4, 2.5, Config.CORRIDOR_WIDTH), CFrame.new(x, GROUND + height, 0), color)
-		deco(into, "ToriiCap", Vector3.new(5, 1.2, Config.CORRIDOR_WIDTH + 4), CFrame.new(x, GROUND + height + 1.8, 0), Color3.fromRGB(35, 30, 35))
-		deco(into, "ToriiBeam", Vector3.new(3, 1.5, Config.CORRIDOR_WIDTH - 12), CFrame.new(x, GROUND + height - 5, 0), color)
-	end, Vector3.new(1, 1.5, 0))
-end
-WorldBuilder.torii = torii
 
 -- The zone's nest. Its gameplay piece is NestCore, an invisible part where the mother bulb glows: it holds
 -- the "Mother Plant" label and the tagged Attachments for the nest centre, the pods and the guard's home.
@@ -565,13 +540,13 @@ local function buildNest(folder: Folder, k: number)
 
 	-- Non-colliding so neither runners nor the giant snag on it.
 	Assets.swap("Nest_" .. zone.id, model, Assets.facing(center, -Vector3.xAxis), function(into)
-		cylinder(into, "Mound", 1, 22, center + Vector3.new(0, 0.2, 0), theme.mound, Enum.Material.Ground)
+		studs(cylinder(into, "Mound", 1, 22, center + Vector3.new(0, 0.2, 0), theme.mound))
 		Props.disc(into, "GlowRing", 26, center, zone.seedColor, Enum.Material.Neon, 0.15)
 		for i = 1, 8 do
 			local a = i / 8 * math.pi * 2
-			Props.rock(into, center + Vector3.new(math.cos(a) * 12.5, 0, math.sin(a) * 12.5), Vector3.new(3, 2.2, 2.6), theme.nestStone, theme.nestStoneMaterial, a, false)
+			Props.rock(into, center + Vector3.new(math.cos(a) * 12.5, 0, math.sin(a) * 12.5), Vector3.new(3, 2.2, 2.6), theme.nestStone, Enum.Material.SmoothPlastic, a, false)
 		end
-		cylinder(into, "Stem", 14, 2, center + Vector3.new(0, 8, 0), Color3.fromRGB(60, 170, 60), Enum.Material.Grass)
+		cylinder(into, "Stem", 14, 2, center + Vector3.new(0, 8, 0), Color3.fromRGB(70, 190, 70))
 		local bulb = ball(into, "MotherBulb", 8, center + Vector3.new(0, 16, 0), zone.seedColor, Enum.Material.Neon)
 		local light = Instance.new("PointLight")
 		light.Color = zone.seedColor
@@ -582,7 +557,7 @@ local function buildNest(folder: Folder, k: number)
 			local a = i * math.pi / 2 + math.pi / 4
 			Props.blob(into, "Leaf", Vector3.new(10, 0.8, 4.5),
 				CFrame.new(center + Vector3.new(math.cos(a) * 5, 9, math.sin(a) * 5)) * CFrame.Angles(0, -a, math.rad(20)),
-				theme.leaf, Enum.Material.Grass)
+				theme.leaf)
 		end
 		Props.emitOn(bulb, {
 			color = zone.seedColor, rate = 6, lifetime = NumberRange.new(1.5, 2.5), speed = NumberRange.new(2, 4),
@@ -602,44 +577,22 @@ local function buildNest(folder: Folder, k: number)
 	marker(core, "GuardHome", CFrame.new(center + Vector3.new(Config.GUARD_HOME_OFFSET, 0, 0)), "GuardHome", "ZoneIndex", k)
 end
 
+-- The corridor: one folder per zone (floor, walls, props, gate, nest). The Spirit Garden is the last stage
+-- and its back wall closes the corridor (ZoneThemes): there is no finish line or "end" area.
 local function buildCorridor(world: Folder)
 	local corridor = Instance.new("Folder")
 	corridor.Name = "Corridor"
 	corridor.Parent = world
 	local rng = Random.new(20260930)
-	local h = Config.WALL_HEIGHT
 
 	for k, zone in Config.ZONES do
 		local zoneFolder = Instance.new("Folder")
 		zoneFolder.Name = string.format("%d_%s", k, zone.id)
 		zoneFolder.Parent = corridor
-		ZoneThemes.build(zoneFolder, k, rng, { torii = torii })
+		ZoneThemes.build(zoneFolder, k, rng)
 		buildArch(zoneFolder, k)
 		buildNest(zoneFolder, k)
 	end
-
-	-- End of the line
-	local endFolder = Instance.new("Folder")
-	endFolder.Name = "End"
-	endFolder.Parent = corridor
-	box(endFolder, "EndWall", Vector3.new(4, h, Config.CORRIDOR_WIDTH + 8), CFrame.new(Config.END_X + 2, GROUND + h / 2, 0), Color3.fromRGB(210, 40, 45))
-	torii(endFolder, Config.END_X - 40, Color3.fromRGB(255, 200, 60), 32)
-	local pad = box(endFolder, "EndPad", Vector3.new(30, 1, Config.CORRIDOR_WIDTH - 8), CFrame.new(Config.END_X - 18, GROUND + 0.5, 0),
-		Color3.fromRGB(255, 215, 0), Enum.Material.Neon)
-	pad.CanCollide = false
-	Props.emitter(endFolder, "EndConfetti", Vector3.new(30, 1, Config.CORRIDOR_WIDTH - 8), Vector3.new(Config.END_X - 18, GROUND + 30, 0), {
-		color = ColorSequence.new({
-			ColorSequenceKeypoint.new(0, Color3.fromRGB(255, 80, 120)),
-			ColorSequenceKeypoint.new(0.5, Color3.fromRGB(255, 220, 60)),
-			ColorSequenceKeypoint.new(1, Color3.fromRGB(90, 200, 255)),
-		}),
-		rate = 20, lifetime = NumberRange.new(4, 6), speed = NumberRange.new(2, 5), size = NumberSequence.new(0.5),
-		direction = Enum.NormalId.Bottom, acceleration = Vector3.new(0, -3, 0), rotSpeed = NumberRange.new(-180, 180), lightEmission = 0.6,
-	})
-	sign(endFolder, Vector3.new(Config.END_X - 1, GROUND + h - 12, 0), Vector2.new(Config.CORRIDOR_WIDTH - 8, 14), {
-		{ text = "⛩️ END OF THE LINE ⛩️", color = Color3.fromRGB(255, 230, 90) },
-		{ text = "You made it!", color = Color3.new(1, 1, 1) },
-	}, Color3.fromRGB(120, 20, 30))
 end
 
 ----------------------------------------------------------------------------------------------------
