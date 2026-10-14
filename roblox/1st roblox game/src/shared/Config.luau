@@ -16,9 +16,9 @@ Config.CORRIDOR_START_X = 60 -- anything with X below this is the safe base area
 Config.CORRIDOR_WIDTH = 64
 Config.WALL_HEIGHT = 44
 Config.PLOT_SIZE = 84
-Config.PLOT_SPACING_X = 100
-Config.PLOT_FIRST_X = -70
-Config.PLOT_OFFSET_Z = 80 -- plots sit at z = +/-80, the walkway runs down z = 0
+Config.PLOT_SPACING_X = 84 -- = PLOT_SIZE: neighbouring plots touch and share the fence between them
+Config.PLOT_FIRST_X = -6 -- the front plots end 24 studs before the corridor mouth (room for the free chest)
+Config.PLOT_OFFSET_Z = 72 -- plots sit at z = +/-72, the walkway runs down z = 0
 Config.SLOT_SPACING = 8 -- creature sizes (CREATURE_* below) are budgeted against this
 Config.SLOT_COLUMNS = 8
 Config.SOIL_HEIGHT = 0.4 -- soil patch under each slot; creatures stand on top of it
