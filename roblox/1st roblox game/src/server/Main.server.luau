@@ -21,6 +21,7 @@ local TrailService = require(Server:WaitForChild("TrailService"))
 local AmbientService = require(Server:WaitForChild("AmbientService"))
 local RewardService = require(Server:WaitForChild("RewardService"))
 local PlantGhosts = require(Server:WaitForChild("PlantGhosts"))
+local FlowerPreviews = require(Server:WaitForChild("FlowerPreviews"))
 
 -- Guards pass through players (the catch is a distance check) and each other.
 PhysicsService:RegisterCollisionGroup("Guards")
@@ -37,6 +38,7 @@ RewardService.init(workspace:FindFirstChild("World"))
 SpeedService.start()
 PlotService.start()
 task.spawn(PlantGhosts.publish) -- the planting preview's 3D ghosts, for the clients
+task.spawn(FlowerPreviews.publish) -- every flower's 3D picture, for the HUD's Index, Plants and Sell cards
 AmbientService.start()
 RewardService.start()
 
