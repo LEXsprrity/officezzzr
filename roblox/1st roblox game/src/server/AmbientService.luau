@@ -9,6 +9,7 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Shared = ReplicatedStorage:WaitForChild("Shared")
 local Config = require(Shared:WaitForChild("Config"))
 local Format = require(Shared:WaitForChild("Format"))
+local Icons = require(Shared:WaitForChild("Icons"))
 local Net = require(script.Parent:WaitForChild("Net"))
 local Sessions = require(script.Parent:WaitForChild("Sessions"))
 
@@ -137,7 +138,7 @@ local function buildBoard(): { TextLabel }
 		label.Parent = gui
 		return label
 	end
-	row(0, "⚡ FASTEST HERE ⚡", Color3.fromRGB(255, 220, 80))
+	Icons.set(row(0, "⚡ FASTEST HERE ⚡", Color3.fromRGB(255, 220, 80)), "Leaderboard", "⚡ FASTEST HERE ⚡")
 	local rows = {}
 	for i = 1, ROWS do
 		rows[i] = row(i, "", Color3.new(1, 1, 1))

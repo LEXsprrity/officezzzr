@@ -11,6 +11,7 @@
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Config = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("Config"))
 local Format = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("Format"))
+local Icons = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("Icons"))
 local Props = require(script.Parent:WaitForChild("Props"))
 local ZoneThemes = require(script.Parent:WaitForChild("ZoneThemes"))
 local Assets = require(script.Parent:WaitForChild("Assets"))
@@ -826,6 +827,34 @@ function WorldBuilder.build(): ({ PlotInfo }, { NestInfo })
 	return plots, nests
 end
 
+-- The fixed sign texts that show an icon once it is uploaded (Config.ICONS), matched by their exact text so
+-- signs hand-edited to say something else are left alone. The plot and treadmill signs are rewritten by
+-- PlotService through Icons.set too; these are their texts before anyone owns the plot.
+WorldBuilder.SIGN_ICONS = {
+	["🛒 SHOP"] = "Shop",
+	["🏃 TRAIL SHOP"] = "TrailShop",
+	["📖 INDEX"] = "Index",
+	["⬆️ UPGRADE PLOT"] = "PlotUpgrade",
+	["🏠 Empty Plot"] = "Home",
+	["🏃 TREADMILL"] = "Treadmill",
+} :: { [string]: string }
+
+-- Puts the uploaded icons on the map's signs at runtime, so map/World.rbxm itself keeps the emoji text and
+-- never needs regenerating for icons. Does nothing while no icon is uploaded. Returns how many signs changed.
+function WorldBuilder.applyIcons(world: Instance): number
+	local count = 0
+	for _, d in world:GetDescendants() do
+		if d:IsA("TextLabel") then
+			local key = WorldBuilder.SIGN_ICONS[d.Text]
+			if key and Icons.image(key) then
+				Icons.set(d, key, d.Text)
+				count += 1
+			end
+		end
+	end
+	return count
+end
+
 -- Server start: adopts the map in the place (Workspace.World, from map/World.rbxm) with every hand edit,
 -- puts the assets folder's models into the pieces still built from code, and only regenerates the map
 -- when a piece gameplay needs is missing.
@@ -838,6 +867,7 @@ function WorldBuilder.load(): ({ PlotInfo }, { NestInfo })
 				warn("[WorldBuilder] " .. note)
 			end
 			Assets.refresh(world)
+			WorldBuilder.applyIcons(world)
 			return plots, nests
 		end
 		warn("[WorldBuilder] Workspace.World is missing pieces the game needs, so this server regenerates the map from code"
@@ -845,7 +875,9 @@ function WorldBuilder.load(): ({ PlotInfo }, { NestInfo })
 	else
 		warn("[WorldBuilder] no Workspace.World in the place, so the map is generated from code")
 	end
-	return WorldBuilder.build()
+	local plots, nests = WorldBuilder.build()
+	WorldBuilder.applyIcons(workspace:FindFirstChild("World") :: Instance)
+	return plots, nests
 end
 
 -- Is `pos` standing on this plot's treadmill belt?
