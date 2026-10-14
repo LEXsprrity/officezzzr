@@ -1,7 +1,7 @@
 -- Entering a zone flashes its name near the top of the screen for about two seconds: a translucent dark
 -- strip that fades out at both ends, the zone's name in big outlined letters in the zone's colour and a
 -- face that says how scary it is ("Desert 😮", "Lava Fields 😰"). It slides and fades in, holds, then
--- fades out. Walking back out of the corridor shows a smaller, white "🏠 Your Base". Display only: the
+-- fades out. Walking back into the base shows nothing. Display only: the
 -- zone comes from Config.zoneAtX(root X), like the server's. (The recommended Speed is on the zone gates'
 -- planks in the world, not in the HUD.)
 local Players = game:GetService("Players")
@@ -28,7 +28,7 @@ local INK = Color3.fromRGB(16, 18, 26)
 local WHITE = Color3.new(1, 1, 1)
 local FONT = Enum.Font.FredokaOne
 
-local TOP = 70 -- design pixels from the top: just under the HUD's carry banner
+local TOP = 70 -- design pixels from the top (the HUD's toasts move down under it while it shows)
 local STRIP_W, STRIP_H = 1100, 84
 local HOLD = 1 -- seconds on screen, between the fade in and the fade out
 local SETTLE = 0.2 -- a new zone must hold this long first, so standing on a border doesn't flicker
@@ -121,13 +121,12 @@ local function show(title: string, face: string, color: Color3, big: boolean)
 	end)
 end
 
+-- Only the corridor's zones are announced: walking back into the base shows nothing.
 local function announce(zone: number?)
 	if zone then
 		local z = Config.ZONES[zone]
 		local look = LOOK[z.id]
 		show(z.name, if look then look.face else z.icon, if look then look.color else z.ui, true)
-	else
-		show("Your Base", "🏠", WHITE, false)
 	end
 end
 

@@ -689,6 +689,27 @@ function CreatureModels.build(zoneIndex: number, rarityIndex: number, mutation: 
 	return model
 end
 
+-- The zone's plant models of this rarity, in the order `pick` chooses them (build): their model names
+-- ("Daisy", "Tulip", ...). Empty when the zone has no plant models (the built-in creature stands in).
+-- Read once per zone and rarity (the plants view asks for every plant on every payout).
+local variantCache: { [string]: { string } } = {}
+function CreatureModels.variants(zoneIndex: number, rarityIndex: number): { string }
+	local key = `{zoneIndex}:{rarityIndex}`
+	local names = variantCache[key]
+	if not names then
+		local slot = "Creature_" .. string.gsub(Config.ZONES[zoneIndex].seed, "%s", "")
+		names = if Assets.get(slot) then Assets.variantNames(slot, Config.RARITIES[rarityIndex].id) else {}
+		variantCache[key] = names
+	end
+	return names :: { string }
+end
+
+-- The model name of the plant `build(zone, rarity, _, pick)` makes, or nil for the built-in creature.
+function CreatureModels.variantOf(zoneIndex: number, rarityIndex: number, pick: number): string?
+	local names = CreatureModels.variants(zoneIndex, rarityIndex)
+	return if #names > 0 then names[(math.floor(pick) - 1) % #names + 1] else nil
+end
+
 -- Scales a placed creature (around its soil pivot) to `scale` times its build size, and records `scale`
 -- (the logical scale) for the client's idle sway. Uploaded templates were already fitted with ScaleTo,
 -- which is absolute, so their BaseScale is multiplied in; procedural creatures have none (1).
