@@ -324,16 +324,17 @@ end)
 -- Per-zone colour grading: a local ColorCorrectionEffect on the camera sets each zone's mood
 -- (warm desert, hot lava, cold snow, purple space). It stacks with the server's day/night grade.
 ----------------------------------------------------------------------------------------------------
+-- (Kept gentle: a light tint, no extra brightness, little saturation, so no zone glares.)
 type Grade = { TintColor: Color3, Saturation: number, Brightness: number, Contrast: number }
 local NEUTRAL: Grade = { TintColor = Color3.new(1, 1, 1), Saturation = 0, Brightness = 0, Contrast = 0 }
 local ZONE_GRADE: { [string]: Grade } = {
-	Meadow = { TintColor = Color3.fromRGB(255, 255, 240), Saturation = 0.1, Brightness = 0.02, Contrast = 0 },
-	Desert = { TintColor = Color3.fromRGB(255, 238, 208), Saturation = 0.08, Brightness = 0.03, Contrast = 0.04 },
-	Jungle = { TintColor = Color3.fromRGB(228, 255, 222), Saturation = 0.12, Brightness = 0, Contrast = 0.04 },
-	Lava = { TintColor = Color3.fromRGB(255, 214, 196), Saturation = 0.15, Brightness = 0, Contrast = 0.1 },
-	Snow = { TintColor = Color3.fromRGB(232, 244, 255), Saturation = -0.05, Brightness = 0.04, Contrast = 0.02 },
-	Space = { TintColor = Color3.fromRGB(218, 204, 255), Saturation = 0.18, Brightness = -0.03, Contrast = 0.1 },
-	Spirit = { TintColor = Color3.fromRGB(255, 232, 242), Saturation = 0.1, Brightness = 0.02, Contrast = 0 },
+	Meadow = { TintColor = Color3.fromRGB(255, 255, 246), Saturation = 0.04, Brightness = 0, Contrast = 0 },
+	Desert = { TintColor = Color3.fromRGB(255, 244, 226), Saturation = 0.03, Brightness = 0, Contrast = 0.02 },
+	Jungle = { TintColor = Color3.fromRGB(238, 255, 234), Saturation = 0.06, Brightness = 0, Contrast = 0.02 },
+	Lava = { TintColor = Color3.fromRGB(255, 226, 212), Saturation = 0.08, Brightness = 0, Contrast = 0.05 },
+	Snow = { TintColor = Color3.fromRGB(238, 246, 255), Saturation = -0.03, Brightness = -0.02, Contrast = 0.02 },
+	Space = { TintColor = Color3.fromRGB(228, 218, 255), Saturation = 0.08, Brightness = -0.03, Contrast = 0.05 },
+	Spirit = { TintColor = Color3.fromRGB(255, 240, 246), Saturation = 0.04, Brightness = 0, Contrast = 0 },
 }
 
 local grade = Instance.new("ColorCorrectionEffect")

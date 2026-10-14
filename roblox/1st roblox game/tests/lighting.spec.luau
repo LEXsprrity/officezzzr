@@ -38,11 +38,19 @@ H.test("lighting: the day and night looks apply to real Lighting instances", fun
 	H.ok(H.lighting.ClockTime < 5 or H.lighting.ClockTime > 19, "the moon is up at mid-night")
 end)
 
-H.test("lighting: vivid by day, and night stays readable (bright blue ambient, not murky)", function()
-	local cc = LightingLook.EFFECTS.ColorCorrectionEffect
-	H.ok(cc.Saturation[1] >= 0.2 and cc.Saturation[1] <= 0.35, "day saturation up")
-	H.ok(LightingLook.EFFECTS.Atmosphere.Density[1] <= 0.1, "thin air by day")
-	local nightAmbient = LightingLook.LIGHTING.OutdoorAmbient[2]
+H.test("lighting: a clear, natural day that doesn't glare, and night stays readable (bright blue ambient, not murky)", function()
+	-- Owner playtest: the old day (Brightness 3, saturation +0.28, contrast +0.12, bloom 0.35) hurt the eyes.
+	local L, E = LightingLook.LIGHTING, LightingLook.EFFECTS
+	local cc = E.ColorCorrectionEffect
+	H.ok(cc.Saturation[1] >= 0.05 and cc.Saturation[1] <= 0.2, "day colours a little saturated, not blown out")
+	H.ok(cc.Contrast[1] <= 0.08 and cc.Brightness[1] <= 0.01, "no extra contrast or brightness by day")
+	H.ok(L.Brightness[1] <= 2.5 and L.ExposureCompensation[1] <= 0, "a normal sun, no exposure boost")
+	local outdoor = L.OutdoorAmbient[1]
+	H.ok((outdoor.R + outdoor.G + outdoor.B) / 3 <= 0.55, "a plain outdoor ambient")
+	H.ok(E.BloomEffect.Intensity[1] <= 0.25 and E.BloomEffect.Threshold[1] >= 2, "bloom only on the brightest neon")
+	H.ok(E.SunRaysEffect.Intensity[1] <= 0.03, "faint sun rays")
+	H.ok(E.Atmosphere.Density[1] <= 0.1, "thin air by day")
+	local nightAmbient = L.OutdoorAmbient[2]
 	H.ok(nightAmbient.B > nightAmbient.R and (nightAmbient.R + nightAmbient.G + nightAmbient.B) / 3 > 0.5, "night ambient is blue and bright")
 end)
 
