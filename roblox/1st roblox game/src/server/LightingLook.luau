@@ -1,6 +1,7 @@
 -- The day and night looks (pure: no services, so the tests apply it to real Lune instances). The DAY look
--- is a bright simulator day: strong sun, clean blue default sky with clouds, crisp shadows, thin light-blue
--- air and vivid colour. The NIGHT look is a clear, readable blue night (night has gameplay), never murky.
+-- is a clear, natural simulator day: normal sun, clean blue default sky with clouds, crisp shadows, thin
+-- clear air and lightly saturated colour (never glaring). The NIGHT look is a clear, readable blue night
+-- (night has gameplay), never murky.
 -- AmbientService blends them by Config.nightBlend. default.project.json ships the day look, so Studio's
 -- edit mode shows the same; tests/lighting.spec.luau keeps the two in step.
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -15,15 +16,18 @@ end
 -- property -> { day, night } per instance
 export type Look = { [string]: { any } }
 
+-- Day values are calm and natural (owner playtest: the old 3 Brightness, +0.28 saturation and bloom were
+-- glaring and washed out): a normal sun, a plain grey-blue ambient, no exposure boost, a little saturation
+-- and contrast, bloom only on the brightest neon. Night stays a clear, readable blue.
 LightingLook.LIGHTING = {
-	Brightness = { 3, 1.6 },
-	Ambient = { rgb(100, 104, 118), rgb(92, 108, 170) },
-	OutdoorAmbient = { rgb(138, 142, 156), rgb(120, 140, 210) },
-	ColorShift_Top = { rgb(255, 244, 222), rgb(170, 190, 255) },
+	Brightness = { 2, 1.4 },
+	Ambient = { rgb(70, 72, 82), rgb(92, 108, 170) },
+	OutdoorAmbient = { rgb(128, 130, 138), rgb(120, 140, 210) },
+	ColorShift_Top = { rgb(236, 228, 212), rgb(170, 190, 255) },
 	ColorShift_Bottom = { rgb(40, 55, 80), rgb(40, 50, 110) },
-	ExposureCompensation = { 0, 0.3 },
-	EnvironmentDiffuseScale = { 1, 0.6 },
-	EnvironmentSpecularScale = { 0.2, 0.3 }, -- low by day: flat plastic, not glossy
+	ExposureCompensation = { -0.1, 0.2 },
+	EnvironmentDiffuseScale = { 0.5, 0.6 },
+	EnvironmentSpecularScale = { 0.1, 0.3 }, -- low by day: flat plastic, not glossy
 } :: Look
 
 LightingLook.EFFECTS = {
@@ -34,20 +38,19 @@ LightingLook.EFFECTS = {
 		Haze = { 0, 0.2 }, -- no haze by day (clear blue sky), a little at night
 	},
 	ColorCorrectionEffect = {
-		TintColor = { rgb(255, 253, 248), rgb(208, 220, 255) },
-		Saturation = { 0.28, 0.2 },
-		Contrast = { 0.12, 0.1 },
-		Brightness = { 0.03, 0.05 },
+		TintColor = { rgb(255, 255, 255), rgb(208, 220, 255) },
+		Saturation = { 0.12, 0.15 },
+		Contrast = { 0.04, 0.06 },
+		Brightness = { 0, 0.02 },
 	},
 	BloomEffect = {
-		Intensity = { 0.35, 0.7 },
-		Threshold = { 1.8, 1.3 },
+		Intensity = { 0.15, 0.5 },
+		Threshold = { 2.5, 1.6 },
 	},
 	SunRaysEffect = {
-		Intensity = { 0.04, 0 },
+		Intensity = { 0.02, 0 },
 	},
 } :: { [string]: Look }
-
 -- The sun stays high all day (DAY_CLOCK, morning to mid-afternoon, so no long orange sunrise/sunset
 -- light on the base). Sunset and sunrise happen inside the night's fades, where the blend to the night
 -- look hides them, and the clock never jumps.

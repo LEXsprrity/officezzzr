@@ -34,6 +34,8 @@ local box, deco, ball, cylinder, rod, blob, flat, disc, studs =
 local swap, spin = Assets.swap, Assets.spin
 
 local FLOOR_TILE = W / 6 -- the floor checker: six big tiles across
+ZoneThemes.EDGE_WIDTH = 5 -- the soft border strip at each zone's entrance...
+ZoneThemes.EDGE_LIGHTEN = 0.2 -- ...this much lighter than the zone's floor
 local WALL_ROWS = 3 -- the wall checker: three rows up the inner face
 
 type Ctx = {
@@ -86,6 +88,10 @@ local function floor(c: Ctx)
 			end
 		end
 	end
+	-- A soft border where the zone begins: a strip a shade lighter than its floor, flat and studded like
+	-- the rest (no glow). That and the new colours are the only thing marking a zone change.
+	studs(flat(c.folder, "ZoneEdge", ZoneThemes.EDGE_WIDTH, W, Vector3.new(c.x0 + ZoneThemes.EDGE_WIDTH / 2, GROUND, 0),
+		zone.floor:Lerp(Color3.new(1, 1, 1), ZoneThemes.EDGE_LIGHTEN), nil, nil, 0.15))
 end
 
 -- A flat wall from x0 to x1 on side `s` (its inner face at z = s * HALF_W): studded plastic in the zone's
@@ -137,17 +143,62 @@ local function gradient(a: Color3, b: Color3): ColorSequence
 	return ColorSequence.new({ ColorSequenceKeypoint.new(0, a), ColorSequenceKeypoint.new(1, b) })
 end
 
--- A round cartoon pond: a flat blue disc with a lighter rim and a few lily pads.
-local WATER = rgb(90, 190, 245)
-local WATER_LIGHT = rgb(170, 225, 255)
+-- A cartoon pond (owner's reference): flat studded water in a checker of two blues, in a soft, slightly
+-- irregular shape (rows of cells, narrower toward the ends), round lily pads with a wedge cut out (the
+-- first one has a pink and yellow flower) and a clump of tall green reeds at one end. `d` is its width
+-- along X; it is about 3/4 as deep along Z. No rim, no glass, no glow.
+local WATER = rgb(64, 156, 222)
+local WATER_LIGHT = rgb(100, 186, 238)
+local LILY = rgb(74, 172, 72)
+local REED = rgb(66, 168, 58)
+local POND_CELL = 5 -- the checker's cell, about
 local function pond(F: Instance, p: Vector3, d: number, pads: number?)
-	disc(F, "PondRim", d + 3, p, WATER_LIGHT, M.SmoothPlastic, 0.2)
-	local water = disc(F, "Pond", d, p, WATER, M.Glass, 0.3)
-	water.Transparency = 0.15
+	local n = math.max(3, math.round(d / POND_CELL)) -- cells across X
+	local cell = d / n
+	local rows = math.max(3, math.round(n * 0.75))
+	for r = 0, rows - 1 do
+		local v = ((r + 0.5) / rows) * 2 - 1 -- -1 .. 1 across Z
+		local half = math.sqrt(1 - 0.8 * v * v) * n / 2
+		local shift = math.round(math.sin(r * 2.1 + d) * 0.6) -- a little unevenness, the same every build
+		local a = math.clamp(math.round(n / 2 - half) + shift, 0, n - 1)
+		local b = math.clamp(math.round(n / 2 + half) - 1 + shift, a, n - 1)
+		local z = p.Z + (r - (rows - 1) / 2) * cell
+		local x0, x1 = p.X + (a - n / 2) * cell, p.X + (b + 1 - n / 2) * cell
+		studs(flat(F, "Pond", x1 - x0, cell, Vector3.new((x0 + x1) / 2, p.Y, z), WATER, nil, nil, 0.3))
+		for col = a, b do
+			if (col + r) % 2 == 0 then
+				studs(flat(F, "PondTile", cell, cell, Vector3.new(p.X + (col + 0.5 - n / 2) * cell, p.Y, z), WATER_LIGHT, nil, nil, 0.35))
+			end
+		end
+	end
+	local depth = rows * cell
 	for i = 1, pads or 0 do
 		local a = i * 2.4
-		local r = d * 0.28
-		disc(F, "LilyPad", 3.4, p + Vector3.new(math.cos(a) * r, 0.25, math.sin(a) * r), rgb(70, 190, 80), M.SmoothPlastic, 0.15)
+		local size = if i == 1 then math.min(7, d * 0.24) else math.min(4.5, d * 0.16)
+		local center = p + Vector3.new(math.cos(a) * d * 0.22, 0.4, math.sin(a) * depth * 0.2)
+		studs(disc(F, "LilyPad", size, center, LILY, M.Plastic, 0.2))
+		-- the wedge cut: a water-coloured diamond with one corner at the pad's centre (a 90-degree notch)
+		local cut = size * 0.38
+		local dir = a + math.pi * 0.75
+		local yaw = math.pi / 4 - dir
+		deco(F, "LilyCut", Vector3.new(cut, 0.22, cut),
+			CFrame.new(center + Vector3.new(math.cos(dir), 0, math.sin(dir)) * (cut / math.sqrt(2)) + Vector3.new(0, 0.11, 0)) * CFrame.Angles(0, yaw, 0),
+			WATER).CastShadow = false
+		if i == 1 then -- a pink flower with a yellow heart on the big pad
+			local top = center + Vector3.new(0, 0.35, 0)
+			for _, turn in { 0, math.pi / 2 } do
+				deco(F, "LilyPetal", Vector3.new(size * 0.34, 0.3, size * 0.12), CFrame.new(top) * CFrame.Angles(0, turn + 0.4, 0), rgb(255, 140, 200)).CastShadow = false
+			end
+			deco(F, "LilyHeart", Vector3.new(size * 0.12, 0.4, size * 0.12), CFrame.new(top + Vector3.new(0, 0.05, 0)) * CFrame.Angles(0, 0.4, 0), rgb(255, 222, 70)).CastShadow = false
+		end
+	end
+	-- tall reeds just past the pond's +X end, on the wall side
+	local side = if p.Z < 0 then -1 else 1
+	local base = p + Vector3.new(d / 2 + 1, 0, side * depth * 0.15)
+	for j, h in { 7, 9.5, 5.5 } do
+		local at = base + Vector3.new((j - 2) * 1.1, 0, (j % 2) * 1.2 - 0.6)
+		studs(deco(F, "Reed", Vector3.new(0.7, h, 0.7), CFrame.new(at + Vector3.new(0, h / 2, 0)) * CFrame.Angles(math.rad((j - 2) * 5), 0, math.rad((j - 2) * -4)), REED),
+			{ "FrontSurface", "BackSurface", "LeftSurface", "RightSurface", "TopSurface" })
 	end
 end
 
@@ -157,10 +208,10 @@ local function waterfall(F: Instance, x: number, s: number, width: number)
 	local fall = deco(F, "Waterfall", Vector3.new(width, H - 2, 1), CFrame.new(x, GROUND + (H - 2) / 2, z), rgb(160, 225, 255))
 	fall.Transparency = 0.2
 	fall.CastShadow = false
-	local core = deco(F, "WaterfallCore", Vector3.new(width * 0.4, H - 2, 0.6), CFrame.new(x, GROUND + (H - 2) / 2, z - s * 0.5), rgb(235, 250, 255), M.Neon)
+	local core = deco(F, "WaterfallCore", Vector3.new(width * 0.4, H - 2, 0.6), CFrame.new(x, GROUND + (H - 2) / 2, z - s * 0.5), rgb(235, 250, 255), M.SmoothPlastic)
 	core.Transparency = 0.35
 	core.CastShadow = false
-	pond(F, Vector3.new(x, GROUND, s * (HALF_W - 14)), 28, 3)
+	pond(F, Vector3.new(x, GROUND, s * (HALF_W - 14)), 28, 2)
 	Props.emitter(F, "WaterfallMist", Vector3.new(width, 2, 4), Vector3.new(x, GROUND + 2, s * (HALF_W - 4)), {
 		texture = Props.TEX.smoke, color = rgb(235, 248, 255), rate = 6, lifetime = NumberRange.new(1.5, 2.5),
 		speed = NumberRange.new(2, 4), size = NumberSequence.new({ NumberSequenceKeypoint.new(0, 3), NumberSequenceKeypoint.new(1, 7) }),
@@ -173,7 +224,7 @@ local BRIGHT = {
 }
 
 ----------------------------------------------------------------------------------------------------
--- 1. Meadow: the first stretch, kept nearly empty: green lawn, a pond, a few trees, bushes and flowers
+-- 1. Meadow: the first stretch, kept nearly empty: green lawn, a pond, a few trees, bushes and a flower bed
 ----------------------------------------------------------------------------------------------------
 local function buildMeadow(c: Ctx)
 	local rng, F = c.rng, c.folder
@@ -186,7 +237,7 @@ local function buildMeadow(c: Ctx)
 		Props.bush(F, Vector3.new(at(c, spot[1]), GROUND, spot[2] * 84), rng:NextNumber(5, 7), rgb(80, 196, 64))
 	end
 	pond(F, Vector3.new(at(c, 0.45), GROUND, -68), 26, 3)
-	for _, spot in { { 0.2, -1 }, { 0.55, 1 } } do -- two little flower beds
+	for _, spot in { { 0.55, 1 } } do -- a little flower bed across from the pond
 		for j = 1, 4 do
 			local p = Vector3.new(at(c, spot[1]) + rng:NextNumber(-8, 8), GROUND, spot[2] * rng:NextNumber(66, 80))
 			Props.flower(F, p, BRIGHT[rng:NextInteger(1, #BRIGHT)], rng:NextNumber(1.6, 2.6), "Meadow_Flower")
@@ -368,7 +419,7 @@ local function buildJungle(c: Ctx)
 end
 
 ----------------------------------------------------------------------------------------------------
--- 4. Lava Fields: cartoon volcano land: glowing lava rivers along the walls, three volcanoes, rocks
+-- 4. Lava Fields: cartoon volcano land: lava rivers along the walls, three volcanoes, rocks
 ----------------------------------------------------------------------------------------------------
 local LAVA = rgb(255, 120, 30)
 local LAVA_HOT = rgb(255, 210, 70)
@@ -403,15 +454,15 @@ local function buildLava(c: Ctx)
 			local x = c.x0 + (i + 0.5) * c.len / n
 			local z = s * 80
 			flat(F, "RiverBank", c.len / n + 2, 14, Vector3.new(x, GROUND, z), rgb(56, 36, 44), M.SmoothPlastic, nil, 0.2)
-			local river = flat(F, "LavaRiver", c.len / n + 2, 9, Vector3.new(x, GROUND, z), LAVA, M.Neon, nil, 0.3)
+			local river = flat(F, "LavaRiver", c.len / n + 2, 9, Vector3.new(x, GROUND, z), LAVA, M.SmoothPlastic, nil, 0.3)
 			if i % 3 == 0 then
 				embers(river)
 			end
 		end
 	end
-	for _ = 1, 10 do -- a few glowing cracks
+	for _ = 1, 10 do -- a few lava cracks (flat plastic, no glow)
 		flat(F, "Crack", rng:NextNumber(8, 16), 0.6, Vector3.new(at(c, rng:NextNumber(0.05, 0.95)), GROUND, rng:NextNumber(-50, 50)),
-			if rng:NextNumber() < 0.3 then LAVA_HOT else LAVA, M.Neon, rng:NextNumber(0, math.pi), 0.15)
+			if rng:NextNumber() < 0.3 then LAVA_HOT else LAVA, M.SmoothPlastic, rng:NextNumber(0, math.pi), 0.15)
 	end
 
 	for i = 1, 3 do -- volcanoes against the walls (a drop-in volcano gets the crater's smoke and embers)
@@ -529,7 +580,7 @@ local function buildSnow(c: Ctx)
 end
 
 ----------------------------------------------------------------------------------------------------
--- 6. Deep Space: purple floor with a neon grid, planets in the sky, crystals, a UFO
+-- 6. Deep Space: purple floor with a few stars, planets in the sky, crystals, a UFO
 ----------------------------------------------------------------------------------------------------
 local SPACE_CYAN = rgb(70, 225, 255)
 local SPACE_PINK = rgb(255, 80, 220)
@@ -539,16 +590,9 @@ local function buildSpace(c: Ctx)
 	local rng, F = c.rng, c.folder
 	floor(c)
 	walls(c)
-	for x = c.x0 + FLOOR_TILE, c.x1 - 1, FLOOR_TILE * 2 do
-		flat(F, "GridLine", 0.8, W, Vector3.new(x, GROUND, 0), SPACE_CYAN, M.Neon, nil, 0.15)
-	end
 	for _ = 1, 30 do
 		local size = rng:NextNumber(0.8, 1.6)
-		flat(F, "FloorStar", size, size, Vector3.new(at(c, rng:NextNumber(0.03, 0.97)), GROUND, rng:NextNumber(-88, 88)), STAR_COLORS[rng:NextInteger(1, #STAR_COLORS)], M.Neon, math.rad(45), 0.15)
-	end
-	for _, s in { -1, 1 } do -- a neon band along each wall
-		local band = deco(F, "WallBand", Vector3.new(c.len, 1.2, 0.4), CFrame.new(c.x0 + c.len / 2, GROUND + 14, s * (HALF_W - 0.25)), SPACE_PINK, M.Neon)
-		band.CastShadow = false
+		flat(F, "FloorStar", size, size, Vector3.new(at(c, rng:NextNumber(0.03, 0.97)), GROUND, rng:NextNumber(-88, 88)), STAR_COLORS[rng:NextInteger(1, #STAR_COLORS)], M.SmoothPlastic, math.rad(45), 0.15)
 	end
 
 	-- Planets hang in the sky over the corridor (a drop-in planet's pivot is the bottom of the sphere)
@@ -710,7 +754,7 @@ local function buildSpirit(c: Ctx)
 	local fall = deco(F, "Waterfall", Vector3.new(1, H - 2, 24), CFrame.new(endX - 0.6, GROUND + (H - 2) / 2, 0), rgb(160, 225, 255))
 	fall.Transparency = 0.2
 	fall.CastShadow = false
-	local core = deco(F, "WaterfallCore", Vector3.new(0.6, H - 2, 10), CFrame.new(endX - 1.1, GROUND + (H - 2) / 2, 0), rgb(235, 250, 255), M.Neon)
+	local core = deco(F, "WaterfallCore", Vector3.new(0.6, H - 2, 10), CFrame.new(endX - 1.1, GROUND + (H - 2) / 2, 0), rgb(235, 250, 255), M.SmoothPlastic)
 	core.Transparency = 0.35
 	core.CastShadow = false
 	pond(F, Vector3.new(endX - 18, GROUND, 0), 32, 4)
@@ -723,7 +767,7 @@ local function buildSpirit(c: Ctx)
 	for _, f in { 0.25, 0.6 } do
 		torii(F, at(c, f), 34)
 	end
-	for _, spot in { { 0.12, -1 }, { 0.42, 1 }, { 0.72, -1 } } do -- waterfalls into ponds, alternating sides
+	for _, spot in { { 0.12, -1 }, { 0.45, 1 } } do -- waterfalls into ponds, one each side (and the big one at the end)
 		waterfall(F, at(c, spot[1]), spot[2], 12)
 	end
 	for i, f in { 0.08, 0.35, 0.66 } do

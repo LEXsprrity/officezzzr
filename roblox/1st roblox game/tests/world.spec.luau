@@ -370,6 +370,69 @@ H.test("world: no finish line: the Spirit Garden's back wall ends the corridor, 
 	end
 end)
 
+H.test("world: no neon on the corridor's floor or edges (no glowing strips, lines, rings or rivers)", function()
+	for _, p in parts(world.Corridor) do
+		if p.Material == Enum.Material.Neon then
+			local s = p.Size
+			local thinnest = math.min(s.X, s.Y, s.Z)
+			local longest = math.max(s.X, s.Y, s.Z)
+			local onFloor = p.CFrame.Position.Y - thinnest / 2 < Config.GROUND_Y + 1 and thinnest <= 0.6
+			H.ok(not onFloor, `{p:GetFullName()}: neon on the floor`)
+			local dims = { s.X, s.Y, s.Z }
+			table.sort(dims)
+			H.ok(not (longest >= 20 and dims[2] <= 3), `{p:GetFullName()}: a neon strip`)
+		end
+	end
+end)
+
+H.test("world: each zone starts with a soft border strip a shade lighter than its floor (no glow)", function()
+	for k, zone in Config.ZONES do
+		local folder = world.Corridor:FindFirstChild(string.format("%d_%s", k, zone.id))
+		local edge = folder:FindFirstChild("ZoneEdge")
+		H.ok(edge, `{zone.id}: a ZoneEdge`)
+		H.ok(math.abs(edge.Size.Z - Config.CORRIDOR_WIDTH) < 1e-3 and edge.Size.X <= 8, `{zone.id}: a narrow strip across the corridor`)
+		H.ok(math.abs(edge.CFrame.Position.X - edge.Size.X / 2 - Config.zoneStartX(k)) < 1e-3, `{zone.id}: at the zone's entrance`)
+		H.ok(edge.Material == Enum.Material.Plastic and edge.TopSurface == Enum.SurfaceType.Studs, `{zone.id}: flat studded plastic`)
+		local f, c = zone.floor, edge.Color
+		local diff = (c.R - f.R) + (c.G - f.G) + (c.B - f.B)
+		H.ok(diff > 0 and diff < 0.6, `{zone.id}: a little lighter than the floor ({diff})`)
+		H.ok(edge.Size.Y > 0.1 and edge.Size.Y < 0.3 and not edge.CanCollide, `{zone.id}: a flat overlay`)
+	end
+end)
+
+H.test("world: ponds are flat studded checker water with notched lily pads, a flower and reeds", function()
+	local ponds, tones, pads, cuts, petals, reeds = 0, {}, 0, 0, 0, 0
+	for _, p in parts(world.Corridor) do
+		H.ok(p.Name ~= "PondRim", "no pond rim")
+		if p.Name == "Pond" or p.Name == "PondTile" then
+			if p.Name == "Pond" then
+				ponds += 1
+			end
+			H.ok(p.Material == Enum.Material.Plastic and p.Transparency == 0, `{p:GetFullName()}: solid studded plastic water`)
+			H.ok(p.Color.B > p.Color.R and p.Color.B > p.Color.G, "blue water")
+			tones[p.Color:ToHex()] = true
+		elseif p.Name == "LilyPad" then
+			pads += 1
+		elseif p.Name == "LilyCut" then
+			cuts += 1
+		elseif p.Name == "LilyPetal" then
+			petals += 1
+		elseif p.Name == "Reed" then
+			reeds += 1
+			H.ok(p.Size.Y >= 5, "tall reeds")
+		end
+	end
+	local nTones = 0
+	for _ in tones do
+		nTones += 1
+	end
+	H.ok(ponds >= 5, `ponds (rows) {ponds}`)
+	H.eq(nTones, 2, "a checker of two blues")
+	H.ok(pads >= 4 and cuts == pads, `each lily pad has its wedge cut ({pads} pads, {cuts} cuts)`)
+	H.ok(petals >= 2, "a flower on a pad")
+	H.ok(reeds >= 3, "reeds")
+end)
+
 H.test("world: every zone wall has a cap", function()
 	local halfW = Config.CORRIDOR_WIDTH / 2
 	for k, zone in Config.ZONES do
@@ -386,9 +449,9 @@ H.test("world: every zone wall has a cap", function()
 end)
 
 -- Decoration in a zone: everything visible but the floor, walls, their checker and caps, the nest and the
--- Speed plank (the Spirit Garden's roof is its cap).
+-- Speed plank (the Spirit Garden's roof is its cap; the zone edge and pond water are flat floor overlays).
 local STRUCTURE = { Floor = true, FloorTile = true, Wall = true, WallTile = true, WallCap = true,
-	Roof = true, RoofTile = true, RoofTrim = true }
+	Roof = true, RoofTile = true, RoofTrim = true, ZoneEdge = true, Pond = true, PondTile = true }
 local function propParts(folder: any): number
 	local id = string.match(folder.Name, "^%d+_(.+)$")
 	local n = 0
