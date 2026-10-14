@@ -309,7 +309,7 @@ H.test("assets: every slot the code uses is known, and the guide lists every slo
 end)
 
 H.test("assets: a whole map built with dummy models keeps its contract (roles, prompts, no colliding props)", function()
-	local slots = { "Treadmill", "UpgradeSign", "ShopStall", "FenceSection", "Spirit_Torii", "Lava_Volcano" }
+	local slots = { "Treadmill", "UpgradeSign", "ShopStall", "FenceSection", "Spirit_Shrine", "Lava_Volcano" }
 	local made = {}
 	for _, slot in slots do
 		table.insert(made, dummy(slot, { { Vector3.new(4, 6, 2), Vector3.zero }, { Vector3.new(2, 2, 2), Vector3.new(0, 4, 0) } }))
@@ -362,7 +362,7 @@ H.test("assets: a whole map built with dummy models keeps its contract (roles, p
 			emitters += 1
 		end
 	end
-	H.eq(emitters, 2, "the crater's smoke and embers carry over to the volcano model")
+	H.eq(emitters, 3, "the crater fire's flames, embers and smoke carry over to the volcano model")
 	WorldBuilder.build() -- leave a map built only from the real assets folder
 end)
 

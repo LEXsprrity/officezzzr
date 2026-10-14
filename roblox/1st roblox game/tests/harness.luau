@@ -36,6 +36,8 @@ local function folder(name: string, dir: string, parent: Node?): Node
 		local modName = string.match(entry, "^(.-)%.luau$")
 		if modName and not string.find(modName, "%.server$") and not string.find(modName, "%.client$") then
 			node.__children[modName] = makeNode(modName, node, dir .. "/" .. entry)
+		elseif fs.isDir(dir .. "/" .. entry) then -- a sub-folder (Rojo makes it a Folder), e.g. Server/Zones
+			node.__children[entry] = folder(entry, dir .. "/" .. entry, node)
 		end
 	end
 	return node

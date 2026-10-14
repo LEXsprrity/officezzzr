@@ -70,6 +70,20 @@ function Props.deco(parent: Instance, name: string, size: Vector3, cf: CFrame, c
 	return p
 end
 
+-- Every face but the bottom one: the corridor's props are studded all over, like its floor and walls
+-- (owner playtest: everything in the same classic studded plastic).
+Props.STUD_FACES = { "TopSurface", "FrontSurface", "BackSurface", "LeftSurface", "RightSurface" }
+
+-- A non-colliding block in studded plastic on every visible face: what the corridor's props are built of.
+-- Small bits cast no shadow (cheaper on mobile, and their shadows are only specks).
+function Props.block(parent: Instance, name: string, size: Vector3, cf: CFrame, color: Color3): Part
+	local p = Props.studs(Props.deco(parent, name, size, cf, color), Props.STUD_FACES)
+	if size.X * size.Y * size.Z < 4 then
+		p.CastShadow = false
+	end
+	return p
+end
+
 function Props.ball(parent: Instance, name: string, diameter: number, pos: Vector3, color: Color3, material: Enum.Material?): Part
 	local p = part({
 		Name = name,
@@ -227,6 +241,7 @@ export type EmitterSpec = {
 	rotation: NumberRange?,
 	rotSpeed: NumberRange?,
 	lightEmission: number?,
+	lightInfluence: number?, -- 0: as bright at night as by day (fire, glow)
 	drag: number?,
 }
 
@@ -258,6 +273,9 @@ function Props.emitOn(host: BasePart, spec: EmitterSpec): ParticleEmitter
 	e.Rotation = spec.rotation or NumberRange.new(0, 360)
 	e.RotSpeed = spec.rotSpeed or NumberRange.new(0)
 	e.LightEmission = spec.lightEmission or 0
+	if spec.lightInfluence then
+		e.LightInfluence = spec.lightInfluence
+	end
 	e.Drag = spec.drag or 0
 	e.Parent = host
 	return e
