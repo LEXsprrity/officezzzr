@@ -450,11 +450,11 @@ function PlotService.sellPlants(player: Player, slots: any)
 end
 
 ----------------------------------------------------------------------------------------------------
--- Plot upgrades: the board at each plot's gate (money or Robux), and the Shop's "PlotUpgrade" (money)
+-- Plot upgrades: the board by each plot's entrance (money or Robux), and the Shop's "PlotUpgrade" (money)
 ----------------------------------------------------------------------------------------------------
 local UPGRADE_PROMPT_DISTANCE = 9
 
--- The board's two owner-only prompts (money and Robux).
+-- The board's two owner-only prompts (money and Robux; no popup, see addBoardButtons).
 local function upgradePrompts(state: PlotState): { ProximityPrompt }
 	local list = {}
 	for _, d in state.info.upgradeBoard:GetDescendants() do
@@ -497,9 +497,9 @@ local function boardRobuxPrice(product: Config.DevProduct): number
 end
 
 ----------------------------------------------------------------------------------------------------
--- Treadmill upgrades: two owner-only prompts on the Upgrade board beside each plot's treadmill (money or
+-- Treadmill upgrades: the owner-only buttons on the Upgrade board next to each plot's treadmill (money or
 -- Robux, one tier at a time), and the Shop's "TreadmillUpgrade" (money). The board (TreadmillBoard) is
--- built at runtime beside whatever belt the map has.
+-- built at runtime next to whatever belt the map has (the treadmill stands in front of the plot).
 ----------------------------------------------------------------------------------------------------
 -- The board's two prompts (money and Robux).
 local function treadmillPrompts(state: PlotState): { ProximityPrompt }

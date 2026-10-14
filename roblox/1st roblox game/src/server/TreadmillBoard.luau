@@ -1,8 +1,9 @@
 -- Each plot's treadmill visuals, built at runtime around whatever belt the map has (so they follow the
--- treadmill wherever it is moved): an "Upgrade" board beside it (a chunky dark navy sign on a post, like
--- the plot's Upgrade board: "Level X > Level Y", a red button with the money price and a purple one with
--- the Robux price) and a small "+X/step" text floating over the belt's front end. The map's old
--- "TREADMILL" billboard is switched off. PlotService writes them and owns the board's prompts.
+-- treadmill wherever it is moved): an "Upgrade" board next to it, in line past its back end (a chunky dark
+-- navy sign on a post, like the plot's Upgrade board: "Level X > Level Y", a red button with the money price
+-- and a purple one with the Robux price; the treadmill stands in front of its plot, so the board faces the
+-- walkway) and a small "+X/step" text floating over the belt's front end. The map's old "TREADMILL"
+-- billboard is switched off. PlotService writes them and owns the board's buttons (click/tap and E/F).
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Shared = ReplicatedStorage:WaitForChild("Shared")
 local Format = require(Shared:WaitForChild("Format"))

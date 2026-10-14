@@ -13,6 +13,7 @@ local UserInputService = game:GetService("UserInputService")
 local Shared = ReplicatedStorage:WaitForChild("Shared")
 local Config = require(Shared:WaitForChild("Config"))
 local Planting = require(Shared:WaitForChild("Planting"))
+local UiFx = require(Shared:WaitForChild("UiFx"))
 local Remotes = ReplicatedStorage:WaitForChild("Remotes")
 local StatsUpdate = Remotes:WaitForChild("StatsUpdate") :: RemoteEvent
 local LootEvent = Remotes:WaitForChild("LootEvent") :: RemoteEvent
@@ -160,6 +161,7 @@ cancel.TextScaled = true
 cancel.TextColor3 = Color3.new(1, 1, 1)
 cancel.Text = "✖"
 cancel.Parent = hint
+UiFx.pop(cancel)
 local cancelCorner = Instance.new("UICorner")
 cancelCorner.CornerRadius = UDim.new(0, 8)
 cancelCorner.Parent = cancel

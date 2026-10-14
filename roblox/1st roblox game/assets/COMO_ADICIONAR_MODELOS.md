@@ -36,13 +36,13 @@ Algumas peças fazem o jogo funcionar. Elas têm um **atributo `Role`** (veja em
 | `Role` | O que é | Onde fica |
 |---|---|---|
 | `Plot` | o modelo do lote (Plot1 ... Plot5) | `World → PlotN` |
-| `PlotFloor` | o chão do lote. Dentro dele ficam os pontos `Slot1`...`Slot40` (onde as plantas nascem) e `Spawn` (onde o jogador aparece) | `PlotN → Floor` |
-| `PlantPad` | o quadrado de terra onde se planta | `PlotN → PlantPad` |
+| `PlotFloor` | o chão do lote. Dentro dele ficam os pontos `Origin` (de onde as posições das plantas são medidas) e `Spawn` (onde o jogador aparece) | `PlotN → Floor` |
+| `PlantBed` | os dois canteiros de terra marrom (atributo `BedIndex` 1 e 2) onde o jogador planta em qualquer lugar. Pode mover, girar ou aumentar; um 3º canteiro com `BedIndex` 3 também vale | `PlotN → DirtBed` |
 | `TreadmillBelt` | a esteira (o jogador ganha Speed em cima dela) | `PlotN → TreadmillBelt` |
 | `TreadmillSign` | a plaquinha invisível com o texto da esteira | `PlotN → TreadmillSign` |
-| `PlotSign` | a plaquinha invisível com o nome do dono | `PlotN → SignPost` |
+| `PlotSign` | a placa na cerca, ao lado da entrada, com o nome do dono | `PlotN → OwnerSign` |
 | `UpgradeBoard` | o painel da placa "Upgrade" (com os textos Level / Cash / Robux; a fila de botões `Buttons` é opcional) | `PlotN → UpgradeBoard` |
-| `Slot`, `Spawn` | pontos (Attachments) dentro do chão do lote | `PlotN → Floor` |
+| `PlotOrigin`, `Spawn` | pontos (Attachments) dentro do chão do lote | `PlotN → Floor` |
 | `Nest` | o modelo do ninho de cada zona | `World → Corridor → N_Zona → Nest_Zona` |
 | `NestCore` | a peça invisível no centro do ninho, com os pontos `Center`, `Pod1`...`Pod4` (as sementes) e `GuardHome` (onde o guardião dorme) | `Nest_Zona → NestCore` |
 
@@ -196,7 +196,7 @@ O **ninho** é a planta-mãe com o monte de terra, as pedras e a flor brilhante.
 
 | Nome | O que é | Onde aparece | Altura | Largura máx. |
 |---|---|---|---|---|
-| `Treadmill` | a estrutura da esteira (moldura, corrimãos, painel). A faixa preta onde se corre continua do jogo: ela fica invisível e toma o tamanho e a altura da peça do modelo com "Belt" no nome, então o Speed conta exatamente onde se vê a faixa. Frente = virada para a entrada do lote | cada lote | até ~16 | 8 × 21 |
+| `Treadmill` | a estrutura da esteira (moldura, corrimãos, painel). A faixa preta onde se corre continua do jogo: ela fica invisível e toma o tamanho e a altura da peça do modelo com "Belt" no nome, então o Speed conta exatamente onde se vê a faixa. Fica fora do lote, na frente dele (entre a cerca e o caminho), do tamanho de um personagem. Frente = virada para o caminho de entrada do lote | cada lote | até ~16 | 7 × 12 |
 | `UpgradeSign` | o suporte da placa "Upgrade" (moldura com studs e o poste curto). O painel azul-escuro com o texto e os botões continua do jogo | na frente de cada lote | ~7 | ~8 |
 | `ShopStall` | barraca da praça das lojas (quatro postes de madeira, balcão de pedra cinza com corrimãos, toldo listrado com bordas arredondadas). O anel brilhante no chão e o título flutuante continuam do jogo. Frente = calçada. Vale para as barracas SHOP, TRAIL SHOP e INDEX (não para a SELL) | praça das lojas | ~17 | 17 × 13 |
 | `ShopStall_Shop` | só a barraca 🛒 SHOP (se existir, vale mais que `ShopStall`) | praça das lojas | ~17 | 17 × 13 |
