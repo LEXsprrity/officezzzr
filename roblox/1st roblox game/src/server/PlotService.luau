@@ -7,6 +7,7 @@ local Config = require(Shared:WaitForChild("Config"))
 local Format = require(Shared:WaitForChild("Format"))
 local SeedPacks = require(Shared:WaitForChild("SeedPacks"))
 local Icons = require(Shared:WaitForChild("Icons"))
+local Treadmill = require(Shared:WaitForChild("Treadmill"))
 local Net = require(script.Parent:WaitForChild("Net"))
 local Sessions = require(script.Parent:WaitForChild("Sessions"))
 local SeedService = require(script.Parent:WaitForChild("SeedService"))
@@ -463,12 +464,6 @@ local function treadmillPrompts(state: PlotState): { ProximityPrompt }
 	return list
 end
 
--- How close the owner must be to the belt's centre to see its prompts: anywhere on the belt, plus a bit
--- (the belt's size comes from the map, so a resized treadmill still works).
-local function treadmillPromptDistance(belt: BasePart): number
-	return math.max(10, math.max(belt.Size.X, belt.Size.Z) / 2 + 4)
-end
-
 -- The treadmill sign shows its owner's tier, what standing on it pays right now (WalkSpeed x Speed per
 -- stud x the tier's multiplier, per second, like the HUD's "+X Speed/step") and the next tier's prices.
 -- Refreshed with every payout. The prompts say what they buy; at the last tier they switch off.
@@ -491,7 +486,7 @@ local function renderTreadmillSign(state: PlotState)
 		prompt.ActionText = if price then `Upgrade to x{Config.treadmillMult(tier + 1)}` else "Maxed"
 		prompt.ObjectText = if prompt.Name == "TreadmillCash" then (if price then Format.money(price) else "")
 			else (robux or "")
-		prompt.MaxActivationDistance = if price then treadmillPromptDistance(state.info.belt) else 0
+		prompt.MaxActivationDistance = if price then Treadmill.promptDistance(state.info.belt.Size) else 0
 	end
 end
 
@@ -557,17 +552,26 @@ local TREADMILL_PROMPTS = {
 
 local function addTreadmillPrompts(state: PlotState)
 	local belt = state.info.belt
+	-- The sign now has three lines (tier, Speed/s, next prices): give its billboard the height for them.
+	local gui = state.info.treadmillLabel:FindFirstAncestorWhichIsA("BillboardGui")
+	if gui and gui.Size.Y.Scale < 5 and gui.Size.Y.Offset == 0 then
+		gui.Size = UDim2.fromScale(gui.Size.X.Scale, 5)
+	end
 	for _, spec in TREADMILL_PROMPTS do
 		local anchor = Instance.new("Attachment")
 		anchor.Name = spec.name .. "PromptAnchor"
-		anchor.Position = Vector3.new(spec.side * belt.Size.X * 0.3, belt.Size.Y / 2 + 3, 0)
+		local function place() -- over the belt, either side of its middle, wherever the map sized it
+			anchor.Position = Vector3.new(spec.side * belt.Size.X * 0.3, belt.Size.Y / 2 + 3, 0)
+		end
+		place()
+		belt:GetPropertyChangedSignal("Size"):Connect(place)
 		anchor.Parent = belt
 		local prompt = Instance.new("ProximityPrompt")
 		prompt.Name = spec.name
 		prompt.ActionText = "Upgrade"
 		prompt.ObjectText = "Treadmill"
 		prompt.HoldDuration = spec.hold
-		prompt.MaxActivationDistance = treadmillPromptDistance(belt)
+		prompt.MaxActivationDistance = Treadmill.promptDistance(belt.Size)
 		prompt.RequiresLineOfSight = false
 		prompt.KeyboardKeyCode = spec.key
 		prompt.GamepadKeyCode = spec.pad
@@ -576,7 +580,7 @@ local function addTreadmillPrompts(state: PlotState)
 		prompt.Triggered:Connect(function(player: Player)
 			local char = player.Character
 			local root = char and char:FindFirstChild("HumanoidRootPart") :: BasePart?
-			if state.owner == player and root and (root.Position - belt.Position).Magnitude <= treadmillPromptDistance(belt) + 6 then
+			if Treadmill.canUpgrade(state.owner == player, if root then root.Position else nil, belt.Position, belt.Size) then
 				spec.buy(player)
 			end
 		end)

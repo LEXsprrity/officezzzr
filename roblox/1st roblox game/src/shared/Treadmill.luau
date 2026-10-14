@@ -34,6 +34,18 @@ function Treadmill.standing(belts: { BasePart }, pos: Vector3, myPlot: number?):
 	return if myPlot ~= nil and plot == myPlot then "own" else "other"
 end
 
+-- How close the owner must be to a belt's centre to see its upgrade prompts: anywhere on the belt, plus
+-- a bit (the size comes from the map, so a resized treadmill still works).
+function Treadmill.promptDistance(beltSize: Vector3): number
+	return math.max(10, math.max(beltSize.X, beltSize.Z) / 2 + 4)
+end
+
+-- The server's check before a belt prompt buys anything: only the plot's owner (the client also hides
+-- the prompts from everyone else), with a living character near the belt.
+function Treadmill.canUpgrade(isOwner: boolean, rootPos: Vector3?, beltPos: Vector3, beltSize: Vector3): boolean
+	return isOwner and rootPos ~= nil and (rootPos - beltPos).Magnitude <= Treadmill.promptDistance(beltSize) + 6
+end
+
 -- Whether the client loops the run animation: alive, on their own treadmill, and not walking (walking
 -- already plays the run animation).
 function Treadmill.shouldRun(standing: ("own" | "other")?, alive: boolean, moveMagnitude: number): boolean

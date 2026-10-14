@@ -1,6 +1,7 @@
 -- Free-to-play progression: the Speed curve (gain per stud compounds with Speed), and a simulated free
 -- player (tests/progression_sim) who reaches every zone within about ±50% of the owner's targets.
--- Robux (the x5 treadmill, Speed packs) shortens that a lot but is never required.
+-- Treadmill tiers bought with money speed it up; Robux (treadmill upgrades, Speed packs) shortens it a
+-- lot but is never required; AFK farming on the treadmill is far slower than running the corridor.
 local H = require("./harness")
 local Config = H.shared("Config")
 local Sim = require("./progression_sim")
@@ -54,15 +55,45 @@ H.test("progression: the timeline is stable across RNG seeds (rarity rolls)", fu
 	end
 end)
 
-H.test("progression: Robux shortens it noticeably (x5 treadmill, Speed packs) but isn't needed", function()
-	local tread = Sim.run({ treadmillTier = 3 })
-	local packs = Sim.run({ treadmillTier = 3, speedPacks = { 1e6, 10e6 } })
+H.test("progression: Robux shortens it noticeably (treadmill upgrades, Speed packs) but isn't needed", function()
+	-- every treadmill tier bought with Robux at the start (TreadmillT1..T3, 9 receipts)
+	local tread = Sim.run({ treadmillTier = Config.TREADMILL_MAX })
+	local packs = Sim.run({ treadmillTier = Config.TREADMILL_MAX, speedPacks = { 1e6, 10e6 } })
 	local spirit = #Config.ZONES
-	H.ok(tread.arrivals[spirit] <= free.arrivals[spirit] * 0.7, `x5 treadmill: {Sim.clock(tread.arrivals[spirit])} vs {Sim.clock(free.arrivals[spirit])}`)
+	H.ok(tread.arrivals[spirit] <= free.arrivals[spirit] * 0.7, `x{Config.treadmillMult(Config.TREADMILL_MAX)} treadmill: {Sim.clock(tread.arrivals[spirit])} vs {Sim.clock(free.arrivals[spirit])}`)
 	H.ok(packs.arrivals[spirit] < tread.arrivals[spirit], "Speed packs on top help further")
 	for k = 2, spirit do
 		H.ok(tread.arrivals[k] <= free.arrivals[k], `{Config.ZONES[k].id}: Robux never slows you down`)
 	end
+end)
+
+H.test("progression: money treadmill tiers help, and the free player buys them all game", function()
+	local without = Sim.run({ noTreadmillUpgrades = true })
+	local spirit = #Config.ZONES
+	H.ok(free.arrivals[spirit] < without.arrivals[spirit] * 0.9,
+		`with tiers {Sim.clock(free.arrivals[spirit])}, without {Sim.clock(without.arrivals[spirit])}`)
+	local tiers = {}
+	for _, b in free.buys do
+		if string.match(b.what, "^Treadmill x") then
+			table.insert(tiers, b.t)
+		end
+	end
+	H.ok(#tiers >= 5, `{#tiers} treadmill tiers bought by the Spirit Garden`)
+	H.ok(tiers[1] >= 3 * 60, `the first tier isn't instant ({Sim.clock(tiers[1])})`)
+	H.ok(tiers[#tiers] > free.arrivals[5], "still buying tiers after the Snow Peaks")
+	H.ok(free.treadmillTier < Config.TREADMILL_MAX, "the last tiers are late-game sinks, past the Spirit Garden")
+end)
+
+H.test("progression: AFK farming on the treadmill never beats running the corridor", function()
+	-- The AFK farmer fills the plot once, then only stands on the treadmill, buying the same upgrades.
+	-- Both start the same way (the Desert comes before the plot is first full), so compare from the Jungle.
+	local afk = Sim.run({ afk = true, limitHours = 80 })
+	for k = 3, #Config.ZONES do
+		local zone = Config.ZONES[k].id
+		H.ok(afk.arrivals[k] == nil or afk.arrivals[k] > free.arrivals[k], `{zone}: AFK {Sim.clock(afk.arrivals[k])}, active {Sim.clock(free.arrivals[k])}`)
+	end
+	H.ok(afk.arrivals[#Config.ZONES] == nil or afk.arrivals[#Config.ZONES] > 2 * free.arrivals[#Config.ZONES], "far behind by the end")
+	H.ok(afk.treadmillTier < free.treadmillTier, "plants from the corridor pay for the better treadmill")
 end)
 
 H.test("progression: money stays a sink all game (trails and plot levels bought throughout)", function()
@@ -73,7 +104,7 @@ H.test("progression: money stays a sink all game (trails and plot levels bought 
 		local trail = string.match(b.what, "^(%a+) Trail$")
 		if trail then
 			trailAt[trail] = b.t
-		else
+		elseif string.match(b.what, "^Plot Level") then
 			local third = if b.t < spirit / 3 then "early" elseif b.t < spirit * 2 / 3 then "middle" else "late"
 			plotBuys[third] += 1
 		end

@@ -249,7 +249,7 @@ end)
 -- Saves
 ----------------------------------------------------------------------------------------------------
 H.test("rewards: v3 saves load with the gift unclaimed, the window unseen and the chest ready (v4)", function()
-	H.eq(ProfileStore.VERSION, 4)
+	H.ok(ProfileStore.VERSION >= 4, "v4 added these fields")
 	local v3 = { v = 3, money = 12, speed = 34, plotLevel = 2, trails = { "Grey" }, trail = "Grey", plants = {}, index = {} }
 	local p = ProfileStore.deserialize(serde.decode("json", serde.encode("json", v3)))
 	H.eq(p.freeGift, false)
@@ -258,7 +258,7 @@ H.test("rewards: v3 saves load with the gift unclaimed, the window unseen and th
 	H.eq(p.money, 12, "the rest loads as before")
 	H.eq(p.plotLevel, 2)
 	local data = ProfileStore.serialize(p)
-	H.eq(data.v, 4)
+	H.eq(data.v, ProfileStore.VERSION)
 	-- v4 round trip, and junk in the new fields falls back to the defaults
 	p.freeGift, p.giftShown, p.chestAt = true, true, NOW
 	local back = roundTrip(p)

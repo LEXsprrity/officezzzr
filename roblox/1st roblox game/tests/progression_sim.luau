@@ -231,22 +231,25 @@ Sim.TARGETS = { Desert = 5 * 60, Jungle = 30 * 60, Lava = 75 * 60, Snow = 3 * 36
 function Sim.report(): string
 	local Format = H.shared("Format")
 	local free = Sim.run()
-	local tread = Sim.run({ treadmillTier = 3 })
-	local packs = Sim.run({ treadmillTier = 3, speedPacks = { 1e6, 10e6 } })
-	local lines = { "| Zone | Rec. Speed | Target | Free player | ±50% window | Treadmill x5 (R$) | x5 + 11M Speed packs (R$) |", "|---|---|---|---|---|---|---|" }
+	local top = Config.TREADMILL_MAX
+	local tread = Sim.run({ treadmillTier = top })
+	local packs = Sim.run({ treadmillTier = top, speedPacks = { 1e6, 10e6 } })
+	local afk = Sim.run({ afk = true, limitHours = 80 })
+	local x = `x{Config.treadmillMult(top)}`
+	local lines = { `| Zone | Rec. Speed | Target | Free player | ±50% window | AFK farmer | Treadmill {x} (R$) | {x} + 11M Speed packs (R$) |`, "|---|---|---|---|---|---|---|---|" }
 	for k, zone in Config.ZONES do
 		local target = Sim.TARGETS[zone.id]
-		table.insert(lines, string.format("| %s %s | %s | %s | **%s** | %s | %s | %s |", zone.icon, zone.name, Format.short(zone.req),
+		table.insert(lines, string.format("| %s %s | %s | %s | **%s** | %s | %s | %s | %s |", zone.icon, zone.name, Format.short(zone.req),
 			if target then Sim.clock(target) else "start", Sim.clock(free.arrivals[k]),
 			if target then `{Sim.clock(target * 0.5)} – {Sim.clock(target * 1.5)}` else "—",
-			Sim.clock(tread.arrivals[k]), Sim.clock(packs.arrivals[k])))
+			Sim.clock(afk.arrivals[k]), Sim.clock(tread.arrivals[k]), Sim.clock(packs.arrivals[k])))
 	end
 	local buys = {}
 	for _, b in free.buys do
 		table.insert(buys, `{Sim.clock(b.t)} {b.what} ({Format.money(b.price)})`)
 	end
 	table.insert(lines, "")
-	table.insert(lines, `Free player at the Spirit Garden: {free.trail} trail, plot level {free.plotLevel}, {Format.money(free.income)}/s, {Format.money(free.finalMoney)} unspent.`)
+	table.insert(lines, `Free player at the Spirit Garden: {free.trail} trail, plot level {free.plotLevel}, treadmill x{Config.treadmillMult(free.treadmillTier)}, {Format.money(free.income)}/s, {Format.money(free.finalMoney)} unspent.`)
 	table.insert(lines, "Purchases: " .. table.concat(buys, " · "))
 	return table.concat(lines, "\n")
 end

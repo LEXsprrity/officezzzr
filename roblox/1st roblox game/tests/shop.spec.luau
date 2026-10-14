@@ -39,18 +39,19 @@ local function withIds(ids: { [string]: number }, fn: () -> ())
 end
 
 ----------------------------------------------------------------------------------------------------
--- Money buys only trails and plot upgrades
+-- Money buys only trails, plot upgrades and treadmill tiers
 ----------------------------------------------------------------------------------------------------
-H.test("money: only trails and the plot upgrade have a money price", function()
+H.test("money: only trails, the plot upgrade and the treadmill upgrade have a money price", function()
 	local view = { money = 1e30, plotLevel = 1, trails = { Grey = true } }
 	H.ok((Config.priceOf("PlotUpgrade", view)) ~= nil)
+	H.eq((Config.priceOf("TreadmillUpgrade", view)), Config.TREADMILL_TIERS[2].price, "the next treadmill tier")
 	for _, t in Config.TRAILS do
 		if t.price > 0 then
 			H.eq((Config.priceOf("Trail:" .. t.id, view)), t.price, t.id)
 		end
 	end
 	for _, id in { "Speed25", "SpeedMax", "SpeedMult", "Slot", "Treadmill", "SleepDust", "Product:Speed1M", "Product:Money8M",
-		"Product:TreadmillX5", "Product:SleepDust3", "Product:TrailRed", "Product:PackSpace", "Pass:DoubleMoney", "Trail:Hacked", "Trail:", "" } do
+		"Product:TreadmillT1", "Product:SleepDust3", "Product:TrailRed", "Product:PackSpace", "Pass:DoubleMoney", "Trail:Hacked", "Trail:", "" } do
 		H.eq((Config.priceOf(id, view)), nil, id .. " has no money price")
 	end
 end)
@@ -60,7 +61,7 @@ H.test("money: Robux-only items refuse a money purchase and never charge", funct
 	p.money = 1e30
 	local before = serde.encode("json", ProfileStore.serialize(p))
 	for _, id in { "Speed25", "SpeedMax", "SpeedMult", "Slot", "Treadmill", "SleepDust", "Product:Speed1M", "Product:Money8M",
-		"Product:TreadmillX5", "Product:SleepDust3", "Product:TrailRed", "Product:PackSpace", "Pass:ExtraSlots", "Nonsense" } do
+		"Product:TreadmillT1", "Product:SleepDust3", "Product:TrailRed", "Product:PackSpace", "Pass:ExtraSlots", "Nonsense" } do
 		local ok, msg = Shop.buy(p, id)
 		H.eq(ok, false, id)
 		H.ok(type(msg) == "string" and #msg > 0, id .. " explains why")
@@ -75,9 +76,6 @@ H.test("money: the removed money-shop config is gone", function()
 		H.eq((Config :: any)[key], nil, "Config." .. key)
 	end
 	H.eq((Config :: any).speedCost, nil, "Config.speedCost")
-	for _, tier in Config.TREADMILL_TIERS do
-		H.eq((tier :: any).price, nil, "treadmill tiers have no money price")
-	end
 end)
 
 ----------------------------------------------------------------------------------------------------
@@ -345,28 +343,36 @@ H.test("robux: the agreed Speed, Money and Treadmill products, all id = 0 stubs;
 	H.eq(amounts("Speed", "amount"), "10000/9 100000/36 150000/64 1000000/76 10000000/560 50000000/1200 500000000/1600 1000000000/2400")
 	H.eq(amounts("Money", "amount"), "24000/40 200000/80 800000/200 4000000/400 8000000/640")
 	H.eq(amounts("Money", "minutes"), "10/40 30/80 60/200 180/400 360/640")
-	H.eq(amounts("Treadmill", "tier"), "2/60 3/200")
+	H.eq(amounts("TreadmillUpgrade", "tier"), "1/19 2/39 3/79")
+	H.eq(#Config.products("Treadmill"), 0, "the old direct x3/x5 products were replaced by one-tier upgrades")
 	H.eq(#Config.products("Dust"), 0, "Sleep Dust was removed")
 	H.eq(Config.DEVELOPER_PRODUCTS.SleepDust3, nil)
 	for name, product in Config.DEVELOPER_PRODUCTS do
-		H.ok(product.kind == "Pack" or product.kind == "Speed" or product.kind == "Money" or product.kind == "Treadmill"
+		H.ok(product.kind == "Pack" or product.kind == "Speed" or product.kind == "Money" or product.kind == "TreadmillUpgrade"
 			or product.kind == "Trail" or product.kind == "PlotUpgrade", name .. " has a known kind")
 		H.ok(#name <= 24 and string.match(name, "^%a%w*$"), name .. " fits the Product:<name> remote id")
 	end
 end)
 
-H.test("robux: id = 0 products say coming soon; owned treadmill tiers aren't prompted", function()
+H.test("robux: id = 0 products say coming soon; only the treadmill's own upgrade tier is prompted", function()
 	local p = ProfileStore.defaultProfile()
 	for name in Config.DEVELOPER_PRODUCTS do
 		local product, why = Shop.canPrompt(p, name)
 		H.eq(product, nil, name)
 		H.ok(why and string.find(why, "coming soon"), why)
 	end
-	withIds({ TreadmillX3 = 301, TreadmillX5 = 302, Speed1B = 303 }, function()
-		H.ok((Shop.canPrompt(p, "TreadmillX5")), "x5 directly from x2")
-		p.treadmillTier = 3
-		H.eq((Shop.canPrompt(p, "TreadmillX3")), nil, "already faster")
-		H.eq((Shop.canPrompt(p, "TreadmillX5")), nil, "already owned")
+	withIds({ TreadmillT1 = 301, TreadmillT2 = 302, TreadmillT3 = 304, Speed1B = 303 }, function()
+		H.ok((Shop.canPrompt(p, "TreadmillT1")), "tier 1 -> T1")
+		H.eq((Shop.canPrompt(p, "TreadmillT2")), nil, "not a later tier's product")
+		p.treadmillTier = 5
+		H.eq((Shop.canPrompt(p, "TreadmillT1")), nil, "a cheap tier can't buy a late upgrade")
+		H.ok((Shop.canPrompt(p, "TreadmillT2")), "tier 5 -> T2")
+		p.treadmillTier = Config.TREADMILL_MAX
+		for _, name in { "TreadmillT1", "TreadmillT2", "TreadmillT3" } do
+			local got, why = Shop.canPrompt(p, name)
+			H.eq(got, nil, name .. " at the last tier")
+			H.ok(why and string.find(why, "fully upgraded"), why)
+		end
 		H.ok((Shop.canPrompt(p, "Speed1B")), "Speed packs are always open")
 	end)
 end)
@@ -380,10 +386,10 @@ H.test("robux: Speed and treadmill receipts grant exactly once", function()
 		{ "Speed1B", function()
 			return p.speed
 		end, 150e3 + 1e9 },
-		{ "TreadmillX5", function()
+		{ "TreadmillT1", function()
 			return p.treadmillTier
-		end, 3 },
-		{ "TreadmillX3", function() -- arriving late (a raced prompt) never lowers the tier
+		end, 2 },
+		{ "TreadmillT1", function() -- a second purchase (new PurchaseId): one more tier
 			return p.treadmillTier
 		end, 3 },
 	}
@@ -401,7 +407,7 @@ H.test("robux: Speed and treadmill receipts grant exactly once", function()
 			H.eq(read(), want, name .. " granted once")
 		end
 	end
-	H.eq(Config.TREADMILL_TIERS[p.treadmillTier].mult, 5)
+	H.eq(Config.treadmillMult(p.treadmillTier), Config.TREADMILL_TIERS[3].mult)
 	H.eq(p.money, 0, "none of these touch money")
 end)
 
@@ -527,7 +533,7 @@ H.test("migration: a migrated save is written in the current format and isn't mi
 	H.eq(back.money, refunded, "no second refund")
 	H.eq(back.plotLevel, 8)
 	H.eq(back.equippedTrail, "Rainbow")
-	H.eq(back.treadmillTier, 2, "treadmill tier kept")
+	H.eq(Config.treadmillMult(back.treadmillTier), 3, "the old Robux x3 treadmill keeps x3")
 	local same, why = H.deepEq(back, p)
 	H.ok(same, why)
 end)
