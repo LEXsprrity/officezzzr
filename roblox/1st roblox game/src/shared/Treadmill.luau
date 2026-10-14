@@ -76,17 +76,12 @@ Treadmill.RUN_ANIM_SPEED = 2.75
 ----------------------------------------------------------------------------------------------------
 -- What standing on it pays, and the text over it
 ----------------------------------------------------------------------------------------------------
--- Speed one step (stud of belt) pays on a treadmill with multiplier `treadmillMult` (Config.speedPerStud x tier).
--- `_speed` is unused since the gain stopped growing with Speed (v7); kept so callers needn't change.
-function Treadmill.perStep(_speed: number, trailId: string?, treadmillMult: number): number
-	return Config.speedPerStud(trailId) * treadmillMult
-end
-
--- Speed per second standing on it: the full walking rate (WalkSpeed studs/s, capped like SpeedLogic) x perStep.
--- What the server pays a second (SpeedLogic.treadmillGain every tick), the "+X" popups over the runner and
--- the "+X/s" text over the treadmill all show this one number.
-function Treadmill.perSecond(walkSpeed: number, speed: number, trailId: string?, treadmillMult: number): number
-	return math.min(walkSpeed, Config.GAIN_CAP_STUDS_PER_TICK / Config.TICK) * Treadmill.perStep(speed, trailId, treadmillMult)
+-- Speed per second standing on your own treadmill of tier `tier` with trail `trailId` equipped: the tier's
+-- fixed rate x the trail (Config.treadmillPerSecond), whatever your Speed or WalkSpeed. What the server pays
+-- a second (SpeedLogic.treadmillGain every tick), the "+X" popups over the runner, the "+X/s" text over the
+-- treadmill, its Upgrade board and the Shop card all show this one number.
+function Treadmill.perSecond(tier: number?, trailId: string?): number
+	return Config.treadmillPerSecond(tier, trailId)
 end
 
 -- "+0.5", "+12.3", "+200", "+1.6K" (like the HUD's "+X/step").
@@ -152,6 +147,17 @@ function Treadmill.boardText(tier: number?): (string, "open" | "max" | "empty")
 		return "MAX", "max"
 	end
 	return `Level {tier} > Level {tier + 1}`, "open"
+end
+
+-- The board's line under it: what a second pays now and at the next tier ("+60/s > +100/s"), just now's
+-- at the last tier ("+2.5K/s"), nothing with no owner.
+function Treadmill.boardRateText(perSecond: number?, nextPerSecond: number?): string
+	if perSecond == nil then
+		return ""
+	elseif nextPerSecond == nil then
+		return Treadmill.rateText(perSecond)
+	end
+	return `{Treadmill.rateText(perSecond)} > {Treadmill.rateText(nextPerSecond)}`
 end
 
 -- How close the owner must be to the board to see its prompts; the server re-checks with some slack.

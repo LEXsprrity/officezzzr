@@ -157,7 +157,7 @@ local function apply(p: Profile, name: string, product: Config.DevProduct, incom
 		-- money since the prompt). Already maxed: the last tier's money price instead.
 		if p.treadmillTier < Config.TREADMILL_MAX then
 			p.treadmillTier += 1
-			grant.label = `Treadmill x{Config.treadmillMult(p.treadmillTier)}`
+			grant.label = `Treadmill Level {p.treadmillTier}`
 		else
 			grant.compensation = Config.treadmillUpgradeMaxedPay()
 			p.money += grant.compensation

@@ -552,10 +552,11 @@ local function renderTreadmillSign(state: PlotState)
 		tier = tier,
 		cash = price,
 		robux = robux,
-		perSecond = Treadmill.perSecond(s.walkSpeed, s.profile.speed, s.profile.equippedTrail, Sessions.treadmillMult(s)),
+		perSecond = Treadmill.perSecond(tier, s.profile.equippedTrail),
+		nextPerSecond = if price then Treadmill.perSecond(tier + 1, s.profile.equippedTrail) else nil,
 	})
 	for _, prompt in treadmillPrompts(state) do
-		prompt.ActionText = if price then `Upgrade to x{Config.treadmillMult(tier + 1)}` else "Maxed"
+		prompt.ActionText = if price then `Upgrade to Level {tier + 1}` else "Maxed"
 		prompt.ObjectText = if prompt.Name == "TreadmillCash" then (if price then Format.money(price) else "")
 			else (if robux then Format.robux(robux) else "")
 		prompt.MaxActivationDistance = if price then Treadmill.BOARD_PROMPT_DISTANCE else 0
@@ -578,7 +579,7 @@ function PlotService.upgradeTreadmill(player: Player)
 	Sessions.pushFull(s)
 	Net.LootEvent:FireClient(player, "Bought", {
 		itemId = "TreadmillUpgrade",
-		label = `{msg}! Your treadmill pays x{Sessions.treadmillMult(s)} the walking Speed`,
+		label = `{msg}! Your treadmill pays {Treadmill.rateText(Sessions.treadmillPerSecond(s))} Speed`,
 	})
 end
 

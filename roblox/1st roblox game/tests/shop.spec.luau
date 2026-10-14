@@ -156,15 +156,15 @@ H.test("trails: the equipped trail multiplies Speed gained walking and on the tr
 	local function gain(trail: string, onTreadmill: boolean): number
 		local s = SpeedLogic.newState()
 		for _ = 1, 5 do
-			SpeedLogic.step(s, Vector3.new(0, 0, 0), DT, { walkSpeed = 80, onTreadmill = false, mult = 1, treadmillMult = 2 })
+			SpeedLogic.step(s, Vector3.new(0, 0, 0), DT, { walkSpeed = 80, onTreadmill = false, mult = 1, treadmillTier = 1, trailMult = 1 })
 		end
 		local to = if onTreadmill then Vector3.new(0, 0, 0) else Vector3.new(80 * DT, 0, 0)
-		local g = SpeedLogic.step(s, to, DT, { walkSpeed = 80, onTreadmill = onTreadmill, mult = Config.speedPerStud(trail), treadmillMult = 2 })
+		local g = SpeedLogic.step(s, to, DT, { walkSpeed = 80, onTreadmill = onTreadmill, mult = Config.speedPerStud(trail), treadmillTier = 1, trailMult = Config.trailMult(trail) })
 		return g
 	end
 	for _, onTreadmill in { false, true } do
 		local grey = gain("Grey", onTreadmill)
-		H.near(grey, 80 * DT * Config.BASE_SPEED_PER_STUD * (if onTreadmill then 2 else 1), 1e-9, "Grey x1: the flat base")
+		H.near(grey, if onTreadmill then Config.treadmillRate(1) * DT else 80 * DT * Config.BASE_SPEED_PER_STUD, 1e-9, "Grey x1: the flat base (the treadmill: its fixed rate)")
 		for _, t in Config.TRAILS do
 			H.near(gain(t.id, onTreadmill), grey * t.mult, 1e-9, t.id)
 		end
@@ -407,7 +407,7 @@ H.test("robux: Speed and treadmill receipts grant exactly once", function()
 			H.eq(read(), want, name .. " granted once")
 		end
 	end
-	H.eq(Config.treadmillMult(p.treadmillTier), Config.TREADMILL_TIERS[3].mult)
+	H.eq(p.treadmillTier, 3)
 	H.eq(p.money, 0, "none of these touch money")
 end)
 
@@ -536,7 +536,7 @@ H.test("migration: a migrated save is written in the current format and isn't mi
 	H.eq(back.money, refunded, "no second refund")
 	H.eq(back.plotLevel, 8)
 	H.eq(back.equippedTrail, "Rainbow")
-	H.eq(Config.treadmillMult(back.treadmillTier), 3, "the old Robux x3 treadmill keeps x3")
+	H.eq(back.treadmillTier, 5, "the old Robux x3 treadmill became tier 5 (x3 in v5) and keeps it")
 	local same, why = H.deepEq(back, p)
 	H.ok(same, why)
 end)

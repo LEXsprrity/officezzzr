@@ -1,4 +1,4 @@
--- Speed from moving: per-tick gain, cap, treadmill multiplier, movement sanity check.
+-- Speed from moving: per-tick gain, cap, the treadmill's fixed rate, movement sanity check.
 local H = require("./harness")
 local Vector3 = H.Vector3
 
@@ -7,8 +7,8 @@ local SpeedLogic = H.server("SpeedLogic")
 
 local DT = Config.TICK
 
-local function opts(walkSpeed: number, onTreadmill: boolean?, mult: number?, tier: number?)
-	return { walkSpeed = walkSpeed, onTreadmill = onTreadmill == true, mult = mult or 1, treadmillMult = tier or 2 }
+local function opts(walkSpeed: number, onTreadmill: boolean?, mult: number?, tier: number?, trailMult: number?)
+	return { walkSpeed = walkSpeed, onTreadmill = onTreadmill == true, mult = mult or 1, treadmillTier = tier or 1, trailMult = trailMult or 1 }
 end
 
 -- Warm a tracker up at `pos` (standing for a second refills the movement budget).
@@ -43,33 +43,31 @@ H.test("speed: walking gain = horizontal distance x Speed per stud", function()
 	H.near(gain, d * 3, 1e-9, "vertical movement doesn't count; gain = studs x Speed per stud")
 end)
 
-H.test("speed: treadmill gives exactly 2x the walking gain (starting tier)", function()
+H.test("speed: the treadmill pays its tier's fixed rate x the trail, whatever the WalkSpeed", function()
 	for _, walk in { 16, 50, 107, 180 } do
-		-- walking a full tick at WalkSpeed...
-		local s1 = tracker(Vector3.new(0, 0, 0))
-		local walkGain = SpeedLogic.step(s1, Vector3.new(walk * DT, 0, 0), DT, opts(walk))
-		-- ...vs standing (AFK) on the treadmill for a tick
-		local s2 = tracker(Vector3.new(0, 0, 0))
-		local tmGain, verdict = SpeedLogic.step(s2, Vector3.new(0, 0, 0), DT, opts(walk, true, 1, Config.TREADMILL_TIERS[1].mult))
+		-- standing (AFK) on the treadmill for a tick, at any WalkSpeed: the same
+		local s = tracker(Vector3.new(0, 0, 0))
+		local tmGain, verdict = SpeedLogic.step(s, Vector3.new(0, 0, 0), DT, opts(walk, true, 1, 1, 1))
 		H.eq(verdict, "ok")
-		H.eq(Config.TREADMILL_TIERS[1].mult, 2)
-		H.near(tmGain, 2 * walkGain, 1e-9, `WalkSpeed {walk}`)
+		H.near(tmGain, Config.TREADMILL_TIERS[1].perSecond * DT, 1e-9, `WalkSpeed {walk}`)
 	end
+	-- the trail multiplies it, and nothing else does
+	local s = tracker(Vector3.new(0, 0, 0))
+	H.near(SpeedLogic.step(s, Vector3.new(0, 0, 0), DT, opts(180, true, 7, 1, 2.5)), Config.TREADMILL_TIERS[1].perSecond * 2.5 * DT, 1e-9, "x2.5 trail")
 end)
 
-H.test("speed: every treadmill tier multiplies the AFK gain by its multiplier", function()
+H.test("speed: every treadmill tier pays its own fixed rate", function()
 	for tier, t in Config.TREADMILL_TIERS do
 		local s = tracker(Vector3.new(0, 0, 0))
-		local gain = SpeedLogic.step(s, Vector3.new(0, 0, 0), DT, opts(100, true, 1, Config.treadmillMult(tier)))
-		H.near(gain, t.mult * 100 * DT, 1e-9, `tier {tier}`)
+		local gain = SpeedLogic.step(s, Vector3.new(0, 0, 0), DT, opts(100, true, 1, tier, 1))
+		H.near(gain, t.perSecond * DT, 1e-9, `tier {tier}`)
 	end
 end)
 
-H.test("speed: gain is capped per tick (walking and treadmill)", function()
+H.test("speed: walking gain is capped per tick", function()
 	local cap = Config.GAIN_CAP_STUDS_PER_TICK
 	H.eq(SpeedLogic.walkGain(1e6, 1), cap)
 	H.eq(SpeedLogic.walkGain(1e6, 4), cap * 4)
-	H.eq(SpeedLogic.treadmillGain(1e6, DT, 1, 2), cap * 2, "AFK treadmill is capped too")
 	-- through step(): at max WalkSpeed with slack, one tick never pays more than the cap
 	local walk = Config.MAX_WALKSPEED
 	local s = tracker(Vector3.new(0, 0, 0))

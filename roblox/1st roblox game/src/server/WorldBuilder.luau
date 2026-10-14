@@ -15,6 +15,7 @@ local Config = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("Co
 local Format = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("Format"))
 local Icons = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("Icons"))
 local Planting = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("Planting"))
+local BoardButton = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("BoardButton"))
 local Props = require(script.Parent:WaitForChild("Props"))
 local ZoneThemes = require(script.Parent:WaitForChild("ZoneThemes"))
 local Assets = require(script.Parent:WaitForChild("Assets"))
@@ -140,7 +141,7 @@ local BOARD_TEXT = {
 	empty = Color3.fromRGB(190, 195, 210), -- nobody owns the plot
 }
 local BOARD_BUTTONS = {
-	{ name = "Cash", text = "$500", fill = Color3.fromRGB(225, 40, 40), edge = Color3.fromRGB(90, 10, 10), width = 0.58 },
+	{ name = "Cash", text = "$500", fill = BoardButton.RED.fill, edge = BoardButton.RED.edge, width = 0.58 }, -- green when affordable (Effects.client)
 	{ name = "Robux", text = "R$ 25", fill = Color3.fromRGB(165, 45, 230), edge = Color3.fromRGB(55, 10, 80), width = 0.38 },
 }
 
@@ -1204,9 +1205,15 @@ function WorldBuilder.setUpgradeBoard(labels: UpgradeLabels, level: number?, rob
 		labels.level.Text = `Level {level} > Level {level + 1}`
 		labels.level.TextColor3 = BOARD_TEXT.open
 	end
+	-- the money price on the red button, so the owner's client can turn it green when affordable
+	local price = if open then Config.plotUpgradePrice((level :: number) + 1) else nil
+	local cashButton = labels.cash.Parent
+	if cashButton then
+		cashButton:SetAttribute(BoardButton.PRICE_ATTRIBUTE, price)
+	end
 	if open then
 		local _, product = Config.plotUpgradeProduct(level :: number)
-		Icons.set(labels.cash, "PlotUpgrade", Format.money(Config.plotUpgradePrice((level :: number) + 1)), 0.8)
+		Icons.set(labels.cash, "PlotUpgrade", Format.money(price :: number), 0.8)
 		Icons.set(labels.robux, "Robux", Format.robux(robux or (product :: Config.DevProduct).robux), 0.8)
 	else
 		Icons.set(labels.cash, {}, "")
