@@ -514,7 +514,7 @@ end)
 H.test("treadmill board: follows the belt when the map moves it", function()
 	local world = H.workspace:FindFirstChild("World")
 	local plots = WorldBuilder.adopt(world)
-	local plot = plots[3]
+	local plot = plots[2] -- a +Z plot (on the -Z side this nudge only widens the treadmill's side clearance, so the board stays)
 	local board = TreadmillBoard.build(plot.model, plot.belt, plot.center)
 	local before = board.panel.CFrame.Position
 	plot.belt.CFrame = plot.belt.CFrame * CFrame.new(-4, 0, 0)

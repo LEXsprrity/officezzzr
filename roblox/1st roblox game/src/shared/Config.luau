@@ -19,6 +19,22 @@ Config.PLOT_SIZE = 84
 Config.PLOT_SPACING_X = 84 -- = PLOT_SIZE: neighbouring plots touch and share the fence between them
 Config.PLOT_FIRST_X = -6 -- the front plots end 24 studs before the corridor mouth (room for the free gift)
 Config.PLOT_OFFSET_Z = 84 -- plots sit at z = +/-84, the walkway runs down z = 0
+-- The base's spots fill column by column from the corridor mouth (-X), alternating sides of the walkway: odd
+-- spots at +Z, even ones at -Z. The shop plaza takes spot PLAZA_SPOT (the -Z side of the front column, by the
+-- corridor mouth: owner request); the plots fill the other spots in order (Config.plotSpot).
+Config.PLAZA_SPOT = 2
+
+-- The middle of spot `spot` on the ground: its (x, z).
+function Config.spotXZ(spot: number): (number, number)
+	local col = (spot - 1) // 2
+	local side = if spot % 2 == 1 then 1 else -1
+	return Config.PLOT_FIRST_X - col * Config.PLOT_SPACING_X, side * Config.PLOT_OFFSET_Z
+end
+
+-- The spot plot `index` stands in: the plots skip the plaza's spot, so plot 1 is nearest the corridor mouth.
+function Config.plotSpot(index: number): number
+	return if index >= Config.PLAZA_SPOT then index + 1 else index
+end
 Config.WALKWAY_WIDTH = 36 -- the sand walkway down z = 0; the 24 studs between it and a plot's front fence hold its treadmill
 -- Inside a plot (owner's reference): two brown dirt beds, left and right, with a grass path down the middle
 -- from the entrance. Players plant anywhere on their own beds (Shared/Planting).
