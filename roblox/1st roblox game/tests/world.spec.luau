@@ -184,7 +184,7 @@ H.test("world: every zone has an entry sign with its name and recommended Speed"
 	end
 end)
 
-H.test("world: shop plaza has a walk-up stall for the Shop, the Trail Shop and the Index", function()
+H.test("world: shop plaza has a walk-up stall for the Shop, the Trail Shop, the Index and selling", function()
 	local plaza = world:FindFirstChild("ShopPlaza")
 	H.ok(plaza ~= nil, "ShopPlaza model")
 	local opens = {}
@@ -193,7 +193,7 @@ H.test("world: shop plaza has a walk-up stall for the Shop, the Trail Shop and t
 			opens[d:GetAttribute("OpensShop")] = true
 		end
 	end
-	for _, id in { "Shop", "Trails", "Index" } do
+	for _, id in { "Shop", "Trails", "Index", "Sell" } do
 		H.ok(opens[id], `stall opens {id}`)
 	end
 end)

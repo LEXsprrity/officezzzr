@@ -676,7 +676,6 @@ local function sellCircle(parent: Instance, pos: Vector3)
 	rim.Transparency = 0.25
 	local fill = Props.disc(parent, "SellCircleFill", 14.6, pos, Color3.fromRGB(170, 255, 190), Enum.Material.SmoothPlastic, 0.25)
 	fill.Transparency = 0.45
-	Props.light(fill, SELL_GLOW, 14, 0.8)
 end
 
 local function buildShops(world: Folder)
