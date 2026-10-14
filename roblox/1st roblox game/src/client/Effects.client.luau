@@ -9,11 +9,13 @@ local TweenService = game:GetService("TweenService")
 local Shared = ReplicatedStorage:WaitForChild("Shared")
 local Config = require(Shared:WaitForChild("Config"))
 local Format = require(Shared:WaitForChild("Format"))
+local Treadmill = require(Shared:WaitForChild("Treadmill"))
 
 local player = Players.LocalPlayer
 local remotes = ReplicatedStorage:WaitForChild("Remotes")
 local LootEvent = remotes:WaitForChild("LootEvent") :: RemoteEvent
 local IncomePopup = remotes:WaitForChild("IncomePopup") :: RemoteEvent
+local StatsUpdate = remotes:WaitForChild("StatsUpdate") :: RemoteEvent
 
 ----------------------------------------------------------------------------------------------------
 -- Income popups
@@ -122,6 +124,10 @@ end)
 -- World decoration that must follow streaming: belts, rainbow mutations, owner-only prompts
 ----------------------------------------------------------------------------------------------------
 local stripes: { [Texture]: boolean } = {}
+local belts: { [BasePart]: boolean? } = {} -- every plot's treadmill belt (Role = "TreadmillBelt")
+-- The local player's plot index: from StatsUpdate `plot`, or from the plot Model PlotService marks with
+-- our OwnerUserId (in case the first full stats arrived before this script listened).
+local myPlot: number? = nil
 local rainbows: { [BasePart]: boolean? } = {}
 
 -- Plant-creatures (PlotService tags them with RestPivot and Scale) get an idle sway, see the end of the file.
@@ -165,6 +171,17 @@ local function consider(inst: Instance)
 		stripes[inst] = true
 	elseif inst:IsA("ProximityPrompt") then
 		watchPrompt(inst)
+	elseif inst:IsA("BasePart") and inst:GetAttribute("Role") == "TreadmillBelt" then
+		belts[inst] = true
+	elseif inst:IsA("Model") and inst:GetAttribute("Role") == "Plot" then
+		local function owner()
+			local index = inst:GetAttribute("PlotIndex")
+			if inst:GetAttribute("OwnerUserId") == player.UserId and type(index) == "number" then
+				myPlot = index
+			end
+		end
+		owner()
+		inst:GetAttributeChangedSignal("OwnerUserId"):Connect(owner)
 	elseif inst:IsA("BasePart") and inst:GetAttribute("Mutation") == "Rainbow" then
 		rainbows[inst] = true
 	elseif inst:IsA("Model") and inst:GetAttribute("Mutation") == "Rainbow" then
@@ -203,6 +220,7 @@ workspace.DescendantRemoving:Connect(function(inst)
 		stripes[inst] = nil
 	elseif inst:IsA("BasePart") then
 		rainbows[inst] = nil
+		belts[inst] = nil
 		local c = inst.Parent and creatures[inst.Parent :: Model]
 		if c then
 			c.dirty = true
@@ -347,24 +365,26 @@ end)
 
 ----------------------------------------------------------------------------------------------------
 -- Treadmill run-in-place: belts no longer push, so standing still on one would just idle. While the
--- local character stands on a belt (the Stripes texture's part) without walking, loop the character's
--- own run animation from its Animate script. Speed is granted by the server either way.
+-- local character stands on its OWN plot's belt without walking, loop the character's own run animation
+-- from its Animate script (Shared/Treadmill.shouldRun). Other players' treadmills pay nothing (the
+-- server only checks your plot's belt and toasts "This isn't your treadmill"), so they don't animate.
 ----------------------------------------------------------------------------------------------------
 local runTrack: AnimationTrack? = nil
 local runHumanoid: Humanoid? = nil
 local lastBeltCheck = 0
 
-local function onAnyBelt(pos: Vector3): boolean
-	for tex in stripes do
-		local belt = tex.Parent
-		if belt and belt:IsA("BasePart") then
-			local rel = belt.CFrame:PointToObjectSpace(pos)
-			if math.abs(rel.X) <= belt.Size.X / 2 and math.abs(rel.Z) <= belt.Size.Z / 2 and rel.Y >= 0 and rel.Y <= 7 then
-				return true
-			end
-		end
+StatsUpdate.OnClientEvent:Connect(function(partial: { [string]: any })
+	if type(partial) == "table" and partial.plot ~= nil then
+		myPlot = if type(partial.plot) == "number" then partial.plot else nil
 	end
-	return false
+end)
+
+local function standingOn(pos: Vector3): ("own" | "other")?
+	local list = {}
+	for belt in belts do
+		table.insert(list, belt)
+	end
+	return Treadmill.standing(list, pos, myPlot)
 end
 
 local function runAnimation(char: Model): Animation?
@@ -381,8 +401,8 @@ RunService.Heartbeat:Connect(function()
 	local char = player.Character
 	local humanoid = char and char:FindFirstChildOfClass("Humanoid")
 	local root = char and char:FindFirstChild("HumanoidRootPart") :: BasePart?
-	local want = humanoid ~= nil and root ~= nil and humanoid.Health > 0
-		and humanoid.MoveDirection.Magnitude < 0.1 and onAnyBelt(root.Position)
+	local want = humanoid ~= nil and root ~= nil
+		and Treadmill.shouldRun(standingOn(root.Position), humanoid.Health > 0, humanoid.MoveDirection.Magnitude)
 	if humanoid ~= runHumanoid then
 		if runTrack then
 			runTrack:Stop(0)

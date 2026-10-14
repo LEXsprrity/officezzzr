@@ -77,7 +77,7 @@ function Sessions.speedPerStud(s: Session): number
 end
 
 function Sessions.treadmillMult(s: Session): number
-	return Config.TREADMILL_TIERS[s.profile.treadmillTier].mult
+	return Config.treadmillMult(s.profile.treadmillTier)
 end
 
 -- Plant income multiplier besides day/night: plot level x the 2x Money pass.

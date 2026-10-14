@@ -6,15 +6,19 @@
 --   * steal from the furthest zone whose recommended Speed they have, run home and plant it
 --     (into a free slot, or replacing the plant worth least once grown, if the new seed beats it);
 --   * when the plot is full of plants as good as a fresh seed from that zone, stand on the treadmill;
---   * whenever affordable, buy the cheaper of: the next trail, the next plot level.
+--   * whenever affordable, buy the cheapest of: the next trail, the next plot level, the next treadmill tier.
+-- With `afk`, the player is an AFK farmer instead: they fill the plot once, then never run the corridor
+-- again (only the treadmill, buying the same upgrades from their plants' income).
 local H = require("./harness")
 local Config = H.shared("Config")
 
 local Sim = {}
 
 export type Options = {
-	treadmillTier: number?, -- 1 = the free x2 (default); 2/3 = the Robux x3/x5
+	treadmillTier: number?, -- the treadmill tier at t = 0 (default 1, the free x2; 6 = x5, bought with Robux)
 	speedPacks: { number }?, -- Speed bought with Robux at t = 0
+	noTreadmillUpgrades: boolean?, -- never buy treadmill tiers with money (the economy before they existed)
+	afk: boolean?, -- an AFK farmer (see above)
 	limitHours: number?,
 	seed: number?,
 }
@@ -28,6 +32,7 @@ export type Result = {
 	income: number, -- $/s at the end
 	plotLevel: number,
 	trail: string,
+	treadmillTier: number,
 }
 
 local TRIP_OVERHEAD = 10 -- seconds per steal trip beyond running: grabbing, dodging, planting, menus
@@ -48,7 +53,7 @@ function Sim.run(opts: Options?): Result
 		return rand:NextNumber()
 	end
 	local limit = (o.limitHours or 40) * 3600
-	local treadmillMult = Config.TREADMILL_TIERS[o.treadmillTier or 1].mult
+	local treadmillTier = o.treadmillTier or 1
 
 	local t = 0
 	local speed = 0
@@ -103,13 +108,17 @@ function Sim.run(opts: Options?): Result
 	local function shop()
 		while true do
 			local nextTrail = Config.TRAILS[trailIndex + 1]
-			local plotPrice = Config.priceOf("PlotUpgrade", { money = money, plotLevel = level, trails = {} })
-			local trailPrice = if nextTrail then nextTrail.price else nil
-			local pick, price
-			if trailPrice and (not plotPrice or trailPrice <= plotPrice) then
-				pick, price = "trail", trailPrice
-			elseif plotPrice then
-				pick, price = "plot", plotPrice
+			local view = { money = money, plotLevel = level, trails = {}, treadmillTier = treadmillTier }
+			local options = {
+				{ pick = "trail", price = if nextTrail then nextTrail.price else nil },
+				{ pick = "plot", price = Config.priceOf("PlotUpgrade", view) },
+				{ pick = "treadmill", price = if o.noTreadmillUpgrades then nil else Config.priceOf("TreadmillUpgrade", view) },
+			}
+			local pick, price = nil, math.huge
+			for _, option in options do
+				if option.price and option.price < price then
+					pick, price = option.pick, option.price
+				end
 			end
 			if not pick or money < price then
 				return
@@ -118,9 +127,12 @@ function Sim.run(opts: Options?): Result
 			if pick == "trail" then
 				trailIndex += 1
 				table.insert(buys, { t = t, what = Config.TRAILS[trailIndex].name, price = price })
-			else
+			elseif pick == "plot" then
 				level += 1
 				table.insert(buys, { t = t, what = `Plot Level {level}`, price = price })
+			else
+				treadmillTier += 1
+				table.insert(buys, { t = t, what = `Treadmill x{Config.treadmillMult(treadmillTier)}`, price = price })
 			end
 			refreshIncome()
 		end
@@ -149,12 +161,14 @@ function Sim.run(opts: Options?): Result
 	end
 
 	noteArrivals()
+	local filled = false -- the plot was full once (an AFK farmer stops running then)
 	while t < limit and not arrivals[#Config.ZONES] do
 		local k = bestZone()
 		local slots = Config.plotSlots(level)
 		local _, worstValue = worst()
 		local fresh = grownValue(k, 1, nil)
-		if #plants < slots or worstValue < fresh then
+		filled = filled or #plants >= slots
+		if (#plants < slots or worstValue < fresh) and not (o.afk and filled) then
 			-- steal trip: run to zone k's nest and back, then plant
 			local distance = 2 * (Config.nestX(k) - HOME_X + WALKWAY)
 			while distance > 0 do
@@ -178,7 +192,7 @@ function Sim.run(opts: Options?): Result
 			refreshIncome()
 		else
 			for _ = 1, IDLE_CHUNK do
-				second(true, treadmillMult)
+				second(true, Config.treadmillMult(treadmillTier))
 			end
 		end
 		shop()
@@ -193,6 +207,7 @@ function Sim.run(opts: Options?): Result
 		income = income,
 		plotLevel = level,
 		trail = Config.TRAILS[trailIndex].id,
+		treadmillTier = treadmillTier,
 	}
 end
 

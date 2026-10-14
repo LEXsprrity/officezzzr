@@ -1,6 +1,7 @@
 --!strict
--- Pure purchase rules: validate against the profile, charge, apply. In-game money buys only trails and
--- plot upgrades; prices come from Config.priceOf, the same function the client uses to label buttons.
+-- Pure purchase rules: validate against the profile, charge, apply. In-game money buys only trails, plot
+-- upgrades and treadmill tiers; prices come from Config.priceOf, the same function the client uses to
+-- label buttons.
 -- Everything else is Robux (developer products), so its rules live here too: prompt gates and
 -- idempotent receipt grants, all testable without Roblox.
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -29,7 +30,7 @@ local function ownTrail(p: Profile, trail: Config.Trail)
 end
 
 ----------------------------------------------------------------------------------------------------
--- Money: "PlotUpgrade" and "Trail:<id>". Nothing else has a money price.
+-- Money: "PlotUpgrade", "TreadmillUpgrade" and "Trail:<id>". Nothing else has a money price.
 ----------------------------------------------------------------------------------------------------
 -- Returns (ok, message).
 function Shop.buy(p: Profile, itemId: string): (boolean, string)
@@ -43,6 +44,8 @@ function Shop.buy(p: Profile, itemId: string): (boolean, string)
 	p.money -= price
 	if itemId == "PlotUpgrade" then
 		p.plotLevel += 1
+	elseif itemId == "TreadmillUpgrade" then
+		p.treadmillTier += 1
 	else
 		ownTrail(p, Config.trailById(string.sub(itemId, 7)) :: Config.Trail) -- a bought trail is equipped
 	end
@@ -77,8 +80,8 @@ export type Grant = {
 
 -- Whether the server may open the Robux prompt for `productName`. Returns (product, nil) or
 -- (nil, message). A product without an id is "coming soon"; packs aren't prompted once the bag holds
--- SEED_BAG_MAX seeds, trails/treadmill tiers the player already has aren't prompted at all, and a plot
--- upgrade only through the tier of the plot's level (never once maxed). Only the
+-- SEED_BAG_MAX seeds, trails the player already has aren't prompted at all, and a plot or treadmill
+-- upgrade only through the price tier of the plot's level / treadmill's tier (never once maxed). Only the
 -- *prompt* is gated: a receipt that arrives is always granted (Shop.grantProduct).
 function Shop.canPrompt(p: Profile, productName: string): (Config.DevProduct?, string?)
 	local product = Config.DEVELOPER_PRODUCTS[productName]
@@ -92,8 +95,14 @@ function Shop.canPrompt(p: Profile, productName: string): (Config.DevProduct?, s
 		return nil, "Your seed bag is full! Plant some seeds first."
 	elseif product.kind == "Trail" and p.trails[product.trail :: string] then
 		return nil, `You already own the {product.label}.`
-	elseif product.kind == "Treadmill" and p.treadmillTier >= (product.tier :: number) then
-		return nil, "Your treadmill is already that fast."
+	elseif product.kind == "TreadmillUpgrade" then
+		-- Only the price tier that sells this treadmill's next tier.
+		local current = Config.treadmillUpgradeProduct(p.treadmillTier)
+		if not current then
+			return nil, "Your treadmill is fully upgraded!"
+		elseif current ~= productName then
+			return nil, "That isn't the upgrade for your treadmill's tier."
+		end
 	elseif product.kind == "PlotUpgrade" then
 		-- Only the tier that sells this plot's next level (a cheaper tier can't buy a late level).
 		local current = Config.plotUpgradeProduct(p.plotLevel)
@@ -143,9 +152,17 @@ local function apply(p: Profile, name: string, product: Config.DevProduct, incom
 		grant.compensation = Config.moneyPackAmount(product, income)
 		p.money += grant.compensation
 		grant.label = `{product.label}: +{Format.money(grant.compensation)}`
-	elseif kind == "Treadmill" then
-		-- A tier at or below the current one only arrives if two prompts raced; keep the better tier.
-		p.treadmillTier = math.max(p.treadmillTier, product.tier :: number)
+	elseif kind == "TreadmillUpgrade" then
+		-- Exactly one tier, from the tier the treadmill has now (the player may have bought tiers with
+		-- money since the prompt). Already maxed: the last tier's money price instead.
+		if p.treadmillTier < Config.TREADMILL_MAX then
+			p.treadmillTier += 1
+			grant.label = `Treadmill x{Config.treadmillMult(p.treadmillTier)}`
+		else
+			grant.compensation = Config.treadmillUpgradeMaxedPay()
+			p.money += grant.compensation
+			grant.label = `Your treadmill is maxed: +{Format.money(grant.compensation)} instead`
+		end
 	elseif kind == "Trail" then
 		ownTrail(p, Config.trailById(product.trail) :: Config.Trail)
 	elseif kind == "PlotUpgrade" then

@@ -1248,14 +1248,34 @@ do
 			end)
 		end
 
-		-- Treadmill (Robux)
+		-- Treadmill: the next tier for money or Robux (also on the prompts at your treadmill), like the plot card
 		section("TREADMILL", nextOrder(), HEADING_GOLD, "Treadmill")
-		grid = cardGrid(nextOrder())
-		for i, entry in Config.products("Treadmill") do
-			local tier = entry.product.tier :: number
-			local owned = (stats.treadmillTier or 1) >= tier
-			productCard(grid, i, entry.name, entry.product, Color3.fromRGB(240, 90, 90), `x{Config.TREADMILL_TIERS[tier].mult} TREADMILL`,
-				`Your treadmill: x{Config.TREADMILL_TIERS[stats.treadmillTier or 1].mult}`, "Treadmill", if owned then "Owned" else nil)
+		do
+			local treadGrid = cardGrid(nextOrder())
+			local tier = stats.treadmillTier or 1
+			local treadPrice = Config.priceOf("TreadmillUpgrade", stats :: any)
+			local treadCard = shopCard(treadGrid, 1, Color3.fromRGB(240, 90, 90),
+				if treadPrice then `x{Config.treadmillMult(tier + 1)} TREADMILL` else "MAX TREADMILL",
+				if treadPrice then `Tier {tier + 1}/{Config.TREADMILL_MAX} · now x{Config.treadmillMult(tier)}`
+					else `x{Config.treadmillMult(tier)} · stand on it to gain Speed`, "Treadmill")
+			local treadButton = buyRow(treadCard, if treadPrice then Format.money(treadPrice) else "Maxed", COLORS.disabled, function()
+				RequestBuy:FireServer("TreadmillUpgrade")
+			end, nil, false)
+			watchMoney(function()
+				treadButton.BackgroundColor3 = if treadPrice and stats.money >= treadPrice then COLORS.buy else COLORS.disabled
+			end)
+			local treadProductName, treadProduct = Config.treadmillUpgradeProduct(tier)
+			if treadPrice and treadProductName and treadProduct then
+				treadButton.Size = UDim2.new(0.55, -10, 0, 50)
+				local robuxButton = chunky(treadCard, Format.robux(robuxPrice(treadProduct)), if treadProduct.id == 0 then SOON_PURPLE else COLORS.robux,
+					UDim2.new(0.45, -10, 0, 50), function()
+						RequestBuy:FireServer("Product:" .. treadProductName)
+					end, { "Robux" }, ICON.small)
+				robuxButton.Position = UDim2.new(0.55, 2, 1, -58)
+				if treadProduct.id == 0 then
+					soonTag(robuxButton)
+				end
+			end
 		end
 
 		-- Gamepasses (Robux)
