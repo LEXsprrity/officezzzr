@@ -31,7 +31,7 @@ Assets.SLOTS = {
 	"Snow_Pine", "Snow_Snowman", "Snow_Crystal",
 	"Space_Planet", "Space_Crystal", "Space_Asteroid", "Space_Mushroom", "Space_UFO",
 	"Spirit_Torii", "Spirit_Lantern", "Spirit_CherryTree",
-	"Treadmill", "UpgradeSign", "PlotGate", "ShopStall", "ShopStall_Shop", "ShopStall_Trails", "ShopStall_Index", "ShopStall_Sell", "SpawnSign",
+	"Treadmill", "UpgradeSign", "ShopStall", "ShopStall_Shop", "ShopStall_Trails", "ShopStall_Index", "ShopStall_Sell", "SpawnSign",
 	"FreeChest", "MoneyBoard",
 } :: { string }
 for _, zone in Config.ZONES do
@@ -65,7 +65,7 @@ Assets.ALIASES = {
 	Arvores = "Tree", Arvore = "Tree", Arbustos = "Bush", Arbusto = "Bush",
 	Pedras = "Rock", Pedra = "Rock", Rochas = "Rock", Flores = "Flower", Flor = "Flower",
 	Postes = "Lamp", Poste = "Lamp", Luminarias = "Lamp", Cercas = "FenceSection", Cerca = "FenceSection",
-	Esteira = "Treadmill", Portao = "PlotGate", Barraca = "ShopStall", Barracas = "ShopStall",
+	Esteira = "Treadmill", Barraca = "ShopStall", Barracas = "ShopStall",
 	Cactos = "Desert_Cactus", Cacto = "Desert_Cactus", Pinheiros = "Snow_Pine", Pinheiro = "Snow_Pine",
 	BonecoDeNeve = "Snow_Snowman", Cerejeiras = "Spirit_CherryTree", Cerejeira = "Spirit_CherryTree",
 } :: { [string]: string }
@@ -451,8 +451,9 @@ local function carryEffects(group: Model, placed: Model, fit: Vector3)
 end
 
 -- Gameplay parts that sit under a slot's visuals: when the slot gets a model, the part (a sibling of the
--- group, by name) is hidden and its top raised or lowered to the top of the model's part whose name
--- contains `topOf`, so players stand on the model's surface. The part keeps working (e.g. the belt check).
+-- group, by name) is hidden, resized to the footprint of the model's part whose name contains `topOf` and
+-- its top raised or lowered to that part's top, so players stand on the model's surface and the part covers
+-- exactly what they see. The part keeps working (e.g. the belt check).
 local UNDER_MODEL: { [string]: { part: string, topOf: string } } = {
 	Treadmill = { part = "TreadmillBelt", topOf = "Belt" },
 }
@@ -471,9 +472,13 @@ local function fitUnder(slot: string, placed: Model)
 	end
 	for _, d in placed:GetDescendants() do
 		if d:IsA("BasePart") and string.find(d.Name, rule.topOf, 1, true) then
-			local top = d.CFrame.Position.Y + d.Size.Y / 2
-			local current = under.CFrame.Position.Y + under.Size.Y / 2
-			under.CFrame = under.CFrame + Vector3.new(0, top - current, 0)
+			-- The model's part in the gameplay part's own axes: take its footprint and its top.
+			local lo, hi = Assets.bounds(d, under.CFrame)
+			if lo and hi then
+				local mid = ((lo :: Vector3) + (hi :: Vector3)) / 2
+				under.Size = Vector3.new((hi :: Vector3).X - (lo :: Vector3).X, under.Size.Y, (hi :: Vector3).Z - (lo :: Vector3).Z)
+				under.CFrame = under.CFrame * CFrame.new(mid.X, (hi :: Vector3).Y - under.Size.Y / 2, mid.Z)
+			end
 			break
 		end
 	end

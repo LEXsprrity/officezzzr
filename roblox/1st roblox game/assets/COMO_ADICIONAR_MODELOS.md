@@ -96,7 +96,7 @@ Botão direito na pasta **Arvores** → **Save to File...** → `assets/Arvores.
 #### Nomes
 
 - Maiúsculas, acentos, espaços e `_` não importam: `arvores`, `Árvores` e `ARVORES` funcionam igual; `desert cactus` = `Desert_Cactus`.
-- Apelidos em português: `Arvores` = `Tree`, `Arbustos` = `Bush`, `Pedras` = `Rock`, `Flores` = `Flower`, `Postes` = `Lamp`, `Cercas` = `FenceSection`, `Esteira` = `Treadmill`, `Portao` = `PlotGate`, `Barracas` = `ShopStall`, `Cactos` = `Desert_Cactus`, `Pinheiros` = `Snow_Pine`, `Boneco de Neve` = `Snow_Snowman`, `Cerejeiras` = `Spirit_CherryTree`.
+- Apelidos em português: `Arvores` = `Tree`, `Arbustos` = `Bush`, `Pedras` = `Rock`, `Flores` = `Flower`, `Postes` = `Lamp`, `Cercas` = `FenceSection`, `Esteira` = `Treadmill`, `Barracas` = `ShopStall`, `Cactos` = `Desert_Cactus`, `Pinheiros` = `Snow_Pine`, `Boneco de Neve` = `Snow_Snowman`, `Cerejeiras` = `Spirit_CherryTree`.
 - Um arquivo com nome errado é ignorado, e o jogo avisa no Output: `assets/X matches no slot`.
 - Um arquivo por peça. Não salve duas coisas soltas no mesmo arquivo: use uma pasta.
 
@@ -104,7 +104,7 @@ Botão direito na pasta **Arvores** → **Save to File...** → `assets/Arvores.
 
 - **Ponto de apoio = centro da base.** O jogo calcula sozinho: o fundo do modelo fica no chão e o meio dele fica no lugar da peça original.
 - **Frente = o lado -Z** (para onde a peça "olha"). Para saber qual lado é esse no Studio: insira uma Part, coloque um **Decal** nela com `Face = Front`. O lado onde o Decal aparece é a frente. Gire seu modelo para olhar para o mesmo lado antes de salvar.
-- A frente importa nas placas, arcos, barracas, portão, esteira, boneco de neve, guardiões e criaturas. Árvores, pedras e flores ganham um giro aleatório.
+- A frente importa nas placas, arcos, barracas, esteira, boneco de neve, guardiões e criaturas. Árvores, pedras e flores ganham um giro aleatório.
 - Ficou virado errado no jogo? Não precisa exportar de novo: no Model, adicione o atributo **`Yaw`** (número, em graus: `90`, `180` ou `-90`) e salve o arquivo de novo.
 
 ### 4. Tamanho
@@ -195,9 +195,8 @@ O **ninho** é a planta-mãe com o monte de terra, as pedras e a flor brilhante.
 
 | Nome | O que é | Onde aparece | Altura | Largura máx. |
 |---|---|---|---|---|
-| `Treadmill` | a estrutura da esteira (moldura, corrimãos, painel). A faixa preta onde se corre continua do jogo, a 1 stud do chão do lote. Frente = lado do painel, virado para o portão | cada lote | até ~24 | 12 × 32 |
+| `Treadmill` | a estrutura da esteira (moldura, corrimãos, painel). A faixa preta onde se corre continua do jogo: ela fica invisível e toma o tamanho e a altura da peça do modelo com "Belt" no nome, então o Speed conta exatamente onde se vê a faixa. Frente = virada para a entrada do lote | cada lote | até ~16 | 8 × 21 |
 | `UpgradeSign` | o suporte da placa "Upgrade" (moldura com studs e o poste curto). O painel azul-escuro com o texto e os botões continua do jogo | na frente de cada lote | ~7 | ~8 |
-| `PlotGate` | o portão do lote (dois pilares + arco), 20 studs de abertura. Não colide | entrada de cada lote | até ~16 | ~23 |
 | `ShopStall` | barraca da praça das lojas (balcão, fundo, toldo). Frente = calçada. Vale para as barracas SHOP, TRAIL SHOP e INDEX (não para a SELL) | praça das lojas | ~21 | 18 × 21 |
 | `ShopStall_Shop` | só a barraca 🛒 SHOP (se existir, vale mais que `ShopStall`) | praça das lojas | ~21 | 18 × 21 |
 | `ShopStall_Trails` | só a barraca 🏃 TRAIL SHOP | praça das lojas | ~21 | 18 × 21 |

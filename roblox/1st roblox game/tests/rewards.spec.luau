@@ -314,7 +314,7 @@ H.test("rewards: the base has the free chest and the MOST MONEY/s board, out of 
 	local panel = board.status.Parent.Parent
 	H.eq(panel:GetAttribute("Role"), "MoneyBoard")
 	-- Inside the base, off the walkway (|z| < 18) and the corridor mouth (|z| < HALF_W), clear of every plot
-	-- and the plaza, on the other side from the "Fastest here" board (z > 0).
+	-- and the plaza, on the -Z side.
 	local half = Config.PLOT_SIZE / 2
 	-- `margin`: the chest's circle (11 across) around its prompt part, the board's frame around its panel.
 	for _, piece in { { part = chest, margin = 3 }, { part = panel, margin = 1.5 } } do

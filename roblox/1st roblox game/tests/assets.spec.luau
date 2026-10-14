@@ -88,7 +88,7 @@ H.test("assets: names match without case, accents, spaces or underscores, and Po
 	for name, slot in {
 		arvores = "Tree", ["Árvores"] = "Tree", ARVORES = "Tree", arbustos = "Bush", Arbustos = "Bush", Pedras = "Rock",
 		Flores = "Flower", Postes = "Lamp", Cercas = "FenceSection", ["desert cactus"] = "Desert_Cactus",
-		["creature_lotuswyrm"] = "Creature_LotusWyrm", ["Boneco de Neve"] = "Snow_Snowman", ["Portão"] = "PlotGate",
+		["creature_lotuswyrm"] = "Creature_LotusWyrm", ["Boneco de Neve"] = "Snow_Snowman", Esteira = "Treadmill",
 	} do
 		H.eq(Assets.slotFor(name), slot, name)
 	end
@@ -296,7 +296,7 @@ H.test("assets: every slot the code uses is known, and the guide lists every slo
 end)
 
 H.test("assets: a whole map built with dummy models keeps its contract (roles, prompts, no colliding props)", function()
-	local slots = { "Arch_Meadow", "Nest_Desert", "Treadmill", "UpgradeSign", "PlotGate", "ShopStall", "SpawnSign", "FenceSection", "Spirit_Torii", "Lava_Volcano" }
+	local slots = { "Arch_Meadow", "Nest_Desert", "Treadmill", "UpgradeSign", "ShopStall", "SpawnSign", "FenceSection", "Spirit_Torii", "Lava_Volcano" }
 	local made = {}
 	for _, slot in slots do
 		table.insert(made, dummy(slot, { { Vector3.new(4, 6, 2), Vector3.zero }, { Vector3.new(2, 2, 2), Vector3.new(0, 4, 0) } }))

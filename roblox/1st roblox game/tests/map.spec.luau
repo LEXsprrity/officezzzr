@@ -5,6 +5,7 @@ local fs = require("@lune/fs")
 local roblox = require("@lune/roblox")
 local H = require("./harness")
 local MapTool = require("../tools/map_tool")
+local Layout = require("./plot_layout")
 
 local Instance, Vector3, CFrame = roblox.Instance, roblox.Vector3, roblox.CFrame
 local Config = H.shared("Config")
@@ -169,6 +170,18 @@ H.test("map: tools/apply_assets.luau puts new models into the map where the piec
 	H.ok(Assets.pivotOf(lantern).LookVector:Dot(moved.LookVector) > 0.999, "turned the way it was turned")
 	H.ok(after:FindFirstChild("FriendsStatue") ~= nil, "hand-added pieces stay")
 	H.ok(WorldBuilder.adopt(after) ~= nil, "still validates")
+end)
+
+H.test("map: map/World.rbxm has clean shared plot fences, no plot gates, no FASTEST board and plot-sized treadmills", function()
+	local world = MapTool.load(MapTool.PATH)
+	local plots = WorldBuilder.adopt(world)
+	H.ok(plots ~= nil, "validates")
+	Layout.check(world, plots, "map/World.rbxm")
+	for i, plot in plots do
+		local top = plot.belt.CFrame * CFrame.new(0, plot.belt.Size.Y / 2 + 3, 0)
+		H.ok(WorldBuilder.onBelt(plot.belt, top.Position), `plot {i}: standing on the smaller belt counts`)
+		H.ok(not WorldBuilder.onBelt(plot.belt, top.Position + Vector3.new(plot.belt.Size.X, 0, 0)), `plot {i}: beside it doesn't`)
+	end
 end)
 
 return nil

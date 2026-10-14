@@ -29,7 +29,7 @@ Icons.TOKENS = {
 	DoubleMoney = { "💎" },
 	ExtraSlots = { "💎" },
 	Bag = { "🎒" },
-	Leaderboard = { "⚡" }, -- "⚡ FASTEST HERE ⚡"
+	Leaderboard = { "⚡" }, -- leaderboard titles
 	Treadmill = { "🏃" },
 	Home = { "🏠" },
 } :: { [string]: { string } }
