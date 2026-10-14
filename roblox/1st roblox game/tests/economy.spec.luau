@@ -12,13 +12,42 @@ H.test("zones: 7 zones with the agreed recommended speeds", function()
 	end
 end)
 
-H.test("zones: corridor is 4-6k studs and a max-speed run to the end takes 20-40 s", function()
+H.test("zones: lengths double from the first zone up to the max, then stay at the max (100, 200, 400 x5)", function()
+	H.eq(Config.ZONE_LENGTH_BASE, 100)
+	H.eq(Config.ZONE_LENGTH_GROWTH, 2)
+	H.eq(Config.ZONE_LENGTH_MAX, 400)
+	local want = { 100, 200, 400, 400, 400, 400, 400 }
+	for k, zone in Config.ZONES do
+		H.eq(zone.length, want[k], zone.id)
+		H.eq(zone.length, Config.zoneLength(k), `{zone.id} comes from the formula`)
+		if k > 1 then
+			local prev = Config.ZONES[k - 1].length
+			H.eq(zone.length, math.min(prev * Config.ZONE_LENGTH_GROWTH, Config.ZONE_LENGTH_MAX), `{zone.id}: x2 the previous, capped`)
+		end
+	end
+	H.ok(Config.ZONES[1].length < Config.ZONES[2].length, "the first zone is the smallest")
+	-- the max is about two corridor widths deep (the owner's reference)
+	H.ok(Config.ZONE_LENGTH_MAX >= 1.5 * Config.CORRIDOR_WIDTH and Config.ZONE_LENGTH_MAX <= 2.5 * Config.CORRIDOR_WIDTH, "max ~2x the width")
+end)
+
+H.test("zones: corridor is 2-3k studs and a max-speed run to the end takes 10-20 s", function()
+	-- (was 4-6k and 20-40 s before the zones were shortened to the doubling-with-cap lengths)
 	local length = Config.END_X - Config.CORRIDOR_START_X
-	H.ok(length >= 4000 and length <= 6000, "length " .. length)
+	H.ok(length >= 2000 and length <= 3000, "length " .. length)
 	local atEnd = Config.walkSpeedFor(Config.ZONES[#Config.ZONES].req)
 	for _, w in { atEnd, Config.MAX_WALKSPEED } do
 		local seconds = length / w
-		H.ok(seconds >= 20 and seconds <= 40, `run takes {seconds}s at WalkSpeed {w}`)
+		H.ok(seconds >= 10 and seconds <= 20, `run takes {seconds}s at WalkSpeed {w}`)
+	end
+end)
+
+H.test("zones: every nest and its sleeping guard sit inside their own zone", function()
+	for k, zone in Config.ZONES do
+		local x0, x1 = Config.zoneStartX(k), Config.zoneStartX(k) + zone.length
+		local nest = Config.nestX(k)
+		H.ok(nest - 14 > x0, `{zone.id}: the nest's mound is clear of the zone's start`)
+		H.ok(nest + Config.GUARD_HOME_OFFSET < x1, `{zone.id}: the guard sleeps inside its zone`)
+		H.eq(Config.zoneAtX(nest + Config.GUARD_HOME_OFFSET), k, zone.id)
 	end
 end)
 

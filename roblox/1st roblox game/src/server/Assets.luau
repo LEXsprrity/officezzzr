@@ -31,11 +31,10 @@ Assets.SLOTS = {
 	"Snow_Pine", "Snow_Snowman", "Snow_Crystal",
 	"Space_Planet", "Space_Crystal", "Space_Asteroid", "Space_Mushroom", "Space_UFO",
 	"Spirit_Torii", "Spirit_Lantern", "Spirit_CherryTree",
-	"Treadmill", "UpgradeSign", "ShopStall", "ShopStall_Shop", "ShopStall_Trails", "ShopStall_Index", "ShopStall_Sell", "SpawnSign",
+	"Treadmill", "UpgradeSign", "ShopStall", "ShopStall_Shop", "ShopStall_Trails", "ShopStall_Index", "ShopStall_Sell",
 	"FreeChest", "MoneyBoard",
 } :: { string }
 for _, zone in Config.ZONES do
-	table.insert(Assets.SLOTS, "Arch_" .. zone.id)
 	table.insert(Assets.SLOTS, "Nest_" .. zone.id)
 end
 for _, zone in Config.ZONES do

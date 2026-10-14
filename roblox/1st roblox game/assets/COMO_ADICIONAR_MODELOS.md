@@ -65,7 +65,7 @@ Cada arquivo nesta pasta (`roblox/1st roblox game/assets/`) troca **um tipo de p
 - **Polígonos**: o Roblox aceita até ~20 mil triângulos por peça (MeshPart). Para o jogo rodar bem:
   - flores, pedras, arbustos, postes: **até ~1.000** triângulos;
   - árvores, cactos, lanternas: **até ~3.000**;
-  - arcos, ninhos, barracas, criaturas: **até ~8.000**;
+  - ninhos, barracas, criaturas: **até ~8.000**;
   - guardiões: **até ~15.000**.
 - **Poucas peças**: 1 a 5 MeshParts por modelo (por exemplo, tronco + copa). Árvores e flores aparecem centenas de vezes no mapa.
 - **Materiais e texturas**: o mais leve é usar só a cor + material do Roblox (Wood, Grass, Slate...) depois de importar, como na `arvore_variant3`. Se usar textura, uma imagem por malha, PNG até 1024×1024, embutida no FBX.
@@ -104,7 +104,7 @@ Botão direito na pasta **Arvores** → **Save to File...** → `assets/Arvores.
 
 - **Ponto de apoio = centro da base.** O jogo calcula sozinho: o fundo do modelo fica no chão e o meio dele fica no lugar da peça original.
 - **Frente = o lado -Z** (para onde a peça "olha"). Para saber qual lado é esse no Studio: insira uma Part, coloque um **Decal** nela com `Face = Front`. O lado onde o Decal aparece é a frente. Gire seu modelo para olhar para o mesmo lado antes de salvar.
-- A frente importa nas placas, arcos, barracas, esteira, boneco de neve, guardiões e criaturas. Árvores, pedras e flores ganham um giro aleatório.
+- A frente importa nas placas, barracas, esteira, boneco de neve, guardiões e criaturas. Árvores, pedras e flores ganham um giro aleatório.
 - Ficou virado errado no jogo? Não precisa exportar de novo: no Model, adicione o atributo **`Yaw`** (número, em graus: `90`, `180` ou `-90`) e salve o arquivo de novo.
 
 ### 4. Tamanho
@@ -123,7 +123,7 @@ Botão direito na pasta **Arvores** → **Save to File...** → `assets/Arvores.
 
 ### 6. Como conferir
 
-1. Depois que o dono rodar `lune run tools/apply_assets.luau` e recriar o `StealASeed.rbxlx`, abra o arquivo: o modelo aparece no mapa **sem apertar Play** (árvores, cercas, arcos...).
+1. Depois que o dono rodar `lune run tools/apply_assets.luau` e recriar o `StealASeed.rbxlx`, abra o arquivo: o modelo aparece no mapa **sem apertar Play** (árvores, cercas, ninhos...).
 2. Aperte **Play**: ele aparece no jogo também. As criaturas aparecem quando você planta uma semente, e os guardiões ficam nos ninhos.
 3. Se aparecer a peça antiga, veja o **Output**: avisos com `[Assets]` dizem o que deu errado (nome que não bate, modelo sem peças, pasta vazia).
 4. Modelo **cinza** ou **invisível** só no jogo publicado: os meshes que o 3D Importer enviou estão na **sua** conta. O dono precisa ter permissão para usá-los (Creator Hub → o asset → Permissions, ou envie os meshes para o grupo do jogo).
@@ -176,21 +176,21 @@ Botão direito na pasta **Arvores** → **Save to File...** → `assets/Arvores.
 | `Spirit_Lantern` | lanterna de pedra (frente = caminho) | ⛩️ Spirit Garden | ~7 | ~6 |
 | `Spirit_CherryTree` | cerejeira inclinada sobre o caminho (frente = caminho) | ⛩️ Spirit Garden | 18 a 22 | ~27 a 37 |
 
-### Arcos e ninhos (um por zona)
+### Ninhos (um por zona)
 
-O **arco** é a entrada da zona: pilares + viga + enfeite. A placa com o nome da zona e a linha brilhante no chão continuam do jogo. É um portão grande e robusto: dois pilares grossos encostados nas paredes, uma viga por cima com um "telhado" e uma viga mais baixa (a placa fica pendurada nela). Ele atravessa o corredor inteiro (frente = -X, para quem chega). Altura ~80 a 110, largura ~240.
+As zonas não têm arcos, portões nem placas com o nome: uma zona passa para a outra pela cor do chão e das paredes. Ao lado de cada ninho há uma plaquinha de madeira num poste ("👟 700K recommended"); ela é do jogo e não tem modelo (dá para mover ou apagar à mão no mapa).
 
 O **ninho** é a planta-mãe com o monte de terra, as pedras e a flor brilhante. As 4 sementes ficam num meio-círculo de 8 studs em volta do centro, a 2,5 de altura: deixe esse espaço livre. O texto "Mother Plant", a luz e as partículas continuam. Altura até ~40, largura ~28.
 
-| Arco | Ninho | Zona |
-|---|---|---|
-| `Arch_Meadow` | `Nest_Meadow` | 🌼 Meadow |
-| `Arch_Desert` | `Nest_Desert` | 🦂 Desert |
-| `Arch_Jungle` | `Nest_Jungle` | 🦖 Jungle |
-| `Arch_Lava` | `Nest_Lava` | 🌋 Lava Fields |
-| `Arch_Snow` | `Nest_Snow` | ❄️ Snow Peaks |
-| `Arch_Space` | `Nest_Space` | 👽 Deep Space |
-| `Arch_Spirit` | `Nest_Spirit` | ⛩️ Spirit Garden |
+| Ninho | Zona |
+|---|---|
+| `Nest_Meadow` | 🌼 Meadow |
+| `Nest_Desert` | 🦂 Desert |
+| `Nest_Jungle` | 🦖 Jungle |
+| `Nest_Lava` | 🌋 Lava Fields |
+| `Nest_Snow` | ❄️ Snow Peaks |
+| `Nest_Space` | 👽 Deep Space |
+| `Nest_Spirit` | ⛩️ Spirit Garden |
 
 ### Base, lotes e lojas
 
@@ -205,7 +205,6 @@ O **ninho** é a planta-mãe com o monte de terra, as pedras e a flor brilhante.
 | `ShopStall_Sell` | só a barraca SELL (vender plantas): a mesma barraca, com o toldo vermelho e branco. O anel verde no chão e o texto "SELL" continuam do jogo. Sem modelo, fica a barraca do jogo (não usa `ShopStall`) | praça das lojas | ~17 | 17 × 13 |
 | `FreeChest` | o baú grátis "FREE!" (vermelho e dourado). O círculo verde no chão, o texto "FREE!", a contagem e o prompt "Claim" continuam do jogo. Frente = virada para a base | canto das recompensas, junto ao muro ao lado da entrada do corredor | ~6 | ~7 × 5 |
 | `MoneyBoard` | a moldura do quadro "MOST MONEY/s" (moldura com studs, o topo e o pedestal). O painel com o título e a lista dos 10 melhores continua do jogo (12 × 18 studs, a 4 studs do chão) | ao lado do baú grátis | ~23 | ~16 |
-| `SpawnSign` | a placa grande "🌱 STEAL A SEED 🌱" que flutua na entrada do corredor. O apoio é a borda de baixo da placa. **O texto tem que estar no seu modelo** (textura ou letras 3D) | entrada do corredor | ~12 | ~44 |
 
 ### Criaturas (aparecem quando uma semente é plantada)
 

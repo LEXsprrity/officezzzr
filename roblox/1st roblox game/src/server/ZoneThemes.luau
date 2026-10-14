@@ -1,15 +1,15 @@
--- Per-zone art for the corridor: themed floor and walls, a chunky gate at each zone's entrance, a few
--- props and particle ambience. WorldBuilder calls ZoneThemes.build for each zone, ZoneThemes.gate for its
--- entrance and uses ZoneThemes.theme for the sign and nest colours.
+-- Per-zone art for the corridor: themed floor and walls, a few props and particle ambience. WorldBuilder
+-- calls ZoneThemes.build for each zone and uses ZoneThemes.theme for the nest colours. There are no gates,
+-- arches or zone signs (owner playtest): one zone flows into the next by its floor and wall colours.
 --
 -- Art direction (owner playtest, docs/references): a game for kids, so clean and cartoony, never realistic.
 --   * flat bright colours in plastic: a big studded floor with a big lighter checker over it, tall flat
 --     walls with a lighter checker on their inner face and a simple cap along the top
---   * every zone keeps its own theme (colours, cap, gate ornament, props), in the same clean language
+--   * every zone keeps its own theme (colours, cap, props), in the same clean language
 --   * few, well-placed props, fewest in the early zones; no realistic materials (Assets.REALISTIC)
 --
 -- Layout rules that keep the corridor playable:
---   * only the floor, the two walls (and the Spirit Garden's back wall) and the gate pillars collide;
+--   * only the floor and the two walls (and the Spirit Garden's back wall) collide;
 --     every prop is a non-colliding "ghost" (see Props)
 --   * props stand along the walls (|z| >= ~50 of the 96); the middle only gets flat floor overlays, so
 --     the run and the guards' chase line stay visually clear
@@ -35,7 +35,6 @@ local swap, spin = Assets.swap, Assets.spin
 
 local FLOOR_TILE = W / 6 -- the floor checker: six big tiles across
 local WALL_ROWS = 3 -- the wall checker: three rows up the inner face
-local GATE_H = H + 16 -- top of the gate pillars
 
 type Ctx = {
 	folder: Folder,
@@ -47,23 +46,14 @@ type Ctx = {
 	rng: Random,
 }
 
--- A zone's gate: chunky pillars flush with the walls, a big beam over the corridor with a cap on top and a
--- tie beam under it (the zone sign hangs from it), in the zone's colours.
-export type GateStyle = { pillar: Color3, beam: Color3, cap: Color3, foot: Color3, trim: Color3 }
-
 export type Theme = {
 	floorLight: Color3, -- the checker over the floor (Config zone .floor is the floor itself)
 	wallLight: Color3, -- the checker on the walls (Config zone .wall)
 	cap: Color3, -- the strip along the top of both walls
-	gate: GateStyle,
-	accent: Color3, -- the glowing threshold line at the entrance
-	sign: Color3,
-	signText: Color3,
 	mound: Color3,
 	nestStone: Color3,
 	leaf: Color3,
 	build: (ctx: Ctx) -> (),
-	ornament: (folder: Instance, x: number) -> (),
 }
 
 ----------------------------------------------------------------------------------------------------
@@ -183,30 +173,6 @@ local BRIGHT = {
 }
 
 ----------------------------------------------------------------------------------------------------
--- The gate at each zone's entrance (inside the Arch_<zone> slot; WorldBuilder adds the sign and the
--- threshold). `x` is the middle of the pillars.
-----------------------------------------------------------------------------------------------------
-function ZoneThemes.gate(into: Instance, k: number, x: number)
-	local g = ZoneThemes.theme(k).gate
-	for _, s in { -1, 1 } do
-		-- 12 thick, centred 2 studs into the wall: the inner face stands 4 studs proud of the wall.
-		studs(box(into, "GatePillar", Vector3.new(12, GATE_H, 12), CFrame.new(x, GROUND + GATE_H / 2, s * (HALF_W + 2)), g.pillar))
-		studs(deco(into, "PillarFoot", Vector3.new(15, 6, 15), CFrame.new(x, GROUND + 3, s * (HALF_W + 2)), g.foot))
-		studs(deco(into, "PillarTop", Vector3.new(14, 2, 14), CFrame.new(x, GROUND + GATE_H - 1, s * (HALF_W + 2)), g.foot))
-	end
-	studs(deco(into, "GateBeam", Vector3.new(12, 7, W + 36), CFrame.new(x, GROUND + GATE_H + 3.5, 0), g.beam))
-	studs(deco(into, "GateCap", Vector3.new(15, 3, W + 46), CFrame.new(x, GROUND + GATE_H + 8.5, 0), g.cap))
-	studs(deco(into, "GateTie", Vector3.new(8, 5, W + 8), CFrame.new(x, GROUND + GATE_H - 12, 0), g.beam))
-	deco(into, "GateTrim", Vector3.new(8.4, 1, W + 8.4), CFrame.new(x, GROUND + GATE_H - 15, 0), g.trim, M.Neon)
-	studs(deco(into, "GateStrut", Vector3.new(6, 9.5, 10), CFrame.new(x, GROUND + GATE_H - 4.75, 0), g.pillar))
-	ZoneThemes.theme(k).ornament(into, x)
-end
-
--- Where the zone sign hangs (centre of the board) and its size: under the gate's tie beam.
-ZoneThemes.GATE_SIGN_Y = GROUND + GATE_H - 25 -- its top edge meets the tie beam
-ZoneThemes.GATE_SIGN_SIZE = Vector2.new(72, 20)
-
-----------------------------------------------------------------------------------------------------
 -- 1. Meadow: the first stretch, kept nearly empty: green lawn, a pond, a few trees, bushes and flowers
 ----------------------------------------------------------------------------------------------------
 local function buildMeadow(c: Ctx)
@@ -243,19 +209,6 @@ local function buildMeadow(c: Ctx)
 		color = rgb(255, 245, 160), rate = 8, lifetime = NumberRange.new(5, 8), speed = NumberRange.new(0.3, 1),
 		size = NumberSequence.new(0.25), spread = Vector2.new(180, 180), lightEmission = 1,
 	})
-end
-
-local function meadowOrnament(folder: Instance, x: number)
-	for _, s in { -1, 1 } do -- a round bush with flowers on each pillar
-		local top = Vector3.new(x, GROUND + GATE_H, s * (HALF_W + 2))
-		blob(folder, "PillarBush", Vector3.new(12, 7, 12), CFrame.new(top + Vector3.new(0, 2.5, 0)), rgb(80, 196, 64))
-		for j = 1, 3 do
-			ball(folder, "PillarFlower", 2.4, top + Vector3.new(math.cos(j * 2.1) * 3.5, 5.6, math.sin(j * 2.1) * 3.5), BRIGHT[j])
-		end
-	end
-	for i = -2, 2 do
-		ball(folder, "Garland", 3.4, Vector3.new(x - 6.4, GROUND + GATE_H + 3.5, i * 18), BRIGHT[(i + 3) % #BRIGHT + 1])
-	end
 end
 
 ----------------------------------------------------------------------------------------------------
@@ -349,21 +302,6 @@ local function buildDesert(c: Ctx)
 	})
 end
 
-local function desertOrnament(folder: Instance, x: number)
-	local p = Vector3.new(x - 4, GROUND + GATE_H + 14, 0)
-	blob(folder, "Skull", Vector3.new(4, 7, 8), CFrame.new(p), BONE)
-	for _, z in { -1, 1 } do
-		ball(folder, "EyeSocket", 1.8, p + Vector3.new(-1.7, 1, z * 1.8), rgb(40, 30, 30))
-		rod(folder, "Horn", p + Vector3.new(0, 2, z * 3.4), p + Vector3.new(-1, 6, z * 8), 1.4, BONE)
-	end
-	for _, s in { -1, 1 } do -- little stepped pyramids on the pillars
-		local top = Vector3.new(x, GROUND + GATE_H, s * (HALF_W + 2))
-		for j = 0, 2 do
-			studs(deco(folder, "PillarStep", Vector3.new(10 - j * 3, 2, 10 - j * 3), CFrame.new(top + Vector3.new(0, 1 + j * 2, 0)), rgb(236, 196, 130)))
-		end
-	end
-end
-
 ----------------------------------------------------------------------------------------------------
 -- 3. Jungle: deep green, big trees along the walls, ferns, a lily pond, vines, fireflies
 ----------------------------------------------------------------------------------------------------
@@ -427,18 +365,6 @@ local function buildJungle(c: Ctx)
 		speed = NumberRange.new(2, 4), size = NumberSequence.new(0.6), direction = Enum.NormalId.Bottom,
 		acceleration = Vector3.new(0.8, -0.5, 0), rotSpeed = NumberRange.new(-90, 90),
 	})
-end
-
-local function jungleOrnament(folder: Instance, x: number)
-	for _, s in { -1, 1 } do
-		blob(folder, "GateLeaves", Vector3.new(16, 8, 30), CFrame.new(x, GROUND + GATE_H + 11, s * (HALF_W + 6)), LEAF)
-		blob(folder, "GateLeaves", Vector3.new(10, 6, 16), CFrame.new(x - 2, GROUND + GATE_H + 15, s * (HALF_W - 6)), LEAF_LIGHT)
-		for _, dz in { 44, 50 } do -- vines from the tie beam, beside the sign
-			local top = Vector3.new(x - 4, GROUND + GATE_H - 14, s * dz)
-			rod(folder, "Vine", top, top - Vector3.new(0, 10, 0), 0.7, rgb(52, 150, 52))
-			blob(folder, "VineLeaf", Vector3.new(0.6, 2.4, 3.4), CFrame.new(top - Vector3.new(0, 10, 0)), LEAF_LIGHT)
-		end
-	end
 end
 
 ----------------------------------------------------------------------------------------------------
@@ -524,19 +450,6 @@ local function buildLava(c: Ctx)
 	})
 end
 
-local function lavaOrnament(folder: Instance, x: number)
-	for _, s in { -1, 1 } do
-		local flame = Props.emitter(folder, "Flame", Vector3.new(6, 1, 6), Vector3.new(x, GROUND + GATE_H + 1, s * (HALF_W + 2)), {
-			texture = Props.TEX.fire, color = gradient(LAVA_HOT, rgb(255, 60, 20)), rate = 18, lifetime = NumberRange.new(0.6, 1.1),
-			speed = NumberRange.new(4, 7), size = NumberSequence.new({ NumberSequenceKeypoint.new(0, 4), NumberSequenceKeypoint.new(1, 0.8) }),
-			spread = Vector2.new(10, 10), lightEmission = 1,
-		})
-		flame.Name = "Flame"
-		local top = Vector3.new(x - 6.2, GROUND + GATE_H + 2, s * 30)
-		rod(folder, "LavaDrip", top, top - Vector3.new(0, 8, 0), 1.2, LAVA, M.Neon)
-	end
-end
-
 ----------------------------------------------------------------------------------------------------
 -- 5. Snow Peaks: white floor, ice-blue walls under a snow cap, pines, snowmen, ice crystals, snowfall
 ----------------------------------------------------------------------------------------------------
@@ -579,15 +492,17 @@ local function buildSnow(c: Ctx)
 		flat(F, "IcePatch", rng:NextNumber(16, 30), rng:NextNumber(10, 18), Vector3.new(at(c, rng:NextNumber(0.08, 0.92)), GROUND, rng:NextNumber(-60, 60)),
 			ICE, M.SmoothPlastic, rng:NextNumber(0, math.pi), 0.2)
 	end
-	for i = 1, 16 do -- icicles under the snow cap
+	local icicles = math.max(4, math.round(c.len / 50)) -- one per 50 studs on each wall
+	for i = 1, icicles do -- icicles under the snow cap
 		for _, s in { -1, 1 } do
 			local len = rng:NextNumber(4, 8)
-			deco(F, "Icicle", Vector3.new(1.2, len, 1.2), CFrame.new(at(c, (i - 0.5) / 16), GROUND + H - len / 2, s * (HALF_W - 0.8)) * CFrame.Angles(0, math.rad(45), 0), ICE).CastShadow = false
+			deco(F, "Icicle", Vector3.new(1.2, len, 1.2), CFrame.new(at(c, (i - 0.5) / icicles), GROUND + H - len / 2, s * (HALF_W - 0.8)) * CFrame.Angles(0, math.rad(45), 0), ICE).CastShadow = false
 		end
 	end
-	for i = 1, 8 do
+	local pines = math.max(2, math.round(c.len / 100)) -- one per 100 studs on each side
+	for i = 1, pines do
 		for _, s in { -1, 1 } do
-			pine(F, Vector3.new(at(c, (i - 0.5) / 8) + rng:NextNumber(-12, 12) + s * 25, GROUND, s * rng:NextNumber(78, 86)), rng:NextNumber(1, 1.5))
+			pine(F, Vector3.new(at(c, (i - 0.5) / pines) + rng:NextNumber(-12, 12) + s * 25, GROUND, s * rng:NextNumber(78, 86)), rng:NextNumber(1, 1.5))
 		end
 	end
 	for i = 1, 3 do
@@ -611,17 +526,6 @@ local function buildSnow(c: Ctx)
 		direction = Enum.NormalId.Bottom, acceleration = Vector3.new(1, -0.5, 0), spread = Vector2.new(15, 15),
 		rotSpeed = NumberRange.new(-60, 60), lightEmission = 0.3,
 	})
-end
-
-local function snowOrnament(folder: Instance, x: number)
-	blob(folder, "SnowCap", Vector3.new(18, 6, W + 50), CFrame.new(x, GROUND + GATE_H + 10, 0), SNOW)
-	for _, s in { -1, 1 } do
-		blob(folder, "SnowCap", Vector3.new(16, 5, 16), CFrame.new(x, GROUND + GATE_H + 1, s * (HALF_W + 2)), SNOW)
-		for _, dz in { 42, 46, 50, 54 } do -- icicles under the tie beam, beside the sign
-			local len = 3 + dz % 4
-			deco(folder, "Icicle", Vector3.new(1.2, len, 1.2), CFrame.new(x - 3, GROUND + GATE_H - 15.5 - len / 2, s * dz) * CFrame.Angles(0, math.rad(45), 0), ICE)
-		end
-	end
 end
 
 ----------------------------------------------------------------------------------------------------
@@ -712,17 +616,6 @@ local function buildSpace(c: Ctx)
 		speed = NumberRange.new(0, 0.4), size = NumberSequence.new({ NumberSequenceKeypoint.new(0, 0.1), NumberSequenceKeypoint.new(0.5, 0.5), NumberSequenceKeypoint.new(1, 0.1) }),
 		spread = Vector2.new(180, 180), lightEmission = 1,
 	})
-end
-
-local function spaceOrnament(folder: Instance, x: number)
-	for _, s in { -1, 1 } do
-		local ring = deco(folder, "OrbitRing", Vector3.new(0.6, 20, 20), CFrame.new(x, GROUND + GATE_H + 14, s * (HALF_W + 2)) * CFrame.Angles(0, 0, math.rad(70)), SPACE_CYAN, M.Neon)
-		ring.Shape = Enum.PartType.Cylinder
-		ring.Transparency = 0.3
-		ball(folder, "PillarOrb", 8, Vector3.new(x, GROUND + GATE_H + 14, s * (HALF_W + 2)), rgb(150, 110, 255))
-		rod(folder, "Antenna", Vector3.new(x, GROUND + GATE_H + 10, s * 30), Vector3.new(x, GROUND + GATE_H + 20, s * 30), 0.6, rgb(200, 205, 220))
-		ball(folder, "AntennaTip", 1.8, Vector3.new(x, GROUND + GATE_H + 20.8, s * 30), SPACE_PINK, M.Neon)
-	end
 end
 
 ----------------------------------------------------------------------------------------------------
@@ -854,72 +747,44 @@ local function buildSpirit(c: Ctx)
 	})
 end
 
-local function spiritOrnament(folder: Instance, x: number)
-	for _, s in { -1, 1 } do
-		-- upturned ends of the cap, gold finials and paper lanterns beside the sign
-		deco(folder, "GateCapEnd", Vector3.new(15, 3, 14), CFrame.new(x, GROUND + GATE_H + 10.5, s * (W / 2 + 18)) * CFrame.Angles(-s * math.rad(18), 0, 0), ROOF)
-		ball(folder, "GoldFinial", 3, Vector3.new(x, GROUND + GATE_H + 11.5, s * 20), rgb(255, 205, 80))
-		for _, dz in { 44, 54 } do
-			local top = Vector3.new(x - 3, GROUND + GATE_H - 15.5, s * dz)
-			rod(folder, "LanternCord", top, top - Vector3.new(0, 3, 0), 0.3, rgb(40, 30, 30))
-			local lantern = blob(folder, "PaperLantern", Vector3.new(3.4, 4.4, 3.4), CFrame.new(top - Vector3.new(0, 5.2, 0)), rgb(240, 60, 60), M.Neon)
-			lantern.CastShadow = false
-		end
-	end
-end
-
 ----------------------------------------------------------------------------------------------------
 -- Theme table
 ----------------------------------------------------------------------------------------------------
 local THEMES: { [string]: Theme } = {
 	Meadow = {
 		floorLight = rgb(124, 212, 64), wallLight = rgb(212, 144, 94), cap = rgb(90, 214, 64),
-		gate = { pillar = rgb(196, 138, 82), beam = rgb(250, 245, 235), cap = rgb(90, 214, 64), foot = rgb(150, 98, 58), trim = rgb(255, 222, 60) },
-		accent = rgb(255, 222, 60), sign = rgb(64, 168, 70), signText = rgb(255, 210, 235),
 		mound = rgb(150, 100, 64), nestStone = rgb(190, 190, 205), leaf = rgb(90, 210, 80),
-		build = buildMeadow, ornament = meadowOrnament,
+		build = buildMeadow,
 	},
 	Desert = {
 		floorLight = rgb(248, 224, 164), wallLight = rgb(238, 196, 112), cap = rgb(250, 222, 150),
-		gate = { pillar = rgb(222, 150, 84), beam = rgb(240, 196, 120), cap = rgb(196, 112, 60), foot = rgb(196, 112, 60), trim = rgb(255, 170, 60) },
-		accent = rgb(255, 170, 60), sign = rgb(190, 100, 50), signText = rgb(255, 225, 190),
 		mound = rgb(214, 160, 96), nestStone = rgb(226, 160, 96), leaf = rgb(90, 190, 80),
-		build = buildDesert, ornament = desertOrnament,
+		build = buildDesert,
 	},
 	Jungle = {
 		floorLight = rgb(72, 184, 82), wallLight = rgb(86, 156, 84), cap = rgb(96, 206, 80),
-		gate = { pillar = rgb(130, 90, 56), beam = rgb(156, 110, 66), cap = rgb(60, 176, 64), foot = rgb(100, 70, 44), trim = rgb(160, 255, 90) },
-		accent = rgb(160, 255, 90), sign = rgb(40, 120, 54), signText = rgb(200, 255, 170),
 		mound = rgb(130, 88, 54), nestStone = rgb(120, 160, 110), leaf = rgb(50, 190, 76),
-		build = buildJungle, ornament = jungleOrnament,
+		build = buildJungle,
 	},
 	Lava = {
 		floorLight = rgb(106, 68, 76), wallLight = rgb(88, 58, 66), cap = rgb(255, 120, 40),
-		gate = { pillar = rgb(80, 54, 62), beam = rgb(104, 70, 78), cap = rgb(255, 120, 40), foot = rgb(56, 36, 44), trim = LAVA },
-		accent = LAVA, sign = rgb(120, 32, 22), signText = rgb(255, 190, 130),
 		mound = rgb(80, 54, 60), nestStone = rgb(70, 46, 54), leaf = rgb(240, 100, 40),
-		build = buildLava, ornament = lavaOrnament,
+		build = buildLava,
 	},
 	Snow = {
 		floorLight = rgb(214, 232, 252), wallLight = rgb(180, 222, 252), cap = SNOW,
-		gate = { pillar = rgb(150, 206, 246), beam = rgb(196, 230, 255), cap = SNOW, foot = rgb(120, 180, 230), trim = rgb(140, 230, 255) },
-		accent = rgb(140, 230, 255), sign = rgb(60, 120, 190), signText = rgb(210, 240, 255),
 		mound = rgb(226, 240, 252), nestStone = ICE, leaf = rgb(60, 170, 120),
-		build = buildSnow, ornament = snowOrnament,
+		build = buildSnow,
 	},
 	Space = {
 		floorLight = rgb(78, 60, 156), wallLight = rgb(60, 48, 124), cap = rgb(36, 28, 84),
-		gate = { pillar = rgb(84, 70, 160), beam = rgb(110, 96, 190), cap = rgb(40, 30, 92), foot = rgb(50, 40, 110), trim = SPACE_CYAN },
-		accent = SPACE_CYAN, sign = rgb(40, 28, 96), signText = rgb(200, 170, 255),
 		mound = rgb(80, 64, 140), nestStone = rgb(160, 120, 255), leaf = rgb(120, 255, 180),
-		build = buildSpace, ornament = spaceOrnament,
+		build = buildSpace,
 	},
 	Spirit = {
 		floorLight = rgb(128, 214, 110), wallLight = rgb(156, 156, 224), cap = ROOF,
-		gate = { pillar = TORII_RED, beam = TORII_RED, cap = ROOF, foot = ROOF, trim = rgb(255, 205, 80) },
-		accent = rgb(255, 205, 80), sign = rgb(130, 24, 34), signText = rgb(255, 200, 220),
 		mound = rgb(140, 104, 82), nestStone = rgb(170, 170, 214), leaf = rgb(255, 170, 200),
-		build = buildSpirit, ornament = spiritOrnament,
+		build = buildSpirit,
 	},
 }
 

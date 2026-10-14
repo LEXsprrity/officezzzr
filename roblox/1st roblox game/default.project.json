@@ -22,9 +22,7 @@
     "Workspace": {
       "World": { "$path": "map/World.rbxm" },
       "$properties": {
-        "StreamingEnabled": true,
-        "StreamingMinRadius": 256,
-        "StreamingTargetRadius": 2048
+        "StreamingEnabled": false
       },
       "SpawnLocation": {
         "$className": "SpawnLocation",
@@ -68,12 +66,12 @@
       "Atmosphere": {
         "$className": "Atmosphere",
         "$properties": {
-          "Density": 0.2,
+          "Density": 0.05,
           "Offset": 0.25,
           "Color": [0.784, 0.894, 1.0],
           "Decay": [0.431, 0.627, 0.863],
           "Glare": 0,
-          "Haze": 0.25
+          "Haze": 0
         }
       },
       "Bloom": {

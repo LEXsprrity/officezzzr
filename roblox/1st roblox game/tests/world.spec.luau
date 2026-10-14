@@ -84,20 +84,14 @@ H.test("world: everything is anchored", function()
 	end
 end)
 
--- Inside the corridor only the floor, walls (the Spirit Garden's back wall too) and the gates' wall-flush pillars
--- may collide, so props never block runners or the guards' MoveTo line.
-H.test("world: corridor props never collide (only floor/walls/pillars)", function()
-	local allowed = { Floor = true, Wall = true, GatePillar = true }
+-- Inside the corridor only the floor and walls (the Spirit Garden's back wall too) may collide, so props
+-- never block runners or the guards' MoveTo line.
+H.test("world: corridor props never collide (only floor/walls)", function()
+	local allowed = { Floor = true, Wall = true }
 	local corridor = world:FindFirstChild("Corridor")
 	for _, p in parts(corridor) do
 		if p.CanCollide and not allowed[p.Name] then
 			error(`{p:GetFullName()} collides`)
-		end
-	end
-	-- Pillars stay flush with the walls: at most 4 studs proud of each wall.
-	for _, p in parts(corridor) do
-		if p.Name == "GatePillar" then
-			H.ok(math.abs(p.CFrame.Position.Z) - p.Size.Z / 2 >= Config.CORRIDOR_WIDTH / 2 - 4, "pillar intrudes into the corridor")
 		end
 	end
 end)
@@ -190,24 +184,75 @@ H.test("world: base part budget (plots, plaza, lawn and walls < 1250)", function
 	H.ok(n < 1250, `the base area has {n} parts`)
 end)
 
-H.test("world: every zone has an entry sign with its name and recommended Speed", function()
+H.test("world: no zone gates, arches, threshold lines, zone name signs or STEAL A SEED sign anywhere", function()
+	local banned = { GatePillar = true, GateBeam = true, GateCap = true, GateTie = true, GateTrim = true, GateStrut = true,
+		PillarFoot = true, PillarTop = true, Threshold = true, Garland = true, PillarBush = true, PillarOrb = true,
+		GateLeaves = true, GateCapEnd = true, GoldFinial = true, PaperLantern = true, OrbitRing = true, SnowCap = true }
+	for _, d in world:GetDescendants() do
+		H.ok(not banned[d.Name], `{d:GetFullName()}: a gate piece`)
+		local slot = d:GetAttribute("AssetSlot")
+		H.ok(not (slot and (string.match(slot, "^Arch_") or slot == "SpawnSign")), `{d:GetFullName()}: the {slot} slot`)
+		H.ok(not string.match(d.Name, "^Arch_") and d.Name ~= "SpawnSign", `{d:GetFullName()}: an arch or the spawn sign`)
+		if d:IsA("TextLabel") then
+			local text = string.upper(d.Text)
+			H.ok(not string.find(text, "STEAL A SEED", 1, true), `{d:GetFullName()} says "{d.Text}"`)
+			H.ok(not string.find(text, "GUARDIAN", 1, true) and not string.find(text, "RECOMMENDED SPEED", 1, true), `{d:GetFullName()} is a zone sign`)
+			for _, zone in Config.ZONES do
+				H.ok(not string.find(text, string.upper(zone.name), 1, true), `{d:GetFullName()} names the {zone.name}`)
+			end
+		end
+	end
+	local Assets = H.server("Assets")
+	for _, slot in Assets.SLOTS do
+		H.ok(not string.match(slot, "^Arch_") and slot ~= "SpawnSign", `no {slot} asset slot`)
+	end
+end)
+
+H.test("world: beside each nest a small wooden plank on a post says the zone's recommended Speed", function()
 	local Format = H.shared("Format")
 	for k, zone in Config.ZONES do
 		local folder = world.Corridor:FindFirstChild(string.format("%d_%s", k, zone.id))
 		H.ok(folder ~= nil, "zone folder " .. zone.id)
-		local found = false
-		for _, d in folder:GetDescendants() do
-			if d:IsA("TextLabel") and string.find(d.Text, string.upper(zone.name), 1, true) then
-				local speedLine = false
-				for _, sib in d.Parent:GetChildren() do
-					if sib:IsA("TextLabel") and string.find(sib.Text, Format.short(zone.req), 1, true) and string.find(sib.Text, "Speed", 1, true) then
-						speedLine = true
-					end
-				end
-				found = found or speedLine
+		local sign = folder:FindFirstChild("SpeedSign")
+		H.ok(sign and sign:IsA("Model"), `{zone.id}: a SpeedSign`)
+		local plank, post = sign:FindFirstChild("Plank"), sign:FindFirstChild("PlankPost")
+		H.ok(plank and post, `{zone.id}: a plank on a post`)
+		-- small and chunky, wooden orange/brown, studded, decoration only
+		H.ok(plank.Size.X <= 12 and plank.Size.Y <= 6 and plank.Size.Z >= 1, `{zone.id}: a small chunky plank`)
+		for _, p in { plank, post } do
+			H.ok(p.Color.R > p.Color.G and p.Color.G > p.Color.B and p.Color.R > 0.6, `{zone.id}: {p.Name} is orange/brown wood`)
+			H.ok(not p.CanCollide and p.Anchored, `{zone.id}: {p.Name} is decoration`)
+		end
+		H.eq(plank.FrontSurface, Enum.SurfaceType.Studs, `{zone.id}: studded`)
+		H.ok(post.CFrame.Position.Y + post.Size.Y / 2 <= plank.CFrame.Position.Y - plank.Size.Y / 2 + 0.01, "the post holds the plank up")
+		-- next to the nest, toward the base, facing the players coming from it
+		local nest = Vector3.new(Config.nestX(k), Config.GROUND_Y, 0)
+		local flat = Vector3.new(plank.CFrame.Position.X, Config.GROUND_Y, plank.CFrame.Position.Z)
+		H.ok((flat - nest).Magnitude < 40, `{zone.id}: next to the nest ({(flat - nest).Magnitude} studs)`)
+		H.ok(flat.X < nest.X and math.abs(flat.Z) > 16 and math.abs(flat.Z) < Config.CORRIDOR_WIDTH / 2 - 10, `{zone.id}: in front of the nest, beside the run`)
+		H.ok(plank.CFrame.LookVector.X < -0.99, `{zone.id}: faces the base`)
+		local gui = plank:FindFirstChildOfClass("SurfaceGui")
+		H.ok(gui and gui.Face == Enum.NormalId.Front, `{zone.id}: a SurfaceGui on the plank's front`)
+		local texts = {}
+		for _, l in gui:GetDescendants() do
+			if l:IsA("TextLabel") then
+				table.insert(texts, l.Text)
 			end
 		end
-		H.ok(found, "sign for " .. zone.id)
+		local all = table.concat(texts, " ")
+		if zone.req > 0 then
+			H.ok(string.find(all, "👟 " .. Format.short(zone.req), 1, true) and string.find(all, "recommended", 1, true), `{zone.id}: says "{all}"`)
+		else
+			H.ok(string.find(all, "Start here", 1, true), `{zone.id}: says "{all}"`)
+		end
+	end
+	local top = WorldBuilder.speedSignText(3)
+	H.eq(top, "👟 500K")
+end)
+
+H.test("world: every zone has particle ambience", function()
+	for k, zone in Config.ZONES do
+		local folder = world.Corridor:FindFirstChild(string.format("%d_%s", k, zone.id))
 		local emitters = 0
 		for _, d in folder:GetDescendants() do
 			if d:IsA("ParticleEmitter") then
@@ -262,7 +307,7 @@ end)
 
 
 ----------------------------------------------------------------------------------------------------
--- Art direction (owner playtest): clean cartoony look, a 3x wider corridor, a gate per zone, wall caps,
+-- Art direction (owner playtest): clean cartoony look, a 3x wider corridor, no zone gates, wall caps,
 -- few props early, no finish line, market stalls.
 ----------------------------------------------------------------------------------------------------
 local Assets = H.server("Assets")
@@ -288,7 +333,7 @@ H.test("world: the corridor is 192 studs wide, wall to wall, in every zone", fun
 		H.ok(floor and math.abs(floor.Size.Z - Config.CORRIDOR_WIDTH) < 1e-3 and floor.CanCollide, `{zone.id} floor spans the width`)
 		local sides = {}
 		for _, p in folder:GetChildren() do
-			if p:IsA("BasePart") and p.Name == "Wall" and p.Size.X > 100 then
+			if p:IsA("BasePart") and p.Name == "Wall" and p.Size.X >= zone.length - 1 then
 				local inner = math.abs(p.CFrame.Position.Z) - p.Size.Z / 2
 				H.ok(math.abs(inner - halfW) < 1e-3 and p.CanCollide, `{zone.id} wall's inner face at {inner}`)
 				H.ok(p.Size.Y >= Config.WALL_HEIGHT, "tall walls")
@@ -325,30 +370,13 @@ H.test("world: no finish line: the Spirit Garden's back wall ends the corridor, 
 	end
 end)
 
-H.test("world: every zone has a chunky gate at its entrance, and every wall a cap", function()
+H.test("world: every zone wall has a cap", function()
 	local halfW = Config.CORRIDOR_WIDTH / 2
 	for k, zone in Config.ZONES do
 		local folder = world.Corridor:FindFirstChild(string.format("%d_%s", k, zone.id))
-		local gate = folder:FindFirstChild("Arch_" .. zone.id)
-		H.ok(gate and gate:IsA("Model") and gate:GetAttribute("AssetSlot") == "Arch_" .. zone.id, `{zone.id}: the Arch_ slot holds its gate`)
-		local pillars, beam = {}, nil
-		for _, p in gate:GetDescendants() do
-			if p:IsA("BasePart") and p.Name == "GatePillar" then
-				table.insert(pillars, p)
-			elseif p:IsA("BasePart") and p.Name == "GateBeam" then
-				beam = p
-			end
-		end
-		H.eq(#pillars, 2, `{zone.id}: two pillars`)
-		local x0 = Config.zoneStartX(k)
-		for _, p in pillars do
-			H.ok(p.Size.X >= 10 and p.Size.Z >= 10, `{zone.id}: chunky pillars`)
-			H.ok(math.abs(p.CFrame.Position.X - x0) < 15 and p.Size.Y > Config.WALL_HEIGHT, `{zone.id}: at the entrance, above the walls`)
-		end
-		H.ok(beam and beam.Size.Z >= Config.CORRIDOR_WIDTH and beam.CFrame.Position.Y > Config.WALL_HEIGHT, `{zone.id}: a beam over the whole corridor`)
 		local caps = 0
 		for _, p in folder:GetChildren() do
-			if p:IsA("BasePart") and p.Name == "WallCap" and p.Size.X > 100 and math.abs(p.CFrame.Position.Z) > halfW - 2 then
+			if p:IsA("BasePart") and p.Name == "WallCap" and p.Size.X >= zone.length - 1 and math.abs(p.CFrame.Position.Z) > halfW - 2 then
 				caps += 1
 				H.ok(p.CFrame.Position.Y > Config.WALL_HEIGHT, "on top of the wall")
 			end
@@ -357,17 +385,17 @@ H.test("world: every zone has a chunky gate at its entrance, and every wall a ca
 	end
 end)
 
--- Decoration in a zone: everything visible but the floor, walls, their checker and caps, the gate, the
--- sign and the nest (the Spirit Garden's roof is its cap).
-local STRUCTURE = { Floor = true, FloorTile = true, Wall = true, WallTile = true, WallCap = true, Threshold = true, Sign = true,
+-- Decoration in a zone: everything visible but the floor, walls, their checker and caps, the nest and the
+-- Speed plank (the Spirit Garden's roof is its cap).
+local STRUCTURE = { Floor = true, FloorTile = true, Wall = true, WallTile = true, WallCap = true,
 	Roof = true, RoofTile = true, RoofTrim = true }
 local function propParts(folder: any): number
 	local id = string.match(folder.Name, "^%d+_(.+)$")
 	local n = 0
 	for _, p in parts(folder) do
-		local inGate = p:FindFirstAncestor("Arch_" .. id)
 		local inNest = p:FindFirstAncestor("Nest_" .. id)
-		if not STRUCTURE[p.Name] and not inGate and not inNest and p.Transparency < 1 then
+		local inSign = p:FindFirstAncestor("SpeedSign")
+		if not STRUCTURE[p.Name] and not inNest and not inSign and p.Transparency < 1 then
 			n += 1
 		end
 	end
