@@ -1,0 +1,42 @@
+{
+  "passes": {
+    "DoubleLuck": 0,
+    "DoubleMoney": 0,
+    "DoubleSpeed": 0,
+    "ExtraSlots": 0,
+    "FastGrow": 0,
+    "VIP": 0
+  },
+  "products": {
+    "Money200K": 0,
+    "Money24K": 0,
+    "Money4M": 0,
+    "Money800K": 0,
+    "Money8M": 0,
+    "PackSpace": 0,
+    "PackSpirit": 0,
+    "PlotUpgradeT1": 0,
+    "PlotUpgradeT2": 0,
+    "PlotUpgradeT3": 0,
+    "PlotUpgradeT4": 0,
+    "PlotUpgradeT5": 0,
+    "PlotUpgradeT6": 0,
+    "Speed10M": 0,
+    "Speed150K": 0,
+    "Speed250K": 0,
+    "Speed25K": 0,
+    "Speed25M": 0,
+    "Speed3M": 0,
+    "Speed50M": 0,
+    "Speed750K": 0,
+    "TrailBlue": 0,
+    "TrailGolden": 0,
+    "TrailGreen": 0,
+    "TrailPurple": 0,
+    "TrailRainbow": 0,
+    "TrailRed": 0,
+    "TreadmillT1": 0,
+    "TreadmillT2": 0,
+    "TreadmillT3": 0
+  }
+}

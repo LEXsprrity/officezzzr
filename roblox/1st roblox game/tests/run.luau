@@ -32,6 +32,7 @@ require("./seeds.spec")
 require("./previews.spec")
 require("./passes.spec")
 require("./security.spec")
+require("./monetization.spec")
 require("./compile.spec")
 
 print("Steal a Seed: mocked server tests\n")

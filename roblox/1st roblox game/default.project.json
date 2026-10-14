@@ -5,7 +5,8 @@
     "ReplicatedStorage": {
       "Shared": {
         "$path": "src/shared",
-        "IconIds": { "$path": "icons/ids.json" }
+        "IconIds": { "$path": "icons/ids.json" },
+        "MonetizationIds": { "$path": "monetization/ids.json" }
       }
     },
     "ServerStorage": {
