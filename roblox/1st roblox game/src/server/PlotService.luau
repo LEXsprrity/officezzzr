@@ -1,5 +1,6 @@
--- Plots: assignment, planting (server ProximityPrompt on the plot's pad), plant-creature models,
--- and income. Weight is a closed-form function of plantedAt: one payout loop, no per-plant ticking.
+-- Plots: assignment, free planting (anywhere on your own dirt beds: the client sends a spot, the server checks
+-- it with Shared/Planting), plant-creature models, and income. Weight is a closed-form function of
+-- plantedAt: one payout loop, no per-plant ticking.
 local MarketplaceService = game:GetService("MarketplaceService")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Shared = ReplicatedStorage:WaitForChild("Shared")
@@ -8,6 +9,7 @@ local Format = require(Shared:WaitForChild("Format"))
 local SeedPacks = require(Shared:WaitForChild("SeedPacks"))
 local Icons = require(Shared:WaitForChild("Icons"))
 local Treadmill = require(Shared:WaitForChild("Treadmill"))
+local Planting = require(Shared:WaitForChild("Planting"))
 local Net = require(script.Parent:WaitForChild("Net"))
 local Sessions = require(script.Parent:WaitForChild("Sessions"))
 local SeedService = require(script.Parent:WaitForChild("SeedService"))
@@ -24,9 +26,21 @@ type PlotState = {
 	info: WorldBuilder.PlotInfo,
 	treadmill: TreadmillBoard.Board, -- the treadmill's Upgrade board and "+X/step" text
 	owner: Player?,
-	models: { [number]: Model }, -- by slot
+	models: { [number]: Model }, -- by plant id (`slot`)
 	scales: { [number]: number },
+	clicks: { ClickDetector }, -- the Upgrade boards' click/tap targets (both boards), owner-only
 }
+
+-- Where a plant stands: its saved spot (in the plot's space, Shared/Planting) on the top of the bed under
+-- it, facing the entrance (the origin looks into the plot). Off every bed (a hand-moved bed): on the floor.
+local function restOf(info: WorldBuilder.PlotInfo, plant: ProfileStore.Plant): CFrame
+	local pos = Planting.toWorld(info.origin, plant.x, plant.z)
+	local bed = Planting.bedAt(info.beds, pos)
+	if bed then
+		pos = Planting.surface(bed, pos)
+	end
+	return CFrame.new(pos) * info.origin.Rotation * CFrame.Angles(0, math.pi, 0)
+end
 
 local plots: { PlotState } = {}
 local sellStalls: { BasePart } = {} -- the SELL stalls' prompt parts (WorldBuilder.sellPoints)
@@ -153,9 +167,9 @@ local function buildPlantModel(state: PlotState, plant: ProfileStore.Plant, weig
 		PlotService.removePlant(player, plant.slot)
 	end)
 
-	-- Stand on the soil facing the gate (slot CFrames look into the plot). The pivot is on the soil, so
-	-- ScaleTo grows the creature from the ground up. Scale before parenting: one replication, not two.
-	local rest = state.info.slotCFrames[plant.slot] * CFrame.new(0, Config.SOIL_HEIGHT, 0) * CFrame.Angles(0, math.pi, 0)
+	-- Stand on the dirt facing the entrance. The pivot is on the dirt, so ScaleTo grows the creature from
+	-- the ground up. Scale before parenting: one replication, not two.
+	local rest = restOf(state.info, plant)
 	model:PivotTo(rest)
 	CreatureModels.applyScale(model, scale)
 	model:SetAttribute("RestPivot", rest) -- the client's idle sway (Effects.client) animates around this
@@ -163,19 +177,38 @@ local function buildPlantModel(state: PlotState, plant: ProfileStore.Plant, weig
 	return model
 end
 
-local function renderSoil(state: PlotState, count: number)
-	state.info.soil:ClearAllChildren()
-	for i = 1, count do
-		local p = Instance.new("Part")
-		p.Name = "Soil" .. i
-		p.Anchored = true
-		p.Size = Vector3.new(6, Config.SOIL_HEIGHT, 6)
-		p.CanCollide = false
-		p.CFrame = state.info.slotCFrames[i] * CFrame.new(0, Config.SOIL_HEIGHT / 2, 0) -- slot CFrames sit on the floor's top surface
-		p.Color = Color3.fromRGB(120, 80, 50)
-		p.Material = Enum.Material.Ground
-		p.Parent = state.info.soil
+-- A dark dug-soil patch under each plant (Soil_<id> in the plot's Soil folder), the size of its full-grown
+-- reach, so the beds show where the room is taken.
+local SOIL_DUG = Color3.fromRGB(120, 66, 62)
+local function addSoil(state: PlotState, plant: ProfileStore.Plant)
+	local rest = restOf(state.info, plant)
+	local d = Planting.radius(plant.rarity) * 1.2
+	local p = Instance.new("Part")
+	p.Name = "Soil_" .. plant.slot
+	p.Shape = Enum.PartType.Cylinder
+	p.Anchored = true
+	p.CanCollide = false
+	p.CanQuery = false
+	p.CanTouch = false
+	p.CastShadow = false
+	p.Size = Vector3.new(0.12, d, d)
+	p.CFrame = CFrame.new(rest.Position + Vector3.new(0, 0.06, 0)) * CFrame.Angles(0, 0, math.pi / 2)
+	p.Color = SOIL_DUG
+	p.Material = Enum.Material.Plastic
+	p.Parent = state.info.soil
+end
+
+local function removePlantModel(state: PlotState, slot: number)
+	local model = state.models[slot]
+	if model then
+		model:Destroy()
 	end
+	local soil = state.info.soil:FindFirstChild("Soil_" .. slot)
+	if soil then
+		soil:Destroy()
+	end
+	state.models[slot] = nil
+	state.scales[slot] = nil
 end
 
 local function spawnPlant(state: PlotState, plant: ProfileStore.Plant, now: number)
@@ -183,12 +216,14 @@ local function spawnPlant(state: PlotState, plant: ProfileStore.Plant, now: numb
 	local scale = plantScale(plant, weight)
 	state.models[plant.slot] = buildPlantModel(state, plant, weight, income, scale)
 	state.scales[plant.slot] = scale
+	addSoil(state, plant)
 end
 
 local function clearPlants(state: PlotState)
 	for _, m in state.models do
 		m:Destroy()
 	end
+	state.info.soil:ClearAllChildren()
 	state.models = {}
 	state.scales = {}
 end
@@ -205,7 +240,9 @@ local function pushPlants(s: Sessions.Session, now: number)
 		income *= mult * Config.timeMult(plant.zone, isNight)
 		-- `sell`: what the SELL stall pays for it right now (Selling.price)
 		table.insert(view, {
+			-- x/z: where it stands in the plot's space (the planting preview keeps new plants clear of it)
 			slot = plant.slot, zone = plant.zone, rarity = plant.rarity, mutation = plant.mutation, weight = weight, income = income,
+			x = plant.x, z = plant.z,
 			sell = Selling.price(plant, now, mult),
 		})
 	end
@@ -228,34 +265,14 @@ local function plotOf(player: Player): PlotState?
 	return nil
 end
 
--- The first free slot if `player` stands at their own pad with room left, else nil (toasting why;
--- being too far is silent unless `farMessage` is given).
-local function freeSlotAtPad(player: Player, s: Sessions.Session, state: PlotState, farMessage: string?): number?
-	local char = player.Character
-	local root = char and char:FindFirstChild("HumanoidRootPart") :: BasePart?
-	if not root or (root.Position - state.info.pad.Position).Magnitude > Config.PLANT_DISTANCE then
-		if farMessage then
-			Net.toast(player, farMessage, "red")
-		end
-		return nil
-	end
-	local used = {}
-	for _, plant in s.profile.plants do
-		used[plant.slot] = true
-	end
-	for i = 1, Sessions.maxSlots(s) do
-		if not used[i] then
-			return i
-		end
-	end
-	Net.toast(player, "Your plot is full! Remove a plant or upgrade your plot (board at your plot's entrance).", "red")
-	return nil
-end
-
--- Plants a seed (carried or from the seed bag) into `slot`: model, Index, income and client updates.
-local function plantSeed(player: Player, s: Sessions.Session, state: PlotState, slot: number, zone: number, rarity: number, mutation: string?)
+-- Plants a seed (carried or from the seed bag) at (x, z) in the plot's space, under a new id: model, Index,
+-- income and client updates.
+local function plantSeed(player: Player, s: Sessions.Session, state: PlotState, x: number, z: number, zone: number, rarity: number, mutation: string?)
 	local now = os.time()
-	local plant: ProfileStore.Plant = { slot = slot, zone = zone, rarity = rarity, mutation = mutation, plantedAt = now }
+	local plant: ProfileStore.Plant = {
+		slot = Planting.newId(s.profile.plants :: any), zone = zone, rarity = rarity, mutation = mutation, plantedAt = now,
+		x = math.round(x * 100) / 100, z = math.round(z * 100) / 100,
+	}
 	table.insert(s.profile.plants, plant)
 	spawnPlant(state, plant, now)
 
@@ -284,44 +301,79 @@ local function plantSeed(player: Player, s: Sessions.Session, state: PlotState, 
 	})
 end
 
-local function tryPlant(player: Player, state: PlotState)
+local function finite(v: Vector3): boolean
+	return v.X == v.X and v.Y == v.Y and v.Z == v.Z and math.abs(v.X) < 1e6 and math.abs(v.Y) < 1e6 and math.abs(v.Z) < 1e6
+end
+
+-- Plants the carried seed, or (with `bagKey`) one from the seed bag, at `pos`: the remote PlantSeed, sent by
+-- the client's planting preview (Planting.client), so nothing in it is trusted. The spot must be on one of
+-- the player's OWN dirt beds, clear of their other plants (by full-grown size), within reach of where they
+-- stand, and the plot must have a free slot (Shared/Planting.check). A refused spot toasts why and
+-- plants nothing; the seed stays carried or in the bag.
+function PlotService.plantAt(player: Player, pos: any, bagKey: any)
 	local s = Sessions.get(player)
-	if not s or state.owner ~= player then
+	local state = plotOf(player)
+	if not s or not state or typeof(pos) ~= "Vector3" or not finite(pos) then
 		return
 	end
-	if not s.carry then
+	if bagKey ~= nil and (type(bagKey) ~= "string" or #bagKey > 40) then
+		return
+	end
+	local zone: number?, rarity: number?, mutation: string?
+	if bagKey then
+		zone, rarity, mutation = SeedPacks.parseBagKey(bagKey)
+		if (s.profile.seedBag[bagKey] or 0) <= 0 then
+			return
+		end
+	elseif s.carry then
+		zone, rarity, mutation = s.carry.zone, s.carry.rarity, s.carry.mutation
+	else
 		local hasBag = SeedPacks.bagCount(s.profile.seedBag) > 0
 		Net.toast(player, if hasBag then "Steal a seed, or plant one from your 🌱 Seeds bag!" else "Steal a seed from the corridor first!", "red")
 		return
 	end
-	local slot = freeSlotAtPad(player, s, state, nil)
-	if not slot then
+	local char = player.Character
+	local root = char and char:FindFirstChild("HumanoidRootPart") :: BasePart?
+	if not zone or not rarity or not root then
 		return
 	end
-	local carry = SeedService.consumeCarry(player)
-	if not carry then
+	local ok, why = Planting.check({
+		beds = state.info.beds, -- only this player's own plot
+		origin = state.info.origin,
+		plants = s.profile.plants :: any,
+		pos = pos,
+		rarity = rarity,
+		root = root.Position,
+		limit = Sessions.maxSlots(s),
+	})
+	if not ok then
+		Net.toast(player, Planting.MESSAGES[why :: Planting.Reason], "red")
 		return
 	end
-	plantSeed(player, s, state, slot, carry.zone, carry.rarity, carry.mutation)
-	if Config.announcesLegendary(carry.zone, carry.rarity, false) then
-		Net.announce(Config.legendaryAnnouncement(player.DisplayName, carry.zone, carry.mutation), "gold")
+	if bagKey then
+		if not SeedPacks.takeFromBag(s.profile.seedBag, bagKey) then
+			return
+		end
+	elseif not SeedService.consumeCarry(player) then
+		return
+	end
+	local x, z = Planting.toLocal(state.info.origin, pos)
+	plantSeed(player, s, state, x, z, zone, rarity, mutation)
+	if not bagKey and Config.announcesLegendary(zone, rarity, false) then
+		Net.announce(Config.legendaryAnnouncement(player.DisplayName, zone, mutation), "gold")
 	end
 end
 
--- Plants one seed of kind `key` from the player's seed bag (seeds bought in packs), from the Seeds
--- menu. Same rules as the pad prompt: own plot, standing at the pad, a free slot.
+-- The Seeds menu's Plant button on a bagged seed (seeds bought in packs): if the player has one, their
+-- client shows the planting preview for it (LootEvent "PlaceSeed"); clicking or tapping their dirt then
+-- plants it through PlotService.plantAt.
 function PlotService.plantFromBag(player: Player, key: string)
 	local s = Sessions.get(player)
-	local state = plotOf(player)
 	local zone, rarity, mutation = SeedPacks.parseBagKey(key)
-	if not s or not state or not zone or not rarity or (s.profile.seedBag[key] or 0) <= 0 then
+	if not s or not plotOf(player) or not zone or not rarity or (s.profile.seedBag[key] or 0) <= 0 then
 		return
 	end
-	local slot = freeSlotAtPad(player, s, state, "Stand on your plot's planting pad to plant seeds from your bag.")
-	if not slot or not SeedPacks.takeFromBag(s.profile.seedBag, key) then
-		return
-	end
-	plantSeed(player, s, state, slot, zone, rarity, mutation)
+	Net.LootEvent:FireClient(player, "PlaceSeed", { key = key, zone = zone, rarity = rarity, name = SeedService.seedName(zone, rarity, mutation) })
 end
 
 function PlotService.removePlant(player: Player, slot: number)
@@ -344,9 +396,7 @@ function PlotService.removePlant(player: Player, slot: number)
 			local _, income = PlotService.plantStats(plant, now)
 			local refund = income * Config.SELL_SECONDS * Sessions.moneyMult(s)
 			table.remove(s.profile.plants, i)
-			model:Destroy()
-			state.models[slot] = nil
-			state.scales[slot] = nil
+			removePlantModel(state, slot)
 			s.profile.money += refund
 			refreshIncome(s, now)
 			pushPlants(s, now)
@@ -387,12 +437,7 @@ function PlotService.sellPlants(player: Player, slots: any)
 		return
 	end
 	for _, slot in sale.slots do
-		local model = state.models[slot]
-		if model then
-			model:Destroy()
-		end
-		state.models[slot] = nil
-		state.scales[slot] = nil
+		removePlantModel(state, slot)
 	end
 	refreshIncome(s, now)
 	pushPlants(s, now)
@@ -545,12 +590,79 @@ function PlotService.refreshTreadmill(s: Sessions.Session)
 	end
 end
 
--- The treadmill board's prompts, under its buttons (x: share of the board's width; seen from the front,
--- the red button is on the board's +X side): E buys with money, F with Robux (different keys, so both
--- show at once, like the plot's Upgrade board). The client hides them from everyone but the owner; the
--- server re-checks the owner and the distance.
-local TREADMILL_PROMPTS = {
-	{ name = "TreadmillCash", object = "Cash", x = 0.16, hold = 0.3, key = Enum.KeyCode.E, pad = Enum.KeyCode.ButtonX, buy = function(player: Player)
+-- Both Upgrade boards (the plot's, and the treadmill's) are bought from by their painted buttons, with no
+-- black prompt popups (the owner's call: only the sign shows):
+--   * a click or tap on the red $ or purple R$ button: an invisible part over each painted button with a
+--     ClickDetector (works with mouse and touch);
+--   * the E (money) and F (Robux) keys, and gamepad X/Y: a ProximityPrompt under each button with Style =
+--     Custom and no custom UI, so it shows nothing but its key still works.
+-- Both carry OwnerUserId: the client switches them on for the owner only (Effects.client), and the server
+-- re-checks the owner and the distance (`canUse`) before buying.
+local BUTTON_HITS = {
+	-- where each painted button is, as shares of the panel (x from the middle, seen from the front the red
+	-- one is on the panel's +X side; y from the middle; w and h its size)
+	Cash = { x = 0.158, y = -0.175, w = 0.44, h = 0.25 },
+	Robux = { x = -0.233, y = -0.175, w = 0.29, h = 0.25 },
+}
+local BUTTON_CLICK_DISTANCE = 14
+
+type ButtonSpec = { name: string, object: string, x: number, hold: number, key: Enum.KeyCode, pad: Enum.KeyCode, buy: (Player) -> () }
+
+local function addBoardButtons(panel: BasePart, hitParent: Instance, specs: { ButtonSpec }, promptDistance: number,
+	canUse: (Player) -> boolean): { ClickDetector }
+	local clicks = {}
+	for _, spec in specs do
+		local anchor = Instance.new("Attachment")
+		anchor.Name = spec.name .. "PromptAnchor"
+		anchor.Position = Vector3.new(spec.x * panel.Size.X, -panel.Size.Y / 2 - 0.6, 0)
+		anchor.Parent = panel
+		local prompt = Instance.new("ProximityPrompt")
+		prompt.Name = spec.name
+		prompt.Style = Enum.ProximityPromptStyle.Custom -- no popup: the key works, the sign is all that shows
+		prompt.ActionText = "Upgrade"
+		prompt.ObjectText = spec.object
+		prompt.HoldDuration = spec.hold
+		prompt.MaxActivationDistance = promptDistance
+		prompt.RequiresLineOfSight = false
+		prompt.KeyboardKeyCode = spec.key
+		prompt.GamepadKeyCode = spec.pad
+		prompt:SetAttribute("OwnerUserId", 0)
+		prompt.Parent = anchor
+		prompt.Triggered:Connect(function(player: Player)
+			if canUse(player) then
+				spec.buy(player)
+			end
+		end)
+
+		local area = BUTTON_HITS[spec.object]
+		local hit = Instance.new("Part")
+		hit.Name = spec.name .. "Button"
+		hit.Anchored = true
+		hit.CanCollide = false
+		hit.CanTouch = false
+		hit.CastShadow = false
+		hit.Transparency = 1
+		hit.Size = Vector3.new(area.w * panel.Size.X, area.h * panel.Size.Y, 0.3)
+		hit.CFrame = panel.CFrame * CFrame.new(area.x * panel.Size.X, area.y * panel.Size.Y, -(panel.Size.Z / 2 + 0.55)) -- over the front face
+		local click = Instance.new("ClickDetector")
+		click.MaxActivationDistance = 0 -- Effects.client opens it for the owner (Reach)
+		click:SetAttribute("Reach", BUTTON_CLICK_DISTANCE)
+		click:SetAttribute("OwnerUserId", 0)
+		click.Parent = hit
+		click.MouseClick:Connect(function(player: Player)
+			if canUse(player) then
+				spec.buy(player)
+			end
+		end)
+		hit.Parent = hitParent
+		table.insert(clicks, click)
+	end
+	return clicks
+end
+
+-- The treadmill board's buttons: E / the red button buys with money, F / the purple one with Robux.
+local TREADMILL_PROMPTS: { ButtonSpec } = {
+	{ name = "TreadmillCash", object = "Cash", x = 0.16, hold = 0, key = Enum.KeyCode.E, pad = Enum.KeyCode.ButtonX, buy = function(player: Player)
 		PlotService.upgradeTreadmill(player)
 	end },
 	{ name = "TreadmillRobux", object = "Robux", x = -0.23, hold = 0, key = Enum.KeyCode.F, pad = Enum.KeyCode.ButtonY, buy = function(player: Player)
@@ -560,30 +672,13 @@ local TREADMILL_PROMPTS = {
 
 local function addTreadmillPrompts(state: PlotState)
 	local panel = state.treadmill.panel
-	for _, spec in TREADMILL_PROMPTS do
-		local anchor = Instance.new("Attachment")
-		anchor.Name = spec.name .. "PromptAnchor"
-		anchor.Position = Vector3.new(spec.x * panel.Size.X, -panel.Size.Y / 2 - 0.6, 0)
-		anchor.Parent = panel
-		local prompt = Instance.new("ProximityPrompt")
-		prompt.Name = spec.name
-		prompt.ActionText = "Upgrade"
-		prompt.ObjectText = spec.object
-		prompt.HoldDuration = spec.hold
-		prompt.MaxActivationDistance = Treadmill.BOARD_PROMPT_DISTANCE
-		prompt.RequiresLineOfSight = false
-		prompt.KeyboardKeyCode = spec.key
-		prompt.GamepadKeyCode = spec.pad
-		prompt:SetAttribute("OwnerUserId", 0)
-		prompt.Parent = anchor
-		prompt.Triggered:Connect(function(player: Player)
-			local char = player.Character
-			local root = char and char:FindFirstChild("HumanoidRootPart") :: BasePart?
-			if Treadmill.canUseBoard(state.owner == player, if root then root.Position else nil, panel.Position) then
-				spec.buy(player)
-			end
-		end)
-	end
+	-- the click targets ride in the board's model, so they follow it when the belt moves (TreadmillBoard.follow)
+	local clicks = addBoardButtons(panel, state.treadmill.model, TREADMILL_PROMPTS, Treadmill.BOARD_PROMPT_DISTANCE, function(player: Player)
+		local char = player.Character
+		local root = char and char:FindFirstChild("HumanoidRootPart") :: BasePart?
+		return Treadmill.canUseBoard(state.owner == player, if root then root.Position else nil, panel.Position)
+	end)
+	table.move(clicks, 1, #clicks, #state.clicks + 1, state.clicks)
 end
 
 -- Writes the owner's level and both prices on the board ("MAX LEVEL" and no buttons at the last level).
@@ -647,16 +742,28 @@ function PlotService.promptRobuxUpgrade(player: Player)
 	MarketplaceService:PromptProductPurchase(player, product.id)
 end
 
--- The board's prompts, under its buttons (x: share of the board's width; seen from the front, the red
--- button is on the board's +X side).
-local UPGRADE_PROMPTS = {
-	{ name = "UpgradeCash", object = "Cash", x = 0.16, hold = 0.3, key = Enum.KeyCode.E, pad = Enum.KeyCode.ButtonX, buy = function(player: Player)
+-- The plot's Upgrade board's buttons: E / the red button buys with money, F / the purple one with Robux.
+local UPGRADE_PROMPTS: { ButtonSpec } = {
+	{ name = "UpgradeCash", object = "Cash", x = 0.16, hold = 0, key = Enum.KeyCode.E, pad = Enum.KeyCode.ButtonX, buy = function(player: Player)
 		PlotService.upgrade(player)
 	end },
 	{ name = "UpgradeRobux", object = "Robux", x = -0.23, hold = 0, key = Enum.KeyCode.F, pad = Enum.KeyCode.ButtonY, buy = function(player: Player)
 		PlotService.promptRobuxUpgrade(player)
 	end },
 }
+
+-- Who may click, tap or press a board's buttons: its owner, with some slack over the prompts' reach.
+local function setButtonsOwner(state: PlotState, userId: number)
+	for _, prompt in upgradePrompts(state) do
+		prompt:SetAttribute("OwnerUserId", userId)
+	end
+	for _, prompt in treadmillPrompts(state) do
+		prompt:SetAttribute("OwnerUserId", userId)
+	end
+	for _, click in state.clicks do
+		click:SetAttribute("OwnerUserId", userId)
+	end
+end
 
 ----------------------------------------------------------------------------------------------------
 -- Assignment
@@ -672,6 +779,7 @@ function PlotService.init(infos: { WorldBuilder.PlotInfo }, stalls: { BasePart }
 			owner = nil,
 			models = {},
 			scales = {},
+			clicks = {},
 		}
 		-- The board and the step text follow the belt if anything moves or resizes it.
 		for _, property in { "CFrame", "Size" } do
@@ -680,50 +788,16 @@ function PlotService.init(infos: { WorldBuilder.PlotInfo }, stalls: { BasePart }
 			end)
 		end
 		plots[i] = state
-		-- Two owner-only prompts on the gate's board (the client hides other players' prompts), one under
-		-- each button: E buys with money, F with Robux. Different keys, so both show at once. The server
-		-- re-checks the owner and the distance.
 		local board = info.upgradeBoard
-		for _, spec in UPGRADE_PROMPTS do
-			local anchor = Instance.new("Attachment")
-			anchor.Name = spec.name .. "PromptAnchor"
-			anchor.Position = Vector3.new(spec.x * board.Size.X, -board.Size.Y / 2 - 0.6, 0)
-			anchor.Parent = board
-			local prompt = Instance.new("ProximityPrompt")
-			prompt.Name = spec.name
-			prompt.ActionText = "Upgrade"
-			prompt.ObjectText = spec.object
-			prompt.HoldDuration = spec.hold
-			prompt.MaxActivationDistance = UPGRADE_PROMPT_DISTANCE
-			prompt.RequiresLineOfSight = false
-			prompt.KeyboardKeyCode = spec.key
-			prompt.GamepadKeyCode = spec.pad
-			prompt:SetAttribute("OwnerUserId", 0)
-			prompt.Parent = anchor
-			prompt.Triggered:Connect(function(player: Player)
-				local char = player.Character
-				local root = char and char:FindFirstChild("HumanoidRootPart") :: BasePart?
-				if state.owner == player and root and (root.Position - board.Position).Magnitude <= 14 then
-					spec.buy(player)
-				end
-			end)
-		end
+		local clicks = addBoardButtons(board, board.Parent or info.model, UPGRADE_PROMPTS, UPGRADE_PROMPT_DISTANCE, function(player: Player)
+			local char = player.Character
+			local root = char and char:FindFirstChild("HumanoidRootPart") :: BasePart?
+			return state.owner == player and root ~= nil and (root.Position - board.Position).Magnitude <= 16
+		end)
+		table.move(clicks, 1, #clicks, 1, state.clicks)
 		renderUpgradeSign(state)
 		addTreadmillPrompts(state)
 		renderTreadmillSign(state)
-
-		local prompt = Instance.new("ProximityPrompt")
-		prompt.ActionText = "Plant Seed"
-		prompt.ObjectText = "Your plot"
-		prompt.HoldDuration = 0.2
-		prompt.MaxActivationDistance = Config.PLANT_DISTANCE
-		prompt.RequiresLineOfSight = false
-		prompt.KeyboardKeyCode = Enum.KeyCode.E
-		prompt:SetAttribute("OwnerUserId", 0)
-		prompt.Parent = info.pad
-		prompt.Triggered:Connect(function(player: Player)
-			tryPlant(player, state)
-		end)
 	end
 end
 
@@ -734,25 +808,16 @@ function PlotService.assign(s: Sessions.Session): WorldBuilder.PlotInfo?
 			state.owner = s.player
 			s.plot = state.info
 			Icons.set(state.info.signLabel, "Home", `🏠 {s.player.DisplayName}'s Plot`)
-			local padPrompt = state.info.pad:FindFirstChildOfClass("ProximityPrompt")
-			if padPrompt then
-				padPrompt:SetAttribute("OwnerUserId", s.player.UserId)
-			end
-			for _, boardPrompt in upgradePrompts(state) do
-				boardPrompt:SetAttribute("OwnerUserId", s.player.UserId)
-			end
-			for _, beltPrompt in treadmillPrompts(state) do
-				beltPrompt:SetAttribute("OwnerUserId", s.player.UserId)
-			end
+			setButtonsOwner(state, s.player.UserId)
 			renderTreadmillSign(state)
 			renderUpgradeSign(state)
 			state.info.model:SetAttribute("OwnerUserId", s.player.UserId)
-			renderSoil(state, Sessions.maxSlots(s))
+			-- Every plant on a bed and clear of the others (a save from before free planting, a bed moved in
+			-- Studio): Shared/Planting.settle moves the ones that don't fit to free spots.
+			Planting.settle(state.info.beds, state.info.origin, s.profile.plants :: any)
 			local now = os.time()
 			for _, plant in s.profile.plants do
-				if plant.slot <= #state.info.slotCFrames then
-					spawnPlant(state, plant, now)
-				end
+				spawnPlant(state, plant, now)
 			end
 			refreshIncome(s, now)
 			pushPlants(s, now)
@@ -768,29 +833,19 @@ function PlotService.release(player: Player)
 		return
 	end
 	clearPlants(state)
-	state.info.soil:ClearAllChildren()
 	state.owner = nil
 	Icons.set(state.info.signLabel, "Home", "🏠 Empty Plot")
 	state.info.model:SetAttribute("OwnerUserId", nil)
-	local padPrompt = state.info.pad:FindFirstChildOfClass("ProximityPrompt")
-	if padPrompt then
-		padPrompt:SetAttribute("OwnerUserId", 0)
-	end
-	for _, boardPrompt in upgradePrompts(state) do
-		boardPrompt:SetAttribute("OwnerUserId", 0)
-	end
-	for _, beltPrompt in treadmillPrompts(state) do
-		beltPrompt:SetAttribute("OwnerUserId", 0)
-	end
+	setButtonsOwner(state, 0)
 	renderUpgradeSign(state)
 	renderTreadmillSign(state)
 end
 
--- After a plot upgrade (money or a Robux receipt) or the slots gamepass: soil, plants and the board.
+-- After a plot upgrade (money or a Robux receipt) or the slots gamepass: the plants view (its slot count)
+-- and the board.
 function PlotService.refreshSlots(s: Sessions.Session)
 	local state = plotOf(s.player)
 	if state then
-		renderSoil(state, Sessions.maxSlots(s))
 		pushPlants(s, os.time())
 		renderUpgradeSign(state)
 	end

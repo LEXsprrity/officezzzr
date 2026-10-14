@@ -1,4 +1,4 @@
--- RequestBuy / RequestUseItem / SellPlants handlers. Every request is rate-limited, type-checked and validated
+-- RequestBuy / RequestUseItem / SellPlants / PlantSeed handlers. Every request is rate-limited, type-checked and validated
 -- against server state; the client only says what it wants. Money buys trails, plot upgrades and treadmill tiers;
 -- everything else is Robux: the developer product prompt (gated) and ProcessReceipt (always grants what
 -- was paid for), plus the gamepasses.
@@ -191,7 +191,7 @@ local function processReceipt(receiptInfo: { [string]: any }): Enum.ProductPurch
 		elseif kind == "Trail" then
 			TrailService.apply(s.player.Character, s.profile.equippedTrail)
 		elseif kind == "PlotUpgrade" then
-			PlotService.refreshSlots(s) -- the new soil patch and the board's next prices
+			PlotService.refreshSlots(s) -- the slot count and the board's next prices
 		elseif kind == "TreadmillUpgrade" then
 			PlotService.refreshTreadmill(s) -- the sign's tier and next prices
 		end
@@ -223,10 +223,22 @@ local function onSell(player: Player, slots: any)
 	PlotService.sellPlants(player, slots)
 end
 
+-- The planting preview: plant the carried seed (or bagged seed `bagKey`) at `position` (PlotService.plantAt
+-- checks the spot, the plot, the reach and the slots).
+local PLANTS_PER_SECOND = 4
+local function onPlant(player: Player, position: any, bagKey: any)
+	local s = Sessions.get(player)
+	if not s or not Sessions.allowRequest(s, PLANTS_PER_SECOND) then
+		return
+	end
+	PlotService.plantAt(player, position, bagKey)
+end
+
 function ShopService.init()
 	Net.RequestBuy.OnServerEvent:Connect(onBuy)
 	Net.RequestUseItem.OnServerEvent:Connect(onUse)
 	Net.SellPlants.OnServerEvent:Connect(onSell)
+	Net.PlantSeed.OnServerEvent:Connect(onPlant)
 	MarketplaceService.ProcessReceipt = processReceipt
 	MarketplaceService.PromptGamePassPurchaseFinished:Connect(function(player: Player, passId: number, purchased: boolean)
 		if not purchased then

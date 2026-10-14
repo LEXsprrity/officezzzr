@@ -336,7 +336,7 @@ local OWNER_SIGN = Vector2.new(13, 4.2) -- the owner's sign on the front fence (
 -- Where the treadmill stands: outside the plot, in front of it (between the front fence and the walkway),
 -- beside the entrance path, running across the plot's front. `u` is its middle across the plot, `w` how
 -- far out from the fence; its Upgrade board (TreadmillBoard) stands in line past its back end.
-local TREADMILL = { u = 18.5, w = 12, len = 18, wide = 5.2 }
+local TREADMILL = { u = 15, w = 12, len = 9, wide = 4.5 } -- belt sized to a character (owner: the old 18 x 5.2 was too big)
 
 -- Chunky dark sign board on the fence, its front toward the walkway: "🏠 Name's Plot" (PlotService writes it).
 local function ownerSign(model: Model, cf: CFrame, index: number): BasePart

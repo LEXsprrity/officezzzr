@@ -5,6 +5,7 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Shared = ReplicatedStorage:WaitForChild("Shared")
 local Config = require(Shared:WaitForChild("Config"))
 local SeedPacks = require(Shared:WaitForChild("SeedPacks"))
+local Planting = require(Shared:WaitForChild("Planting"))
 
 local ProfileStore = {}
 ProfileStore.__index = ProfileStore
@@ -18,7 +19,10 @@ ProfileStore.__index = ProfileStore
 -- v5 grew the treadmill from 3 tiers (x2, Robux x3, Robux x5) to Config.TREADMILL_TIERS (money or
 -- Robux, one tier at a time). An older save's tier becomes the new tier with the same multiplier
 -- (migrateTreadmillTier), so nobody's treadmill changes speed.
-ProfileStore.VERSION = 5
+-- v6 replaced the fixed plant slots with free planting: each plant saves where it stands on the plot (x, z in
+-- the plot's space, Shared/Planting) and keeps its slot number as its id. An older save's plant gets its old
+-- slot's spot moved onto the new dirt beds (Planting.legacySpot), so the plot keeps its arrangement.
+ProfileStore.VERSION = 6
 
 -- The multipliers of the v1-v4 treadmill tiers (`treadmillTier` 1..3).
 ProfileStore.LEGACY_TREADMILL_MULT = { 2, 3, 5 }
@@ -38,11 +42,13 @@ ProfileStore.LEGACY_SPEED_MULT = {
 }
 
 export type Plant = {
-	slot: number,
+	slot: number, -- its id (unique per profile): the remove prompt, the Plants menu and the SELL stall use it; seeds its variance
 	zone: number,
 	rarity: number,
 	mutation: string?,
 	plantedAt: number, -- unix seconds; weight is derived from this, never stored
+	x: number, -- where it stands, in the plot's space (Shared/Planting): across
+	z: number, -- ...and along (+z toward the entrance)
 }
 
 export type Profile = {
@@ -145,7 +151,7 @@ end
 function ProfileStore.serialize(p: Profile): { [string]: any }
 	local plants = {}
 	for _, pl in p.plants do
-		table.insert(plants, { s = pl.slot, z = pl.zone, r = pl.rarity, m = pl.mutation, t = pl.plantedAt })
+		table.insert(plants, { s = pl.slot, z = pl.zone, r = pl.rarity, m = pl.mutation, t = pl.plantedAt, px = pl.x, pz = pl.z })
 	end
 	local index = {}
 	for key, v in p.index do
@@ -224,6 +230,7 @@ function ProfileStore.deserialize(data: any): Profile
 	p.chestAt = num(data.chestAt, 0, 0, math.huge)
 
 	local used = {}
+	local modern = type(data.v) == "number" and data.v >= 6 -- plants saved with their spot
 	if type(data.plants) == "table" then
 		for _, raw in data.plants do
 			if type(raw) == "table" then
@@ -233,7 +240,14 @@ function ProfileStore.deserialize(data: any): Profile
 				local mutation = if type(raw.m) == "string" and Config.mutationById(raw.m) then raw.m else nil
 				if slot >= 1 and zone >= 1 and rarity >= 1 and not used[slot] and type(raw.t) == "number" then
 					used[slot] = true
-					table.insert(p.plants, { slot = slot, zone = zone, rarity = rarity, mutation = mutation, plantedAt = raw.t })
+					-- v6: its saved spot (kept when it is a sane number on the plot; PlotService.assign still checks it
+					-- against the real beds). Older saves, or a bad spot: the old slot's spot on the new beds.
+					local x, z = Planting.legacySpot(slot)
+					local half = Config.PLOT_SIZE / 2
+					if modern and type(raw.px) == "number" and type(raw.pz) == "number" and math.abs(raw.px) <= half and math.abs(raw.pz) <= half then
+						x, z = raw.px, raw.pz
+					end
+					table.insert(p.plants, { slot = slot, zone = zone, rarity = rarity, mutation = mutation, plantedAt = raw.t, x = x, z = z })
 				end
 			end
 		end
