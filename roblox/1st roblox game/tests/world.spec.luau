@@ -32,9 +32,9 @@ end)
 H.test("world: plot layout contract (two dirt beds, a grass path, origin, spawn, the treadmill in front)", function()
 	local Planting = H.shared("Planting")
 	for i, plot in plots do
-		local col = (i - 1) // 2
-		local side = if i % 2 == 1 then 1 else -1
-		local center = Vector3.new(Config.PLOT_FIRST_X - col * Config.PLOT_SPACING_X, Config.GROUND_Y, side * Config.PLOT_OFFSET_Z)
+		local x, z = Config.spotXZ(Config.plotSpot(i))
+		local side = math.sign(z)
+		local center = Vector3.new(x, Config.GROUND_Y, z)
 		H.ok((plot.center - center).Magnitude < 1e-3, "plot center")
 		local toWalk = -side
 		local half = Config.PLOT_SIZE / 2
@@ -449,6 +449,36 @@ H.test("world: shop plaza has a walk-up stall for the Shop, the Trail Shop, the 
 	end
 end)
 
+H.test("world: the shop plaza stands by the corridor mouth (-Z side), the plots fill the other spots nearest first", function()
+	local half = Config.PLOT_SIZE / 2
+	local px, pz = Config.spotXZ(Config.PLAZA_SPOT)
+	-- owner request: the -Z row reads stalls (by the corridor mouth), then plots
+	H.eq(px, Config.PLOT_FIRST_X, "the plaza is in the front column")
+	H.ok(pz < 0, "on the -Z side of the walkway")
+	local spots = {}
+	for i, plot in plots do
+		local spot = Config.plotSpot(i)
+		H.ok(spot ~= Config.PLAZA_SPOT and not spots[spot], `plot {i} has its own spot ({spot})`)
+		spots[spot] = true
+		H.ok(i == 1 or plot.center.X <= plots[i - 1].center.X, `plot {i} is no nearer the corridor than plot {i - 1}`)
+		H.ok(math.abs(plot.center.X - px) >= Config.PLOT_SIZE - 1e-3 or math.sign(plot.center.Z) ~= math.sign(pz), `plot {i} clear of the plaza`)
+	end
+	H.eq(#plots, Config.MAX_PLAYERS)
+	-- every stall, ring and sand piece of the plaza stays in its spot (off the plots, the walkway and the rewards corner)
+	local plaza = world:FindFirstChild("ShopPlaza")
+	for _, d in plaza:GetDescendants() do
+		if d:IsA("BasePart") and d.Name ~= "PlazaPath" then
+			local p = d.CFrame.Position
+			H.ok(math.abs(p.X - px) <= half and math.abs(p.Z - pz) <= half, `{d:GetFullName()} in the plaza's spot ({p})`)
+		end
+	end
+	local spot, board = WorldBuilder.rewardPoints(world)
+	for _, part in { spot, board.status.Parent.Parent } do
+		local p = part.CFrame.Position
+		H.ok(p.X > px + half + 4, `{part.Name} beside the plaza, toward the corridor mouth, not in it`)
+	end
+end)
+
 H.test("world: each plot has a small, non-colliding Upgrade Plot board just outside its gate", function()
 	for i, plot in plots do
 		local board = plot.upgradeBoard
@@ -457,7 +487,7 @@ H.test("world: each plot has a small, non-colliding Upgrade Plot board just outs
 		H.eq(board.CanCollide, false, "the board never blocks the path")
 		H.ok(board.Size.X <= 8 and board.Size.Y <= 5, "stud-sized, read up close")
 		-- outside the fence (walkway side), beside the 14-stud path, near the gate
-		local side = if i % 2 == 1 then 1 else -1
+		local side = math.sign(plot.center.Z)
 		local entranceZ = plot.center.Z - side * Config.PLOT_SIZE / 2
 		local p = board.CFrame.Position
 		H.ok(math.abs(p.Z) < math.abs(entranceZ), `plot {i} board is outside the plot`)

@@ -223,11 +223,11 @@ local function buildUpgradeGui(board: BasePart)
 	end
 end
 
--- Plots and the shop plaza (spot MAX_PLAYERS + 1) alternate sides of the walkway, column by column.
+-- Plots and the shop plaza (spot Config.PLAZA_SPOT, by the corridor mouth) alternate sides of the walkway,
+-- column by column (Config.spotXZ); plot `index` stands in spot Config.plotSpot(index).
 local function spotCenter(spot: number): Vector3
-	local col = (spot - 1) // 2
-	local side = if spot % 2 == 1 then 1 else -1
-	return Vector3.new(Config.PLOT_FIRST_X - col * Config.PLOT_SPACING_X, GROUND, side * Config.PLOT_OFFSET_Z)
+	local x, z = Config.spotXZ(spot)
+	return Vector3.new(x, GROUND, z)
 end
 
 -- Level ground (Props): every floor piece's top is at GROUND and the pieces tile edge to edge. Slabs under
@@ -284,8 +284,8 @@ local function buildBase(world: Folder)
 	local midX = BASE_MIN_X + len / 2
 	-- The ground slab, sunk under the lawn's tiles; the plots' own floors take its place under them.
 	local plotSquares = {}
-	for spot = 1, Config.MAX_PLAYERS do
-		table.insert(plotSquares, spotRect(spot))
+	for index = 1, Config.MAX_PLAYERS do
+		table.insert(plotSquares, spotRect(Config.plotSpot(index)))
 	end
 	for _, r in Props.subtract({ BASE_MIN_X, Config.CORRIDOR_START_X, -BASE_HALF_Z, BASE_HALF_Z }, plotSquares) do
 		box(base, "Ground", Vector3.new(r[2] - r[1], 4, r[4] - r[3]), CFrame.new((r[1] + r[2]) / 2, GROUND - TILE_T - 2, (r[3] + r[4]) / 2), GRASS)
@@ -310,8 +310,8 @@ local LAWN_HOLES = { Walkway = true, Path = true, EntranceTile = true, Plaza = t
 local function buildLawn(world: Folder)
 	local base = world:FindFirstChild("Base") :: Folder
 	local holes = {}
-	for spot = 1, Config.MAX_PLAYERS do
-		table.insert(holes, spotRect(spot))
+	for index = 1, Config.MAX_PLAYERS do
+		table.insert(holes, spotRect(Config.plotSpot(index)))
 	end
 	for _, d in world:GetDescendants() do
 		if d:IsA("BasePart") and LAWN_HOLES[d.Name] then
@@ -372,7 +372,8 @@ local function ownerSign(model: Model, cf: CFrame, index: number): BasePart
 end
 
 local function buildPlot(world: Folder, index: number, posts: { [string]: boolean })
-	local center = spotCenter(index)
+	local spot = Config.plotSpot(index)
+	local center = spotCenter(spot)
 	local side = math.sign(center.Z)
 	local half = Config.PLOT_SIZE / 2
 	local toWalk = -side -- the entrance faces the walkway at z = 0
@@ -427,8 +428,8 @@ local function buildPlot(world: Folder, index: number, posts: { [string]: boolea
 
 	-- Chunky studded wooden fence all round (posts from the ground up, two rails), with one opening on the
 	-- walkway side and no gate. Neighbouring plots touch and share the fence between them: a plot builds its
-	-- +X side only when no plot stands there (the front column; the plot at +X is spot index - 2), and a
-	-- corner post a neighbour already built is not built twice (`posts` is shared by every plot).
+	-- +X side only when no plot stands there (the front column, or the plaza's spot: the spot at +X is
+	-- spot - 2), and a corner post a neighbour already built is not built twice (`posts` is shared by every plot).
 	local fenceH, spacing = 5.5, Config.PLOT_SIZE / 8
 	local function fence(u0: number, w0: number, u1: number, w1: number)
 		Props.fence(model, at(u0, w0, 0), at(u1, w1, 0), fenceH, spacing, FENCE_POST, FENCE_RAIL, posts)
@@ -437,7 +438,7 @@ local function buildPlot(world: Folder, index: number, posts: { [string]: boolea
 	fence(-PLOT_OPENING / 2, 0, -half, 0)
 	fence(-half, 0, -half, size)
 	fence(-half, size, half, size)
-	if index <= 2 or Config.PLOT_SPACING_X > Config.PLOT_SIZE then
+	if spot <= 2 or spot - 2 == Config.PLAZA_SPOT or Config.PLOT_SPACING_X > Config.PLOT_SIZE then
 		fence(half, size, half, 0)
 	end
 	fence(half, 0, PLOT_OPENING / 2, 0)
@@ -623,7 +624,7 @@ local function buildCorridor(world: Folder)
 end
 
 ----------------------------------------------------------------------------------------------------
--- Shop plaza: walk-up stalls in the spot after the last plot. Each stall's prompt carries an
+-- Shop plaza: walk-up stalls in spot Config.PLAZA_SPOT, by the corridor mouth. Each stall's prompt carries an
 -- "OpensShop" attribute; the HUD opens that menu when the local player triggers it.
 ----------------------------------------------------------------------------------------------------
 -- Every stall has the same cartoon market-stall look (owner's reference): four studded wooden posts, a
@@ -687,7 +688,7 @@ local function stallRing(parent: Instance, name: string, pos: Vector3, color: Co
 end
 
 local function buildShops(world: Folder)
-	local center = spotCenter(Config.MAX_PLAYERS + 1) -- laid out like one more plot
+	local center = spotCenter(Config.PLAZA_SPOT) -- laid out like one more plot, by the corridor mouth
 	local side = math.sign(center.Z)
 	local front = center + Vector3.new(0, 0, -side * Config.PLOT_SIZE / 2)
 	local function at(u: number, w: number, y: number): Vector3

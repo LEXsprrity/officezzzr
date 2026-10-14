@@ -306,9 +306,7 @@ H.test("rewards: the base has the gift's spot (where the free chest stood) and t
 		H.ok(p.X + ex <= Config.CORRIDOR_START_X and p.Z < 0, `{part.Name} in the base (in front of the wall), -Z side`)
 		H.ok(math.abs(p.Z) - ez > Config.CORRIDOR_WIDTH / 2, `{part.Name} clear of the walkway and the corridor mouth`)
 		for i = 1, Config.MAX_PLAYERS + 1 do
-			local col = (i - 1) // 2
-			local cx = Config.PLOT_FIRST_X - col * Config.PLOT_SPACING_X
-			local cz = (if i % 2 == 1 then 1 else -1) * Config.PLOT_OFFSET_Z
+			local cx, cz = Config.spotXZ(i)
 			H.ok(math.abs(p.X - cx) > half + ex or math.abs(p.Z - cz) > half + ez, `{part.Name} clear of spot {i}`)
 		end
 	end
@@ -372,8 +370,7 @@ local function checkGiftBox(world: any, label: string)
 	H.ok(math.abs(p.Z - b.Z) > r + panel.Size.X / 2 + 1 or math.abs(p.X - b.X) > r + 3, `{label}: clear of the board`)
 	local half = Config.PLOT_SIZE / 2
 	for i = 1, Config.MAX_PLAYERS + 1 do
-		local cx = Config.PLOT_FIRST_X - ((i - 1) // 2) * Config.PLOT_SPACING_X
-		local cz = (if i % 2 == 1 then 1 else -1) * Config.PLOT_OFFSET_Z
+		local cx, cz = Config.spotXZ(i)
 		H.ok(math.abs(p.X - cx) > half + r or math.abs(p.Z - cz) > half + r, `clear of spot {i}`)
 	end
 	model:Destroy()
