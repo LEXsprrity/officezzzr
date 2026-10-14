@@ -372,9 +372,11 @@ local function fitClone(slot: string, source: Instance, settings: Instance, cfra
 		end
 		assert(s == s, "its size is not a number")
 
-		-- Pivot: the bottom centre of its bounds, axes turned by Yaw (front = -Z after the turn).
+		-- Pivot: the bottom centre of its bounds, axes turned by Yaw (front = -Z after the turn), or the
+		-- model's own ground point when it has a Pivot attribute (a Vector3 in its space: the bosses' feet).
 		local bottom = Vector3.new(((lo :: Vector3).X + (hi :: Vector3).X) / 2, (lo :: Vector3).Y, ((lo :: Vector3).Z + (hi :: Vector3).Z) / 2)
-		local pivot = turn:Inverse() * CFrame.new(bottom)
+		local anchor = settings:GetAttribute("Pivot") or source:GetAttribute("Pivot")
+		local pivot = if typeof(anchor) == "Vector3" then CFrame.new(anchor) * turn:Inverse() else turn:Inverse() * CFrame.new(bottom)
 
 		local keepMaterials = settings:GetAttribute("KeepMaterials") == true or source:GetAttribute("KeepMaterials") == true
 		if not keepMaterials and not string.match(slot, "^Creature_") and not string.match(slot, "^Guard_") then

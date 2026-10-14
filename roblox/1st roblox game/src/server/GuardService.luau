@@ -1,4 +1,4 @@
--- Builds one sleeping giant per zone and runs them at ~10 Hz: GuardBrain decides, this applies it
+-- Builds one sleeping boss per zone and runs them at ~10 Hz: GuardBrain decides, this applies it
 -- with Humanoid:MoveTo (no pathfinding) and handles catches and bat stuns.
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Config = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("Config"))
@@ -9,7 +9,6 @@ local SeedService = require(script.Parent:WaitForChild("SeedService"))
 local SpeedService = require(script.Parent:WaitForChild("SpeedService"))
 local WorldBuilder = require(script.Parent:WaitForChild("WorldBuilder"))
 local Assets = require(script.Parent:WaitForChild("Assets"))
-local GiantMole = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("GiantMole"))
 
 local GuardService = {}
 
@@ -21,6 +20,7 @@ type Guard = {
 	root: BasePart,
 	status: TextLabel,
 	eyes: { BasePart },
+	rigged: boolean, -- a rigged boss: its clients animate it and float its own Zzz
 	shownState: string,
 }
 
@@ -85,12 +85,15 @@ local function proceduralBody(model: Model, root: BasePart, zone: Config.Zone, h
 	return eyes
 end
 
--- A body from the assets folder (slot Guard_<Name>, e.g. Guard_GiantMole), if there is one: fitted to
--- about the blocky giant's size with its feet on the ground under the invisible root, facing the root's
--- front, then unanchored, massless and welded to the root so it moves with the chase like the blocky
--- body. A rigged model stays in its saved pose (no animation). An invisible "Head" at its top carries
--- the name and state labels. Returns false when there is no usable model.
-local function assetBody(model: Model, root: BasePart, zone: Config.Zone, hip: number): boolean
+-- A body from the assets folder (slot Guard_<Name>, e.g. Guard_GiantTurtle), if there is one, on the
+-- ground under the invisible root, facing the root's front. The zone bosses are the owner's rigged pets
+-- (tools/export_bosses.luau): they keep their exported size and stand on their own ground point (Pivot),
+-- and every client poses their Bones by code (BossRigs + GuardAnimator.client), from the guard's "Rig"
+-- attribute and the body's rest bounds (BodyMin/BodyMax, root-ground space). Any other model is fitted to
+-- about the blocky giant's size and stays in its saved pose. Either way it is unanchored, massless and
+-- welded to the root so it moves with the chase, and an invisible "Head" at its top carries the state
+-- label. Returns whether there was a usable model, and the rig's name.
+local function assetBody(model: Model, root: BasePart, zone: Config.Zone, hip: number): (boolean, string?)
 	local slot = "Guard_" .. string.gsub(zone.guard, "%s", "")
 	if not Assets.get(slot) then
 		return false
@@ -101,8 +104,16 @@ local function assetBody(model: Model, root: BasePart, zone: Config.Zone, hip: n
 	if not body then
 		return false
 	end
-	local _, hi = Assets.bounds(body, ground)
+	local lo, hi = Assets.bounds(body, ground)
 	local top = if hi then hi.Y else 7.75 * S
+	local rig = body:GetAttribute("BossRig")
+	if type(rig) == "string" and lo and hi then
+		model:SetAttribute("Rig", rig)
+		model:SetAttribute("BodyMin", lo)
+		model:SetAttribute("BodyMax", hi)
+	else
+		rig = nil
+	end
 	for _, d in body:GetDescendants() do
 		if d:IsA("BasePart") then
 			d.CanCollide = false
@@ -118,7 +129,7 @@ local function assetBody(model: Model, root: BasePart, zone: Config.Zone, hip: n
 	end
 	local head = weldPart(model, root, "Head", Vector3.new(3, 2.5, 2.5) * S, root.CFrame:ToObjectSpace(ground * CFrame.new(0, top - 1.25 * S, 0)), zone.guardColor)
 	head.Transparency = 1
-	return true
+	return true, rig :: string?
 end
 
 -- A giant facing -X (toward the base), scaled by GUARD_SCALE: the blocky body or a model from the assets
@@ -140,18 +151,14 @@ local function buildGuard(info: WorldBuilder.NestInfo): Guard
 	root.Parent = model
 	model.PrimaryPart = root
 
-	-- The Meadow boss is a fully rigged, animated Giant Mole (GiantMole + GuardAnimator.client) unless a
-	-- Guard_GiantMole model is in the assets folder; the other giants are still the blocky bodies.
-	local rigged = false
+	-- Every zone's boss is a rigged pet from the assets folder (Guard_<Name>); without one (a missing or
+	-- broken file), the blocky giant.
 	local eyes: { BasePart } = {}
-	if not assetBody(model, root, zone, hip) then
-		if zone.id == "Meadow" then
-			GiantMole.build(model, root, root.CFrame * CFrame.new(0, -(hip + root.Size.Y / 2), 0))
-			rigged = true
-		else
-			eyes = proceduralBody(model, root, zone, hip)
-		end
+	local placed, rig = assetBody(model, root, zone, hip)
+	if not placed then
+		eyes = proceduralBody(model, root, zone, hip)
 	end
+	local rigged = rig ~= nil
 
 	local hum = Instance.new("Humanoid")
 	hum.RigType = Enum.HumanoidRigType.R15 -- R15 honours HipHeight on a legless custom rig
@@ -173,9 +180,9 @@ local function buildGuard(info: WorldBuilder.NestInfo): Guard
 	end
 
 	local head = model:FindFirstChild("Head") :: BasePart
-	-- The rigged boss shows its own animated Zzz and expressions, so its status label starts empty. No name
-	-- floats over it (owner playtest), and the status shows only fairly close.
-	local statusY = if rigged then GiantMole.HEAD_LABEL_OFFSETS.status else 3 * S
+	-- A rigged boss floats its own animated Zzz (GuardAnimator.client), so its status label is empty while
+	-- it sleeps. No name floats over it (owner playtest), and the status shows only fairly close.
+	local statusY = 3 * S
 	local status = WorldBuilder.billboard(head, if rigged then "" else "💤", UDim2.fromOffset(120, 60), Vector3.new(0, statusY, 0), 100)
 
 	model.Parent = info.model.Parent
@@ -189,6 +196,7 @@ local function buildGuard(info: WorldBuilder.NestInfo): Guard
 		root = root,
 		status = status,
 		eyes = eyes,
+		rigged = rigged,
 		shownState = "Sleeping",
 	}
 end
@@ -200,7 +208,7 @@ local function showState(g: Guard)
 	end
 	g.shownState = state
 	local text = ({ Sleeping = "💤", Waking = "❗", Chasing = "😡", Returning = "😤", Stunned = "💫" } :: any)[state]
-	g.status.Text = text or ""
+	g.status.Text = if state == "Sleeping" and g.rigged then "" else text or ""
 	for _, eye in g.eyes do
 		local open = state ~= "Sleeping"
 		eye.Size = Vector3.new(0.7, if open then 0.7 else 0.15, 0.2) * Config.GUARD_SCALE
@@ -213,7 +221,7 @@ end
 local function onCaught(g: Guard, player: Player)
 	local s = Sessions.get(player)
 	local root = SpeedService.rootOf(player)
-	g.model:SetAttribute("SwipeAt", workspace:GetServerTimeNow()) -- the rigged boss plays a paw swipe
+	g.model:SetAttribute("CatchAt", workspace:GetServerTimeNow()) -- the rigged boss lunges and bites
 	SeedService.returnCarry(player)
 	if not s or not root then
 		return
