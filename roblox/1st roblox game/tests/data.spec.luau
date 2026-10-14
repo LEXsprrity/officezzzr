@@ -272,4 +272,31 @@ H.test("v7 Speed migration: older saves (v1-v6) are moved once; v7 saves load as
 	H.eq(ProfileStore.deserialize({ v = 7, speed = 5e9 }).speed, 5e9)
 end)
 
+
+-- v8: each plant keeps the flower drawn when it was planted
+H.test("v8 plant flower: saved and loaded; v7 plants load without one (the id pick) and keep everything else", function()
+	H.eq(ProfileStore.VERSION, 8)
+	local p = ProfileStore.defaultProfile()
+	table.insert(p.plants, { slot = 1, zone = 6, rarity = 1, plantedAt = 100, x = 1, z = 2, variant = "NebulaRose" })
+	table.insert(p.plants, { slot = 2, zone = 2, rarity = 2, mutation = "Gold", plantedAt = 100, x = 3, z = 4 })
+	local back = ProfileStore.deserialize(serde.decode("json", serde.encode("json", ProfileStore.serialize(p))))
+	H.eq(back.plants[1].variant, "NebulaRose", "kept")
+	H.eq(back.plants[2].variant, nil, "none stays none")
+	H.eq(back.plants[2].mutation, "Gold")
+	-- a v7 save: its plants have no flower; they keep their spot, Speed is not migrated again
+	local v7 = { v = 7, speed = 5e9, plants = { { s = 3, z = 7, r = 4, t = 50, px = 2, pz = -3 } } }
+	local old = ProfileStore.deserialize(serde.decode("json", serde.encode("json", v7)))
+	H.eq(#old.plants, 1)
+	H.eq(old.plants[1].variant, nil, "a v7 plant: the id pick (CreatureModels.pickOf)")
+	H.eq(old.plants[1].x, 2)
+	H.eq(old.plants[1].z, -3)
+	H.eq(old.speed, 5e9, "v7 Speed is already on the new scale")
+	H.eq(ProfileStore.serialize(old).v, 8, "saved back as v8")
+	-- junk in the field is dropped, never trusted as a name
+	for _, bad in { 5, "", string.rep("x", 41), "Bad<Name>", { 1 } } do
+		local data = { v = 8, plants = { { s = 1, z = 1, r = 1, t = 1, px = 0, pz = 0, vr = bad } } }
+		H.eq(ProfileStore.deserialize(data).plants[1].variant, nil, `bad variant {tostring(bad)}`)
+	end
+end)
+
 return nil

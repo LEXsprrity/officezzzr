@@ -1,5 +1,5 @@
 -- Per-zone art for the corridor: themed floor and walls, a few props and particle ambience. WorldBuilder
--- calls ZoneThemes.build for each zone and uses ZoneThemes.theme for the nest colours. There are no gates,
+-- calls ZoneThemes.build for each zone; each zone keeps its nest's corner clear (nestKeepOut). There are no gates,
 -- arches or zone signs (owner playtest): one zone flows into the next by its floor and wall colours.
 --
 -- Art direction (owner playtest, docs/references): a game for kids, so clean and cartoony, never realistic.
@@ -52,7 +52,6 @@ export type Theme = {
 	floorLight: Color3, -- the checker over the floor (Config zone .floor is the floor itself)
 	wallLight: Color3, -- the checker on the walls (Config zone .wall)
 	cap: Color3, -- the strip along the top of both walls
-	nestStone: Color3,
 	build: (ctx: Ctx) -> (),
 }
 
@@ -281,8 +280,8 @@ local function buildMeadow(c: Ctx)
 	for _, spot in { { 0.4, 1 }, { 0.78, -1 }, { 0.82, 1 } } do
 		Props.bush(F, Vector3.new(at(c, spot[1]), GROUND, spot[2] * 84), rng:NextNumber(5, 7), rgb(80, 196, 64))
 	end
-	pond(F, Vector3.new(at(c, 0.45), GROUND, -68), 26, 3)
-	for _, spot in { { 0.55, 1 } } do -- a little flower bed across from the pond
+	pond(F, Vector3.new(at(c, 0.2), GROUND, -68), 26, 3) -- (near the entrance: the nest has the left wall at the far end)
+	for _, spot in { { 0.55, 1 } } do -- a little flower bed on the other side
 		for j = 1, 4 do
 			local p = Vector3.new(at(c, spot[1]) + rng:NextNumber(-8, 8), GROUND, spot[2] * rng:NextNumber(66, 80))
 			Props.flower(F, p, BRIGHT[rng:NextInteger(1, #BRIGHT)], rng:NextNumber(1.6, 2.6), "Meadow_Flower")
@@ -375,7 +374,7 @@ local function buildDesert(c: Ctx)
 	swap("Desert_Skull", F, Assets.facing(skull, Vector3.xAxis), function(into) -- the skull looks along +X
 		skeleton(into, skull, rng)
 	end)
-	local oasis = Vector3.new(at(c, 0.62), GROUND, -66)
+	local oasis = Vector3.new(at(c, 0.55), GROUND, -66) -- (its reeds clear of the nest)
 	pond(F, oasis, 24, 0)
 	for _, dz in { -4, 4 } do -- a few loose bones near the skeleton
 		local p = skull + Vector3.new(rng:NextNumber(14, 24), 0.4, dz)
@@ -701,8 +700,8 @@ local function buildSpace(c: Ctx)
 	beam.Transparency = 0.85
 	beam.CastShadow = false
 
-	ambience(c, 450, 22, 30, { -- twinkles
-		color = gradient(rgb(255, 255, 255), SPACE_CYAN), rate = 10, lifetime = NumberRange.new(2, 4),
+	ambience(c, 200, 22, 30, { -- twinkles (two slabs at half the rate: the nest no longer sparkles)
+		color = gradient(rgb(255, 255, 255), SPACE_CYAN), rate = 5, lifetime = NumberRange.new(2, 4),
 		speed = NumberRange.new(0, 0.4), size = NumberSequence.new({ NumberSequenceKeypoint.new(0, 0.1), NumberSequenceKeypoint.new(0.5, 0.5), NumberSequenceKeypoint.new(1, 0.1) }),
 		spread = Vector2.new(180, 180), lightEmission = 1,
 	})
@@ -843,37 +842,30 @@ end
 local THEMES: { [string]: Theme } = {
 	Meadow = {
 		floorLight = rgb(124, 212, 64), wallLight = rgb(212, 144, 94), cap = rgb(90, 214, 64),
-		nestStone = rgb(190, 190, 205),
 		build = buildMeadow,
 	},
 	Desert = {
 		floorLight = rgb(248, 224, 164), wallLight = rgb(238, 196, 112), cap = rgb(250, 222, 150),
-		nestStone = rgb(226, 160, 96),
 		build = buildDesert,
 	},
 	Jungle = {
 		floorLight = rgb(72, 184, 82), wallLight = rgb(86, 156, 84), cap = rgb(96, 206, 80),
-		nestStone = rgb(120, 160, 110),
 		build = buildJungle,
 	},
 	Lava = {
 		floorLight = rgb(106, 68, 76), wallLight = rgb(88, 58, 66), cap = rgb(255, 120, 40),
-		nestStone = rgb(70, 46, 54),
 		build = buildLava,
 	},
 	Snow = {
 		floorLight = rgb(214, 232, 252), wallLight = rgb(180, 222, 252), cap = SNOW,
-		nestStone = ICE,
 		build = buildSnow,
 	},
 	Space = {
 		floorLight = rgb(78, 60, 156), wallLight = rgb(60, 48, 124), cap = rgb(36, 28, 84),
-		nestStone = rgb(160, 120, 255),
 		build = buildSpace,
 	},
 	Spirit = {
 		floorLight = rgb(128, 214, 110), wallLight = rgb(156, 156, 224), cap = ROOF,
-		nestStone = rgb(170, 170, 214),
 		build = buildSpirit,
 	},
 }
@@ -882,11 +874,43 @@ function ZoneThemes.theme(k: number): Theme
 	return THEMES[Config.ZONES[k].id]
 end
 
+-- The nest's corner (Config.nestCenter), as world bounds x0, x1, z0, z1: the boss sleeping against the left
+-- wall (GUARD_HOME_OFFSET along, its body reaching ~24 studs either way), its pods at its right and the
+-- Speed plank just before them. No prop stands in it (pruneNest), so nothing pokes through the boss and
+-- nothing lies under the pods; the floor, the walls and what runs along them (caps, vines, icicles, the
+-- Lava rivers' flat bands, the sky's planets) stay.
+function ZoneThemes.nestKeepOut(k: number): (number, number, number, number)
+	local c = Config.nestCenter(k)
+	return c.X - 28, c.X + Config.GUARD_HOME_OFFSET + 24, -HALF_W, c.Z + 36
+end
+
+local KEEP = {
+	Floor = true, FloorTile = true, ZoneEdge = true, Wall = true, WallTile = true, WallCap = true,
+	Roof = true, RoofTile = true, RoofTrim = true, Ambience = true, Icicle = true, Vine = true, VineLeaf = true,
+	RiverBank = true, LavaRiver = true, Waterfall = true, WaterfallCore = true, WaterfallMist = true,
+}
+
+-- Removes the zone's props that reach into its nest's corner. It runs after the theme has built, so no
+-- random draw moves and the rest of the zone keeps its layout.
+local function pruneNest(c: Ctx)
+	local x0, x1, z0, z1 = ZoneThemes.nestKeepOut(c.k)
+	for _, child in c.folder:GetChildren() do
+		if KEEP[child.Name] or not (child:IsA("BasePart") or child:IsA("Model")) then
+			continue
+		end
+		local lo, hi = Assets.bounds(child)
+		if lo and hi and lo.Y < GROUND + H and lo.X < x1 and hi.X > x0 and lo.Z < z1 and hi.Z > z0 then
+			child:Destroy()
+		end
+	end
+end
+
 function ZoneThemes.build(folder: Folder, k: number, rng: Random)
 	local x0 = Config.zoneStartX(k)
 	local len = Config.ZONES[k].length
 	local ctx: Ctx = { folder = folder, k = k, x0 = x0, x1 = x0 + len, len = len, nestX = Config.nestX(k), rng = rng }
 	ZoneThemes.theme(k).build(ctx)
+	pruneNest(ctx)
 end
 
 return ZoneThemes

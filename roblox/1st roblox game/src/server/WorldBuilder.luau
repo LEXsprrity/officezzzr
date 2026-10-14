@@ -524,7 +524,7 @@ WorldBuilder.PLANK_SIZE = Vector3.new(6, 3.5, 1) -- the board
 WorldBuilder.PLANK_POST_SIZE = Vector3.new(1.6, 1.8, 1.4) -- a short thick post: the board's bottom at 1.8
 local PLANK_PPS = 50 -- SurfaceGui pixels per stud
 local PLANK_FONT = Font.new("rbxasset://fonts/families/Montserrat.json", Enum.FontWeight.Heavy, Enum.FontStyle.Italic)
-WorldBuilder.SPEED_SIGN_OFFSET = Vector3.new(-20, 0, 14) -- ground point under the post, from the nest centre (toward the base, run side)
+WorldBuilder.SPEED_SIGN_OFFSET = Vector3.new(-24, 0, 20) -- ground point under the post, from the nest centre: just before the pods, toward the base
 
 function WorldBuilder.speedSignText(k: number): (string, string)
 	return Format.speedPlank(Config.ZONES[k].req) -- Client/SpeedPlanks rewrites it from the same function
@@ -571,41 +571,24 @@ local function buildSpeedSign(folder: Instance, k: number)
 	end
 end
 
--- The zone's nest, on the LEFT side of the corridor (Config.nestCenter; owner request: not in the middle):
--- where the boss sleeps, its seed pods scattered on the ground beside it on the base side. No mother plant
--- (owner request). Its gameplay piece is NestCore, an invisible part on the ground at the centre: it holds
--- the tagged Attachments for the nest centre, the pods and the guard's home. The look (a patch in the
--- zone's seed colour with a few pebbles round it) is the Nest_<zone> slot.
-WorldBuilder.NEST_PATCH = { offset = Vector3.new(-8, 0, 0), diameter = 26 } -- under the pods, from the centre
+-- The zone's nest, ALL the way on the LEFT side of the corridor (Config.nestCenter; owner request): the boss
+-- sleeps against the left wall and its seed pods stand loose on the floor at its right, toward the middle
+-- (Config.podOffset). No mother plant, and nothing under the pods: no patch, ring or pebbles (owner
+-- requests). The wall props there make room (ZoneThemes.nestKeepOut). Its one piece is NestCore, an
+-- invisible part on the ground at the centre: it holds the tagged Attachments for the nest centre, the
+-- pods and the guard's home.
 local function buildNest(folder: Folder, k: number)
 	local zone = Config.ZONES[k]
-	local theme = ZoneThemes.theme(k)
 	local center = Config.nestCenter(k)
 	local model = tag(Instance.new("Model"), "Nest", "ZoneIndex", k)
 	model.Name = "Nest_" .. zone.id
 	model.ModelStreamingMode = Enum.ModelStreamingMode.Atomic
 	model.Parent = folder
 
-	-- Non-colliding so neither runners nor the giant snag on it.
-	local patch = center + WorldBuilder.NEST_PATCH.offset
-	Assets.swap("Nest_" .. zone.id, model, Assets.facing(patch, -Vector3.xAxis), function(into)
-		local d = WorldBuilder.NEST_PATCH.diameter
-		local ring = studs(Props.disc(into, "NestRing", d, patch, zone.seedColor, Enum.Material.Plastic, 0.35)) -- (0.35: prouder than the floor decals, no z-fighting)
-		Props.emitOn(ring, { -- soft sparkles rising off it, in the seeds' colour
-			color = zone.seedColor, rate = 4, lifetime = NumberRange.new(1.5, 2.5), speed = NumberRange.new(1.5, 3),
-			size = NumberSequence.new(0.5), spread = Vector2.new(20, 20), lightEmission = 1,
-			direction = Enum.NormalId.Right, -- (a disc lies on its side: its +X is up)
-		})
-		for i = 1, 5 do -- a few pebbles round its edge, not evenly spaced
-			local a = i / 5 * math.pi * 2 + (i % 2) * 0.5
-			Props.rock(into, patch + Vector3.new(math.cos(a), 0, math.sin(a)) * (d / 2 + 0.5), Vector3.new(2.4, 1.6, 2), theme.nestStone, Enum.Material.SmoothPlastic, a, false)
-		end
-	end, Vector3.new(1, 2, 1))
-
 	local core = tag(hidden(model, "NestCore", Vector3.new(2, 2, 2), CFrame.new(center + Vector3.new(0, 1, 0))), "NestCore", "ZoneIndex", k)
 	model.PrimaryPart = core
 	marker(core, "Center", CFrame.new(center), "NestCenter", "ZoneIndex", k)
-	-- Pods scattered on the base side of the sleeping boss, so thieves grab and run home with it behind them.
+	-- Pods at the sleeping boss's right, a head start ahead of it, so thieves grab and run home with it behind them.
 	for i = 1, Config.PODS_PER_NEST do
 		marker(core, "Pod" .. i, CFrame.new(center + Config.podOffset(k, i)), "Pod", "ZoneIndex", k):SetAttribute("PodIndex", i)
 	end

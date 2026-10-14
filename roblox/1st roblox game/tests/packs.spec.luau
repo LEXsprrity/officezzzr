@@ -360,7 +360,7 @@ H.test("grant: a pack can give Celestial, and the bag/save keep it", function()
 		return 0 -- lowest roll: Common + the first mutation, Celestial
 	end, yes)
 	H.eq(grant.roll.mutation, "Celestial")
-	H.eq(grant.roll.name, "Celestial Common Lotus Wyrm")
+	H.eq(grant.roll.name, "Celestial Common Seed", "the reveal never names the flower (a surprise until planted)")
 	local key = SeedPacks.bagKey(SPIRIT, 1, "Celestial")
 	H.eq(p.seedBag[key], 1)
 	H.eq(select(3, SeedPacks.parseBagKey(key)), "Celestial", "a Celestial bag key is valid (plantable)")

@@ -129,9 +129,11 @@ Config.ZONES = {
 Config.NEST_FRACTION = 0.85 -- nest sits this far into its zone...
 Config.GUARD_HOME_OFFSET = 24 -- the guard sleeps this many studs past the nest's centre (+X)
 Config.NEST_END_CLEARANCE = 12 -- ...but its guard sleeps at least this far before the zone's end (the short Meadow)
--- The nest is on the LEFT of a runner coming from the base (-Z; owner request: not in the middle of the
--- corridor), between the run line and the props along the wall (|z| >= ~50).
-Config.NEST_Z = -32
+-- The nest is ALL the way on the LEFT of a runner coming from the base (-Z; owner request): the boss sleeps
+-- with its flank against the left wall. The widest boss reaches ~14.2 studs to each side of its root and
+-- GuardAnimator keeps bodies a stud inside the wall's inner face (96), so its root sits at 80. The wall
+-- props there make room for it (ZoneThemes.nestKeepOut).
+Config.NEST_Z = -80
 
 function Config.zoneStartX(k: number): number
 	local x = Config.CORRIDOR_START_X
@@ -152,14 +154,17 @@ function Config.nestCenter(k: number): Vector3
 	return Vector3.new(Config.nestX(k), Config.GROUND_Y, Config.NEST_Z)
 end
 
--- Where seed pod `i` of zone `k` floats, from the nest's centre: a loose, natural scatter (not a ring or a
--- grid) on the base side of the sleeping boss, a little different in every zone, always 2.5 studs up.
-local POD_SCATTER = { { -4, 5 }, { -11, -3 }, { -5, -8 }, { -13, 8 }, { -8, 1 }, { -2, -2 } }
+-- Where seed pod `i` of zone `k` sits, from the nest's centre: a loose, natural scatter (not a ring or a
+-- grid) on the sleeping boss's RIGHT, between it and the middle of the corridor (+Z, clear of its flank),
+-- a little different in every zone, each resting on the floor. They stay about GUARD_HOME_OFFSET ahead of
+-- its root along the run home: the guard chases at the runner's speed, so that head start along X is what
+-- holds (a sideways gap closes to about half during the chase; tests/guard.spec).
+local POD_SCATTER = { { -4, 17 }, { -11, 23 }, { -5, 28 }, { -13, 15 }, { -8, 21 }, { -2, 25 } }
 function Config.podOffset(k: number, i: number): Vector3
 	local base = POD_SCATTER[(i - 1) % #POD_SCATTER + 1]
 	local jx = ((k * 13 + i * 7) % 5 - 2) * 0.6
 	local jz = ((k * 11 + i * 5) % 7 - 3) * 0.7
-	return Vector3.new(base[1] + jx, 2.5, base[2] + jz)
+	return Vector3.new(base[1] + jx, 1.5, base[2] + jz) -- (the pod, a 3-stud ball, rests on the floor)
 end
 
 Config.END_X = Config.zoneStartX(#Config.ZONES + 1) -- far end of the corridor: the Spirit Garden's back wall (no finish line)
@@ -265,10 +270,11 @@ function Config.announcesLegendary(zone: number, rarity: number, fromPack: boole
 	return rarity == Config.LEGENDARY and (fromPack or zone >= Config.ANNOUNCE_LEGENDARY_FROM_ZONE)
 end
 
--- "Alex got a LEGENDARY Gold Starpetal!"
-function Config.legendaryAnnouncement(playerName: string, zone: number, mutation: string?): string
+-- "Alex got a LEGENDARY Gold Nebula Rose!" once it is planted (`plantName`: its flower, after its mutation),
+-- "Alex got a LEGENDARY Gold Seed!" from a pack (the flower is a surprise until it is planted).
+function Config.legendaryAnnouncement(playerName: string, zone: number, mutation: string?, plantName: string?): string
 	local prefix = if mutation then mutation .. " " else ""
-	return `🌟 {playerName} got a LEGENDARY {prefix}{Config.ZONES[zone].seed}!`
+	return `🌟 {playerName} got a LEGENDARY {plantName or prefix .. "Seed"}!`
 end
 
 -- `exclusive` mutations never roll from pods (chance 0); only the premium seed packs can give them

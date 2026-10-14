@@ -124,8 +124,10 @@ H.test("announce: only a Legendary from Deep Space / Spirit Garden, or from a pa
 			H.eq(fromPack, r == L, `pack zone {k} rarity {r}`)
 		end
 	end
-	H.eq(Config.legendaryAnnouncement("Alex", 6, nil), "🌟 Alex got a LEGENDARY Starpetal!")
-	H.eq(Config.legendaryAnnouncement("Alex", 7, "Celestial"), "🌟 Alex got a LEGENDARY Celestial Lotus Wyrm!")
+	-- a pack seed is still a surprise; a planted one goes by its flower
+	H.eq(Config.legendaryAnnouncement("Alex", 6, nil), "🌟 Alex got a LEGENDARY Seed!")
+	H.eq(Config.legendaryAnnouncement("Alex", 7, "Celestial"), "🌟 Alex got a LEGENDARY Celestial Seed!")
+	H.eq(Config.legendaryAnnouncement("Alex", 7, "Celestial", "Celestial Nebula Rose"), "🌟 Alex got a LEGENDARY Celestial Nebula Rose!")
 end)
 
 return nil
