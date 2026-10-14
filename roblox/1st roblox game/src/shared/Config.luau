@@ -342,13 +342,16 @@ Config.SLOTS_START = 5 -- plant slots at plot level 1
 Config.SLOTS_MAX = 30 -- plant slots at the last plot level (the ExtraSlots gamepass adds on top)
 Config.ECONOMY_SLOTS = 10 -- the plot size income is balanced for; independent of SLOTS_START
 Config.PAYBACK_SECONDS = 300
-Config.PAYOUT_INTERVAL = 3
+-- Plant income scale on top of ZONE_CASH: x1.25 since day/night went from x1.5 / x1 to x1 / x0.8, so a
+-- plant peaks at 1.25x its old base (was 1.5x) and the zones still come at the agreed pace.
+Config.INCOME_SCALE = 1.25
+Config.PAYOUT_INTERVAL = 1 -- seconds; each pass pays one second of income, so a plant's popup is its $/s
 Config.ZONE_CASH = { 0, 10e3, 500e3, 5e6, 50e6, 500e6, 5e9 } -- per zone, in Config.ZONES order
 
 -- Common, sprout-weight income per plant for zone k ($/s)
 function Config.seedIncome(k: number): number
 	local nextCash = Config.ZONE_CASH[k + 1] or Config.ZONE_CASH[k] * 10
-	return nextCash / (Config.ECONOMY_SLOTS * Config.PAYBACK_SECONDS)
+	return nextCash / (Config.ECONOMY_SLOTS * Config.PAYBACK_SECONDS) * Config.INCOME_SCALE
 end
 
 -- Growth (P2): closed form from plantedAt, never simulated per tick.
@@ -804,25 +807,30 @@ function Config.dayPhase(now: number): (boolean, number)
 	return true, cycle - t
 end
 
--- Day and night plants: each zone's plants (Zone.active) earn ACTIVE_TIME_MULT during their phase, 1x
--- otherwise. plantIncome stays the plain base; PlotService applies this on payout.
-Config.ACTIVE_TIME_MULT = 1.5
+-- Day and night plants: each zone's plants (Zone.active) earn ACTIVE_TIME_MULT (x1) during their phase and
+-- OFF_TIME_MULT (x0.8) during the other one. plantIncome stays the plain base; PlotService applies this on
+-- payout.
+Config.ACTIVE_TIME_MULT = 1
+Config.OFF_TIME_MULT = 0.8
 Config.ACTIVE_ICONS = { day = "☀️", night = "🌙" } :: { [string]: string }
+-- The muted colour of the "Night x0.8" note while a plant is out of its phase (billboard, Plants panel, Sell).
+Config.OFF_TIME_COLOR = Color3.fromRGB(170, 175, 195)
 
 function Config.isActiveTime(k: number, isNight: boolean): boolean
 	return (Config.ZONES[k].active == "night") == isNight
 end
 
--- "Day x1.5" / "Night x1.5" while zone `k`'s plants earn their bonus, else nil (plant labels: words, no emoji).
+-- "Night x0.8" / "Day x0.8" while zone `k`'s plants are out of their phase (earning less), else nil: at x1
+-- nothing extra is shown (plant labels: words, no emoji).
 function Config.bonusLabel(k: number, isNight: boolean): string?
-	if not Config.isActiveTime(k, isNight) then
+	if Config.isActiveTime(k, isNight) then
 		return nil
 	end
-	return string.format("%s x%g", if isNight then "Night" else "Day", Config.ACTIVE_TIME_MULT)
+	return string.format("%s x%g", if isNight then "Night" else "Day", Config.OFF_TIME_MULT)
 end
 
 function Config.timeMult(k: number, isNight: boolean): number
-	return if Config.isActiveTime(k, isNight) then Config.ACTIVE_TIME_MULT else 1
+	return if Config.isActiveTime(k, isNight) then Config.ACTIVE_TIME_MULT else Config.OFF_TIME_MULT
 end
 
 -- Time-weighted mean of timeMult over a full day/night cycle (offline income).

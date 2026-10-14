@@ -60,12 +60,12 @@ H.test("zones: zoneAtX maps corridor positions to zones, base to nil", function(
 	H.eq(Config.zoneAtX(Config.END_X - 1), #Config.ZONES)
 end)
 
-H.test("economy: a full plot of zone-k Commons earns zone k+1's ZONE_CASH in dollars in PAYBACK_SECONDS", function()
+H.test("economy: a full plot of zone-k Commons earns zone k+1's ZONE_CASH (x INCOME_SCALE) in dollars in PAYBACK_SECONDS", function()
 	H.eq(Config.ECONOMY_SLOTS, 10, "income is balanced for 10 plants, whatever SLOTS_START is")
 	H.eq(#Config.ZONE_CASH, #Config.ZONES, "one money anchor per zone")
 	for k = 1, #Config.ZONES - 1 do
 		local perSecond = Config.seedIncome(k) * Config.ECONOMY_SLOTS
-		H.near(perSecond * Config.PAYBACK_SECONDS, Config.ZONE_CASH[k + 1], 1e-3, Config.ZONES[k].id)
+		H.near(perSecond * Config.PAYBACK_SECONDS, Config.ZONE_CASH[k + 1] * Config.INCOME_SCALE, 1e-3, Config.ZONES[k].id)
 		H.ok(Config.ZONE_CASH[k + 1] > Config.ZONE_CASH[k], "deeper zones pay more")
 	end
 	-- the money anchors are the pre-v7 recommended Speeds: shrinking the Speed scale didn't move the money one
@@ -73,7 +73,8 @@ H.test("economy: a full plot of zone-k Commons earns zone k+1's ZONE_CASH in dol
 	for k, cash in Config.ZONE_CASH do
 		H.eq(cash, ProfileStore.LEGACY_ZONE_REQ[k], Config.ZONES[k].id)
 	end
-	H.near(Config.seedIncome(1), 10e3 / 3000, 1e-9, "the money scale is unchanged by the rework")
+	H.near(Config.seedIncome(1), 10e3 / 3000 * Config.INCOME_SCALE, 1e-9, "the money scale is unchanged by the rework")
+	H.eq(Config.INCOME_SCALE, 1.25, "x1.25 makes up for the x1 / x0.8 day-night rates (were x1.5 / x1)")
 end)
 
 H.test("growth: weight grows from sprout to GROW_MAX_FACTOR x and then stops (closed form)", function()
@@ -173,29 +174,47 @@ H.test("day/night plants: every zone is a day or a night plant (Meadow/Desert/La
 	end
 end)
 
-H.test("day/night plants: timeMult is 1.5 during the plant's phase and 1 otherwise", function()
-	H.eq(Config.ACTIVE_TIME_MULT, 1.5)
+H.test("day/night plants: timeMult is 1 during the plant's phase and 0.8 during the other one", function()
+	H.eq(Config.ACTIVE_TIME_MULT, 1)
+	H.eq(Config.OFF_TIME_MULT, 0.8)
 	for k, zone in Config.ZONES do
 		local day, night = Config.timeMult(k, false), Config.timeMult(k, true)
 		if zone.active == "day" then
-			H.eq(day, 1.5, zone.id .. " by day")
-			H.eq(night, 1, zone.id .. " at night")
-		else
 			H.eq(day, 1, zone.id .. " by day")
-			H.eq(night, 1.5, zone.id .. " at night")
+			H.eq(night, 0.8, zone.id .. " at night")
+		else
+			H.eq(day, 0.8, zone.id .. " by day")
+			H.eq(night, 1, zone.id .. " at night")
 		end
 	end
 	-- driven by the shared clock
 	local meadow, jungle = 1, 3
-	H.eq(Config.timeMult(meadow, (Config.dayPhase(10))), 1.5)
-	H.eq(Config.timeMult(jungle, (Config.dayPhase(10))), 1)
-	H.eq(Config.timeMult(jungle, (Config.dayPhase(Config.DAY_SECONDS + 10))), 1.5)
+	H.eq(Config.timeMult(meadow, (Config.dayPhase(10))), 1)
+	H.eq(Config.timeMult(meadow, (Config.dayPhase(Config.DAY_SECONDS + 10))), 0.8)
+	H.eq(Config.timeMult(jungle, (Config.dayPhase(10))), 0.8)
+	H.eq(Config.timeMult(jungle, (Config.dayPhase(Config.DAY_SECONDS + 10))), 1)
+end)
+
+H.test("day/night plants: the label shows only the x0.8 penalty (\"Night x0.8\"), nothing at x1", function()
+	local meadow, jungle = 1, 3
+	H.eq(Config.bonusLabel(meadow, false), nil, "a day plant by day: x1, nothing extra")
+	H.eq(Config.bonusLabel(meadow, true), "Night x0.8")
+	H.eq(Config.bonusLabel(jungle, false), "Day x0.8")
+	H.eq(Config.bonusLabel(jungle, true), nil, "a night plant at night: x1, nothing extra")
+	H.ok(typeof(Config.OFF_TIME_COLOR) == "Color3", "a muted colour for the penalty")
+	local fs = require("@lune/fs")
+	local plot = fs.readFile("src/server/PlotService.luau")
+	local hud = fs.readFile("src/client/HUD.client.luau")
+	H.ok(string.find(plot, "if bonus then Config.OFF_TIME_COLOR else INCOME_GREEN", 1, true) ~= nil, "billboard: muted while penalised")
+	H.ok(string.find(hud, "if bonus then Config.OFF_TIME_COLOR else MONEY_GREEN", 1, true) ~= nil, "Sell cards: muted while penalised")
+	H.ok(string.find(hud, "MUTED_INK:ToHex()", 1, true) ~= nil, "Plants panel: muted while penalised")
+	H.ok(not string.find(plot, "INCOME_GOLD", 1, true) and not string.find(hud, "GOLD_INK", 1, true), "no gold bonus colour left")
 end)
 
 H.test("day/night plants: offline income uses the time-weighted average multiplier", function()
 	local D, N = Config.DAY_SECONDS, Config.NIGHT_SECONDS
 	for k, zone in Config.ZONES do
-		local want = if zone.active == "day" then (D * 1.5 + N) / (D + N) else (D + N * 1.5) / (D + N)
+		local want = if zone.active == "day" then (D + N * 0.8) / (D + N) else (D * 0.8 + N) / (D + N)
 		H.near(Config.averageTimeMult(k), want, 1e-9, zone.id)
 		-- matches what the payout loop pays over one full cycle, second by second
 		local sum = 0
@@ -204,8 +223,78 @@ H.test("day/night plants: offline income uses the time-weighted average multipli
 		end
 		H.near(Config.averageTimeMult(k), sum / (D + N), 1e-9, zone.id .. " integrated")
 	end
-	H.near(Config.averageTimeMult(1), 4 / 3, 1e-9, "day plants: 300 s x1.5 + 150 s x1")
-	H.near(Config.averageTimeMult(3), 7 / 6, 1e-9, "night plants: 300 s x1 + 150 s x1.5")
+	H.near(Config.averageTimeMult(1), 14 / 15, 1e-9, "day plants: 300 s x1 + 150 s x0.8")
+	H.near(Config.averageTimeMult(3), 13 / 15, 1e-9, "night plants: 300 s x0.8 + 150 s x1")
+end)
+
+----------------------------------------------------------------------------------------------------
+-- Payouts every second: each plant's "+$X" popup is the $/s on its billboard
+----------------------------------------------------------------------------------------------------
+H.test("payout: every second, so a plant's income popup equals its billboard's $/s", function()
+	H.eq(Config.PAYOUT_INTERVAL, 1)
+	local fs = require("@lune/fs")
+	local plot = fs.readFile("src/server/PlotService.luau")
+	local a = string.find(plot, "local function payout(", 1, true)
+	local b = string.find(plot, "function PlotService.start()", 1, true)
+	local body = a and b and string.sub(plot, a, b) or ""
+	H.ok(body ~= "", "the payout loop")
+	-- the popup and the label are fed the same number: earned = perSecond * PAYOUT_INTERVAL (= perSecond)
+	H.ok(string.find(body, "local earned = perSecond * Config.PAYOUT_INTERVAL", 1, true) ~= nil, "earned per pass")
+	H.ok(string.find(body, "setIncomeLabel(incomeLabel, plant.zone, perSecond, isNight)", 1, true) ~= nil, "label shows perSecond")
+	H.ok(string.find(body, "Net.IncomePopup:FireClient(s.player, earned,", 1, true) ~= nil, "popup shows earned")
+	-- both go through Format.money: same text for every amount (fractional dollars round the same way)
+	for _, perSecond in { 0.4, 3.333, 5.33, 15.99, 109.5, 1234.5, 98765.4, 2.5e6 } do
+		H.eq(Format.money(perSecond * Config.PAYOUT_INTERVAL), Format.money(perSecond), `{perSecond}/s`)
+	end
+	-- money per unit time is unchanged: a minute of payouts is a minute of income
+	local paid = 0
+	for _ = 1, 60 / Config.PAYOUT_INTERVAL do
+		paid += 5.33 * Config.PAYOUT_INTERVAL
+	end
+	H.near(paid, 5.33 * 60, 1e-9)
+	-- popups stay readable: only plants near the camera pop, and at most MAX_POPUPS live at once
+	local fx = fs.readFile("src/client/Effects.client.luau")
+	H.ok(string.find(fx, "local POPUP_RANGE = 70", 1, true) ~= nil and string.find(fx, "Magnitude > POPUP_RANGE then", 1, true) ~= nil, "near the camera only")
+	H.ok(string.find(fx, "local MAX_POPUPS = 40", 1, true) ~= nil, "a cap")
+	-- the Plants panel push (the bulkiest) keeps its old 3 s cadence
+	H.ok(string.find(body, "if payoutPass % PLANTS_PUSH_EVERY == 0 then", 1, true) ~= nil, "Plants view every 3 passes")
+end)
+
+----------------------------------------------------------------------------------------------------
+-- Plant info only on hover / tap, and nothing flat on the ground under a plant
+----------------------------------------------------------------------------------------------------
+H.test("plant info: the billboard is built hidden and PlantHover.client shows it on hover or a tap", function()
+	local fs = require("@lune/fs")
+	local plot = fs.readFile("src/server/PlotService.luau")
+	local a = string.find(plot, "local function buildPlantModel", 1, true)
+	local b = string.find(plot, "local function removePlantModel", 1, true)
+	local build = a and b and string.sub(plot, a, b) or ""
+	H.ok(string.find(build, "gui.Name = \"Info\"\r?\n%s*gui.Enabled = false") ~= nil, "Info billboard disabled by default")
+	H.ok(fs.isFile("src/client/PlantHover.client.luau"), "the hover script")
+	local hover = fs.readFile("src/client/PlantHover.client.luau")
+	for _, needle in {
+		"inst.Name ~= \"Info\"",
+		"string.match(model.Name, \"^Plant_%d+$\")",
+		"UserInputService:GetMouseLocation()",
+		"camera:ViewportPointToRay(mouse.X, mouse.Y)",
+		"UserInputService.TouchTapInWorld:Connect(",
+		"local TAP_SECONDS = 3",
+		"local on = gui == hovered or gui == tapped",
+		"gui.Enabled = on",
+		"model:GetBoundingBox()",
+	} do
+		H.ok(string.find(hover, needle, 1, true) ~= nil, needle)
+	end
+	-- the treadmill's "+X/s" and other world texts are untouched
+	H.ok(not string.find(hover, "Treadmill", 1, true), "only plant billboards")
+end)
+
+H.test("plants: no dug-soil disc or aura ring under a plant", function()
+	local fs = require("@lune/fs")
+	local plot = fs.readFile("src/server/PlotService.luau")
+	H.ok(not string.find(plot, "addSoil", 1, true) and not string.find(plot, "Soil_", 1, true) and not string.find(plot, "SOIL_DUG", 1, true), "no soil disc")
+	local creatures = fs.readFile("src/server/CreatureModels.luau")
+	H.ok(not string.find(creatures, "\"AuraRing\"", 1, true), "no aura ring")
 end)
 
 return nil
