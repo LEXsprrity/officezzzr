@@ -77,11 +77,12 @@ Treadmill.RUN_ANIM_SPEED = 2.75
 -- What standing on it pays, and the text over it
 ----------------------------------------------------------------------------------------------------
 -- Speed per second standing on your own treadmill of tier `tier` with trail `trailId` equipped: the tier's
--- fixed rate x the trail (Config.treadmillPerSecond), whatever your Speed or WalkSpeed. What the server pays
--- a second (SpeedLogic.treadmillGain every tick), the "+X" popups over the runner, the "+X/s" text over the
--- treadmill, its Upgrade board and the Shop card all show this one number.
-function Treadmill.perSecond(tier: number?, trailId: string?): number
-	return Config.treadmillPerSecond(tier, trailId)
+-- fixed rate x the trail x the Speed passes (`passMult`: Config.passSpeedMult of the owner's passes, 1 when
+-- nil; Config.treadmillPerSecond), whatever your Speed or WalkSpeed. What the server pays a second
+-- (SpeedLogic.treadmillGain every tick), the "+X" popups over the runner, the "+X/s" text over the treadmill, its
+-- Upgrade board and the Shop card all show this one number.
+function Treadmill.perSecond(tier: number?, trailId: string?, passMult: number?): number
+	return Config.treadmillPerSecond(tier, trailId, passMult)
 end
 
 -- "+0.5", "+12.3", "+200", "+1.6K" (like the HUD's "+X/step").

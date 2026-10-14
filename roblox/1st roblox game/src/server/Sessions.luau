@@ -17,6 +17,7 @@ export type Carry = {
 	gene: number?, -- the seed's hidden flower and size (Config.rollGene)
 	ghost: number?, -- what its planting ghost shows (PlantGhosts.seedLook): the flower's n...
 	scale: number?, -- ...at the size it has when planted
+	shown: number?, -- the rarity its pod showed (2x Luck may have raised `rarity`); it goes back to the pod as that
 	pod: number,
 	model: Model?,
 }
@@ -69,24 +70,37 @@ function Sessions.all(): { [Player]: Session }
 	return byPlayer
 end
 
--- Speed gain multiplier: the equipped trail.
+-- What the Speed passes multiply every Speed gain by (2x Speed, VIP).
+function Sessions.passSpeedMult(s: Session): number
+	return Config.passSpeedMult(s.passes)
+end
+
+-- Speed gain multiplier: the equipped trail x the Speed passes.
 function Sessions.speedMult(s: Session): number
-	return Config.trailMult(s.profile.equippedTrail)
+	return Config.trailMult(s.profile.equippedTrail) * Sessions.passSpeedMult(s)
 end
 
--- Speed per stud right now: the progression curve at the current Speed x the trail.
+-- Speed per stud right now: the flat base x the trail x the Speed passes.
 function Sessions.speedPerStud(s: Session): number
-	return Config.speedPerStud(s.profile.equippedTrail)
+	return Config.speedPerStud(s.profile.equippedTrail, Sessions.passSpeedMult(s))
 end
 
--- What a second on their own treadmill pays right now: its tier's fixed rate x the equipped trail.
+-- What a second on their own treadmill pays right now: its tier's fixed rate x the trail x the Speed passes.
 function Sessions.treadmillPerSecond(s: Session): number
-	return Config.treadmillPerSecond(s.profile.treadmillTier, s.profile.equippedTrail)
+	return Config.treadmillPerSecond(s.profile.treadmillTier, s.profile.equippedTrail, Sessions.passSpeedMult(s))
 end
 
--- Plant income multiplier besides day/night: plot level x the 2x Money pass.
+-- Plant income multiplier besides day/night: plot level x the money passes (2x Money, VIP).
 function Sessions.moneyMult(s: Session): number
-	return Config.moneyMult(s.profile.plotLevel, s.passes.DoubleMoney == true)
+	return Config.moneyMult(s.profile.plotLevel, s.passes)
+end
+
+-- How much faster their plants grow (Fast Grow), and the luck multiplier their steals roll with (2x Luck).
+function Sessions.growMult(s: Session): number
+	return Config.passGrowMult(s.passes)
+end
+function Sessions.luckMult(s: Session): number
+	return Config.passLuckMult(s.passes)
 end
 
 function Sessions.maxSlots(s: Session): number

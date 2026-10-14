@@ -51,38 +51,40 @@ local sellStalls: { BasePart } = {} -- the SELL stalls' prompt parts (WorldBuild
 ----------------------------------------------------------------------------------------------------
 -- Pure-ish helpers (also used for offline income)
 ----------------------------------------------------------------------------------------------------
-function PlotService.plantStats(plant: ProfileStore.Plant, now: number): (number, number)
+-- `growMult`: the owner's Fast Grow (Sessions.growMult; 1 when nil), so their plants are as big as they
+-- grew, offline time included.
+function PlotService.plantStats(plant: ProfileStore.Plant, now: number, growMult: number?): (number, number)
 	local variance = Config.varianceOf(plant)
-	local weight = Config.plantWeight(plant.zone, plant.rarity, now - plant.plantedAt, variance)
+	local weight = Config.plantWeight(plant.zone, plant.rarity, Config.plantAge(plant.plantedAt, now, growMult), variance)
 	return weight, Config.plantIncome(plant.zone, plant.rarity, weight, plant.mutation)
 end
 
 -- Base $/s of all plants (before money multipliers).
-function PlotService.incomeOf(profile: ProfileStore.Profile, now: number): number
+function PlotService.incomeOf(profile: ProfileStore.Profile, now: number, growMult: number?): number
 	local total = 0
 	for _, plant in profile.plants do
-		local _, income = PlotService.plantStats(plant, now)
+		local _, income = PlotService.plantStats(plant, now, growMult)
 		total += income
 	end
 	return total
 end
 
 -- $/s of all plants right now: base income times each plant's day/night multiplier (before money multipliers).
-function PlotService.liveIncomeOf(profile: ProfileStore.Profile, now: number): number
+function PlotService.liveIncomeOf(profile: ProfileStore.Profile, now: number, growMult: number?): number
 	local isNight = Config.dayPhase(now)
 	local total = 0
 	for _, plant in profile.plants do
-		local _, income = PlotService.plantStats(plant, now)
+		local _, income = PlotService.plantStats(plant, now, growMult)
 		total += income * Config.timeMult(plant.zone, isNight)
 	end
 	return total
 end
 
 -- Offline $/s: base income times the day/night multiplier averaged over a full cycle.
-function PlotService.offlineIncomeOf(profile: ProfileStore.Profile, now: number): number
+function PlotService.offlineIncomeOf(profile: ProfileStore.Profile, now: number, growMult: number?): number
 	local total = 0
 	for _, plant in profile.plants do
-		local _, income = PlotService.plantStats(plant, now)
+		local _, income = PlotService.plantStats(plant, now, growMult)
 		total += income * Config.averageTimeMult(plant.zone)
 	end
 	return total
@@ -188,8 +190,8 @@ local function removePlantModel(state: PlotState, slot: number)
 	state.scales[slot] = nil
 end
 
-local function spawnPlant(state: PlotState, plant: ProfileStore.Plant, now: number)
-	local weight, income = PlotService.plantStats(plant, now)
+local function spawnPlant(state: PlotState, plant: ProfileStore.Plant, now: number, growMult: number)
+	local weight, income = PlotService.plantStats(plant, now, growMult)
 	local scale = plantScale(plant, weight)
 	state.models[plant.slot] = buildPlantModel(state, plant, weight, income, scale)
 	state.scales[plant.slot] = scale
@@ -208,10 +210,11 @@ end
 ----------------------------------------------------------------------------------------------------
 local function pushPlants(s: Sessions.Session, now: number)
 	local mult = Sessions.moneyMult(s)
+	local grow = Sessions.growMult(s)
 	local isNight = Config.dayPhase(now)
 	local view = {}
 	for _, plant in s.profile.plants do
-		local weight, income = PlotService.plantStats(plant, now)
+		local weight, income = PlotService.plantStats(plant, now, grow)
 		income *= mult * Config.timeMult(plant.zone, isNight)
 		-- `sell`: what the SELL stall pays for it right now (Selling.price)
 		table.insert(view, {
@@ -219,7 +222,8 @@ local function pushPlants(s: Sessions.Session, now: number)
 			slot = plant.slot, zone = plant.zone, rarity = plant.rarity, mutation = plant.mutation, weight = weight, income = income,
 			x = plant.x, z = plant.z,
 			name = PlotService.plantName(plant), -- "Gold Daisy": its flower model's name (the Plants panel, the Sell cards)
-			sell = Selling.price(plant, now, mult),
+			flower = CreatureModels.flowerOf(plant.zone, plant.rarity, plant.variant, plant.slot), -- its model ("Daisy"): the HUD's 3D picture
+			sell = Selling.price(plant, now, mult, grow),
 		})
 	end
 	-- The inventory (the Plants panel's Inventory part, the Sell window): each plant as it left the plot
@@ -229,13 +233,14 @@ local function pushPlants(s: Sessions.Session, now: number)
 		table.insert(inventory, {
 			id = entry.id, zone = entry.zone, rarity = entry.rarity, mutation = entry.mutation, weight = Inventory.weight(entry),
 			name = PlotService.plantName(plant), sell = Selling.price(plant, now, mult),
+			flower = CreatureModels.flowerOf(plant.zone, plant.rarity, plant.variant, plant.slot),
 		})
 	end
 	Sessions.push(s.player, { plants = view, inventory = inventory, slots = Sessions.maxSlots(s) })
 end
 
 local function refreshIncome(s: Sessions.Session, now: number)
-	s.income = PlotService.liveIncomeOf(s.profile, now)
+	s.income = PlotService.liveIncomeOf(s.profile, now, Sessions.growMult(s))
 end
 
 ----------------------------------------------------------------------------------------------------
@@ -291,16 +296,16 @@ local function plantSeed(player: Player, s: Sessions.Session, state: PlotState, 
 	local now = os.time()
 	local slot = Planting.newId(s.profile.plants :: any)
 	x, z = math.round(x * 100) / 100, math.round(z * 100) / 100
-	local plant: ProfileStore.Plant = if from then Inventory.toPlant(from, slot, now, x, z)
+	local plant: ProfileStore.Plant = if from then Inventory.toPlant(from, slot, now, x, z, Sessions.growMult(s))
 		else PlantGhosts.seedPlant(zone, rarity, mutation, gene, slot, now, x, z, flowerRoll)
 	table.insert(s.profile.plants, plant)
-	spawnPlant(state, plant, now)
+	spawnPlant(state, plant, now, Sessions.growMult(s))
 
 	local newEntries = discover(s.profile, plant)
 	refreshIncome(s, now)
 	pushPlants(s, now)
 	Sessions.pushFull(s)
-	local weight = PlotService.plantStats(plant, now)
+	local weight = PlotService.plantStats(plant, now, Sessions.growMult(s))
 	local model = state.models[plant.slot]
 	local top = restOf(state.info, plant).Position
 	if model then
@@ -454,7 +459,7 @@ function PlotService.removePlant(player: Player, slot: any)
 			plant.variant = CreatureModels.flowerOf(plant.zone, plant.rarity, plant.variant, plant.slot)
 		end
 	end
-	if not Inventory.take(s.profile, slot, now) then
+	if not Inventory.take(s.profile, slot, now, Sessions.growMult(s)) then
 		-- gone, or the inventory is full (the panel says so in its Inventory part, no toast)
 		pushPlants(s, now) -- the panel was showing a plant that is gone: redraw it
 		return
@@ -486,7 +491,7 @@ function PlotService.sellPlants(player: Player, slots: any, ids: any?)
 		end
 	end
 	local now = os.time()
-	local sale, why = Selling.sell(s.profile, slots, distance, now, Sessions.moneyMult(s), ids)
+	local sale, why = Selling.sell(s.profile, slots, distance, now, Sessions.moneyMult(s), ids, Sessions.growMult(s))
 	if not sale then
 		if why == "far" then
 			Net.toast(player, "Walk up to the SELL stall in the shop plaza to sell plants.", "red")
@@ -593,8 +598,8 @@ local function renderTreadmillSign(state: PlotState)
 		tier = tier,
 		cash = price,
 		robux = robux,
-		perSecond = Treadmill.perSecond(tier, s.profile.equippedTrail),
-		nextPerSecond = if price then Treadmill.perSecond(tier + 1, s.profile.equippedTrail) else nil,
+		perSecond = Treadmill.perSecond(tier, s.profile.equippedTrail, Sessions.passSpeedMult(s)),
+		nextPerSecond = if price then Treadmill.perSecond(tier + 1, s.profile.equippedTrail, Sessions.passSpeedMult(s)) else nil,
 	})
 	for _, prompt in treadmillPrompts(state) do
 		prompt.ActionText = if price then `Upgrade to Level {tier + 1}` else "Maxed"
@@ -902,7 +907,7 @@ function PlotService.assign(s: Sessions.Session): WorldBuilder.PlotInfo?
 			Planting.settle(state.info.beds, state.info.origin, s.profile.plants :: any)
 			local now = os.time()
 			for _, plant in s.profile.plants do
-				spawnPlant(state, plant, now)
+				spawnPlant(state, plant, now, Sessions.growMult(s))
 				discover(s.profile, plant) -- saves from before flower names: their plants' flowers count in the Index
 			end
 			refreshIncome(s, now)
@@ -947,7 +952,7 @@ function PlotService.grantOffline(s: Sessions.Session): number
 	end
 	local now = os.time()
 	local away = math.clamp(now - last, 0, Config.OFFLINE_CAP_SECONDS)
-	local amount = PlotService.offlineIncomeOf(s.profile, now) * away * Sessions.moneyMult(s)
+	local amount = PlotService.offlineIncomeOf(s.profile, now, Sessions.growMult(s)) * away * Sessions.moneyMult(s)
 	if amount > 0 then
 		s.profile.money += amount
 		Net.LootEvent:FireClient(s.player, "Offline", { amount = amount, seconds = away })
@@ -964,10 +969,11 @@ local PLANTS_PUSH_EVERY = 3
 local payoutPass = 0
 local function payout(s: Sessions.Session, state: PlotState, now: number)
 	local mult = Sessions.moneyMult(s)
+	local grow = Sessions.growMult(s)
 	local isNight = Config.dayPhase(now)
 	local total = 0
 	for _, plant in s.profile.plants do
-		local weight, income = PlotService.plantStats(plant, now)
+		local weight, income = PlotService.plantStats(plant, now, grow)
 		local perSecond = income * Config.timeMult(plant.zone, isNight) * mult
 		local earned = perSecond * Config.PAYOUT_INTERVAL
 		total += earned

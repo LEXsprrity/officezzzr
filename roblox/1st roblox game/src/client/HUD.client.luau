@@ -371,7 +371,7 @@ local rightTabs = new("Frame", {
 }, { new("UIListLayout", { Padding = UDim.new(0, 8), VerticalAlignment = Enum.VerticalAlignment.Center }) })
 
 local sidePanel = new("Frame", {
-	AnchorPoint = Vector2.new(1, 0.5), Position = UDim2.new(1, -96, 0.45, 0), Size = UDim2.fromOffset(340, 420),
+	AnchorPoint = Vector2.new(1, 0.5), Position = UDim2.new(1, -96, 0.45, 0), Size = UDim2.fromOffset(380, 440),
 	BackgroundColor3 = COLORS.panel, Visible = false, Parent = gui,
 }, deco(14))
 local sideTitle = text(sidePanel, { Text = "", Size = UDim2.new(1, -20, 0, 36), Position = UDim2.fromOffset(10, 8), TextColor3 = INK })
@@ -626,8 +626,11 @@ end
 --   Inventory: the seeds in the seed bag ("Rare Seed", their flower a surprise) and the removed plants
 --   (their flower's name), each with a Plant button that starts the ghost planting preview
 --   (Planting.client); the SELL stall sells them too. Full bag or inventory: a relief line says so.
+--   Every card shows its flower in 3D (Shared/FlowerView, turning slowly while on screen): a plant its own
+--   flower model (`flower` in the plants view), a bag seed its seed design (ReplicatedStorage.SeedLooks).
 ----------------------------------------------------------------------------------------------------
 do
+	local FlowerView = require(Shared:WaitForChild("FlowerView"))
 	local RemovePlant = remotes:WaitForChild("RemovePlant") :: RemoteEvent
 	-- The tabs, over the list
 	sideList.Position = UDim2.fromOffset(10, 96)
@@ -655,7 +658,9 @@ do
 		UiFx.relief(label, 3, 3)
 	end
 	local inventoryShown = "" -- what the Inventory shows
-	local CARD_H = 66
+	local CARD_H = 70
+	local VIEW = 62 -- the card's 3D picture, left of its words
+	local TEXT_X, TEXT_W = 22 + VIEW + 4, -(118 + VIEW + 4)
 	local SURE_SECONDS = 2
 	local GREEN_INK, MUTED_INK = Color3.fromRGB(30, 160, 55), Color3.fromRGB(120, 124, 140)
 	local shown = "" -- which plants the list shows, in order
@@ -691,9 +696,12 @@ do
 		})
 		new("Frame", { Size = UDim2.new(0, 8, 1, -14), Position = UDim2.fromOffset(7, 7), BackgroundColor3 = accent, BorderSizePixel = 0, Parent = f },
 			{ new("UICorner", { CornerRadius = UDim.new(1, 0) }) })
-		ink(f, { Text = p.name or SeedPacks.seedName(p.zone, p.rarity, p.mutation), Size = UDim2.new(1, -118, 0, 24), Position = UDim2.fromOffset(22, 5) })
-		local info = ink(f, { RichText = true, Size = UDim2.new(1, -118, 0, 16), Position = UDim2.fromOffset(22, 29), TextColor3 = rarity.color:Lerp(INK, 0.45) })
-		local income = ink(f, { RichText = true, Size = UDim2.new(1, -118, 0, 16), Position = UDim2.fromOffset(22, 46), TextColor3 = GREEN_INK })
+		FlowerView.show(f, FlowerView.flower(p.zone, p.rarity, p.flower), {
+			size = UDim2.fromOffset(VIEW, VIEW), position = UDim2.new(0, 20, 0.5, 0), anchor = Vector2.new(0, 0.5), spin = true,
+		})
+		ink(f, { Text = p.name or SeedPacks.seedName(p.zone, p.rarity, p.mutation), Size = UDim2.new(1, TEXT_W, 0, 24), Position = UDim2.fromOffset(TEXT_X, 7) })
+		local info = ink(f, { RichText = true, Size = UDim2.new(1, TEXT_W, 0, 16), Position = UDim2.fromOffset(TEXT_X, 31), TextColor3 = rarity.color:Lerp(INK, 0.45) })
+		local income = ink(f, { RichText = true, Size = UDim2.new(1, TEXT_W, 0, 16), Position = UDim2.fromOffset(TEXT_X, 48), TextColor3 = GREEN_INK })
 
 		local slot = p.slot
 		local remove: TextButton
@@ -738,8 +746,9 @@ do
 		table.insert(updaters, update)
 	end
 
-	-- One Inventory card: a seed from the bag or a removed plant, with its Plant button.
-	local function itemCard(order: number, name: string, sub: string, rarityIndex: number, mutation: string?, key: string)
+	-- One Inventory card: a seed from the bag or a removed plant (`look`: its seed design or flower), with its
+	-- Plant button.
+	local function itemCard(order: number, name: string, sub: string, rarityIndex: number, mutation: string?, key: string, look: Model?)
 		local rarity = Config.RARITIES[rarityIndex]
 		local mut = Config.mutationById(mutation)
 		local accent = if mut then mut.color else rarity.color
@@ -750,8 +759,9 @@ do
 		})
 		new("Frame", { Size = UDim2.new(0, 8, 1, -14), Position = UDim2.fromOffset(7, 7), BackgroundColor3 = accent, BorderSizePixel = 0, Parent = f },
 			{ new("UICorner", { CornerRadius = UDim.new(1, 0) }) })
-		ink(f, { Text = name, Size = UDim2.new(1, -118, 0, 24), Position = UDim2.fromOffset(22, 5), TextColor3 = accent:Lerp(INK, 0.45) })
-		ink(f, { Text = sub, Size = UDim2.new(1, -118, 0, 16), Position = UDim2.fromOffset(22, 33), TextColor3 = MUTED_INK })
+		FlowerView.show(f, look, { size = UDim2.fromOffset(VIEW, VIEW), position = UDim2.new(0, 20, 0.5, 0), anchor = Vector2.new(0, 0.5), spin = true })
+		ink(f, { Text = name, Size = UDim2.new(1, TEXT_W, 0, 24), Position = UDim2.fromOffset(TEXT_X, 7), TextColor3 = accent:Lerp(INK, 0.45) })
+		ink(f, { Text = sub, Size = UDim2.new(1, TEXT_W, 0, 16), Position = UDim2.fromOffset(TEXT_X, 35), TextColor3 = MUTED_INK })
 		local plant = chunky(f, "Plant", COLORS.money, UDim2.fromOffset(88, 42), function()
 			RequestUseItem:FireServer("Seed:" .. key) -- the server answers with the planting preview (PlaceSeed)
 		end)
@@ -796,12 +806,15 @@ do
 			reliefLine(nextOrder(), "Removed plants and seeds from packs wait here.", WHITE)
 		end
 		for _, e in bag do
-			itemCard(nextOrder(), SeedPacks.seedName(e.zone, e.rarity, e.mutation), `x{e.count} · {Config.ZONES[e.zone].name}`, e.rarity, e.mutation, e.key)
+			local _, _, _, gene = SeedPacks.parseBagKey(e.key)
+			itemCard(nextOrder(), SeedPacks.seedName(e.zone, e.rarity, e.mutation), `x{e.count} · {Config.ZONES[e.zone].name}`, e.rarity, e.mutation, e.key,
+				FlowerView.seed(e.zone, gene))
 		end
 		for _, p in inventory do
 			local rarity = Config.RARITIES[p.rarity]
 			itemCard(nextOrder(), p.name or SeedPacks.seedName(p.zone, p.rarity, p.mutation),
-				`{rarity.id}{if p.mutation then " · " .. p.mutation else ""} · {Config.ZONES[p.zone].name}`, p.rarity, p.mutation, `inv:{p.id}`)
+				`{rarity.id}{if p.mutation then " · " .. p.mutation else ""} · {Config.ZONES[p.zone].name}`, p.rarity, p.mutation, `inv:{p.id}`,
+				FlowerView.flower(p.zone, p.rarity, p.flower))
 		end
 	end
 
@@ -1017,21 +1030,23 @@ end
 
 -- Robux prices. Developer products' real prices are set on the Creator Dashboard, so each is fetched
 -- once per id with GetProductInfo (pcall'd, cached). Until then, or with no id yet, the placeholder
--- from Config is shown.
-local robuxPrices: { [number]: number } = {}
-local priceFetching: { [number]: boolean } = {}
+-- from Config is shown. Gamepasses (`infoType` GamePass) the same way.
+local robuxPrices: { [string]: number } = {}
+local priceFetching: { [string]: boolean } = {}
 local priceRerender = false
-local function robuxPrice(product: Config.DevProduct): number
-	local cached = robuxPrices[product.id]
+local function robuxPrice(product: { id: number, robux: number }, infoType: Enum.InfoType?): number
+	local kind = infoType or Enum.InfoType.Product
+	local key = kind.Name .. product.id
+	local cached = robuxPrices[key]
 	if cached then
 		return cached
 	end
-	if product.id ~= 0 and not priceFetching[product.id] then
-		priceFetching[product.id] = true
+	if product.id ~= 0 and not priceFetching[key] then
+		priceFetching[key] = true
 		task.spawn(function()
-			local ok, info = pcall(MarketplaceService.GetProductInfo, MarketplaceService, product.id, Enum.InfoType.Product)
+			local ok, info = pcall(MarketplaceService.GetProductInfo, MarketplaceService, product.id, kind)
 			if ok and type(info) == "table" and type(info.PriceInRobux) == "number" then
-				robuxPrices[product.id] = info.PriceInRobux
+				robuxPrices[key] = info.PriceInRobux
 				if not priceRerender then -- one re-render for a burst of answers
 					priceRerender = true
 					task.delay(0.3, function()
@@ -1043,7 +1058,7 @@ local function robuxPrice(product: Config.DevProduct): number
 				end
 			else
 				task.delay(30, function() -- let a later render try again
-					priceFetching[product.id] = nil
+					priceFetching[key] = nil
 				end)
 			end
 		end)
@@ -1073,13 +1088,13 @@ end
 local packShines: { Frame } = {} -- swept across the premium cards every frame while they're shown
 local renderShop: () -> boolean
 do
+	local PassCards = require(Shared:WaitForChild("PassCards"))
 	local SHOP_CARD_W, SHOP_CARD_H = 252, 236 -- three cards a row
 	local CARD_COLORS = {
 		Speed = Color3.fromRGB(30, 165, 255),
 		Money = Color3.fromRGB(70, 205, 30),
 		PlotUpgrade = Color3.fromRGB(255, 150, 20),
 		Treadmill = Color3.fromRGB(255, 60, 95),
-		Pass = Color3.fromRGB(165, 70, 255),
 	}
 
 	-- A sunburst behind a card's icon: soft white rays turning around (cx, cy) (scale of the card) over a
@@ -1302,9 +1317,9 @@ do
 		section("TREADMILL", nextOrder(), HEADING_GOLD)
 		local tier = stats.treadmillTier or 1
 		local treadPrice = Config.priceOf("TreadmillUpgrade", stats :: any)
-		-- "+60/s": a second on it at that tier with your equipped trail (the "+X/s" over the treadmill)
+		-- "+60/s": a second on it at that tier with your equipped trail and Speed passes (the "+X/s" over the treadmill)
 		local function treadRate(t: number): string
-			return Treadmill.rateText(Treadmill.perSecond(t, stats.equippedTrail))
+			return Treadmill.rateText(Treadmill.perSecond(t, stats.equippedTrail, Config.passSpeedMult(stats.passes)))
 		end
 		local treadCard = shopCard(cardGrid(nextOrder()), 1, CARD_COLORS.Treadmill,
 			if treadPrice then `LEVEL {tier + 1} TREADMILL` else "MAX TREADMILL",
@@ -1312,18 +1327,35 @@ do
 				else `{treadRate(tier)} · stand on it to gain Speed`, "Treadmill")
 		upgradeButtons(treadCard, treadPrice, "TreadmillUpgrade", Config.treadmillUpgradeProduct(tier))
 
-		-- Gamepasses (Robux), purple
+		-- Gamepasses (Robux): a card per pass in its own colour (Shared/PassCards decides what's on them),
+		-- "Owned" once the server says so
 		section("PASSES", nextOrder(), HEADING_GREEN)
-		grid = cardGrid(nextOrder())
-		for i, name in { "DoubleMoney", "ExtraSlots" } do
-			local pass = Config.GAMEPASSES[name]
-			local owned = stats.passes[name] == true
-			local c = shopCard(grid, i, CARD_COLORS.Pass, string.upper(pass.label),
-				if name == "DoubleMoney" then "Doubles all plant income" else "On top of your plot level's slots", name)
-			buyRow(c, if owned then "Owned" else "Buy · R$", if owned then COLORS.disabled else robuxColor(pass.id, ROBUX_GREEN), function()
+		PassCards.render(cardGrid(nextOrder()), stats.passes, {
+			card = function(g: Instance, i: number, view: PassCards.Card): Frame
+				local c = shopCard(g, i, view.color, view.title, view.about, view.icon or "")
+				if not view.icon then -- VIP: a gold relief badge where the icon goes
+					UiFx.relief(bold(c, 5, {
+						Text = "VIP", TextColor3 = Color3.fromRGB(255, 206, 40), AnchorPoint = Vector2.new(0.5, 0),
+						Position = UDim2.new(0.5, 0, 0, 22), Size = UDim2.fromOffset(170, 74), ZIndex = 3,
+					}), 4, 5)
+				end
+				if view.owned then
+					(c:FindFirstChildOfClass("UIStroke") :: UIStroke).Color = COLORS.gold
+				end
+				return c
+			end,
+			button = function(c: Frame, view: PassCards.Card, onClick: () -> ()): GuiObject
+				local pass = Config.GAMEPASSES[view.name]
+				return buyRow(c, view.caption, if view.owned then COLORS.disabled else robuxColor(pass.id, ROBUX_GREEN), onClick,
+					if view.owned then nil else { "Robux" }, false)
+			end,
+			price = function(pass: Config.Gamepass): number
+				return robuxPrice(pass, Enum.InfoType.GamePass)
+			end,
+			buy = function(name: string)
 				RequestBuy:FireServer("Pass:" .. name)
-			end, { "Robux" }, true)
-		end
+			end,
+		})
 
 		local focus = shopFocus and shopSections[shopFocus]
 		shopFocus = nil
@@ -1344,7 +1376,7 @@ end
 local renderTrails: () -> ()
 do
 	local function perStepText(): string
-		local x = Config.speedPerStud(stats.equippedTrail)
+		local x = Config.speedPerStud(stats.equippedTrail, Config.passSpeedMult(stats.passes))
 		return "+" .. (if x < 100 then (string.gsub(string.format("%.2f", x), "%.?0+$", "")) else Format.short(x))
 	end
 
@@ -1446,17 +1478,20 @@ end
 -- rarity listing that rarity's flowers: lit with the flower's name once you've grown it, "???" until then.
 -- The flowers come from the server (stats.catalog[zone][rarity], the plant models' names); a zone or
 -- rarity without plant models shows one cell for the rarity itself.
+-- Each cell shows its flower in 3D over its name (Shared/FlowerView): turning slowly once found, a black
+-- silhouette over "???" until then (the shape may show, the name and colours are the surprise).
 ----------------------------------------------------------------------------------------------------
 local function renderIndex()
+	local FlowerView = require(Shared:WaitForChild("FlowerView"))
 	local catalog = stats.catalog or {}
-	-- Each cell: { key = the Index key that lights it, name = what it says once lit }
-	local function cellsOf(k: number, r: number): { { key: string, name: string } }
+	-- Each cell: { key = the Index key that lights it, name = what it says once lit, model = its flower model }
+	local function cellsOf(k: number, r: number): { { key: string, name: string, model: string? } }
 		local out = {}
 		for _, model in (catalog[k] and catalog[k][r]) or {} do
-			table.insert(out, { key = `{k}:{r}:{model}`, name = Format.plantName(model) })
+			table.insert(out, { key = `{k}:{r}:{model}`, name = Format.plantName(model), model = model })
 		end
 		if #out == 0 then
-			table.insert(out, { key = `{k}:{r}`, name = Config.RARITIES[r].id })
+			table.insert(out, { key = `{k}:{r}`, name = Config.RARITIES[r].id, model = nil })
 		end
 		return out
 	end
@@ -1473,7 +1508,7 @@ local function renderIndex()
 	Icons.set(modalSubtitle, "Star", `✨ {found}/{total} discovered`, ICON.big, 30)
 	clearModal(10)
 	local rarities = #Config.RARITIES
-	local CELL_H, CELL_GAP = 30, 5
+	local CELL_H, CELL_GAP, NAME_H = 104, 5, 24
 	for k, zone in Config.ZONES do
 		local tallest = 1
 		for r = 1, rarities do
@@ -1508,8 +1543,11 @@ local function renderIndex()
 				if got then
 					shade(cell, rarity.color, 0.3, 0.2)
 				end
+				FlowerView.show(cell, FlowerView.flower(k, r, c.model), {
+					size = UDim2.new(1, -8, 1, -(NAME_H + 8)), position = UDim2.fromOffset(4, 4), spin = got, silhouette = not got,
+				})
 				bold(cell, 2, {
-					Text = if got then c.name else "???", Size = UDim2.new(1, -8, 1, -8), Position = UDim2.fromOffset(4, 4),
+					Text = if got then c.name else "???", Size = UDim2.new(1, -8, 0, NAME_H), Position = UDim2.new(0, 4, 1, -(NAME_H + 4)),
 					TextColor3 = WHITE, TextTransparency = if got then 0 else 0.15,
 				})
 			end
@@ -1530,12 +1568,14 @@ end
 local renderSell: () -> ()
 local sellChanged: (changed: { [string]: any }) -> ()
 do
+	local FlowerView = require(Shared:WaitForChild("FlowerView"))
 	local SellPlants = remotes:WaitForChild("SellPlants") :: RemoteEvent
 	WINDOWS.Sell = { title = "Sell", icon = "Money", from = Color3.fromRGB(255, 70, 45), to = Color3.fromRGB(255, 150, 30) }
 	local SELL_RED = Color3.fromRGB(235, 60, 50)
 	local SELL_ORANGE = Color3.fromRGB(255, 140, 30)
 	local SELL_CARD = Color3.fromRGB(85, 125, 235) -- the cards' body under the rarity band
-	local SELL_CARD_W, SELL_CARD_H = 190, 252
+	local SELL_VIEW = 92 -- the flower in 3D, under the band (Shared/FlowerView)
+	local SELL_CARD_W, SELL_CARD_H = 190, 252 + SELL_VIEW
 
 	local function rarityIndex(id: string): number
 		for i, r in Config.RARITIES do
@@ -1577,7 +1617,7 @@ do
 	local function sellSignature(): string
 		local keys = {}
 		for _, p in sellables() do
-			table.insert(keys, `{p.key}:{p.zone}:{p.rarity}:{p.mutation or ""}`)
+			table.insert(keys, `{p.key}:{p.zone}:{p.rarity}:{p.mutation or ""}:{p.flower or ""}`)
 		end
 		table.sort(keys)
 		return table.concat(keys, ",")
@@ -1641,14 +1681,19 @@ do
 		shine(band, 14)
 		bold(band, 3, { Text = p.name or SeedPacks.seedName(p.zone, p.rarity, p.mutation), Size = UDim2.new(1, -14, 0, 32), Position = UDim2.fromOffset(7, 6) })
 		bold(band, 3, { Text = rarity.id, Size = UDim2.new(1, -14, 0, 24), Position = UDim2.fromOffset(7, 40) })
+		-- The plant itself, turning slowly
+		FlowerView.show(c, FlowerView.flower(p.zone, p.rarity, p.flower), {
+			size = UDim2.new(1, -16, 0, SELL_VIEW), position = UDim2.fromOffset(8, 74), spin = true,
+		})
 		-- Mutation (a plant without one shows nothing there), weight, $/s
+		local y = SELL_VIEW
 		if mut then
-			bold(c, 2, { Text = mut.id, Size = UDim2.new(1, -14, 0, 24), Position = UDim2.fromOffset(7, 78), TextColor3 = mut.color })
+			bold(c, 2, { Text = mut.id, Size = UDim2.new(1, -14, 0, 24), Position = UDim2.fromOffset(7, 78 + y), TextColor3 = mut.color })
 		end
-		local weightLabel = text(c, { Visible = false, Text = "", Size = UDim2.new(1, -14, 0, 22), Position = UDim2.fromOffset(7, 106) })
-		local incomeLabel = bold(c, 2, { Size = UDim2.new(1, -14, 0, 22), Position = UDim2.fromOffset(7, 132) })
+		local weightLabel = text(c, { Visible = false, Text = "", Size = UDim2.new(1, -14, 0, 22), Position = UDim2.fromOffset(7, 106 + y) })
+		local incomeLabel = bold(c, 2, { Size = UDim2.new(1, -14, 0, 22), Position = UDim2.fromOffset(7, 132 + y) })
 		-- What the stall pays, and the button (a second click confirms)
-		local priceLabel = bold(c, 3, { Size = UDim2.new(1, -14, 0, 34), Position = UDim2.fromOffset(7, 158), TextColor3 = MONEY_GREEN })
+		local priceLabel = bold(c, 3, { Size = UDim2.new(1, -14, 0, 34), Position = UDim2.fromOffset(7, 158 + y), TextColor3 = MONEY_GREEN })
 		local sure = sellPending ~= nil and sellPending.key == p.key
 		chunky(c, if sure then "Sure? Sell" else "Sell", if sure then COLORS.gold else SELL_RED, UDim2.new(1, -16, 0, 48), function()
 			if sure then
@@ -1767,6 +1812,16 @@ do
 		end
 	end)
 
+	-- The 3D pictures replicate a moment after the server starts: a window or panel opened before then is
+	-- drawn again once they are here (FlowerView: an empty frame until then).
+	ReplicatedStorage.ChildAdded:Connect(function(child: Instance)
+		if child.Name == FlowerView.FOLDER or child.Name == FlowerView.SEEDS then
+			renderSide()
+			if modal.Visible and (modalName == "Index" or modalName == "Sell") then
+				renderModal()
+			end
+		end
+	end)
 end
 ------------------------------------------------------------------------------------------ end of SELL
 

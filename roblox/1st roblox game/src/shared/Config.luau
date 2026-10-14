@@ -372,6 +372,37 @@ function Config.rollSeed(k: number, luck: number, isNight: boolean, rng: () -> n
 	return rarity, mutation
 end
 
+-- The 2x Luck pass. A pod is one seed everybody sees, rolled with the world's luck (`luck`: night or day,
+-- when it grew), so the pass works when its owner steals it: the rarity they get is re-drawn as if the pod
+-- had been rolled with `luck * luckMult`, and never lower than what the pod showed. It is a quantile
+-- coupling: the pod's rarity `rarity` stands for a slice [F(rarity - 1), F(rarity)) of the world-luck
+-- odds' cumulative distribution F; a point u drawn uniformly in that slice is read back on the lucky
+-- odds' G instead. G <= F everywhere (more luck only moves weight up, and Legendary gets luckMult x its
+-- chance), so the result is never below `rarity`, and over all pods the owner's rarities follow exactly
+-- the luckMult-luck odds: a true 2x luck, no bonus re-roll on top. Returns the rarity (the pod's own when
+-- luckMult <= 1).
+function Config.luckUpgrade(k: number, rarity: number, luck: number, luckMult: number, rng: () -> number): number
+	if luckMult <= 1 or rarity >= Config.LEGENDARY then
+		return rarity
+	end
+	local base = Config.rarityWeights(k, luck)
+	local lucky = Config.rarityWeights(k, luck * luckMult)
+	local lo = 0
+	for i = 1, rarity - 1 do
+		lo += base[i]
+	end
+	local u = lo + rng() * base[rarity]
+	local out = #lucky
+	for i, w in lucky do
+		u -= w
+		if u < 0 then
+			out = i
+			break
+		end
+	end
+	return math.max(out, rarity)
+end
+
 ----------------------------------------------------------------------------------------------------
 -- Economy (formulas)
 ----------------------------------------------------------------------------------------------------
@@ -441,6 +472,13 @@ end
 
 function Config.sproutWeight(k: number, rarity: number): number
 	return Config.ZONES[k].baseWeight * Config.RARITIES[rarity].weight
+end
+
+-- How far a plant planted at `plantedAt` has grown at `now`, in seconds of growth: real time x `growMult`
+-- (the owner's Fast Grow pass, Config.passGrowMult; 1 when nil). Read from plantedAt like everything else,
+-- so time offline counts at the same rate.
+function Config.plantAge(plantedAt: number, now: number, growMult: number?): number
+	return math.max(now - plantedAt, 0) * (growMult or 1)
 end
 
 function Config.plantWeight(k: number, rarity: number, age: number, variance: number): number
@@ -540,9 +578,10 @@ function Config.trailMult(id: string?): number
 end
 
 -- Speed gained per stud walked (or per stud of treadmill belt) with trail `trailId`: the flat base times
--- the trail, whatever your Speed. The HUD shows it as "+X/step".
-function Config.speedPerStud(trailId: string?): number
-	return Config.BASE_SPEED_PER_STUD * Config.trailMult(trailId)
+-- the trail times the Speed passes (`passMult`: Config.passSpeedMult, 1 when nil), whatever your Speed.
+-- The HUD shows it as "+X/step".
+function Config.speedPerStud(trailId: string?, passMult: number?): number
+	return Config.BASE_SPEED_PER_STUD * Config.trailMult(trailId) * (passMult or 1)
 end
 
 -- The colours a trail draws with: its colour fading to white, or a rainbow.
@@ -581,10 +620,12 @@ function Config.plotUpgradePrice(toLevel: number): number
 	return math.floor(Config.PLOT_UPGRADE_BASE_PRICE * Config.PLOT_UPGRADE_GROWTH ^ (toLevel - 2))
 end
 
--- Everything that multiplies plant income except day/night: the plot level and the 2x Money pass. The
--- payout loop, offline income, removal refunds and income-based Robux grants all use it.
-function Config.moneyMult(plotLevel: number, doubleMoney: boolean): number
-	return Config.plotMoneyMult(plotLevel) * (if doubleMoney then 2 else 1)
+-- Everything that multiplies plant income except day/night: the plot level and the money passes (2x Money,
+-- VIP: Config.passMoneyMult; `passes` may also be just whether the player has 2x Money). The payout loop,
+-- offline income, removal refunds and income-based Robux grants all use it.
+function Config.moneyMult(plotLevel: number, passes: { [string]: boolean } | boolean | nil): number
+	local owned = if type(passes) == "table" then passes else { DoubleMoney = passes == true }
+	return Config.plotMoneyMult(plotLevel) * Config.passMoneyMult(owned)
 end
 
 -- Treadmill tiers: standing on your own treadmill pays a FIXED Speed per second for its tier (`perSecond`)
@@ -626,10 +667,11 @@ function Config.treadmillRate(tier: number?): number
 end
 
 -- What a second on a treadmill of tier `tier` pays with trail `trailId` equipped: the tier's fixed rate x
--- the trail, at any Speed or WalkSpeed. SpeedLogic.treadmillGain pays it a tick at a time; the "+X/s" text
--- over the belt, the popups over the runner, the Upgrade board and the Shop show it (Treadmill.perSecond).
-function Config.treadmillPerSecond(tier: number?, trailId: string?): number
-	return Config.treadmillRate(tier) * Config.trailMult(trailId)
+-- the trail x the Speed passes (`passMult`: Config.passSpeedMult, 1 when nil), at any Speed or WalkSpeed.
+-- SpeedLogic.treadmillGain pays it a tick at a time; the "+X/s" text over the belt, the popups over the
+-- runner, the Upgrade board and the Shop show it (Treadmill.perSecond).
+function Config.treadmillPerSecond(tier: number?, trailId: string?, passMult: number?): number
+	return Config.treadmillRate(tier) * Config.trailMult(trailId) * (passMult or 1)
 end
 
 -- Treadmill upgrades for Robux: like the plot's, the next tier is sold by the product of its price tier.
@@ -653,13 +695,55 @@ Config.BAT_RANGE = 14
 Config.BAT_STUN = 2
 Config.BAT_COOLDOWN = 4
 
--- Gamepass stubs: set real ids to enable. 0 = not configured.
-export type Gamepass = { id: number, label: string }
+-- Gamepasses: create each on the Creator Dashboard and paste its id here; id = 0 = not set up yet (the
+-- Shop says "coming soon"). Ownership is only ever decided on the server (ShopService: UserOwnsGamePassAsync
+-- at join, PromptGamePassPurchaseFinished after a purchase) into Sessions.passes; the client only shows it.
+-- `robux` is the placeholder price shown until the real one (Dashboard) is read with GetProductInfo;
+-- `about` is the Shop card's benefit line; `icon` its Icons key (nil: a gold "VIP" badge); `order` its place.
+export type Gamepass = { id: number, label: string, robux: number, about: string, icon: string?, order: number }
 Config.GAMEPASSES = {
-	DoubleMoney = { id = 0, label = "2x Money" },
-	ExtraSlots = { id = 0, label = "+10 Plant Slots" },
+	DoubleMoney = { id = 0, label = "2x Money", robux = 0, about = "Doubles all plant income", icon = "DoubleMoney", order = 1 },
+	DoubleSpeed = { id = 0, label = "2x Speed", robux = 299, about = "Walk + treadmill Speed x2", icon = "Speed", order = 2 },
+	DoubleLuck = { id = 0, label = "2x Luck", robux = 249, about = "Rarer seeds when you steal", icon = "Star", order = 3 },
+	VIP = { id = 0, label = "VIP", robux = 399, about = "Gold tag, x1.25 cash + Speed", icon = nil, order = 4 },
+	FastGrow = { id = 0, label = "Fast Grow", robux = 149, about = "Your plants grow 2x faster", icon = "Seeds", order = 5 },
+	ExtraSlots = { id = 0, label = "+10 Plant Slots", robux = 0, about = "On top of your plot level's slots", icon = "ExtraSlots", order = 6 },
 } :: { [string]: Gamepass }
 Config.PASS_EXTRA_SLOTS = 10 -- the ExtraSlots pass adds this many slots, on top of the plot level's
+Config.PASS_SPEED_MULT = 2 -- 2x Speed: every Speed gain (walking and treadmill)
+Config.PASS_LUCK_MULT = 2 -- 2x Luck: the luck a stolen seed's rarity is rolled with (Config.luckUpgrade)
+Config.PASS_GROW_MULT = 2 -- Fast Grow: plants age this much faster (Config.plantAge), offline too
+Config.VIP_MULT = 1.25 -- VIP: money and Speed, multiplied with the other passes
+
+-- The pass names in Shop order.
+function Config.passNames(): { string }
+	local names = {}
+	for name in Config.GAMEPASSES do
+		table.insert(names, name)
+	end
+	table.sort(names, function(a, b)
+		return Config.GAMEPASSES[a].order < Config.GAMEPASSES[b].order
+	end)
+	return names
+end
+
+-- What the passes a player owns (`passes`: Sessions.passes, or the client's copy of it; nil = none) do.
+-- Everything multiplies: 2x Speed and VIP give x2.5 Speed, 2x Money and VIP x2.5 money.
+type Owned = { [string]: boolean }?
+function Config.passSpeedMult(passes: Owned): number
+	local p = passes or {}
+	return (if p.DoubleSpeed then Config.PASS_SPEED_MULT else 1) * (if p.VIP then Config.VIP_MULT else 1)
+end
+function Config.passMoneyMult(passes: Owned): number
+	local p = passes or {}
+	return (if p.DoubleMoney then 2 else 1) * (if p.VIP then Config.VIP_MULT else 1)
+end
+function Config.passLuckMult(passes: Owned): number
+	return if passes and passes.DoubleLuck then Config.PASS_LUCK_MULT else 1
+end
+function Config.passGrowMult(passes: Owned): number
+	return if passes and passes.FastGrow then Config.PASS_GROW_MULT else 1
+end
 
 ----------------------------------------------------------------------------------------------------
 -- Seed packs: our "eggs with odds". Two premium, late-game packs, Robux only: each is a developer

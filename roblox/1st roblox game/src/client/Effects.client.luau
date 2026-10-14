@@ -550,7 +550,7 @@ local function beltTop(belt: BasePart): number
 end
 local nextPopup = 0
 -- What the Speed popups need from the stats (StatsUpdate sends partial tables).
-local stats = { treadmillTier = 1, equippedTrail = nil :: string? }
+local stats = { treadmillTier = 1, equippedTrail = nil :: string?, passes = {} :: { [string]: boolean } }
 
 StatsUpdate.OnClientEvent:Connect(function(partial: { [string]: any })
 	if type(partial) ~= "table" then
@@ -568,6 +568,9 @@ StatsUpdate.OnClientEvent:Connect(function(partial: { [string]: any })
 	end
 	if type(partial.equippedTrail) == "string" then
 		stats.equippedTrail = partial.equippedTrail
+	end
+	if type(partial.passes) == "table" then
+		stats.passes = partial.passes -- (2x Speed and VIP make the popups' number bigger, like the server's gain)
 	end
 end)
 
@@ -636,7 +639,7 @@ end
 -- "[sneaker] +1.6K" over the character, floating up and fading: the Speed a second on the treadmill pays.
 local POPUP_LIFE = 2
 local function speedPopup(root: BasePart)
-	local amount = Treadmill.perSecond(stats.treadmillTier, stats.equippedTrail)
+	local amount = Treadmill.perSecond(stats.treadmillTier, stats.equippedTrail, Config.passSpeedMult(stats.passes))
 	if amount <= 0 then
 		return
 	end

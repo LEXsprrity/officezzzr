@@ -62,6 +62,8 @@ Harness.workspace = dataModel:GetService("Workspace")
 Harness.serverStorage = dataModel:GetService("ServerStorage")
 services.ServerStorage = Harness.serverStorage :: any
 Harness.lighting = dataModel:GetService("Lighting")
+-- The mocked services (a test may add one, e.g. RunService, or put a real Folder under ReplicatedStorage.__children)
+Harness.services = services
 
 -- The assets folder, loaded like Rojo maps it: each assets/<Name>.rbxm(x) becomes ServerStorage.Assets.<Name>.
 -- Files that don't load are listed in Harness.assetErrors (a test fails on them).

@@ -34,8 +34,9 @@ end
 
 -- Takes the player's plant in `slot` (untrusted) off the plot into the inventory: no money (owner request:
 -- Remove never sells). Returns the new entry, or nil and why: "bad" (not a slot number), "none" (no plant
--- of theirs there) or "full"; nothing changes then.
-function Inventory.take(profile: ProfileStore.Profile, slot: any, now: number): (ProfileStore.InvPlant?, string?)
+-- of theirs there) or "full"; nothing changes then. `growMult`: the owner's Fast Grow (1 when nil), so it keeps
+-- the growth it had.
+function Inventory.take(profile: ProfileStore.Profile, slot: any, now: number, growMult: number?): (ProfileStore.InvPlant?, string?)
 	if not whole(slot) then
 		return nil, "bad"
 	end
@@ -50,7 +51,7 @@ function Inventory.take(profile: ProfileStore.Profile, slot: any, now: number): 
 			end
 			local entry: ProfileStore.InvPlant = {
 				id = id, zone = plant.zone, rarity = plant.rarity, mutation = plant.mutation,
-				variant = plant.variant, age = math.clamp(now - plant.plantedAt, 0, Config.GROW_TIME),
+				variant = plant.variant, age = math.clamp(Config.plantAge(plant.plantedAt, now, growMult), 0, Config.GROW_TIME),
 				variance = Config.varianceOf(plant),
 			}
 			table.remove(profile.plants, i)
@@ -62,10 +63,11 @@ function Inventory.take(profile: ProfileStore.Profile, slot: any, now: number): 
 end
 
 -- The plant an entry grows back into, planted at (x, z) under id `slot` at `now`: the same flower,
--- mutation and variance, its growth going on from where it stopped.
-function Inventory.toPlant(entry: ProfileStore.InvPlant, slot: number, now: number, x: number, z: number): ProfileStore.Plant
+-- mutation and variance, its growth going on from where it stopped (at the owner's `growMult`, Fast Grow: its
+-- plantedAt is set back by its age in real seconds at that rate; 1 when nil).
+function Inventory.toPlant(entry: ProfileStore.InvPlant, slot: number, now: number, x: number, z: number, growMult: number?): ProfileStore.Plant
 	return {
-		slot = slot, zone = entry.zone, rarity = entry.rarity, mutation = entry.mutation, plantedAt = now - entry.age,
+		slot = slot, zone = entry.zone, rarity = entry.rarity, mutation = entry.mutation, plantedAt = now - entry.age / (growMult or 1),
 		x = x, z = z, variant = entry.variant, variance = entry.variance,
 	}
 end

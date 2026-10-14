@@ -29,6 +29,7 @@ type Pod = {
 	rarity: number,
 	mutation: string?,
 	gene: number,
+	luck: number, -- the luck its seed was rolled with (night or day), for the 2x Luck pass at steal time
 	regrowToken: number,
 }
 type Nest = { info: WorldBuilder.NestInfo, pods: { Pod } }
@@ -193,7 +194,8 @@ local function setPod(pod: Pod, zone: number, shown: boolean)
 end
 
 local function regrow(pod: Pod, zone: number)
-	pod.rarity, pod.mutation = Config.rollSeed(zone, if isNight() then Config.NIGHT_LUCK else 1, isNight(), roll)
+	pod.luck = if isNight() then Config.NIGHT_LUCK else 1
+	pod.rarity, pod.mutation = Config.rollSeed(zone, pod.luck, isNight(), roll)
 	pod.gene = Config.rollGene(roll)
 	setPod(pod, zone, true)
 end
@@ -244,6 +246,14 @@ function SeedService.newCarry(zone: number, podIndex: number, rarity: number, mu
 	return { zone = zone, rarity = rarity, mutation = mutation, gene = gene, ghost = ghost, scale = scale, pod = podIndex, model = nil }
 end
 
+-- The 2x Luck draw (Config.luckUpgrade's uniform number) for a seed with this gene stolen by this player: fixed
+-- by the two, so a seed that went back to its pod (caught, a reset) and is stolen again by the same player
+-- comes out the same: the pass can't be farmed by re-stealing. Another seed or another player draws anew.
+function SeedService.luckRoll(gene: number, userId: number): number
+	local h = (math.floor(gene) * 2654435761 + (math.floor(userId) % 1e9) * 40503 + 12345) % 4294967296
+	return h / 4294967296
+end
+
 local function steal(player: Player, zone: number, podIndex: number)
 	local s = Sessions.get(player)
 	local nest = nests[zone]
@@ -265,9 +275,14 @@ local function steal(player: Player, zone: number, podIndex: number)
 		return
 	end
 
-	local rarity, mutation = pod.rarity, pod.mutation
+	-- 2x Luck: the thief's own luck re-draws the rarity, never below what the pod showed (Config.luckUpgrade)
+	local rarity = Config.luckUpgrade(zone, pod.rarity, pod.luck, Sessions.luckMult(s), function()
+		return SeedService.luckRoll(pod.gene, player.UserId)
+	end)
+	local mutation = pod.mutation
 	setPod(pod, zone, false)
 	local carry = SeedService.newCarry(zone, podIndex, rarity, mutation, pod.gene)
+	carry.shown = pod.rarity
 	carry.model = makeCarryModel(char, carry)
 	s.carry = carry
 	Sessions.pushCarry(s)
@@ -330,7 +345,7 @@ function SeedService.buildPods(nestInfos: { WorldBuilder.NestInfo })
 			part.Parent = info.model
 			local pod: Pod = {
 				cframe = cf, part = part, prompt = prompt, label = label, gui = gui,
-				available = false, rarity = 1, mutation = nil, gene = 1, regrowToken = 0,
+				available = false, rarity = 1, mutation = nil, gene = 1, luck = 1, regrowToken = 0,
 			}
 			nest.pods[i] = pod
 			regrow(pod, k)
@@ -365,7 +380,8 @@ local function clearCarry(s: Sessions.Session): Sessions.Carry?
 	return carry
 end
 
--- Caught, died or left: the seed goes back to its pod, unchanged (its gene too).
+-- Caught, died or left: the seed goes back to its pod as the pod showed it (its gene too; a 2x Luck upgrade
+-- was the thief's own and stays with them: SeedService.luckRoll gives them the same one if they steal it again).
 function SeedService.returnCarry(player: Player)
 	local s = Sessions.get(player)
 	local carry = s and clearCarry(s)
@@ -374,7 +390,7 @@ function SeedService.returnCarry(player: Player)
 	end
 	local pod = nests[carry.zone].pods[carry.pod]
 	pod.regrowToken += 1
-	pod.rarity, pod.mutation, pod.gene = carry.rarity, carry.mutation, carry.gene or Config.rollGene(roll)
+	pod.rarity, pod.mutation, pod.gene = carry.shown or carry.rarity, carry.mutation, carry.gene or Config.rollGene(roll)
 	setPod(pod, carry.zone, true)
 end
 
