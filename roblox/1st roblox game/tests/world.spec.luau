@@ -115,6 +115,47 @@ H.test("world: part budget (corridor < 6k, whole map < 8k)", function()
 	H.ok(all < 8000, `map has {all} parts`)
 end)
 
+-- The base is kept plain so the plants stand out: the lawn, walls, plot fences and gameplay pieces only.
+local function baseArea(): { any }
+	local out = {}
+	for _, child in world:GetChildren() do
+		if child.Name ~= "Corridor" then
+			table.insert(out, child)
+		end
+	end
+	return out
+end
+
+H.test("world: the base is plain (no trees, bushes, flowers, lamps or rocks outside the corridor)", function()
+	local banned = { Tree = true, BlossomTree = true, Bush = true, Flower = true, Lamp = true, Rock = true }
+	for _, root in baseArea() do
+		for _, d in root:GetDescendants() do
+			if d:IsA("Model") and banned[d:GetAttribute("AssetSlot")] then
+				error(`{d:GetFullName()} is a {d:GetAttribute("AssetSlot")} in the base`)
+			end
+			H.ok(not d:IsA("PointLight"), `{d:GetFullName()}: no lamps in the base`)
+		end
+	end
+	for i, plot in plots do
+		local posts = 0
+		for _, d in plot.model:GetDescendants() do
+			if d:IsA("Model") and d:GetAttribute("AssetSlot") == "FencePost" then
+				posts += 1
+			end
+		end
+		H.ok(posts >= 20 and posts <= 40, `plot {i} has a simple wooden fence ({posts} posts)`)
+	end
+end)
+
+H.test("world: base part budget (plots, plaza, lawn and walls < 1250)", function()
+	local n = 0
+	for _, root in baseArea() do
+		n += #parts(root)
+	end
+	print(`        base area parts: {n}`)
+	H.ok(n < 1250, `the base area has {n} parts`)
+end)
+
 H.test("world: every zone has an entry sign with its name and recommended Speed", function()
 	local Format = H.shared("Format")
 	for k, zone in Config.ZONES do
