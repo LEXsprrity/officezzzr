@@ -640,6 +640,7 @@ local STALLS = {
 }
 local STALL_SPACING = 21 -- four 16.4-stud awnings across the 84-stud plaza
 local STALL_DEPTH = 9 -- front posts to back posts
+local STALL_INSET = 62 -- the counters stand at the back of the plaza (owner), the sand apron and rings in front
 local STALL_STRIPE = Color3.fromRGB(255, 255, 250)
 local STALL_WOOD = Color3.fromRGB(150, 98, 58)
 local STALL_STONE = Color3.fromRGB(150, 152, 168)
@@ -701,17 +702,17 @@ local function buildShops(world: Folder)
 	-- The lawn runs on under the stalls; a sand apron in front of the counters and a path from the walkway,
 	-- level with the lawn (which is laid round them).
 	Props.tile(model, "PlazaPath", rectBetween(at(-7, 0, 0), Vector3.new(center.X + 7, GROUND, side * Config.WALKWAY_WIDTH / 2)), GROUND, SAND)
-	Props.tile(model, "Plaza", rectBetween(at(-Config.PLOT_SIZE / 2, 0, 0), at(Config.PLOT_SIZE / 2, 22, 0)), GROUND, SAND)
+	Props.tile(model, "Plaza", rectBetween(at(-Config.PLOT_SIZE / 2, 0, 0), at(Config.PLOT_SIZE / 2, STALL_INSET + 4, 0)), GROUND, SAND)
 
 	for i, stall in STALLS do
 		local u = (i - (#STALLS + 1) / 2) * STALL_SPACING
-		local w0 = 18 -- counter's distance in from the plaza's front edge
+		local w0 = STALL_INSET -- counter's distance in from the plaza's front edge
 		local selling = stall.opens == "Sell"
 		-- The stall (ShopStall_<menu> slot, else ShopStall) faces the walkway.
 		Assets.swap("ShopStall_" .. stall.opens, model, Assets.facing(at(u, w0 + STALL_DEPTH / 2, 0), Vector3.new(0, 0, -side)), function(into)
 			marketStall(into, at, u, w0, side, stall)
 		end, Vector3.new(1, 1.5, 1.5))
-		stallRing(model, if selling then "SellCircle" else "StallRing", at(u, 8, 0), stall.ring) -- on the sand, in front of the counter
+		stallRing(model, if selling then "SellCircle" else "StallRing", at(u, STALL_INSET - 10, 0), stall.ring) -- on the sand, in front of the counter
 
 		-- A big title floating over the awning, in the stall's colour with a dark outline.
 		local signPart = deco(model, "StallSign", Vector3.new(1, 1, 1), CFrame.new(at(u, w0 + STALL_DEPTH / 2, 19)), stall.color)
