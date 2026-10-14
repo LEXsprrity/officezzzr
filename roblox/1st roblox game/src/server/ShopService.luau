@@ -193,6 +193,12 @@ local function processReceipt(receiptInfo: { [string]: any }): Enum.ProductPurch
 		local pack = grant.pack
 		if pack and grant.roll then
 			Net.LootEvent:FireClient(s.player, "PackRoll", { packId = pack.id, name = pack.name, zone = pack.zone, result = grant.roll })
+			local roll, player = grant.roll, s.player
+			if Config.announcesLegendary(roll.zone, roll.rarity, true) then
+				task.delay(Config.PACK_ANNOUNCE_DELAY, function() -- once the buyer's reveal reel has landed
+					Net.announce(Config.legendaryAnnouncement(player.DisplayName, roll.zone, roll.mutation), "gold")
+				end)
+			end
 		elseif pack then
 			Net.toast(s.player, `🎒 Your seed bag is full, so your {pack.name} paid {Format.money(grant.compensation)} instead.`, "gold")
 		else

@@ -4,6 +4,7 @@
 --       Robux), "Pass:<name>" (gamepasses)
 --     RequestUseItem ids: "Bat", "Seed:<bagKey>" (plant from the seed bag), "Equip:<trailId>"
 --   server -> client: StatsUpdate(stats), LootEvent(kind, data), IncomePopup(amount, position)
+--     LootEvent "Announce" { text, color } goes to every client (Net.announce)
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local folder = Instance.new("Folder")
@@ -28,6 +29,11 @@ folder.Parent = ReplicatedStorage
 
 function Net.toast(player: Player, text: string, color: string?)
 	Net.LootEvent:FireClient(player, "Toast", { text = text, color = color })
+end
+
+-- A message for the whole server (every client shows it), e.g. a Legendary from the last zones.
+function Net.announce(text: string, color: string?)
+	Net.LootEvent:FireAllClients("Announce", { text = text, color = color })
 end
 
 return Net
