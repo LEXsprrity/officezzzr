@@ -48,7 +48,8 @@ local function tickPlayer(s: Sessions.Session, dt: number, now: number)
 		walkSpeed = s.walkSpeed,
 		onTreadmill = onTreadmill,
 		mult = Sessions.speedPerStud(s),
-		treadmillMult = Sessions.treadmillMult(s),
+		treadmillTier = s.profile.treadmillTier,
+		trailMult = Sessions.speedMult(s),
 	})
 
 	if verdict == "rubberband" and back then
