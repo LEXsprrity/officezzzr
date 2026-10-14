@@ -6,13 +6,13 @@ Players get a fenced plot. From spawn, one long walled corridor runs through sev
 
 | # | Zone | Guardian | Seed | Recommended Speed | Length (studs) |
 |---|---|---|---|---|---|
-| 1 | 🌼 Meadow | Giant Mole | Sproutling | 0 | 100 |
-| 2 | 🦂 Desert | Giant Scorpion | Cactopod | 25K | 200 |
-| 3 | 🦖 Jungle | Giant Dino | Fernosaur | 500K | 400 |
-| 4 | 🌋 Lava Fields | Lava Golem | Magmabloom | 2M | 400 |
-| 5 | ❄️ Snow Peaks | Giant Yeti | Frostbulb | 7.5M | 400 |
-| 6 | 👽 Deep Space | Big Alien | Starpetal | 25M | 400 |
-| 7 | ⛩️ Spirit Garden (END) | Spirit Dragon | Lotus Wyrm | 75M | 400 |
+| 1 | 🌼 Meadow | Giant Turtle | Sproutling | 0 | 100 |
+| 2 | 🦂 Desert | Red Mole | Cactopod | 25K | 200 |
+| 3 | 🦖 Jungle | Giant Snake | Fernosaur | 500K | 400 |
+| 4 | 🌋 Lava Fields | Volcano Gorilla | Magmabloom | 2M | 400 |
+| 5 | ❄️ Snow Peaks | Ice Shark | Frostbulb | 7.5M | 400 |
+| 6 | 👽 Deep Space | Void Dragon | Starpetal | 25M | 400 |
+| 7 | ⛩️ Spirit Garden (END) | Lumistag | Lotus Wyrm | 75M | 400 |
 
 Zone lengths come from a formula (`Config.zoneLength`): the first zone is the shortest (`ZONE_LENGTH_BASE` = 100 studs, so a new player grabs a first seed within seconds), each next zone is twice as long (`ZONE_LENGTH_GROWTH` = 2) up to `ZONE_LENGTH_MAX` = 400 (about two corridor widths deep), and every later zone stays at the max. The corridor is 2,300 studs long, so a run to the end takes about 13 s at the Spirit Garden's recommended Speed (WalkSpeed 171) and at max WalkSpeed (180). There are no zone gates, arches or name signs: one zone flows into the next by its floor and wall colours (a banner on the screen names the zone you enter), and a small studded orange plank (6 × 3.5, chest height) on a short post beside each nest says its recommended Speed ("👟 700K recommended"; the Meadow's says "Start here"), green once your Speed reaches it and red below. Streaming is off and the air is thin, so from spawn you can see down the whole corridor to the Spirit Garden's back wall.
 
@@ -323,7 +323,7 @@ lune run tools/upload_icons.luau             # upload every icon whose id is sti
 
 - Every repeated or distinctive map piece is built as a group Model tagged `AssetSlot` (its slot name) and `FitSize` (the space it uses). The groups are trees, bushes, rocks, flowers, lamps, fence posts and sections, each zone's props, nests, the treadmill frame, the upgrade-sign stand and the shop stalls. `Assets.replace` swaps a group for the slot's model at the group's **current pivot**, so hand moves are kept. The model is scaled uniformly (`Model:ScaleTo`) to fit `FitSize` unless it has `KeepScale = true`, its bottom centre is the pivot, and `Yaw` (degrees) turns it. It is anchored, non-colliding for decor (fences and stalls keep their saved collision), stripped of scripts, and gets the built-in piece's lights and particles if it has none. Variants are picked from a stable hash of the position. File names match slots case- and accent-insensitively, with Portuguese aliases (`Arvores` → `Tree`, `Arbustos` → `Bush`, ...; `Assets.ALIASES`).
 - **When they apply:** the server replaces every group still built from code at start (`WorldBuilder.load` → `Assets.refresh`). `lune run tools/apply_assets.luau` does the same in `map/World.rbxm`, keeping hand edits, so they show in edit mode; `--all` also re-places groups that already hold an older export. `build_map --force` uses them too.
-- **Runtime-spawned models:** `Creature_<Seed>` (e.g. `Creature_LotusWyrm`) replaces a plant-creature, ahead of `Config.CREATURE_ASSETS`, and still gets rarity/mutation flair. `Guard_<Name>` (e.g. `Guard_GiantMole`) becomes a guardian's body, welded to the invisible root that `Humanoid:MoveTo` drives (no animation).
+- **Runtime-spawned models:** `Creature_<Seed>` (e.g. `Creature_LotusWyrm`) replaces a plant-creature, ahead of `Config.CREATURE_ASSETS`, and still gets rarity/mutation flair. `Guard_<Name>` (e.g. `Guard_GiantTurtle`) becomes a guardian's body, welded to the invisible root that `Humanoid:MoveTo` drives. The seven slots hold the owner's rigged pets (see "The zone bosses" below); a model without a `BossRig` attribute is fitted like any other and isn't animated.
 - A broken model (no parts, empty folder, an error while fitting) is skipped with one `[Assets]` warning, and the built-in piece stays. Unknown file names are warned about, and `tests/assets.spec.luau` fails on them.
 - Owner workflow when new models arrive: `lune run tools/apply_assets.luau`, then `rojo build -o StealASeed.rbxlx`, `lune run tests/run.luau`, commit `assets/` and `map/World.rbxm`. Meshes uploaded by the 3D Importer belong to the uploader's account: the experience's owner needs permission to use them in the published game.
 
@@ -377,8 +377,20 @@ The tests check, by bisection in the chase sim:
 
 The sim ticks at 10 Hz, like the guard loop, so delays act in 0.1 s steps. Keep `GUARD_SPEED_FACTOR` at 1 or below, or players at exactly the recommended Speed get caught.
 
-## The Meadow boss: a rigged, animated Giant Mole
-The first guardian is a star-nosed Giant Mole in a miner's helmet (`src/shared/GiantMole.luau`, ~80 parts): a real rig of 13 Motor6D joints (spine, neck, star nose, jaw, helmet, shoulders, wrists, hips, tail, stun halo). The server builds it; every client animates it locally (`src/client/GuardAnimator.client.luau`) from the guard's `State` attribute: breathing sleep with floating Zzz, a springy wake-up with the headlamp switching on, a front-crawl gallop with dirt and footstep thumps, a paw swipe on a catch (`SwipeAt`), a stunned wobble with spinning stars, and a grumpy walk home. `GiantMole.pose` is pure math, so the Lune tests check every state (including that nothing sinks into the ground) and `tools/export_mole.luau` samples the same animation for a browser preview. A `Guard_GiantMole` model in `assets/` still replaces it.
+## The zone bosses: the owner's rigged pets, animated by code
+The seven guardians are rigged pets the owner bought (`models/bosses/Pets.rbxl`, Workspace.PetTemplates; no scripts): skinned MeshParts deformed by Bones. `lune run tools/export_bosses.luau` exports the chosen pet of each zone (`BossRigs.BY_ZONE`) into its `assets/Guard_<Name>.rbxm`: just the meshes and the RootPart with the Bones (the kit's AnimationController, saved animations, Motor6Ds and helper parts are dropped), scaled by the profile (part sizes and bone offsets), anchored, front = -Z, with `BossRig`, `RigScale`, `KeepScale` and `Pivot = (0,0,0)` (Assets.place puts the pet's own ground point, not its bounds' centre, at the guard's feet).
+
+| Zone | Guardian | Pet | Height × width × length (studs) | Animation |
+|---|---|---|---|---|
+| 🌼 Meadow | Giant Turtle | Turtle | 10 × 14 × 22 | trot; asleep its head pulls into the shell, legs tucked |
+| 🦂 Desert | Red Mole | RedMole | 11 × 28 × 34 | splayed digging paws paddle; whiskers twitch; rears up to bite |
+| 🦖 Jungle | Giant Snake | GiantSnake | 14 × 8 × 33 | slithers (a wave down the body and tail, the head held steady); coils its neck down asleep; strikes |
+| 🌋 Lava Fields | Volcano Gorilla | GorillaVulcano | 15 × ~27 × 12 | arms brought down from the kit's T-pose; knuckle gallop; chest beat on waking; two-fisted smash |
+| ❄️ Snow Peaks | Ice Shark | IceShark | 15 × 24 × 32 | glides over the snow: tail sweeps, fins paddle, body bobs; jaws snap |
+| 👽 Deep Space | Void Dragon | VoidDragon | 18 × 29 × 17 | runs on two legs flapping its wings; folds them and crouches asleep; wings flare on a bite |
+| ⛩️ Spirit Garden | Lumistag | Lumistag | 18 × 14 × 13 | gallops in bounds; lies down with folded legs; antler ram |
+
+The server still moves the invisible HumanoidRootPart with `Humanoid:MoveTo` (gameplay unchanged) with the pet welded to it, and tags the guard with `Rig`, `BodyMin`/`BodyMax` and, on a catch, `CatchAt`. Every client poses the Bones locally (`src/client/GuardAnimator.client.luau`, only bosses within 150 studs of the camera) from the guard's `State` attribute: sleeping (lying down, slow breathing, floating Zzz), waking (a hop, head flung up, mouth open; the ❗ label stays), chasing (the gait, its stride phase driven by ground speed, with dust and footstep thumps), the catch lunge/bite, a grumpy slower walk home, and a dizzy wobble when stunned, cross-faded over 0.25 s. `src/shared/BossRigs.luau` holds a rig profile per pet (which bones are the legs L/R front/back, spine, neck, head, jaw, tail, wings, fins) and is pure math: a pose turns bones about their own pivots in model axes, and `solve` turns it into `Bone.Transform`. The kits' feet and hands are IK-target bones parented to the root, so they "follow" the end of their leg, feet stay flat, and no foot, toe, hand or finger goes under the ground. Near a side wall the body slides inward a little so it never pokes through (visual only). `tests/bosses.spec.luau` checks each slot holds its pet with no scripts or animation leftovers, every profile bone exists, the sizes, and that every state's pose is finite and stays above the ground.
 
 ## Plant-creatures
 Each planted seed grows into its zone's creature (`CreatureModels`). The creatures are 20–32 parts (up to 39 with Legendary flair) built from Parts, WedgeParts and built-in Sphere `SpecialMesh`es, so nothing needs uploading. Each one hatches from a seed husk and has a leaf or flower motif. Later zones stand taller and glow more.
@@ -443,7 +455,7 @@ Each planted seed grows into its zone's creature (`CreatureModels`). The creatur
 | `src/client/Planting.client.luau` | 〃 | The planting preview (green/red disc on your dirt), click / tap / R2 to plant (remote `PlantSeed`), the hint and ✖ for bagged seeds |
 | `src/client/DayNight.client.luau` | 〃 | The fade to black at each day/night flip and the local switch of the look (from the server clock) |
 | `src/client/SpeedPlanks.client.luau` | 〃 | Writes each nest's "👟 2M recommended" plank from `Config.ZONES[k].req` (`Format.speedPlank`, so a map with older numbers still reads right) and colours it green or red from your Speed |
-| `tests/` | — | Lune harness + specs (guard, speed, data, economy, world, lighting, packs, legendary odds + announcements, shop, progression + its free-player simulation, creatures, assets, map, mole, icons + uploader, SELL stall, community rewards, treadmill tiers + own-belt animation, free planting + save migration) |
+| `tests/` | — | Lune harness + specs (guard, speed, data, economy, world, lighting, packs, legendary odds + announcements, shop, progression + its free-player simulation, creatures, assets, map, bosses, icons + uploader, SELL stall, community rewards, treadmill tiers + own-belt animation, free planting + save migration) |
 
 ## Networking
 `ReplicatedStorage.Remotes`:

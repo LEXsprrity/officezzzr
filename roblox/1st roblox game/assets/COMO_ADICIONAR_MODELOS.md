@@ -119,7 +119,7 @@ Botão direito na pasta **Arvores** → **Save to File...** → `assets/Arvores.
 - Mantém cores e texturas. **Materiais realistas viram plástico**: o mapa tem visual de desenho, limpo (plástico liso ou com studs, cores fortes), então Grass, Sand, Slate, Wood, Metal, Fabric e afins viram `Plastic`/`SmoothPlastic` na mesma cor. Quer manter os seus materiais? Adicione ao Model o atributo **`KeepMaterials`** (Boolean) = `true`. Criaturas e guardiões mantêm sempre os materiais.
 - Luzes e partículas: se a peça original tinha luz (postes, lanternas, vulcões, ninhos), seu modelo ganha a mesma luz no mesmo ponto. Se o seu modelo já tiver um `PointLight` ou um `ParticleEmitter`, vale o seu.
 - Criaturas: o jogo continua colocando o brilho de raridade (aura, halo, partículas) e as cores das mutações. Malhas com textura não mudam de cor nas mutações (Gold, Night...), mas ganham as partículas e a luz.
-- Guardiões: seu modelo vira o corpo do gigante e desliza junto com ele na perseguição. **Animação ainda não funciona**: um modelo com rig fica parado na pose em que foi salvo.
+- Guardiões: os 7 guardiões já são os pets com rig que o dono comprou (`models/bosses/Pets.rbxl`, exportados por `lune run tools/export_bosses.luau`), animados pelo código (`src/shared/BossRigs.luau`). Um modelo **seu** com o nome de um guardião troca o pet: ele vira o corpo do gigante e desliza junto com ele na perseguição, mas fica parado na pose em que foi salvo (a animação por código só conhece os rigs dos pets; veja `models/bosses/LEIA-ME.md`).
 
 ### 6. Como conferir
 
@@ -240,14 +240,16 @@ Em pé, frente = -Z. O jogo cresce a criatura conforme o peso da planta, até ~2
 
 ### Guardiões (dormem ao lado do ninho e perseguem quem rouba)
 
-Em pé, frente = -Z. Os nomes e os ícones de estado (💤 ❗ 😡) ficam em cima da cabeça.
+Em pé, frente = -Z. O ícone de estado (❗ 😡 😤 💫) fica em cima da cabeça; dormindo, um Zzz animado.
 
-| Nome | Guardião | Zona | Altura | Largura máx. |
-|---|---|---|---|---|
-| `Guard_GiantMole` | Giant Mole | 🌼 Meadow | ~23 | ~30 |
-| `Guard_GiantScorpion` | Giant Scorpion | 🦂 Desert | ~23 | ~30 |
-| `Guard_GiantDino` | Giant Dino | 🦖 Jungle | ~23 | ~30 |
-| `Guard_LavaGolem` | Lava Golem | 🌋 Lava Fields | ~23 | ~30 |
-| `Guard_GiantYeti` | Giant Yeti | ❄️ Snow Peaks | ~23 | ~30 |
-| `Guard_BigAlien` | Big Alien | 👽 Deep Space | ~23 | ~30 |
-| `Guard_SpiritDragon` | Spirit Dragon | ⛩️ Spirit Garden | ~23 | ~30 |
+Hoje cada slot já tem o pet com rig exportado de `models/bosses/Pets.rbxl` (tamanhos abaixo, no jogo). Um modelo sem rig seu (sem o atributo `BossRig`) é encaixado em ~23 de altura × ~30 de largura e não anima.
+
+| Nome | Guardião | Zona | Pet (Pets.rbxl) | Altura | Largura × comprimento |
+|---|---|---|---|---|---|
+| `Guard_GiantTurtle` | Giant Turtle | 🌼 Meadow | Turtle | ~10 | ~14 × 22 |
+| `Guard_RedMole` | Red Mole | 🦂 Desert | RedMole | ~11 | ~28 × 34 |
+| `Guard_GiantSnake` | Giant Snake | 🦖 Jungle | GiantSnake | ~14 | ~8 × 33 |
+| `Guard_VolcanoGorilla` | Volcano Gorilla | 🌋 Lava Fields | GorillaVulcano | ~15 | ~27 × 12 (braços para baixo) |
+| `Guard_IceShark` | Ice Shark | ❄️ Snow Peaks | IceShark | ~15 | ~24 × 32 |
+| `Guard_VoidDragon` | Void Dragon | 👽 Deep Space | VoidDragon | ~18 | ~29 × 17 (asas abertas) |
+| `Guard_Lumistag` | Lumistag | ⛩️ Spirit Garden | Lumistag | ~18 | ~14 × 13 |
