@@ -10,7 +10,9 @@ local BossRigs = H.shared("BossRigs")
 local Assets = H.server("Assets")
 
 local PLAYER_HEIGHT = 5 -- studs, a default character
-local SOURCE = roblox.deserializePlace(fs.readFile("models/bosses/Pets.rbxl"))
+-- The bought kit (*.rbxl is gitignored, so a fresh checkout may not have it): checked when it is there.
+local KIT = "models/bosses/Pets.rbxl"
+local SOURCE = if fs.isFile(KIT) then roblox.deserializePlace(fs.readFile(KIT)) else nil
 
 local function slotOf(zone: any): string
 	return "Guard_" .. string.gsub(zone.guard, "%s", "")
@@ -115,15 +117,15 @@ H.test("bosses: each zone's guard slot holds its own rigged pet, with no scripts
 		H.ok(meshes >= 10 and bones >= 20, `{key}: {meshes} meshes, {bones} bones`)
 	end
 	-- the source kit itself has no code
-	for _, d in SOURCE:GetDescendants() do
+	for _, d in if SOURCE then SOURCE:GetDescendants() else {} do
 		H.ok(not d:IsA("LuaSourceContainer"), `Pets.rbxl has a script: {d:GetFullName()}`)
 	end
 end)
 
 H.test("bosses: the rig profiles name only bones that exist (in the kit and in the exported asset), each once", function()
-	local folder = SOURCE.Workspace.PetTemplates
+	local folder = SOURCE and SOURCE.Workspace.PetTemplates
 	for key, p in BossRigs.PROFILES do
-		local inKit = boneCount(folder:FindFirstChild(key))
+		local inKit = if folder then boneCount(folder:FindFirstChild(key)) else nil
 		local zone = nil
 		for _, z in Config.ZONES do
 			if BossRigs.BY_ZONE[z.id] == key then
@@ -133,7 +135,9 @@ H.test("bosses: the rig profiles name only bones that exist (in the kit and in t
 		H.ok(zone, `{key} guards a zone`)
 		local inAsset = boneCount(Assets.get(slotOf(zone)))
 		for _, name in bonesOf(p) do
-			H.eq(inKit[name], 1, `{key}: bone {name} in the kit`)
+			if inKit then
+				H.eq(inKit[name], 1, `{key}: bone {name} in the kit`)
+			end
 			H.eq(inAsset[name], 1, `{key}: bone {name} in the asset`)
 		end
 		local rig = BossRigs.rig(Assets.get(slotOf(zone)).PrimaryPart, p, p.scale)

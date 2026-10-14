@@ -2,6 +2,8 @@
 
 `Pets.rbxl` é o arquivo original ("Ultra-Detailed Pets Rig & Animation Ready", sem scripts). No Workspace há a pasta **PetTemplates** com 30 Models com rig (MeshParts com skinning em Bones, todos os Bones dentro da peça `RootPart`). A pasta **Rigless** (cópias sem rig) não é usada.
 
+> O `.gitignore` ignora `*.rbxl`: para guardar este arquivo no repositório (como o `Treadmills.rbxl`), use `git add -f models/bosses/Pets.rbxl`. O jogo e os testes não precisam dele (os `assets/Guard_*.rbxm` já têm tudo); só o exportador precisa.
+
 `lune run tools/export_bosses.luau` (na pasta do jogo) gera um `assets/Guard_<Nome>.rbxm` por zona:
 
 | Zona | Guardião | Pet | Escala | No jogo (altura × largura × comprimento) |
