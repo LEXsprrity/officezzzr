@@ -448,6 +448,35 @@ local function carryEffects(group: Model, placed: Model, fit: Vector3)
 	end
 end
 
+-- Gameplay parts that sit under a slot's visuals: when the slot gets a model, the part (a sibling of the
+-- group, by name) is hidden and its top raised or lowered to the top of the model's part whose name
+-- contains `topOf`, so players stand on the model's surface. The part keeps working (e.g. the belt check).
+local UNDER_MODEL: { [string]: { part: string, topOf: string } } = {
+	Treadmill = { part = "TreadmillBelt", topOf = "Belt" },
+}
+
+local function fitUnder(slot: string, placed: Model)
+	local rule = UNDER_MODEL[slot]
+	local under = rule and placed.Parent and placed.Parent:FindFirstChild(rule.part)
+	if not rule or not under or not under:IsA("BasePart") then
+		return
+	end
+	under.Transparency = 1
+	for _, d in under:GetChildren() do
+		if d:IsA("Texture") or d:IsA("Decal") then
+			d.Transparency = 1
+		end
+	end
+	for _, d in placed:GetDescendants() do
+		if d:IsA("BasePart") and string.find(d.Name, rule.topOf, 1, true) then
+			local top = d.CFrame.Position.Y + d.Size.Y / 2
+			local current = under.CFrame.Position.Y + under.Size.Y / 2
+			under.CFrame = under.CFrame + Vector3.new(0, top - current, 0)
+			break
+		end
+	end
+end
+
 -- Replaces a slot group (a piece built from code, or an earlier model) with the slot's model, at the
 -- group's current pivot (so hand moves are kept) and in its FitSize. Returns the new model, or nil.
 function Assets.replace(group: Model): Model?
@@ -469,6 +498,7 @@ function Assets.replace(group: Model): Model?
 		carryEffects(group, placed, fitSize)
 	end
 	group:Destroy()
+	fitUnder(slot, placed)
 	return placed
 end
 

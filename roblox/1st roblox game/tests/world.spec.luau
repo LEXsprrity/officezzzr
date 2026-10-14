@@ -48,7 +48,9 @@ H.test("world: plot layout contract is unchanged (slots, pad, spawn, belt)", fun
 		end
 		H.ok((plot.pad.CFrame.Position - at(0, 10, 1.2)).Magnitude < 1e-3, `pad position {plot.pad.CFrame.Position} vs {at(0, 10, 1.2)}`)
 		H.ok((plot.spawnCFrame.Position - at(-24, 12, 4)).Magnitude < 1e-3, "spawn position")
-		H.ok((plot.belt.CFrame.Position - at(30, 26, 1.5)).Magnitude < 1e-3, "belt position")
+		-- With a Treadmill model in assets/, the belt is raised to the model's running surface (same X and Z).
+		local beltDelta = plot.belt.CFrame.Position - at(30, 26, 1.5)
+		H.ok(math.abs(beltDelta.X) < 1e-3 and math.abs(beltDelta.Z) < 1e-3 and beltDelta.Y > -1e-3 and beltDelta.Y < 6, "belt position")
 		H.eq(plot.model.PrimaryPart.Name, "Floor")
 		H.ok(plot.soil:IsA("Folder") and plot.plants:IsA("Folder"), "soil/plants folders")
 		H.ok(plot.signLabel:IsA("TextLabel"), "sign label")
