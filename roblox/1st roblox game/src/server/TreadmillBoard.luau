@@ -153,18 +153,19 @@ local function buildFrame(model: Model, cf: CFrame)
 	studs(Props.deco(model, "BoardPost", Vector3.new(1.4, postHeight, 1), cf * CFrame.new(0, -(h / 2 + postHeight / 2 - 0.2), 0.05), POST), { "FrontSurface" })
 end
 
--- The plot's floor top: its floor (the part tagged Role = "PlotFloor"), or the belt's bottom.
+-- The ground the treadmill stands on: the bottom of its frame or model (the plot's "Treadmill" group), or
+-- the belt's bottom.
 local function groundOf(model: Model, belt: BasePart): number
-	for _, d in model:GetDescendants() do
-		if d:IsA("BasePart") and d:GetAttribute("Role") == "PlotFloor" then
-			return d.CFrame.Position.Y + d.Size.Y / 2
-		end
+	local tm = model:FindFirstChild("Treadmill")
+	local lo = if tm then Assets.bounds(tm) else nil
+	if lo then
+		return lo.Y
 	end
 	return belt.CFrame.Position.Y - belt.Size.Y / 2
 end
 
--- How far the treadmill (its model, if the plot has one) reaches either side of the belt's centre line.
-local function clearHalf(model: Model, belt: BasePart): number?
+-- How far the treadmill (its model, if the plot has one) reaches past the belt's centre along the belt.
+local function clearAlong(model: Model, belt: BasePart): number?
 	local tm = model:FindFirstChild("Treadmill")
 	if not tm then
 		return nil
@@ -173,13 +174,13 @@ local function clearHalf(model: Model, belt: BasePart): number?
 	if not lo or not hi then
 		return nil
 	end
-	local wide = if belt.Size.Z >= belt.Size.X then math.max(math.abs(lo.X), math.abs(hi.X)) else math.max(math.abs(lo.Z), math.abs(hi.Z))
-	return math.max(wide, belt.Size.X / 2)
+	local long = if belt.Size.Z >= belt.Size.X then math.max(math.abs(lo.Z), math.abs(hi.Z)) else math.max(math.abs(lo.X), math.abs(hi.X))
+	return math.max(long, math.max(belt.Size.X, belt.Size.Z) / 2)
 end
 
--- Where the board goes for this plot's belt right now.
+-- Where the board goes for this plot's belt right now: in line with the treadmill, past its back end.
 function TreadmillBoard.placement(model: Model, belt: BasePart, center: Vector3): CFrame
-	return Treadmill.boardCFrame(belt.CFrame, belt.Size, center, Config.PLOT_SIZE, groundOf(model, belt), clearHalf(model, belt))
+	return Treadmill.boardCFrame(belt.CFrame, belt.Size, center, groundOf(model, belt), clearAlong(model, belt))
 end
 
 -- Builds the board and the "+X/step" text for one plot (`model` the plot Model, `center` its centre),

@@ -18,10 +18,17 @@ Config.WALL_HEIGHT = 52
 Config.PLOT_SIZE = 84
 Config.PLOT_SPACING_X = 84 -- = PLOT_SIZE: neighbouring plots touch and share the fence between them
 Config.PLOT_FIRST_X = -6 -- the front plots end 24 studs before the corridor mouth (room for the free chest)
-Config.PLOT_OFFSET_Z = 72 -- plots sit at z = +/-72, the walkway runs down z = 0
-Config.SLOT_SPACING = 8 -- creature sizes (CREATURE_* below) are budgeted against this
-Config.SLOT_COLUMNS = 8
-Config.SOIL_HEIGHT = 0.4 -- soil patch under each slot; creatures stand on top of it
+Config.PLOT_OFFSET_Z = 84 -- plots sit at z = +/-84, the walkway runs down z = 0
+Config.WALKWAY_WIDTH = 36 -- the sand walkway down z = 0; the 24 studs between it and a plot's front fence hold its treadmill
+-- Inside a plot (owner's reference): two brown dirt beds, left and right, with a grass path down the middle
+-- from the entrance. Players plant anywhere on their own beds (Shared/Planting).
+Config.PLOT_PATH_WIDTH = 20 -- the grass path between the beds
+Config.BED_FENCE_GAP = 1.5 -- from a bed's outer edges to the fence line
+Config.BED_HEIGHT = 0.4 -- the beds stand this far above the plot's grass; plants stand on top
+Config.SLOT_SPACING = 8 -- the default planting grid (old saves, auto-placing); creature sizes are budgeted against it
+Config.PLANT_BED_MARGIN = 2 -- a plant's centre stays at least this far inside its bed
+Config.PLANT_OVERLAP = 1 -- two full-grown neighbours may overlap this much (studs)
+Config.PLANT_REACH = 28 -- you plant within this many studs (flat) of where you stand
 
 ----------------------------------------------------------------------------------------------------
 -- Speed stat -> WalkSpeed
@@ -385,8 +392,8 @@ function Config.plantIncome(k: number, rarity: number, weight: number, mutation:
 end
 
 -- Plant-creature models (CreatureModels). Sizes are studs at scale 1, and PlotService scales each creature
--- by weight. CREATURE_FOOTPRINT * CREATURE_MAX_SCALE (8.8) keeps the biggest within about one slot spacing,
--- and the back row (46 + 4 * SLOT_SPACING = 78 studs in) still clears the 84-stud plot's back fence.
+-- by weight. CREATURE_FOOTPRINT * CREATURE_MAX_SCALE (8.8) keeps the biggest within about one SLOT_SPACING,
+-- and Shared/Planting spaces plants by their full-grown size.
 Config.CREATURE_FOOTPRINT = 3.4 -- widest a creature (incl. its aura ring) may be at scale 1
 Config.CREATURE_GROWTH_EXPONENT = 0.4 -- scale ~ (weight / sprout weight) ^ this: sprout ~1x, full-grown ~1.9x
 Config.CREATURE_RARITY_SCALE = 0.07 -- +7% size per rarity step

@@ -86,46 +86,28 @@ function Treadmill.stepTextOffset(beltSize: Vector3): Vector3
 end
 
 ----------------------------------------------------------------------------------------------------
--- The Upgrade board beside it
+-- The Upgrade board next to it
 ----------------------------------------------------------------------------------------------------
 Treadmill.BOARD_SIZE = Vector2.new(7.6, 4.8) -- the panel (studs), like the plot's Upgrade board
-Treadmill.BOARD_GAP = 1.6 -- from the treadmill's side to the board's centre plane
+Treadmill.BOARD_GAP = 1.2 -- from the treadmill's back end to the board's near edge
 Treadmill.BOARD_LIFT = 2 -- the panel's bottom edge above the ground
-Treadmill.BOARD_MARGIN = 2 -- kept clear of the plot's edge (the fence)
 
--- The board's CFrame (its front face, -Z, toward the plot's middle) for a belt at `beltCF`/`beltSize` in a
--- square plot (`plotCenter`, `plotSize` studs) whose floor top is `groundY`. `clearHalf` is how far the
--- treadmill (its frame or model) reaches either side of the belt's centre line (default: the belt plus
--- its rails). It stands beside the treadmill, along it, its end flush with the front end: on the side
--- nearer the plot's edge (away from the plant rows) when it fits there, otherwise on the inner side.
-function Treadmill.boardCFrame(beltCF: CFrame, beltSize: Vector3, plotCenter: Vector3, plotSize: number, groundY: number, clearHalf: number?): CFrame
-	local alongZ, halfAlong, halfLat = axes(beltSize)
-	local alongLocal = if alongZ then Vector3.zAxis else Vector3.xAxis
-	local lateralLocal = if alongZ then Vector3.xAxis else Vector3.zAxis
-	local along = beltCF:VectorToWorldSpace(alongLocal * Treadmill.FRONT)
-	local lateral = beltCF:VectorToWorldSpace(lateralLocal)
+-- The board's CFrame for a belt at `beltCF`/`beltSize` whose treadmill stands on the ground at `groundY`.
+-- The treadmill stands in front of its plot (`plotCenter`), between the fence and the walkway: the board
+-- stands in line with it, just past its back end (behind the runner), its width along the belt, and its
+-- front face (-Z) turned away from the plot's middle, toward the walkway. `clearAlong` is how far the
+-- treadmill (its frame or model) reaches past the belt's centre along it (default: the belt plus its frame).
+function Treadmill.boardCFrame(beltCF: CFrame, beltSize: Vector3, plotCenter: Vector3, groundY: number, clearAlong: number?): CFrame
+	local alongZ, halfAlong = axes(beltSize)
+	local along = beltCF:VectorToWorldSpace((if alongZ then Vector3.zAxis else Vector3.xAxis) * Treadmill.FRONT)
+	local lateral = beltCF:VectorToWorldSpace(if alongZ then Vector3.xAxis else Vector3.zAxis)
 	along = Vector3.new(along.X, 0, along.Z).Unit
 	lateral = Vector3.new(lateral.X, 0, lateral.Z).Unit
-	local reach = (clearHalf or (halfLat + 1.3)) + Treadmill.BOARD_GAP
-	local w = Treadmill.BOARD_SIZE.X
 	local flat = Vector3.new(beltCF.Position.X, 0, beltCF.Position.Z)
-	local base = flat + along * math.max(0, halfAlong - w / 2)
-	local outward = lateral:Dot(flat - Vector3.new(plotCenter.X, 0, plotCenter.Z))
-	local first = if outward < 0 then -1 else 1
-	local limit = plotSize / 2 - Treadmill.BOARD_MARGIN
-	local function fits(p: Vector3): boolean
-		for _, e in { -1, 1 } do
-			local q = p + along * (e * w / 2)
-			if math.abs(q.X - plotCenter.X) > limit or math.abs(q.Z - plotCenter.Z) > limit then
-				return false
-			end
-		end
-		return true
-	end
-	local side = if fits(base + lateral * (first * reach)) then first else -first
-	local pos = base + lateral * (side * reach) + Vector3.new(0, groundY + Treadmill.BOARD_LIFT + Treadmill.BOARD_SIZE.Y / 2, 0)
-	-- Face the plot's middle across the belt: toward the belt from the outer side, away from it inside.
-	local facing = lateral * -first
+	local reach = (clearAlong or (halfAlong + 1.3)) + Treadmill.BOARD_GAP + Treadmill.BOARD_SIZE.X / 2
+	local pos = flat - along * reach + Vector3.new(0, groundY + Treadmill.BOARD_LIFT + Treadmill.BOARD_SIZE.Y / 2, 0)
+	local away = flat - Vector3.new(plotCenter.X, 0, plotCenter.Z)
+	local facing = lateral * (if lateral:Dot(away) < 0 then -1 else 1)
 	return CFrame.lookAt(pos, pos + facing)
 end
 
@@ -190,14 +172,12 @@ function Treadmill.stepLock(state: LockState, input: LockInput): LockAction?
 	return nil
 end
 
--- Where a locked character is held: centred across the belt, where it stepped on along it (kept off the
--- ends), at its own height, facing the front end.
+-- Where a locked character is held: at the CENTRE of the belt (across and along it, wherever it stepped
+-- on), at its own height, facing the front end.
 function Treadmill.lockCFrame(beltCF: CFrame, beltSize: Vector3, rootPos: Vector3): CFrame
-	local alongZ, halfAlong = axes(beltSize)
+	local alongZ = axes(beltSize)
 	local rel = beltCF:PointToObjectSpace(rootPos)
-	local keep = math.max(0, halfAlong - 2.5)
-	local spot = if alongZ then Vector3.new(0, rel.Y, math.clamp(rel.Z, -keep, keep)) else Vector3.new(math.clamp(rel.X, -keep, keep), rel.Y, 0)
-	local pos = beltCF:PointToWorldSpace(spot)
+	local pos = beltCF:PointToWorldSpace(Vector3.new(0, rel.Y, 0))
 	local front = beltCF:VectorToWorldSpace((if alongZ then Vector3.zAxis else Vector3.xAxis) * Treadmill.FRONT)
 	front = Vector3.new(front.X, 0, front.Z).Unit
 	return CFrame.lookAt(pos, pos + front)
