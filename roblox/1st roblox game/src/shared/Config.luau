@@ -41,10 +41,11 @@ end
 -- the studs anyone can walk grow linearly, so a flat rate would make the late zones take hundreds of
 -- hours. gainPerStud(Speed) = GAIN_PER_STUD * (1 + Speed / GAIN_PIVOT) ^ GAIN_EXPONENT, before the
 -- trail and treadmill multipliers. The HUD and the treadmill sign show it. Tuned with the free-player
--- simulation in tests/progression.spec (README "Progression").
-Config.GAIN_PER_STUD = 0.32 -- Speed per stud at 0 Speed
+-- simulation in tests/progression.spec (README "Progression"), which buys treadmill tiers too: the curve
+-- was lowered (0.32 / 0.61 before) when the money tiers came, so the targets didn't move.
+Config.GAIN_PER_STUD = 0.28 -- Speed per stud at 0 Speed
 Config.GAIN_PIVOT = 100e3
-Config.GAIN_EXPONENT = 0.61
+Config.GAIN_EXPONENT = 0.555
 
 function Config.gainPerStud(speed: number): number
 	return Config.GAIN_PER_STUD * (1 + math.max(0, speed) / Config.GAIN_PIVOT) ^ Config.GAIN_EXPONENT
@@ -405,7 +406,7 @@ Config.SELL_STALL_SECONDS = 120
 Config.SELL_STALL_DISTANCE = 20 -- studs from the stall's prompt part the player must stand within
 
 ----------------------------------------------------------------------------------------------------
--- Shop. In-game money buys only two things: TRAILS and PLOT UPGRADES (Config.priceOf). Everything else
+-- Shop. In-game money buys only three things: TRAILS, PLOT UPGRADES and TREADMILL TIERS (Config.priceOf). Everything else
 -- is Robux: developer products (DEVELOPER_PRODUCTS below) and gamepasses. Rules live in Server/Shop.
 ----------------------------------------------------------------------------------------------------
 -- Trails: a coloured Trail behind the player (Server/TrailService) that multiplies the Speed gained from
@@ -496,12 +497,49 @@ function Config.moneyMult(plotLevel: number, doubleMoney: boolean): number
 	return Config.plotMoneyMult(plotLevel) * (if doubleMoney then 2 else 1)
 end
 
--- Treadmill tiers. Tier 1 is free; the others are Robux (`product`). A tier can be bought directly.
+-- Treadmill tiers: standing on your own treadmill pays the walking Speed gain x `mult` (AFK works).
+-- Tier 1 is free. Each next tier is bought one at a time, at the treadmill itself (its owner-only E/F
+-- prompts) or in the Shop: for money (`price`, Config.priceOf "TreadmillUpgrade") or Robux (one tier per
+-- TreadmillT1..T3 receipt, Config.treadmillUpgradeProduct). Prices grow x10 a tier: a free player buys
+-- x2.25 after ~10 minutes and has x5 ($1T) by the Spirit Garden; x6 and x8 are late-game sinks like the
+-- last plot levels. Tuned with tests/progression_sim (the Speed curve above was lowered with them): a
+-- free player who buys these lands every zone near its target, and an AFK farmer (fills the plot once,
+-- then only stands on the treadmill) is far slower than a player who keeps running the corridor. Saves
+-- before v5 had 3 tiers (x2, Robux x3, Robux x5): ProfileStore maps them to the tiers with the same
+-- multiplier.
+export type TreadmillTier = { mult: number, price: number }
 Config.TREADMILL_TIERS = {
-	{ mult = 2 },
-	{ mult = 3, product = "TreadmillX3" },
-	{ mult = 5, product = "TreadmillX5" },
-} :: { { mult: number, product: string? } }
+	{ mult = 2, price = 0 },
+	{ mult = 2.25, price = 1e6 },
+	{ mult = 2.5, price = 10e6 },
+	{ mult = 2.75, price = 100e6 },
+	{ mult = 3, price = 1e9 },
+	{ mult = 3.5, price = 10e9 },
+	{ mult = 4, price = 100e9 },
+	{ mult = 5, price = 1e12 },
+	{ mult = 6, price = 10e12 },
+	{ mult = 8, price = 100e12 },
+} :: { TreadmillTier }
+Config.TREADMILL_MAX = #Config.TREADMILL_TIERS
+
+-- The multiplier of treadmill tier `tier` (clamped, so a bad tier never errors).
+function Config.treadmillMult(tier: number): number
+	return Config.TREADMILL_TIERS[math.clamp(math.floor(tier), 1, Config.TREADMILL_MAX)].mult
+end
+
+-- Treadmill upgrades for Robux: like the plot's, the next tier is sold by the product of its price tier.
+-- Each covers TREADMILL_UPGRADE_TIER_LEVELS upgrades (to tiers 2-4, 5-7 and 8-10).
+Config.TREADMILL_UPGRADE_TIERS = 3
+Config.TREADMILL_UPGRADE_TIER_LEVELS = 3
+
+-- The Robux price tier for upgrading a treadmill that is at `tier` now, or nil at the last tier.
+function Config.treadmillUpgradeTier(tier: number): number?
+	if tier >= Config.TREADMILL_MAX then
+		return nil
+	end
+	return math.clamp((math.max(tier, 1) - 1) // Config.TREADMILL_UPGRADE_TIER_LEVELS + 1, 1, Config.TREADMILL_UPGRADE_TIERS)
+end
+
 -- Every item the inventory can hold, with how many a new player starts with (an item that starts at 0
 -- is listed as 0). There are none right now; saved items not listed here are dropped on load.
 Config.START_ITEMS = {} :: { [string]: number }
@@ -545,7 +583,9 @@ Config.RECEIPT_HISTORY = 100 -- processed Robux PurchaseIds kept per profile, so
 --   Pack      one seed of `zone` into the seed bag
 --   Speed     + `amount` Speed
 --   Money     max(`amount`, `minutes` of the buyer's current income), so late-game packs stay useful
---   Treadmill the treadmill at TREADMILL_TIERS[`tier`]
+--   TreadmillUpgrade  one treadmill tier, from the tier the player has when the receipt arrives (`tier`:
+--             the range of tiers it is sold for, Config.treadmillUpgradeProduct); a maxed treadmill gets
+--             money instead
 --   Trail     owns and equips Config.TRAILS[`trail`]
 --   PlotUpgrade  one plot level, from the level the player has when the receipt arrives (`tier`: the
 --             range of levels it is sold for, Config.plotUpgradeProduct); a maxed plot gets money instead
@@ -558,7 +598,7 @@ export type DevProduct = {
 	zone: number?,
 	amount: number?,
 	minutes: number?,
-	tier: number?, -- Treadmill: the TREADMILL_TIERS index; PlotUpgrade: its price tier
+	tier: number?, -- PlotUpgrade / TreadmillUpgrade: its price tier
 	trail: string?,
 }
 Config.DEVELOPER_PRODUCTS = {
@@ -581,8 +621,12 @@ Config.DEVELOPER_PRODUCTS = {
 	Money4M = { id = 0, kind = "Money", label = "Cash Crate", robux = 400, amount = 4e6, minutes = 180 },
 	Money8M = { id = 0, kind = "Money", label = "Cash Vault", robux = 640, amount = 8e6, minutes = 360 },
 
-	TreadmillX3 = { id = 0, kind = "Treadmill", label = "Treadmill x3", robux = 60, tier = 2 },
-	TreadmillX5 = { id = 0, kind = "Treadmill", label = "Treadmill x5", robux = 200, tier = 3 },
+	-- One treadmill tier each: the treadmill's F prompt and the Shop's R$ button. A product's price is
+	-- fixed, so the 9 upgrades are split into tiers that cost more as the treadmill grows
+	-- (Config.treadmillUpgradeProduct).
+	TreadmillT1 = { id = 0, kind = "TreadmillUpgrade", label = "Treadmill Upgrade (x2.25-x2.75)", robux = 19, tier = 1 },
+	TreadmillT2 = { id = 0, kind = "TreadmillUpgrade", label = "Treadmill Upgrade (x3-x4)", robux = 39, tier = 2 },
+	TreadmillT3 = { id = 0, kind = "TreadmillUpgrade", label = "Treadmill Upgrade (x5-x8)", robux = 79, tier = 3 },
 
 	TrailGreen = { id = 0, kind = "Trail", label = "Green Trail", robux = 16, trail = "Green" },
 	TrailBlue = { id = 0, kind = "Trail", label = "Blue Trail", robux = 24, trail = "Blue" },
@@ -631,6 +675,23 @@ function Config.plotUpgradeMaxedPay(): number
 	return Config.plotUpgradePrice(Config.PLOT_LEVEL_MAX)
 end
 
+-- The developer product that sells the next tier of a treadmill at `tier`, as (name, product), or nil at
+-- the last tier. The treadmill's F prompt uses it, and so does the Shop ("Product:" .. name).
+function Config.treadmillUpgradeProduct(tier: number): (string?, DevProduct?)
+	local priceTier = Config.treadmillUpgradeTier(tier)
+	if not priceTier then
+		return nil, nil
+	end
+	local name = `TreadmillT{priceTier}`
+	return name, Config.DEVELOPER_PRODUCTS[name]
+end
+
+-- What a treadmill-upgrade receipt pays instead of a tier when the treadmill is already at the last one:
+-- the last tier's money price.
+function Config.treadmillUpgradeMaxedPay(): number
+	return Config.TREADMILL_TIERS[Config.TREADMILL_MAX].price
+end
+
 -- The products of one kind, cheapest first (the Shop's card order).
 function Config.products(kind: string): { { name: string, product: DevProduct } }
 	local list = {}
@@ -672,16 +733,23 @@ export type ShopView = {
 	money: number,
 	plotLevel: number,
 	trails: { [string]: boolean },
+	treadmillTier: number?, -- nil = the free tier
 }
 
--- The money price and a short label of a money item ("PlotUpgrade" or "Trail:<id>"), or nil (with
--- "Maxed"/"Owned", or nothing for anything that isn't sold for money).
+-- The money price and a short label of a money item ("PlotUpgrade", "TreadmillUpgrade" or "Trail:<id>"),
+-- or nil (with "Maxed"/"Owned", or nothing for anything that isn't sold for money).
 function Config.priceOf(itemId: string, v: ShopView): (number?, string?)
 	if itemId == "PlotUpgrade" then
 		if v.plotLevel >= Config.PLOT_LEVEL_MAX then
 			return nil, "Maxed"
 		end
 		return Config.plotUpgradePrice(v.plotLevel + 1), `Plot Level {v.plotLevel + 1}`
+	elseif itemId == "TreadmillUpgrade" then
+		local tier = v.treadmillTier or 1
+		if tier >= Config.TREADMILL_MAX then
+			return nil, "Maxed"
+		end
+		return Config.TREADMILL_TIERS[tier + 1].price, `Treadmill x{Config.treadmillMult(tier + 1)}`
 	end
 	local trail = Config.trailById(string.match(itemId, "^Trail:(%a+)$"))
 	if trail then

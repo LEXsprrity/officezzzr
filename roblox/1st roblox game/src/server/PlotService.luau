@@ -7,6 +7,7 @@ local Config = require(Shared:WaitForChild("Config"))
 local Format = require(Shared:WaitForChild("Format"))
 local SeedPacks = require(Shared:WaitForChild("SeedPacks"))
 local Icons = require(Shared:WaitForChild("Icons"))
+local Treadmill = require(Shared:WaitForChild("Treadmill"))
 local Net = require(script.Parent:WaitForChild("Net"))
 local Sessions = require(script.Parent:WaitForChild("Sessions"))
 local SeedService = require(script.Parent:WaitForChild("SeedService"))
@@ -448,17 +449,142 @@ local function boardRobuxPrice(product: Config.DevProduct): number
 	return product.robux
 end
 
--- The treadmill sign shows what standing on it pays its owner right now (WalkSpeed x Speed per stud x
--- the treadmill tier, per second), like the HUD's "+X Speed/step". Refreshed with every payout.
+----------------------------------------------------------------------------------------------------
+-- Treadmill upgrades: two owner-only prompts on each plot's belt (money or Robux, one tier at a time),
+-- and the Shop's "TreadmillUpgrade" (money). They are added at runtime to whatever belt the map has.
+----------------------------------------------------------------------------------------------------
+-- The belt's two prompts (money and Robux).
+local function treadmillPrompts(state: PlotState): { ProximityPrompt }
+	local list = {}
+	for _, d in state.info.belt:GetDescendants() do
+		if d:IsA("ProximityPrompt") and string.sub(d.Name, 1, 9) == "Treadmill" then
+			table.insert(list, d)
+		end
+	end
+	return list
+end
+
+-- The treadmill sign shows its owner's tier, what standing on it pays right now (WalkSpeed x Speed per
+-- stud x the tier's multiplier, per second, like the HUD's "+X Speed/step") and the next tier's prices.
+-- Refreshed with every payout. The prompts say what they buy; at the last tier they switch off.
 local function renderTreadmillSign(state: PlotState)
 	local s = state.owner and Sessions.get(state.owner)
 	if not s then
 		Icons.set(state.info.treadmillLabel, "Treadmill", "🏃 TREADMILL")
 		return
 	end
-	local tier = Sessions.treadmillMult(s)
-	local perSecond = math.min(s.walkSpeed, Config.GAIN_CAP_STUDS_PER_TICK / Config.TICK) * Sessions.speedPerStud(s) * tier
-	Icons.set(state.info.treadmillLabel, "Treadmill", `🏃 TREADMILL x{tier}\n+{Format.short(perSecond)} Speed/s`)
+	local tier = s.profile.treadmillTier
+	local mult = Sessions.treadmillMult(s)
+	local perSecond = math.min(s.walkSpeed, Config.GAIN_CAP_STUDS_PER_TICK / Config.TICK) * Sessions.speedPerStud(s) * mult
+	local price = Config.priceOf("TreadmillUpgrade", s.profile)
+	local _, product = Config.treadmillUpgradeProduct(tier)
+	local robux = if product then Format.robux(boardRobuxPrice(product)) else nil
+	local nextLine = if price and robux then `\nNext x{Config.treadmillMult(tier + 1)}: {Format.money(price)} or {robux}` else "\nMAX TIER"
+	Icons.set(state.info.treadmillLabel, "Treadmill",
+		`🏃 TREADMILL x{mult} ({tier}/{Config.TREADMILL_MAX})\n+{Format.short(perSecond)} Speed/s{nextLine}`)
+	for _, prompt in treadmillPrompts(state) do
+		prompt.ActionText = if price then `Upgrade to x{Config.treadmillMult(tier + 1)}` else "Maxed"
+		prompt.ObjectText = if prompt.Name == "TreadmillCash" then (if price then Format.money(price) else "")
+			else (robux or "")
+		prompt.MaxActivationDistance = if price then Treadmill.promptDistance(state.info.belt.Size) else 0
+	end
+end
+
+-- Buys the next treadmill tier for money (from the belt's E prompt or the Shop).
+function PlotService.upgradeTreadmill(player: Player)
+	local s = Sessions.get(player)
+	local state = plotOf(player)
+	if not s or not state then
+		return
+	end
+	local ok, msg = Shop.buy(s.profile, "TreadmillUpgrade")
+	if not ok then
+		Net.toast(player, if msg == "Maxed" then "Your treadmill is fully upgraded!" else msg, "red")
+		return
+	end
+	renderTreadmillSign(state)
+	Sessions.pushFull(s)
+	Net.LootEvent:FireClient(player, "Bought", {
+		itemId = "TreadmillUpgrade",
+		label = `{msg}! Your treadmill pays x{Sessions.treadmillMult(s)} the walking Speed`,
+	})
+end
+
+-- The belt's F prompt: opens the Robux prompt for the product of the treadmill's price tier (a product
+-- without an id says "coming soon"). ProcessReceipt (ShopService) grants the tier.
+function PlotService.promptRobuxTreadmill(player: Player)
+	local s = Sessions.get(player)
+	if not s then
+		return
+	end
+	local name = Config.treadmillUpgradeProduct(s.profile.treadmillTier)
+	if not name then
+		Net.toast(player, "Your treadmill is fully upgraded!", "red")
+		return
+	end
+	local product, why = Shop.canPrompt(s.profile, name)
+	if not product then
+		Net.toast(player, why or "Unknown product", "red")
+		return
+	end
+	MarketplaceService:PromptProductPurchase(player, product.id)
+end
+
+-- After a treadmill tier from a Robux receipt: the sign and the prompts' prices.
+function PlotService.refreshTreadmill(s: Sessions.Session)
+	local state = plotOf(s.player)
+	if state then
+		renderTreadmillSign(state)
+	end
+end
+
+-- The belt's prompts, either side of its middle: E buys with money, F with Robux (different keys, so
+-- both show at once, like the Upgrade board). The client hides them from everyone but the owner; the
+-- server re-checks the owner and the distance.
+local TREADMILL_PROMPTS = {
+	{ name = "TreadmillCash", side = 1, hold = 0.3, key = Enum.KeyCode.E, pad = Enum.KeyCode.ButtonX, buy = function(player: Player)
+		PlotService.upgradeTreadmill(player)
+	end },
+	{ name = "TreadmillRobux", side = -1, hold = 0, key = Enum.KeyCode.F, pad = Enum.KeyCode.ButtonY, buy = function(player: Player)
+		PlotService.promptRobuxTreadmill(player)
+	end },
+}
+
+local function addTreadmillPrompts(state: PlotState)
+	local belt = state.info.belt
+	-- The sign now has three lines (tier, Speed/s, next prices): give its billboard the height for them.
+	local gui = state.info.treadmillLabel:FindFirstAncestorWhichIsA("BillboardGui")
+	if gui and gui.Size.Y.Scale < 5 and gui.Size.Y.Offset == 0 then
+		gui.Size = UDim2.fromScale(gui.Size.X.Scale, 5)
+	end
+	for _, spec in TREADMILL_PROMPTS do
+		local anchor = Instance.new("Attachment")
+		anchor.Name = spec.name .. "PromptAnchor"
+		local function place() -- over the belt, either side of its middle, wherever the map sized it
+			anchor.Position = Vector3.new(spec.side * belt.Size.X * 0.3, belt.Size.Y / 2 + 3, 0)
+		end
+		place()
+		belt:GetPropertyChangedSignal("Size"):Connect(place)
+		anchor.Parent = belt
+		local prompt = Instance.new("ProximityPrompt")
+		prompt.Name = spec.name
+		prompt.ActionText = "Upgrade"
+		prompt.ObjectText = "Treadmill"
+		prompt.HoldDuration = spec.hold
+		prompt.MaxActivationDistance = Treadmill.promptDistance(belt.Size)
+		prompt.RequiresLineOfSight = false
+		prompt.KeyboardKeyCode = spec.key
+		prompt.GamepadKeyCode = spec.pad
+		prompt:SetAttribute("OwnerUserId", 0)
+		prompt.Parent = anchor
+		prompt.Triggered:Connect(function(player: Player)
+			local char = player.Character
+			local root = char and char:FindFirstChild("HumanoidRootPart") :: BasePart?
+			if Treadmill.canUpgrade(state.owner == player, if root then root.Position else nil, belt.Position, belt.Size) then
+				spec.buy(player)
+			end
+		end)
+	end
 end
 
 -- Writes the owner's level and both prices on the board ("MAX LEVEL" and no buttons at the last level).
@@ -476,6 +602,7 @@ end
 renderAllBoards = function()
 	for _, state in plots do
 		renderUpgradeSign(state)
+		renderTreadmillSign(state)
 	end
 end
 
@@ -571,6 +698,8 @@ function PlotService.init(infos: { WorldBuilder.PlotInfo }, stalls: { BasePart }
 			end)
 		end
 		renderUpgradeSign(state)
+		addTreadmillPrompts(state)
+		renderTreadmillSign(state)
 
 		local prompt = Instance.new("ProximityPrompt")
 		prompt.ActionText = "Plant Seed"
@@ -600,6 +729,9 @@ function PlotService.assign(s: Sessions.Session): WorldBuilder.PlotInfo?
 			end
 			for _, boardPrompt in upgradePrompts(state) do
 				boardPrompt:SetAttribute("OwnerUserId", s.player.UserId)
+			end
+			for _, beltPrompt in treadmillPrompts(state) do
+				beltPrompt:SetAttribute("OwnerUserId", s.player.UserId)
 			end
 			renderTreadmillSign(state)
 			renderUpgradeSign(state)
@@ -635,6 +767,9 @@ function PlotService.release(player: Player)
 	end
 	for _, boardPrompt in upgradePrompts(state) do
 		boardPrompt:SetAttribute("OwnerUserId", 0)
+	end
+	for _, beltPrompt in treadmillPrompts(state) do
+		beltPrompt:SetAttribute("OwnerUserId", 0)
 	end
 	renderUpgradeSign(state)
 	renderTreadmillSign(state)

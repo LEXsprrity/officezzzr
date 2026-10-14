@@ -1,5 +1,5 @@
 -- RequestBuy / RequestUseItem / SellPlants handlers. Every request is rate-limited, type-checked and validated
--- against server state; the client only says what it wants. Money buys trails and plot upgrades;
+-- against server state; the client only says what it wants. Money buys trails, plot upgrades and treadmill tiers;
 -- everything else is Robux: the developer product prompt (gated) and ProcessReceipt (always grants what
 -- was paid for), plus the gamepasses.
 local MarketplaceService = game:GetService("MarketplaceService")
@@ -97,9 +97,13 @@ local function onBuy(player: Player, itemId: any)
 		return
 	end
 
-	-- Money: the plot upgrade and "Trail:<id>". Anything else is refused by Shop.buy (Robux only).
+	-- Money: the plot upgrade, the treadmill tier and "Trail:<id>". Anything else is refused by Shop.buy
+	-- (Robux only).
 	if itemId == "PlotUpgrade" then
 		PlotService.upgrade(player)
+		return
+	elseif itemId == "TreadmillUpgrade" then
+		PlotService.upgradeTreadmill(player)
 		return
 	end
 	local ok, msg = Shop.buy(s.profile, itemId)
@@ -188,6 +192,8 @@ local function processReceipt(receiptInfo: { [string]: any }): Enum.ProductPurch
 			TrailService.apply(s.player.Character, s.profile.equippedTrail)
 		elseif kind == "PlotUpgrade" then
 			PlotService.refreshSlots(s) -- the new soil patch and the board's next prices
+		elseif kind == "TreadmillUpgrade" then
+			PlotService.refreshTreadmill(s) -- the sign's tier and next prices
 		end
 		Sessions.pushFull(s)
 		local pack = grant.pack

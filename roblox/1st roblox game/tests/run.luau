@@ -21,6 +21,7 @@ require("./hud.spec")
 require("./upgrade.spec")
 require("./sell.spec")
 require("./rewards.spec")
+require("./treadmill.spec")
 require("./compile.spec")
 
 print("Steal a Seed: mocked server tests\n")

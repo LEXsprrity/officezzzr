@@ -1,7 +1,7 @@
 -- The fixed remote contract. Everything else (pickup, planting, removing) goes through ProximityPrompts.
 --   client -> server: RequestBuy(itemId), RequestUseItem(itemId)
---     RequestBuy ids: "PlotUpgrade" and "Trail:<id>" (money), "Product:<name>" (developer products,
---       Robux), "Pass:<name>" (gamepasses)
+--     RequestBuy ids: "PlotUpgrade", "TreadmillUpgrade" and "Trail:<id>" (money), "Product:<name>"
+--       (developer products, Robux), "Pass:<name>" (gamepasses)
 --     RequestUseItem ids: "Bat", "Seed:<bagKey>" (plant from the seed bag), "Equip:<trailId>"
 --   client -> server: SellPlants(slots) (a list of plant slots, sold at the SELL stall; PlotService checks)
 --   client -> server: ClaimReward(kind) ("Gift": the Free Gift window's CLAIM button; RewardService checks)

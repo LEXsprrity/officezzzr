@@ -55,12 +55,12 @@ H.test("speed: treadmill gives exactly 2x the walking gain (starting tier)", fun
 	end
 end)
 
-H.test("speed: treadmill shop tiers are 3x and 5x", function()
-	H.eq(Config.TREADMILL_TIERS[2].mult, 3)
-	H.eq(Config.TREADMILL_TIERS[3].mult, 5)
-	local s = tracker(Vector3.new(0, 0, 0))
-	local gain = SpeedLogic.step(s, Vector3.new(0, 0, 0), DT, opts(100, true, 1, 5))
-	H.near(gain, 5 * 100 * DT, 1e-9)
+H.test("speed: every treadmill tier multiplies the AFK gain by its multiplier", function()
+	for tier, t in Config.TREADMILL_TIERS do
+		local s = tracker(Vector3.new(0, 0, 0))
+		local gain = SpeedLogic.step(s, Vector3.new(0, 0, 0), DT, opts(100, true, 1, Config.treadmillMult(tier)))
+		H.near(gain, t.mult * 100 * DT, 1e-9, `tier {tier}`)
+	end
 end)
 
 H.test("speed: gain is capped per tick (walking and treadmill)", function()

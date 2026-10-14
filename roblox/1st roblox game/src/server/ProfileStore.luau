@@ -15,7 +15,13 @@ ProfileStore.__index = ProfileStore
 -- v4 added the community rewards: the Free Gift flag, whether its window has opened by itself, and the
 -- free chest's last claim. Older saves load with the gift unclaimed, the window not shown yet and the
 -- chest ready.
-ProfileStore.VERSION = 4
+-- v5 grew the treadmill from 3 tiers (x2, Robux x3, Robux x5) to Config.TREADMILL_TIERS (money or
+-- Robux, one tier at a time). An older save's tier becomes the new tier with the same multiplier
+-- (migrateTreadmillTier), so nobody's treadmill changes speed.
+ProfileStore.VERSION = 5
+
+-- The multipliers of the v1-v4 treadmill tiers (`treadmillTier` 1..3).
+ProfileStore.LEGACY_TREADMILL_MULT = { 2, 3, 5 }
 
 -- Items removed from the game (the potions, the guards' sleep item) may still be in saves of any version.
 -- Only ids listed in Config.START_ITEMS are loaded; anything else in `items` is dropped, and old potion
@@ -122,6 +128,19 @@ function ProfileStore.levelForSlots(slots: number): number
 	return math.clamp(math.floor(slots) - Config.SLOTS_START + 1, 1, Config.PLOT_LEVEL_MAX)
 end
 
+-- v1-v4 -> v5: an old treadmill tier (1..3) becomes the highest new tier whose multiplier isn't above
+-- the old one (x2 -> 1, x3 -> 5, x5 -> 8 with today's table).
+function ProfileStore.migrateTreadmillTier(oldTier: number): number
+	local oldMult = ProfileStore.LEGACY_TREADMILL_MULT[oldTier] or ProfileStore.LEGACY_TREADMILL_MULT[1]
+	local best = 1
+	for tier, t in Config.TREADMILL_TIERS do
+		if t.mult <= oldMult then
+			best = tier
+		end
+	end
+	return best
+end
+
 -- Plain JSON-safe table for the DataStore.
 function ProfileStore.serialize(p: Profile): { [string]: any }
 	local plants = {}
@@ -172,7 +191,11 @@ function ProfileStore.deserialize(data: any): Profile
 	local maxSlots = Config.SLOTS_MAX + Config.PASS_EXTRA_SLOTS
 	p.money = num(data.money, 0, 0, math.huge)
 	p.speed = num(data.speed, 0, 0, math.huge)
-	p.treadmillTier = int(data.treadmillTier, 1, 1, #Config.TREADMILL_TIERS)
+	if type(data.v) == "number" and data.v >= 5 then
+		p.treadmillTier = int(data.treadmillTier, 1, 1, Config.TREADMILL_MAX)
+	else
+		p.treadmillTier = ProfileStore.migrateTreadmillTier(int(data.treadmillTier, 1, 1, #ProfileStore.LEGACY_TREADMILL_MULT))
+	end
 	if type(data.v) == "number" and data.v >= 3 then
 		p.plotLevel = int(data.plotLevel, 1, 1, Config.PLOT_LEVEL_MAX)
 		if type(data.trails) == "table" then
