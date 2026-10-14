@@ -168,19 +168,18 @@ local carryBanner = new("Frame", {
 local carryLabel = text(carryBanner, { Size = UDim2.new(1, -16, 1, -8), Position = UDim2.fromOffset(8, 4), TextColor3 = WHITE })
 
 ----------------------------------------------------------------------------------------------------
--- Bottom-left, stacked bottom-up with no panels behind the numbers:
+-- Bottom-left, stacked bottom-up and kept minimal, with no panels behind the numbers:
 --   * Speed (with a "+" that opens the Shop's Speed section) in pink, money in green;
---   * the Speed level bar (Config.speedLevel) with the +10K / +100K / +1M quick-buy buttons;
---   * the Shop / Index / Trails buttons and the Slow Mode switch.
+--   * the Shop / Index buttons and the Slow Mode switch. (Trails opens from the TRAIL SHOP stall in
+--     the plaza, the Free Gift from the gift box by the free chest.)
 -- Sizes are design pixels: the screen is 900 tall at UIScale 1, about 680 on a landscape phone (the
 -- 0.55 minimum scale). The button column shrinks on its own if it would run into the top of the screen.
 ----------------------------------------------------------------------------------------------------
 local SPEED_PINK = Color3.fromRGB(255, 70, 150)
 local MONEY_GREEN = Color3.fromRGB(85, 240, 70)
-local STATS_H, LEVEL_H, LEFT_H = 124, 124, 358 -- LEFT_H: 4 side buttons (Rewards.client adds the Gift one) + Slow Mode
+local STATS_H, LEFT_H = 100, 194 -- LEFT_H: 2 side buttons + Slow Mode
 local STATS_BOTTOM = 10
-local LEVEL_BOTTOM = STATS_BOTTOM + STATS_H + 8
-local LEFT_BOTTOM = LEVEL_BOTTOM + LEVEL_H + 10
+local LEFT_BOTTOM = STATS_BOTTOM + STATS_H + 10
 
 local openModal: (name: string) -> ()
 local openShopAt: (section: string) -> ()
@@ -212,20 +211,20 @@ local statsFrame = new("Frame", {
 	BackgroundTransparency = 1, AnchorPoint = Vector2.new(0, 1), Position = UDim2.new(0, 14, 1, -STATS_BOTTOM),
 	Size = UDim2.fromOffset(360, STATS_H), Parent = gui,
 })
-iconLabel(statsFrame, "Speed", "⚡", { Size = UDim2.fromOffset(60, 60) })
+iconLabel(statsFrame, "Speed", "⚡", { Size = UDim2.fromOffset(48, 48) })
 local speedValue = bold(statsFrame, 4, {
-	Text = "0", Size = UDim2.new(1, -76, 0, 54), Position = UDim2.fromOffset(76, 3), TextXAlignment = Enum.TextXAlignment.Left, TextColor3 = SPEED_PINK,
+	Text = "0", Size = UDim2.new(1, -62, 0, 44), Position = UDim2.fromOffset(62, 2), TextXAlignment = Enum.TextXAlignment.Left, TextColor3 = SPEED_PINK,
 })
-iconLabel(statsFrame, "Money", "💰", { Size = UDim2.fromOffset(60, 60), Position = UDim2.fromOffset(0, 64) })
+iconLabel(statsFrame, "Money", "💰", { Size = UDim2.fromOffset(48, 48), Position = UDim2.fromOffset(0, 52) })
 local moneyValue = bold(statsFrame, 4, {
-	Text = "$0", Size = UDim2.new(1, -76, 0, 54), Position = UDim2.fromOffset(76, 67), TextXAlignment = Enum.TextXAlignment.Left, TextColor3 = MONEY_GREEN,
+	Text = "$0", Size = UDim2.new(1, -62, 0, 44), Position = UDim2.fromOffset(62, 54), TextXAlignment = Enum.TextXAlignment.Left, TextColor3 = MONEY_GREEN,
 })
 -- The Speed icon and its yellow "+" badge both open the Shop on the Speed section.
-new("TextButton", { BackgroundTransparency = 1, Text = "", Size = UDim2.fromOffset(60, 60), Parent = statsFrame }).Activated:Connect(function()
+new("TextButton", { BackgroundTransparency = 1, Text = "", Size = UDim2.fromOffset(48, 48), Parent = statsFrame }).Activated:Connect(function()
 	openShopAt("Speed")
 end)
 local plusBadge = new("TextButton", {
-	Size = UDim2.fromOffset(28, 28), Position = UDim2.fromOffset(40, 34), BackgroundColor3 = Color3.fromRGB(255, 210, 40), Text = "",
+	Size = UDim2.fromOffset(24, 24), Position = UDim2.fromOffset(32, 28), BackgroundColor3 = Color3.fromRGB(255, 210, 40), Text = "",
 	AutoButtonColor = true, Parent = statsFrame,
 }, deco(7, 3))
 bold(plusBadge, 3, { Text = "+", Size = UDim2.new(1, -4, 1, -2), Position = UDim2.fromOffset(2, 0) })
@@ -233,65 +232,7 @@ plusBadge.Activated:Connect(function()
 	openShopAt("Speed")
 end)
 
--- Speed level bar: "<Speed> SPEED" and "x<trail> Multiplier" above, "Level N" and "current / next"
--- on the bar, the quick-buy buttons under it.
-local levelPanel = new("Frame", {
-	BackgroundTransparency = 1, AnchorPoint = Vector2.new(0, 1), Position = UDim2.new(0, 14, 1, -LEVEL_BOTTOM),
-	Size = UDim2.fromOffset(360, LEVEL_H), Parent = gui,
-})
-iconLabel(levelPanel, "Speed", "⚡", { Size = UDim2.fromOffset(22, 22), Rotation = -12 })
-local levelSpeedLabel = text(levelPanel, {
-	Text = "0 SPEED", Size = UDim2.new(0.6, -28, 0, 20), Position = UDim2.fromOffset(28, 1), TextXAlignment = Enum.TextXAlignment.Left, TextColor3 = COLORS.gold,
-})
-local levelMultLabel = text(levelPanel, {
-	Text = "x1 Multiplier", Size = UDim2.new(0.4, 0, 0, 20), Position = UDim2.new(0.6, 0, 0, 1), TextXAlignment = Enum.TextXAlignment.Right, TextColor3 = COLORS.gold,
-})
-local levelBar = new("Frame", {
-	Size = UDim2.new(1, 0, 0, 40), Position = UDim2.fromOffset(0, 26), BackgroundColor3 = Color3.fromRGB(226, 228, 236), Parent = levelPanel,
-}, deco(12, 3))
-local levelFill = new("Frame", {
-	Size = UDim2.fromScale(0.03, 1), BackgroundColor3 = Color3.fromRGB(95, 215, 60), BorderSizePixel = 0, Parent = levelBar,
-}, { new("UICorner", { CornerRadius = UDim.new(0, 12) }) })
-local levelLabel = bold(levelBar, 3, {
-	Text = "Level 1", Size = UDim2.new(0.5, -12, 0, 26), Position = UDim2.new(0, 12, 0.5, -13), TextXAlignment = Enum.TextXAlignment.Left, ZIndex = 2,
-})
-local levelProgress = bold(levelBar, 3, {
-	Text = "0 / 1K", Size = UDim2.new(0.5, -12, 0, 22), Position = UDim2.new(0.5, 0, 0.5, -11), TextXAlignment = Enum.TextXAlignment.Right, ZIndex = 2,
-})
-
--- Quick-buy: Robux Speed packs (Config.DEVELOPER_PRODUCTS, granted by ProcessReceipt like the Shop's).
--- While a product's id is 0 the server answers "coming soon".
-local QUICK_BUY = {
-	{ product = "Speed10K", label = "+10K", color = Color3.fromRGB(255, 200, 30) },
-	{ product = "Speed100K", label = "+100K", color = Color3.fromRGB(235, 65, 65) },
-	{ product = "Speed1M", label = "+1M", rainbow = true },
-}
-local quickRow = new("Frame", {
-	BackgroundTransparency = 1, Size = UDim2.new(1, 0, 0, 52), Position = UDim2.fromOffset(0, 72), Parent = levelPanel,
-}, { new("UIListLayout", { FillDirection = Enum.FillDirection.Horizontal, Padding = UDim.new(0, 9), SortOrder = Enum.SortOrder.LayoutOrder }) })
-local quickPrices: { [string]: TextLabel } = {}
-for i, q in QUICK_BUY do
-	local b = new("TextButton", {
-		Size = UDim2.new(1 / 3, -6, 1, 0), BackgroundColor3 = if q.rainbow then WHITE else q.color, Text = "", AutoButtonColor = true,
-		LayoutOrder = i, Parent = quickRow,
-	}, deco(10, 3))
-	if q.rainbow then
-		new("UIGradient", { Color = Config.trailColors(Config.trailById("Rainbow") :: Config.Trail), Parent = b })
-	else
-		new("UIGradient", { Rotation = 90, Color = ColorSequence.new(WHITE, Color3.fromRGB(205, 205, 205)), Parent = b })
-	end
-	iconLabel(b, "Speed", "⚡", { Size = UDim2.fromOffset(34, 34), Position = UDim2.fromOffset(-6, -12), Rotation = -20, ZIndex = 2 })
-	bold(b, 3, { Text = q.label, Size = UDim2.new(1, -30, 0, 28), Position = UDim2.fromOffset(24, 6) })
-	quickPrices[q.product] = text(b, {
-		Size = UDim2.fromOffset(60, 15), AnchorPoint = Vector2.new(1, 1), Position = UDim2.new(1, -5, 1, -3), TextXAlignment = Enum.TextXAlignment.Right,
-	})
-	b.Activated:Connect(function()
-		RequestBuy:FireServer("Product:" .. q.product)
-	end)
-end
-
--- Shop / Index / Trails, then the Slow Mode switch, above the level bar. Rewards.client puts the Gift
--- button on top (it finds the column by name).
+-- Shop / Index, then the Slow Mode switch, above the Speed and money.
 local leftColumn = new("Frame", {
 	Name = "LeftColumn", BackgroundTransparency = 1, AnchorPoint = Vector2.new(0, 1), Position = UDim2.new(0, 14, 1, -LEFT_BOTTOM),
 	Size = UDim2.fromOffset(180, LEFT_H), Parent = gui,
@@ -300,29 +241,13 @@ local leftColumn = new("Frame", {
 })
 local leftScale = new("UIScale", { Parent = leftColumn })
 
--- Red notification bubbles on the side buttons: setBadge("Index", "!") or ("Shop", "3"); nil hides it.
-local badges: { [string]: Frame } = {}
-local function setBadge(name: string, value: string?)
-	local badge = badges[name]
-	if badge then
-		badge.Visible = value ~= nil
-		(badge:FindFirstChild("Label") :: TextLabel).Text = value or ""
-	end
-end
-
 local function sideButton(order: number, label: string, icon: string, emoji: string, color: Color3, onClick: () -> ())
 	local b = new("TextButton", {
-		Size = UDim2.fromOffset(92, 74), BackgroundColor3 = color, Text = "", AutoButtonColor = true, LayoutOrder = order, Parent = leftColumn,
+		Name = label, Size = UDim2.fromOffset(92, 74), BackgroundColor3 = color, Text = "", AutoButtonColor = true, LayoutOrder = order, Parent = leftColumn,
 	}, deco(14, 4))
 	new("UIGradient", { Rotation = 90, Color = ColorSequence.new(WHITE, Color3.fromRGB(200, 200, 200)), Parent = b })
 	iconLabel(b, icon, emoji, { Size = UDim2.fromOffset(46, 46), AnchorPoint = Vector2.new(0.5, 0), Position = UDim2.new(0.5, 0, 0, 2) })
 	bold(b, 3, { Text = label, Size = UDim2.new(1, -6, 0, 26), Position = UDim2.new(0, 3, 1, -28) })
-	local badge = new("Frame", {
-		Size = UDim2.fromOffset(26, 26), AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.new(1, -4, 0, 4), BackgroundColor3 = COLORS.red,
-		Visible = false, ZIndex = 3, Parent = b,
-	}, { new("UICorner", { CornerRadius = UDim.new(1, 0) }), new("UIStroke", { Thickness = 2, Color = WHITE }) })
-	text(badge, { Name = "Label", Size = UDim2.new(1, -6, 1, -6), Position = UDim2.fromOffset(3, 3), ZIndex = 3 })
-	badges[label] = badge
 	b.Activated:Connect(onClick)
 end
 
@@ -332,13 +257,10 @@ end)
 sideButton(2, "Index", "Index", "📖", Color3.fromRGB(40, 200, 235), function()
 	openModal("Index")
 end)
-sideButton(3, "Trails", "TrailShop", "🏃", Color3.fromRGB(255, 145, 40), function()
-	openModal("Trails")
-end)
 
 -- Slow Mode: purely local, clamps our own WalkSpeed so we can potter around the base.
 local slowMode = false
-local slowRow = new("TextButton", { Size = UDim2.new(1, 0, 0, 30), BackgroundTransparency = 1, Text = "", LayoutOrder = 4, Parent = leftColumn })
+local slowRow = new("TextButton", { Name = "SlowMode", Size = UDim2.new(1, 0, 0, 30), BackgroundTransparency = 1, Text = "", LayoutOrder = 3, Parent = leftColumn })
 local slowTrack = new("Frame", {
 	Size = UDim2.fromOffset(54, 28), Position = UDim2.fromOffset(0, 1), BackgroundColor3 = Color3.fromRGB(80, 80, 92), Parent = slowRow,
 }, { new("UICorner", { CornerRadius = UDim.new(1, 0) }), new("UIStroke", { Thickness = 3, Color = INK }) })
@@ -647,8 +569,8 @@ local NOTE_COLOR = Color3.fromRGB(215, 222, 240)
 local NUMBER_GREEN = "#5FFF3C" -- the "x2" on the trail cards' Speed pill
 local HEADING_GOLD = Color3.fromRGB(255, 214, 50)
 local HEADING_GREEN = Color3.fromRGB(120, 245, 70)
-local SOON_GREEN = Color3.fromRGB(120, 165, 120) -- R$ buttons whose product has no id yet
-local SOON_PURPLE = Color3.fromRGB(135, 110, 165)
+local ROBUX_GREEN = Color3.fromRGB(105, 235, 25) -- the Shop's R$ buttons
+local GIFT_PINK = Color3.fromRGB(215, 55, 235) -- the gift button beside them
 local WINDOWS = {
 	Shop = { title = "Shop", icon = "Shop", from = Color3.fromRGB(115, 222, 50), to = Color3.fromRGB(28, 168, 78) },
 	Trails = { title = "Trail Shop", icon = "TrailShop", from = Color3.fromRGB(170, 60, 255), to = Color3.fromRGB(250, 80, 205) },
@@ -687,15 +609,6 @@ local function chunky(parent: Instance, label: string, color: Color3, size: UDim
 	end
 	b.Activated:Connect(onClick)
 	return b
-end
-
--- A small gold "SOON" tag on the corner of a Robux button whose product has no id yet (clicking it
--- still asks the server, which answers "coming soon").
-local function soonTag(b: GuiObject)
-	local tag = new("Frame", {
-		AnchorPoint = Vector2.new(1, 0.5), Position = UDim2.new(1, 6, 0, 0), Size = UDim2.fromOffset(50, 20), BackgroundColor3 = COLORS.gold, ZIndex = 2, Parent = b,
-	}, deco(6, 2))
-	bold(tag, 2, { Text = "SOON", Size = UDim2.new(1, -8, 1, -4), Position = UDim2.fromOffset(4, 2), ZIndex = 2 })
 end
 
 local modal = new("Frame", {
@@ -988,7 +901,6 @@ end
 local robuxPrices: { [number]: number } = {}
 local priceFetching: { [number]: boolean } = {}
 local priceRerender = false
-local refreshQuickBuy: () -> ()
 local function robuxPrice(product: Config.DevProduct): number
 	local cached = robuxPrices[product.id]
 	if cached then
@@ -1004,7 +916,6 @@ local function robuxPrice(product: Config.DevProduct): number
 					priceRerender = true
 					task.delay(0.3, function()
 						priceRerender = false
-						refreshQuickBuy()
 						if modal.Visible and (modalName == "Shop" or modalName == "Trails") then
 							renderModal()
 						end
@@ -1020,40 +931,61 @@ local function robuxPrice(product: Config.DevProduct): number
 	return product.robux
 end
 
--- "R$ 64", or "R$ 64 soon" while the product has no id yet (the server answers "coming soon").
-local function robuxCaption(product: Config.DevProduct): string
-	if product.id == 0 then
-		return `{Format.robux(product.robux)} soon`
-	end
-	return Format.robux(robuxPrice(product))
+-- A Robux button's colour: `color`, a little greyed while the product has no id yet (no tag on it:
+-- clicking still asks the server, which answers "coming soon").
+local function robuxColor(id: number, color: Color3): Color3
+	return if id == 0 then color:Lerp(Color3.fromRGB(150, 160, 150), 0.3) else color
 end
-
--- The small R$ prices on the quick-buy buttons: the placeholder until the product has an id, then
--- the Dashboard price once fetched.
-refreshQuickBuy = function()
-	for name, label in quickPrices do
-		local product = Config.DEVELOPER_PRODUCTS[name]
-		Icons.set(label, "Robux", Format.robux(if product.id == 0 then product.robux else robuxPrice(product)), 1)
-	end
-end
-refreshQuickBuy()
 
 local function giftButton(parent: Instance, size: UDim2): TextButton
 	-- Gifting needs extra work (choosing a player, granting to them): shown, but not live yet.
-	return chunky(parent, "🎁", COLORS.robux, size, function()
+	return chunky(parent, "🎁", GIFT_PINK, size, function()
 		toast("🎁 Gifting is coming soon!", "blue")
 	end, "Gift", ICON.big)
 end
 
 ----------------------------------------------------------------------------------------------------
 -- Shop: seed packs (premium cards with loot tables showing the exact server odds), then every other
--- Robux item as a card with a big icon, the amount in big outlined text, a green R$ button and the
--- purple gift button, plus the money plot upgrade
+-- item as a bright card (docs/references: Speed blue, Money green, each section its own colour) with
+-- light rays behind a big icon, the amount in big outlined text ("+150K" in green, then "SPEED"), the
+-- magenta gift button and a bright green R$ button; the plot and treadmill cards add a $ button.
 ----------------------------------------------------------------------------------------------------
 local packShines: { Frame } = {} -- swept across the premium cards every frame while they're shown
 local renderShop: () -> boolean
 do
-	local SHOP_CARD_W, SHOP_CARD_H = 190, 240
+	local SHOP_CARD_W, SHOP_CARD_H = 252, 236 -- three cards a row
+	local CARD_COLORS = {
+		Speed = Color3.fromRGB(30, 165, 255),
+		Money = Color3.fromRGB(70, 205, 30),
+		PlotUpgrade = Color3.fromRGB(255, 150, 20),
+		Treadmill = Color3.fromRGB(255, 60, 95),
+		Pass = Color3.fromRGB(165, 70, 255),
+	}
+
+	-- A sunburst behind a card's icon: soft white rays turning around (cx, cy) (scale of the card) over a
+	-- glow, fading out toward the card's edges (the card clips them).
+	local function sunburst(c: Frame, cx: number, cy: number)
+		local burst = new("Frame", {
+			Name = "Sunburst", BackgroundTransparency = 1, AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(cx, cy),
+			Size = UDim2.fromOffset(1, 1), Parent = c,
+		})
+		local fade = NumberSequence.new({
+			NumberSequenceKeypoint.new(0, 1), NumberSequenceKeypoint.new(0.3, 0.55), NumberSequenceKeypoint.new(0.5, 0.35),
+			NumberSequenceKeypoint.new(0.7, 0.55), NumberSequenceKeypoint.new(1, 1),
+		})
+		for i = 0, 8 do -- each bar through the centre is two rays: 18 rays
+			new("Frame", {
+				AnchorPoint = Vector2.new(0.5, 0.5), Size = UDim2.fromOffset(SHOP_CARD_W * 1.5, 26), Rotation = i * 20 + 8, BackgroundColor3 = WHITE,
+				BackgroundTransparency = 0.55, BorderSizePixel = 0, Parent = burst,
+			}, { new("UIGradient", { Transparency = fade }) })
+		end
+		for _, glow in { { 190, 0.86 }, { 130, 0.8 }, { 76, 0.72 } } do
+			new("Frame", {
+				AnchorPoint = Vector2.new(0.5, 0.5), Size = UDim2.fromOffset(glow[1], glow[1]), BackgroundColor3 = WHITE, BackgroundTransparency = glow[2],
+				BorderSizePixel = 0, Parent = burst,
+			}, { new("UICorner", { CornerRadius = UDim.new(1, 0) }) })
+		end
+	end
 
 	-- Loot table: one row per rarity with a bar as wide as its chance.
 	local function lootTable(parent: Instance, pack: SeedPacks.Pack, pos: UDim2, size: UDim2)
@@ -1118,16 +1050,15 @@ do
 		Icons.set(perks, { "Money", "Star" }, `💰 {Format.money(Config.seedIncome(pack.zone))}/s per Common sprout`
 			.. (if exclusive then ` · 🌟 {exclusive.id} x{exclusive.income} income, only from packs` else ""), ICON.small)
 		-- Robux only. With id = 0 the server answers "coming soon"; with a full bag it won't prompt.
-		local live = product.id ~= 0
-		local price = robuxCaption(product)
-		local caption = if not live then `Coming soon · {Format.robux(product.robux)}` elseif bagFull then `🎒 Bag full · {price}` else `Buy · {price}`
-		chunky(c, caption, if live and not bagFull then COLORS.buy else COLORS.disabled, UDim2.new(1, -86, 0, 58), function()
-			RequestBuy:FireServer("Product:" .. productName)
-		end, { "Robux", "Bag" }, ICON.small).Position = UDim2.new(0, 12, 1, -70)
-		giftButton(c, UDim2.fromOffset(60, 58)).Position = UDim2.new(1, -72, 1, -70)
+		local price = Format.robux(robuxPrice(product))
+		chunky(c, if bagFull then `🎒 Bag full · {price}` else price, if bagFull then COLORS.disabled else robuxColor(product.id, ROBUX_GREEN),
+			UDim2.new(1, -96, 0, 58), function()
+				RequestBuy:FireServer("Product:" .. productName)
+			end, { "Robux", "Bag" }, ICON.small).Position = UDim2.new(0, 84, 1, -70)
+		giftButton(c, UDim2.fromOffset(62, 58)).Position = UDim2.new(0, 12, 1, -70)
 	end
 
-	-- A grid of shop cards (4 per row), auto-sized to its contents.
+	-- A grid of shop cards (3 per row), auto-sized to its contents.
 	local function cardGrid(order: number): Frame
 		return new("Frame", {
 			BackgroundTransparency = 1, Size = UDim2.new(1, -8, 0, 0), AutomaticSize = Enum.AutomaticSize.Y, LayoutOrder = order, Parent = modalBody,
@@ -1139,42 +1070,63 @@ do
 		})
 	end
 
-	-- A shop card: a big icon on top, the amount in big outlined text, a smaller line under it. The caller
-	-- adds the buttons (buyRow). Returns the card and its amount label.
+	-- A shop card: a saturated `color` (lighter at the top), light rays behind a big icon, the amount in
+	-- big outlined text (rich text: "+150K" can be green) and, only when `sub` isn't "", a short line under
+	-- it. The caller adds the buttons (buyRow). Returns the card and its amount label.
 	local function shopCard(grid: Instance, order: number, color: Color3, amount: string, sub: string, icon: string): (Frame, TextLabel)
-		local c = new("Frame", { LayoutOrder = order, Parent = grid }, {
+		local c = new("Frame", { LayoutOrder = order, ClipsDescendants = true, Parent = grid }, {
 			new("UICorner", { CornerRadius = UDim.new(0, 14) }),
 			new("UIStroke", { Thickness = 4, Color = FRAME_INK, ApplyStrokeMode = Enum.ApplyStrokeMode.Border }),
 		})
-		shade(c, color, 0.3, 0.25)
-		shine(c, 14)
-		bigIcon(c, icon, { Size = UDim2.fromOffset(92, 92), AnchorPoint = Vector2.new(0.5, 0), Position = UDim2.new(0.5, 0, 0, 8) })
-		local amountLabel = bold(c, 4, { Text = amount, Size = UDim2.new(1, -14, 0, 40), Position = UDim2.fromOffset(7, 102) })
-		text(c, { Text = sub, Size = UDim2.new(1, -14, 0, 36), Position = UDim2.fromOffset(7, 144), TextWrapped = true, TextColor3 = Color3.fromRGB(255, 255, 225) })
+		shade(c, color, 0.35, 0.12)
+		local short = sub ~= ""
+		local iconSize = if short then 104 else 124
+		sunburst(c, 0.5, (6 + iconSize / 2) / SHOP_CARD_H)
+		bigIcon(c, icon, { Size = UDim2.fromOffset(iconSize, iconSize), AnchorPoint = Vector2.new(0.5, 0), Position = UDim2.new(0.5, 0, 0, 6), ZIndex = 2 })
+		local amountLabel = bold(c, 4, {
+			Text = amount, RichText = true, Size = UDim2.new(1, -16, 0, 44), Position = UDim2.fromOffset(8, iconSize + 4), ZIndex = 2,
+		})
+		if short then
+			bold(c, 2, { Text = sub, Size = UDim2.new(1, -16, 0, 22), Position = UDim2.fromOffset(8, iconSize + 48), ZIndex = 2 })
+		end
 		return c, amountLabel
 	end
 
-	-- The bottom row of a shop card: the buy button, and the purple gift button for Robux items.
+	-- The bottom row of a shop card: the magenta gift button on the left for Robux items, then the buy button.
 	local function buyRow(c: Frame, caption: string, color: Color3, onClick: () -> (), icon: (string | { string })?, gift: boolean): TextButton
-		local b = chunky(c, caption, color, UDim2.new(1, if gift then -76 else -16, 0, 50), onClick, icon, ICON.small)
-		b.Position = UDim2.new(0, 8, 1, -58)
+		local b = chunky(c, caption, color, UDim2.new(1, if gift then -84 else -20, 0, 52), onClick, icon, ICON.small)
+		b.Position, b.ZIndex = UDim2.new(0, if gift then 74 else 10, 1, -62), 2
 		if gift then
-			giftButton(c, UDim2.fromOffset(54, 50)).Position = UDim2.new(1, -62, 1, -58)
+			local g = giftButton(c, UDim2.fromOffset(56, 52))
+			g.Position, g.ZIndex = UDim2.new(0, 10, 1, -62), 2
 		end
 		return b
 	end
 
-	-- A Robux card for developer product `name`; `owned` replaces the price (e.g. a treadmill tier you have).
-	local function productCard(grid: Instance, order: number, name: string, product: Config.DevProduct, color: Color3, amount: string, sub: string, icon: string, owned: string?): (Frame, TextLabel)
-		local c, amountLabel = shopCard(grid, order, color, amount, sub, icon)
-		local soon = not owned and product.id == 0
-		local b = buyRow(c, owned or Format.robux(robuxPrice(product)), if owned then COLORS.disabled elseif soon then SOON_GREEN else COLORS.buy, function()
+	-- A Robux card for developer product `name`.
+	local function productCard(grid: Instance, order: number, name: string, product: Config.DevProduct, color: Color3, amount: string, icon: string): (Frame, TextLabel)
+		local c, amountLabel = shopCard(grid, order, color, amount, "", icon)
+		buyRow(c, Format.robux(robuxPrice(product)), robuxColor(product.id, ROBUX_GREEN), function()
 			RequestBuy:FireServer("Product:" .. name)
 		end, { "Robux" }, true)
-		if soon then
-			soonTag(b)
-		end
 		return c, amountLabel
+	end
+
+	-- A card with a $ button (gold while affordable) and, while there's a product for it, a green R$ one.
+	local function upgradeButtons(c: Frame, price: number?, buy: string, productName: string?, product: Config.DevProduct?)
+		local b = buyRow(c, if price then Format.money(price) else "Maxed", COLORS.disabled, function()
+			RequestBuy:FireServer(buy)
+		end, nil, false)
+		watchMoney(function()
+			b.BackgroundColor3 = if price and stats.money >= price then COLORS.shop else COLORS.disabled
+		end)
+		if price and productName and product then
+			b.Size = UDim2.new(0.5, -14, 0, 52)
+			local r = chunky(c, Format.robux(robuxPrice(product)), robuxColor(product.id, ROBUX_GREEN), UDim2.new(0.5, -14, 0, 52), function()
+				RequestBuy:FireServer("Product:" .. productName)
+			end, { "Robux" }, ICON.small)
+			r.Position, r.ZIndex = UDim2.new(0.5, 4, 1, -62), 2
+		end
 	end
 
 	-- Returns true when it scrolled to a section (openShopAt), so renderModal doesn't restore the old scroll.
@@ -1198,51 +1150,32 @@ do
 		end
 		note(`🎒 Seed bag {bagCount}/{Config.SEED_BAG_MAX}{if bagFull then " (full: plant some first!)" else ""} · plant bagged seeds from the 🌱 Seeds menu at your plot's pad`, nextOrder(), { "Bag", "Seeds" })
 
-		-- Plot upgrade: money or Robux (also on the board at your plot's gate)
+		-- Plot upgrade: money or Robux (also on the board at your plot's gate). The R$ product is the one
+		-- for the plot's current price tier (looked up on every render, so it follows plotLevel); none at
+		-- the last level.
 		section("PLOT UPGRADE", nextOrder(), HEADING_GREEN, "PlotUpgrade")
-		local plotGrid = cardGrid(nextOrder())
-		local plotColor = Color3.fromRGB(90, 190, 90)
 		local level = stats.plotLevel or 1
 		local price = Config.priceOf("PlotUpgrade", stats :: any)
-		local plotCard = shopCard(plotGrid, 1, plotColor, if price then `LEVEL {level + 1}` else "MAX LEVEL",
+		local plotCard = shopCard(cardGrid(nextOrder()), 1, CARD_COLORS.PlotUpgrade, if price then `LEVEL {level + 1}` else "MAX LEVEL",
 			if price then `+1 slot · cash x{Config.plotMoneyMult(level)} → x{Config.plotMoneyMult(level + 1)}`
 				else `{Config.plotSlots(level)} slots · cash x{Config.plotMoneyMult(level)}`, "PlotUpgrade")
-		local plotButton = buyRow(plotCard, if price then Format.money(price) else "Maxed", COLORS.disabled, function()
-			RequestBuy:FireServer("PlotUpgrade")
-		end, nil, false)
-		watchMoney(function()
-			plotButton.BackgroundColor3 = if price and stats.money >= price then COLORS.buy else COLORS.disabled
-		end)
-		-- The same level for Robux: a purple R$ button beside the $ one, like the board at the gate. The
-		-- product is the one for the plot's current price tier (looked up on every render, so it follows
-		-- plotLevel); none at the last level.
-		local plotProductName, plotProduct = Config.plotUpgradeProduct(level)
-		if price and plotProductName and plotProduct then
-			plotButton.Size = UDim2.new(0.55, -10, 0, 50)
-			local robuxButton = chunky(plotCard, Format.robux(robuxPrice(plotProduct)), if plotProduct.id == 0 then SOON_PURPLE else COLORS.robux,
-				UDim2.new(0.45, -10, 0, 50), function()
-					RequestBuy:FireServer("Product:" .. plotProductName)
-				end, { "Robux" }, ICON.small)
-			robuxButton.Position = UDim2.new(0.55, 2, 1, -58)
-			if plotProduct.id == 0 then
-				soonTag(robuxButton)
-			end
-		end
+		upgradeButtons(plotCard, price, "PlotUpgrade", Config.plotUpgradeProduct(level))
 
-		-- Speed (Robux); the HUD's "+" on the Speed icon opens the Shop here
+		-- Speed (Robux), blue; the HUD's "+" on the Speed icon opens the Shop here
 		local shopSections: { [string]: GuiObject } = {}
 		shopSections.Speed = section("SPEED", nextOrder(), HEADING_GOLD, "Speed")
 		local grid = cardGrid(nextOrder())
 		for i, entry in Config.products("Speed") do
-			productCard(grid, i, entry.name, entry.product, COLORS.speed, string.upper(entry.product.label), "Added to your Speed right away", "Speed")
+			local amount, rest = string.match(string.upper(entry.product.label), "^(%S+)%s+(.+)$")
+			productCard(grid, i, entry.name, entry.product, CARD_COLORS.Speed,
+				if amount then `<font color="{NUMBER_GREEN}">{amount}</font> {rest}` else string.upper(entry.product.label), "Speed")
 		end
 
-		-- Money (Robux): the card shows what you'd get right now (fixed, or minutes of your income)
+		-- Money (Robux), green: the card shows what you'd get right now (fixed, or minutes of your income)
 		section("MONEY", nextOrder(), HEADING_GREEN, "Money")
 		grid = cardGrid(nextOrder())
 		for i, entry in Config.products("Money") do
-			local _, amountLabel = productCard(grid, i, entry.name, entry.product, COLORS.money, "",
-				`{entry.product.label} · at least {entry.product.minutes} min of income`, "Money")
+			local _, amountLabel = productCard(grid, i, entry.name, entry.product, CARD_COLORS.Money, "", "Money")
 			watchMoney(function()
 				amountLabel.Text = Format.money(Config.moneyPackAmount(entry.product, stats.income or 0))
 			end)
@@ -1250,49 +1183,25 @@ do
 
 		-- Treadmill: the next tier for money or Robux (also on the prompts at your treadmill), like the plot card
 		section("TREADMILL", nextOrder(), HEADING_GOLD, "Treadmill")
-		do
-			local treadGrid = cardGrid(nextOrder())
-			local tier = stats.treadmillTier or 1
-			local treadPrice = Config.priceOf("TreadmillUpgrade", stats :: any)
-			local treadCard = shopCard(treadGrid, 1, Color3.fromRGB(240, 90, 90),
-				if treadPrice then `x{Config.treadmillMult(tier + 1)} TREADMILL` else "MAX TREADMILL",
-				if treadPrice then `Tier {tier + 1}/{Config.TREADMILL_MAX} · now x{Config.treadmillMult(tier)}`
-					else `x{Config.treadmillMult(tier)} · stand on it to gain Speed`, "Treadmill")
-			local treadButton = buyRow(treadCard, if treadPrice then Format.money(treadPrice) else "Maxed", COLORS.disabled, function()
-				RequestBuy:FireServer("TreadmillUpgrade")
-			end, nil, false)
-			watchMoney(function()
-				treadButton.BackgroundColor3 = if treadPrice and stats.money >= treadPrice then COLORS.buy else COLORS.disabled
-			end)
-			local treadProductName, treadProduct = Config.treadmillUpgradeProduct(tier)
-			if treadPrice and treadProductName and treadProduct then
-				treadButton.Size = UDim2.new(0.55, -10, 0, 50)
-				local robuxButton = chunky(treadCard, Format.robux(robuxPrice(treadProduct)), if treadProduct.id == 0 then SOON_PURPLE else COLORS.robux,
-					UDim2.new(0.45, -10, 0, 50), function()
-						RequestBuy:FireServer("Product:" .. treadProductName)
-					end, { "Robux" }, ICON.small)
-				robuxButton.Position = UDim2.new(0.55, 2, 1, -58)
-				if treadProduct.id == 0 then
-					soonTag(robuxButton)
-				end
-			end
-		end
+		local tier = stats.treadmillTier or 1
+		local treadPrice = Config.priceOf("TreadmillUpgrade", stats :: any)
+		local treadCard = shopCard(cardGrid(nextOrder()), 1, CARD_COLORS.Treadmill,
+			if treadPrice then `x{Config.treadmillMult(tier + 1)} TREADMILL` else "MAX TREADMILL",
+			if treadPrice then `Tier {tier + 1}/{Config.TREADMILL_MAX} · now x{Config.treadmillMult(tier)}`
+				else `x{Config.treadmillMult(tier)} · stand on it to gain Speed`, "Treadmill")
+		upgradeButtons(treadCard, treadPrice, "TreadmillUpgrade", Config.treadmillUpgradeProduct(tier))
 
-		-- Gamepasses (Robux)
+		-- Gamepasses (Robux), purple
 		section("PASSES", nextOrder(), HEADING_GREEN)
 		grid = cardGrid(nextOrder())
 		for i, name in { "DoubleMoney", "ExtraSlots" } do
 			local pass = Config.GAMEPASSES[name]
 			local owned = stats.passes[name] == true
-			local c = shopCard(grid, i, Color3.fromRGB(0, 180, 200), string.upper(pass.label),
+			local c = shopCard(grid, i, CARD_COLORS.Pass, string.upper(pass.label),
 				if name == "DoubleMoney" then "Doubles all plant income" else "On top of your plot level's slots", name)
-			local soon = not owned and pass.id == 0
-			local b = buyRow(c, if owned then "Owned" else "Buy · R$", if owned then COLORS.disabled elseif soon then SOON_GREEN else COLORS.buy, function()
+			buyRow(c, if owned then "Owned" else "Buy · R$", if owned then COLORS.disabled else robuxColor(pass.id, ROBUX_GREEN), function()
 				RequestBuy:FireServer("Pass:" .. name)
 			end, { "Robux" }, true)
-			if soon then
-				soonTag(b)
-			end
 		end
 
 		local focus = shopFocus and shopSections[shopFocus]
@@ -1392,14 +1301,9 @@ do
 			moneyButton.BackgroundColor3 = if stats.money >= t.price then COLORS.buy else COLORS.disabled
 		end)
 		if product then
-			local robuxButton = chunky(c, Format.robux(robuxPrice(product)), if product.id == 0 then SOON_PURPLE else COLORS.robux,
-				UDim2.fromOffset(TRAIL_W - 24 - moneyW - 8, 54), function()
-					RequestBuy:FireServer("Product:" .. (t.product :: string))
-				end, { "Robux" }, ICON.small)
-			robuxButton.Position = UDim2.fromOffset(12 + moneyW + 8, y)
-			if product.id == 0 then
-				soonTag(robuxButton)
-			end
+			chunky(c, Format.robux(robuxPrice(product)), robuxColor(product.id, COLORS.robux), UDim2.fromOffset(TRAIL_W - 24 - moneyW - 8, 54), function()
+				RequestBuy:FireServer("Product:" .. (t.product :: string))
+			end, { "Robux" }, ICON.small).Position = UDim2.fromOffset(12 + moneyW + 8, y)
 		end
 		return c
 	end
@@ -1928,33 +1832,14 @@ end
 -- Refresh from stats
 ----------------------------------------------------------------------------------------------------
 local lastUnlocked = -1
-local barLevel = 0 -- the level the bar shows (its fill jumps instead of sliding back on a level-up)
 local bestLevel: number? = nil -- highest level seen; nil until the server first sends our Speed
 local function refresh(changed: { [string]: any })
 	speedValue.Text = Format.short(stats.speed)
 	moneyValue.Text = Format.money(stats.money)
 
-	local level, start, nextAt = Config.speedLevel(stats.speed)
-	levelSpeedLabel.Text = `{Format.short(stats.speed)} SPEED`
-	levelMultLabel.Text = `x{Config.trailMult(stats.equippedTrail)} Multiplier`
-	levelLabel.Text = `Level {level}`
-	levelProgress.Text = `{Format.short(stats.speed)} / {Format.short(nextAt)}`
-	local fill = UDim2.fromScale(math.clamp((stats.speed - start) / (nextAt - start), 0.03, 1), 1)
-	if level == barLevel then
-		TweenService:Create(levelFill, TweenInfo.new(0.25), { Size = fill }):Play()
-	else
-		levelFill.Size = fill
-		barLevel = level
-	end
-	-- "!" on Trails while there's a trail we can afford but don't own
-	local canBuyTrail = false
-	for _, t in Config.TRAILS do
-		canBuyTrail = canBuyTrail or (t.price > 0 and not stats.trails[t.id] and stats.money >= t.price)
-	end
-	setBadge("Trails", if canBuyTrail then "!" else nil)
 	if changed.speed ~= nil then
 		local announce
-		bestLevel, announce = Config.levelUp(bestLevel, level)
+		bestLevel, announce = Config.levelUp(bestLevel, (Config.speedLevel(stats.speed)))
 		if announce then
 			announceLevel(announce)
 		end

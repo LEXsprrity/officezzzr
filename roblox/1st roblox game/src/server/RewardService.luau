@@ -1,7 +1,8 @@
 -- The community rewards (TODO 6) on the Roblox side; the rules are in Rewards (pure).
 --   * Free Gift: ClaimReward("Gift") from the window's CLAIM button. The server checks the community
 --     (Player:IsInGroupAsync, then GroupService for a player who joined during this session), grants once per
---     account and toasts. The window opens by itself once, Config.FREE_GIFT_AUTO_OPEN s after joining.
+--     account and toasts. The window opens by itself once, Config.FREE_GIFT_AUTO_OPEN s after joining, and
+--     from the gift box placed here beside the free chest (GiftBox; its prompt is handled on the client).
 --   * Free chest: the chest's ProximityPrompt in the base. Distance, rate limit and the per-player
 --     cooldown are checked here; the client only draws the countdown.
 --   * "MOST MONEY/s": every Config.MONEY_BOARD_INTERVAL s this server writes its players' income to an
@@ -19,6 +20,7 @@ local Sessions = require(script.Parent:WaitForChild("Sessions"))
 local Rewards = require(script.Parent:WaitForChild("Rewards"))
 local SpeedService = require(script.Parent:WaitForChild("SpeedService"))
 local WorldBuilder = require(script.Parent:WaitForChild("WorldBuilder"))
+local GiftBox = require(script.Parent:WaitForChild("GiftBox"))
 
 local RewardService = {}
 
@@ -206,6 +208,9 @@ function RewardService.init(world: Instance?)
 	local prompt = chest and chest:FindFirstChildOfClass("ProximityPrompt")
 	if prompt then
 		prompt.Triggered:Connect(claimChest)
+	end
+	if chest then
+		GiftBox.build(chest)
 	end
 end
 

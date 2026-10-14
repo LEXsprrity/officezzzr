@@ -9,6 +9,7 @@ local Config = H.shared("Config")
 local Rewards = H.server("Rewards")
 local ProfileStore = H.server("ProfileStore")
 local WorldBuilder = H.server("WorldBuilder")
+local GiftBox = H.server("GiftBox")
 local Vector3 = H.Vector3
 local Enum = require("@lune/roblox").Enum
 
@@ -351,6 +352,48 @@ H.test("rewards: the committed map/World.rbxm has the chest and the board", func
 	local world = MapTool.load(MapTool.PATH)
 	checkRewardsCorner(world, "map/World.rbxm")
 	H.ok(WorldBuilder.adopt(world), "and the map still validates")
+end)
+
+-- The gift box RewardService builds beside the chest: the prompt that opens the Free Gift window and the
+-- floating "FREE GIFT", on its own circle next to the chest's, still clear of the walkway and the plots.
+local function checkGiftBox(world: any, label: string)
+	local chest, board = WorldBuilder.rewardPoints(world)
+	H.ok(chest and board, label)
+	local model, prompt = GiftBox.build(chest)
+	H.eq(model.Parent, chest.Parent, `{label}: next to the chest, in the Rewards model`)
+	H.eq(prompt:GetAttribute("FreeGift"), true, "its prompt opens the Free Gift window (Rewards.client)")
+	H.eq(prompt.ObjectText, "Free Gift")
+	H.ok(prompt.RequiresLineOfSight == false and prompt.MaxActivationDistance >= 8, "easy to trigger")
+	local sign
+	for _, d in model:GetDescendants() do
+		if d:IsA("TextLabel") and d.Text == "FREE GIFT" then
+			sign = d
+		end
+	end
+	H.ok(sign and sign:FindFirstChildOfClass("UIStroke").Thickness >= 4 and sign.Parent:IsA("BillboardGui"), "a big outlined FREE GIFT floats above it")
+	local body = model:FindFirstChild("GiftBody")
+	local flat = Vector3.new(1, 0, 1)
+	local gap = ((body.CFrame.Position - chest.CFrame.Position) * flat).Magnitude
+	H.ok(gap >= (11 + GiftBox.CIRCLE) / 2 and gap <= 14, `{label}: beside the chest ({gap} studs), circles apart`)
+	H.ok(math.abs(model.GiftCircle.CFrame.Position.Y - world.Rewards.ChestCircle.CFrame.Position.Y) < 0.5, "on the ground like the chest's circle")
+	local panel = board.status.Parent.Parent
+	H.ok(((body.CFrame.Position - panel.CFrame.Position) * flat).Magnitude > ((chest.CFrame.Position - panel.CFrame.Position) * flat).Magnitude, "on the far side from the board")
+	local p, r = body.CFrame.Position, GiftBox.CIRCLE / 2
+	H.ok(p.X + r <= Config.CORRIDOR_START_X and p.Z < 0, "in the base, -Z side")
+	H.ok(math.abs(p.Z) - r > Config.CORRIDOR_WIDTH / 2, "clear of the walkway and the corridor mouth")
+	local half = Config.PLOT_SIZE / 2
+	for spot = 1, Config.MAX_PLAYERS + 1 do
+		local cx = Config.PLOT_FIRST_X - ((spot - 1) // 2) * Config.PLOT_SPACING_X
+		local cz = (if spot % 2 == 1 then 1 else -1) * Config.PLOT_OFFSET_Z
+		H.ok(math.abs(p.X - cx) > half + r or math.abs(p.Z - cz) > half + r, `clear of spot {spot}`)
+	end
+	model:Destroy()
+end
+
+H.test("rewards: a gift box with a FREE GIFT prompt stands beside the free chest", function()
+	WorldBuilder.build()
+	checkGiftBox(H.workspace:FindFirstChild("World"), "generated")
+	checkGiftBox(MapTool.load(MapTool.PATH), "map/World.rbxm")
 end)
 
 return nil
