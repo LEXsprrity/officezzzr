@@ -435,6 +435,31 @@ local function fitClone(slot: string, source: Instance, settings: Instance, cfra
 	return model
 end
 
+-- The slot's template narrowed to `group` (see Assets.place): nil when it has sub-folders but not that one.
+local function poolOf(template: Instance, group: string?): Instance?
+	if group and template:IsA("Folder") and template:FindFirstChildWhichIsA("Folder") then
+		for _, child in template:GetChildren() do
+			if child:IsA("Folder") and Assets.key(child.Name) == Assets.key(group) then
+				return child
+			end
+		end
+		return nil
+	end
+	return template
+end
+
+-- The names of the variants Assets.place chooses from for (slot, group), in `pick` order (pick 1 is the
+-- first, wrapping around). Empty when the slot has no model.
+function Assets.variantNames(slot: string, group: string?): { string }
+	local template = Assets.get(slot)
+	local pool = template and poolOf(template, group)
+	local names = {}
+	for _, v in (if pool then variantsOf(pool) else {}) :: { Instance } do
+		table.insert(names, v.Name)
+	end
+	return names
+end
+
 -- Clones the slot's model (one of its variants, picked from `cframe`'s position), anchors it, sets the
 -- slot's collision policy, puts its bottom centre at `cframe` (front = -Z of `cframe`) and, unless it has
 -- KeepScale = true, scales it uniformly so it fits inside `fitSize` (0 or math.huge = that axis is free).
@@ -448,15 +473,7 @@ function Assets.place(slot: string, parent: Instance?, cframe: CFrame, fitSize: 
 	if not template then
 		return nil
 	end
-	local pool: Instance? = template
-	if group and template:IsA("Folder") and template:FindFirstChildWhichIsA("Folder") then
-		pool = nil
-		for _, child in template:GetChildren() do
-			if child:IsA("Folder") and Assets.key(child.Name) == Assets.key(group) then
-				pool = child
-			end
-		end
-	end
+	local pool = poolOf(template, group)
 	local variants = if pool then variantsOf(pool) else {}
 	if #variants == 0 then
 		if pool then

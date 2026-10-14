@@ -100,14 +100,24 @@ local function labelsFor(model: Model): (TextLabel?, TextLabel?)
 	return gui:FindFirstChild("Weight") :: TextLabel?, gui:FindFirstChild("Income") :: TextLabel?
 end
 
--- "☀️ $12/s 1.5x!" in gold while the plant's phase is on, "🌙 $8/s" in green otherwise.
+-- "$12/s · Day x1.5" in gold while the plant's phase is on, "$8/s" in green otherwise.
 local INCOME_GREEN = Color3.fromRGB(120, 255, 120)
 local INCOME_GOLD = Color3.fromRGB(255, 215, 60)
 local function setIncomeLabel(label: TextLabel, zone: number, perSecond: number, isNight: boolean)
-	local active = Config.isActiveTime(zone, isNight)
-	local icon = Config.ACTIVE_ICONS[Config.ZONES[zone].active]
-	label.Text = `{icon} {Format.money(perSecond)}/s{if active then string.format(" %gx!", Config.ACTIVE_TIME_MULT) else ""}`
-	label.TextColor3 = if active then INCOME_GOLD else INCOME_GREEN
+	local bonus = Config.bonusLabel(zone, isNight)
+	label.Text = `{Format.money(perSecond)}/s{if bonus then " · " .. bonus else ""}`
+	label.TextColor3 = if bonus then INCOME_GOLD else INCOME_GREEN
+end
+
+-- What a plant is called: the flower model it grew into (CreatureModels.variantOf with its id, the same pick
+-- as its model), after its mutation: "Daisy", "Gold Desert Wild Flower". Without plant models (the
+-- built-in creature) it keeps its seed's name.
+function PlotService.plantName(plant: ProfileStore.Plant): string
+	local variant = CreatureModels.variantOf(plant.zone, plant.rarity, plant.slot)
+	if not variant then
+		return SeedService.seedName(plant.zone, plant.rarity, plant.mutation)
+	end
+	return `{if plant.mutation then plant.mutation .. " " else ""}{Format.plantName(variant)}`
 end
 
 local function buildPlantModel(state: PlotState, plant: ProfileStore.Plant, weight: number, income: number, scale: number): Model
@@ -148,24 +158,10 @@ local function buildPlantModel(state: PlotState, plant: ProfileStore.Plant, weig
 		label.Parent = gui
 		return label
 	end
-	line("Name", SeedService.seedName(plant.zone, plant.rarity, plant.mutation), if mut then mut.color else rarity.color, 1)
-	line("Weight", Format.weight(weight), Color3.new(1, 1, 1), 2)
+	line("Name", PlotService.plantName(plant), if mut then mut.color else rarity.color, 1)
 	local isNight = Config.dayPhase(os.time())
 	setIncomeLabel(line("Income", "", INCOME_GREEN, 3), plant.zone, income * Config.timeMult(plant.zone, isNight), isNight)
-
-	-- Owner-only "remove" prompt (the client hides other players' prompts; the server re-checks).
-	local prompt = Instance.new("ProximityPrompt")
-	prompt.ActionText = "Remove"
-	prompt.ObjectText = SeedService.seedName(plant.zone, plant.rarity, plant.mutation)
-	prompt.HoldDuration = 1
-	prompt.MaxActivationDistance = 10
-	prompt.RequiresLineOfSight = false
-	prompt.KeyboardKeyCode = Enum.KeyCode.R
-	prompt:SetAttribute("OwnerUserId", if state.owner then state.owner.UserId else 0)
-	prompt.Parent = body:FindFirstChild("PromptAnchor") -- low on the creature, so it stays reachable when huge
-	prompt.Triggered:Connect(function(player: Player)
-		PlotService.removePlant(player, plant.slot)
-	end)
+	-- No prompt on the plant: it is removed from the HUD's Plants panel (remote RemovePlant).
 
 	-- Stand on the dirt facing the entrance. The pivot is on the dirt, so ScaleTo grows the creature from
 	-- the ground up. Scale before parenting: one replication, not two.
@@ -243,6 +239,7 @@ local function pushPlants(s: Sessions.Session, now: number)
 			-- x/z: where it stands in the plot's space (the planting preview keeps new plants clear of it)
 			slot = plant.slot, zone = plant.zone, rarity = plant.rarity, mutation = plant.mutation, weight = weight, income = income,
 			x = plant.x, z = plant.z,
+			name = PlotService.plantName(plant), -- "Gold Daisy": its flower model's name (the Plants panel, the Sell cards)
 			sell = Selling.price(plant, now, mult),
 		})
 	end
@@ -265,6 +262,32 @@ local function plotOf(player: Player): PlotState?
 	return nil
 end
 
+-- The Index (collection book) entries a plant fills: "zone:rarity", its flower "zone:rarity:Daisy" (model
+-- name, CreatureModels.variantOf) and its mutation "zone:Gold". Marks them in the profile and returns the
+-- new ones.
+function PlotService.indexKeys(plant: ProfileStore.Plant): { string }
+	local keys = { `{plant.zone}:{plant.rarity}` }
+	local variant = CreatureModels.variantOf(plant.zone, plant.rarity, plant.slot)
+	if variant then
+		table.insert(keys, `{plant.zone}:{plant.rarity}:{variant}`)
+	end
+	if plant.mutation then
+		table.insert(keys, `{plant.zone}:{plant.mutation}`)
+	end
+	return keys
+end
+
+local function discover(profile: ProfileStore.Profile, plant: ProfileStore.Plant): { string }
+	local new = {}
+	for _, key in PlotService.indexKeys(plant) do
+		if not profile.index[key] then
+			profile.index[key] = true
+			table.insert(new, key)
+		end
+	end
+	return new
+end
+
 -- Plants a seed (carried or from the seed bag) at (x, z) in the plot's space, under a new id: model, Index,
 -- income and client updates.
 local function plantSeed(player: Player, s: Sessions.Session, state: PlotState, x: number, z: number, zone: number, rarity: number, mutation: string?)
@@ -276,25 +299,13 @@ local function plantSeed(player: Player, s: Sessions.Session, state: PlotState, 
 	table.insert(s.profile.plants, plant)
 	spawnPlant(state, plant, now)
 
-	-- Index (collection book)
-	local newEntries = {}
-	local keys = { `{zone}:{rarity}` }
-	if mutation then
-		table.insert(keys, `{zone}:{mutation}`)
-	end
-	for _, key in keys do
-		if not s.profile.index[key] then
-			s.profile.index[key] = true
-			table.insert(newEntries, key)
-		end
-	end
-
+	local newEntries = discover(s.profile, plant)
 	refreshIncome(s, now)
 	pushPlants(s, now)
 	Sessions.pushFull(s)
 	local weight = PlotService.plantStats(plant, now)
 	Net.LootEvent:FireClient(player, "Planted", {
-		name = SeedService.seedName(zone, rarity, mutation),
+		name = PlotService.plantName(plant),
 		weight = weight,
 		rarity = rarity,
 		newIndex = newEntries,
@@ -376,35 +387,26 @@ function PlotService.plantFromBag(player: Player, key: string)
 	Net.LootEvent:FireClient(player, "PlaceSeed", { key = key, zone = zone, rarity = rarity, name = SeedService.seedName(zone, rarity, mutation) })
 end
 
-function PlotService.removePlant(player: Player, slot: number)
+-- The HUD Plants panel's Remove button (remote RemovePlant, rate-limited): removes the player's own plant in
+-- `slot` (untrusted: Selling.remove checks it is one of theirs) for SELL_SECONDS of its income.
+local REMOVES_PER_SECOND = 4
+function PlotService.removePlant(player: Player, slot: any)
 	local s = Sessions.get(player)
 	local state = plotOf(player)
-	if not s or not state or type(slot) ~= "number" then
+	if not s or not state or not Sessions.allowRequest(s, REMOVES_PER_SECOND) then
 		return
 	end
-	local char = player.Character
-	local root = char and char:FindFirstChild("HumanoidRootPart") :: BasePart?
-	local model = state.models[slot]
-	-- Measure from the prompt's anchor, not the body: a big creature's body can be 10+ studs up.
-	local anchor = model and model.PrimaryPart and model.PrimaryPart:FindFirstChild("PromptAnchor")
-	if not root or not anchor or not anchor:IsA("Attachment") or (root.Position - anchor.WorldPosition).Magnitude > 14 then
+	local now = os.time()
+	local refund = Selling.remove(s.profile, slot, now, Sessions.moneyMult(s))
+	if not refund then
+		pushPlants(s, now) -- the panel was showing a plant that is gone: redraw it
 		return
 	end
-	for i, plant in s.profile.plants do
-		if plant.slot == slot then
-			local now = os.time()
-			local _, income = PlotService.plantStats(plant, now)
-			local refund = income * Config.SELL_SECONDS * Sessions.moneyMult(s)
-			table.remove(s.profile.plants, i)
-			removePlantModel(state, slot)
-			s.profile.money += refund
-			refreshIncome(s, now)
-			pushPlants(s, now)
-			Sessions.pushCore(s)
-			Net.LootEvent:FireClient(player, "Sold", { amount = refund })
-			return
-		end
-	end
+	removePlantModel(state, slot)
+	refreshIncome(s, now)
+	pushPlants(s, now)
+	Sessions.pushCore(s)
+	Net.LootEvent:FireClient(player, "Sold", { amount = refund })
 end
 
 -- The SELL stall (the HUD's Sell window, remote SellPlants): sells the plants in `slots` for
@@ -780,9 +782,10 @@ end
 -- Assignment
 ----------------------------------------------------------------------------------------------------
 -- `stalls`: the SELL stalls' prompt parts (WorldBuilder.sellPoints); none means plants can't be sold
--- at a stall (the R-key Remove still works).
+-- at a stall (the Plants panel's Remove still works).
 function PlotService.init(infos: { WorldBuilder.PlotInfo }, stalls: { BasePart }?)
 	sellStalls = stalls or {}
+	Net.RemovePlant.OnServerEvent:Connect(PlotService.removePlant)
 	for i, info in infos do
 		local state: PlotState = {
 			info = info,
@@ -812,6 +815,19 @@ function PlotService.init(infos: { WorldBuilder.PlotInfo }, stalls: { BasePart }
 	end
 end
 
+-- Every flower the Index can show: catalog[zone][rarity] = its plant models' names in pick order (the
+-- client shows Format.plantName of each; empty lists when a zone has no plant models).
+local function catalog(): { { { string } } }
+	local out = {}
+	for k in Config.ZONES do
+		out[k] = {}
+		for r in Config.RARITIES do
+			out[k][r] = CreatureModels.variants(k, r)
+		end
+	end
+	return out
+end
+
 -- Returns the PlotInfo, or nil if all plots are taken.
 function PlotService.assign(s: Sessions.Session): WorldBuilder.PlotInfo?
 	for _, state in plots do
@@ -829,9 +845,11 @@ function PlotService.assign(s: Sessions.Session): WorldBuilder.PlotInfo?
 			local now = os.time()
 			for _, plant in s.profile.plants do
 				spawnPlant(state, plant, now)
+				discover(s.profile, plant) -- saves from before flower names: their plants' flowers count in the Index
 			end
 			refreshIncome(s, now)
 			pushPlants(s, now)
+			Sessions.push(s.player, { catalog = catalog() })
 			return state.info
 		end
 	end
@@ -898,7 +916,7 @@ local function payout(s: Sessions.Session, state: PlotState, now: number)
 				weightLabel.Text = Format.weight(weight)
 			end
 			if incomeLabel then
-				setIncomeLabel(incomeLabel, plant.zone, perSecond, isNight) -- also flips ☀️/🌙 "1.5x!" on a phase change
+				setIncomeLabel(incomeLabel, plant.zone, perSecond, isNight) -- also flips the "Day x1.5" bonus on a phase change
 			end
 			local scale = plantScale(plant, weight)
 			if math.abs(scale - (state.scales[plant.slot] or 1)) > 0.03 then

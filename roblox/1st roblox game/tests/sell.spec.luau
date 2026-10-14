@@ -141,6 +141,45 @@ H.test("sell: only your own plants, real slots and a plain list; nothing changes
 	H.eq(#profile.plants, 0)
 end)
 
+H.test("remove (RemovePlant, the Plants panel): only one of your own plants, by a whole slot number; refunds SELL_SECONDS", function()
+	local mine = profileWith({ plant(1, 2, 3, 600), plant(2, 4, 1, 3600, "Gold") })
+	local theirs = profileWith({ plant(5, 1, 1, 60) })
+	-- refused: nothing changes
+	for _, bad in { "1", 1.5, 0 / 0, math.huge, {}, true } :: { any } do
+		local refund, why = Selling.remove(mine, bad, NOW, 2)
+		H.eq(refund, nil, `slot {tostring(bad)}`)
+		H.eq(why, "bad", `slot {tostring(bad)}`)
+	end
+	local refund, why = Selling.remove(mine, 5, NOW, 2) -- another player's plant (not in your profile)
+	H.eq(refund, nil)
+	H.eq(why, "none")
+	H.eq(#mine.plants, 2, "nothing removed")
+	H.eq(mine.money, 1000, "nothing paid")
+	H.eq(#theirs.plants, 1, "theirs untouched")
+	-- your plant: removed, refunded SELL_SECONDS of its income x the multiplier (less than the stall pays)
+	local gold = mine.plants[2]
+	local paid = Selling.remove(mine, 2, NOW, 2)
+	H.near(paid :: number, income(gold) * Config.SELL_SECONDS * 2, 1e-6, "refund")
+	H.ok((paid :: number) < Selling.price(gold, NOW, 2), "the stall pays more")
+	H.eq(#mine.plants, 1)
+	H.eq(mine.plants[1].slot, 1)
+	H.near(mine.money, 1000 + (paid :: number), 1e-6)
+	H.eq(select(2, Selling.remove(mine, 2, NOW, 2)), "none", "gone: a second click removes nothing")
+	-- the remote: its own RemoteEvent, rate-limited, through Selling.remove; no Remove prompt on the plants
+	local fs = require("@lune/fs")
+	local net = fs.readFile("src/server/Net.luau")
+	local plot = fs.readFile("src/server/PlotService.luau")
+	H.ok(string.find(net, "RemovePlant = remote(\"RemovePlant\")", 1, true) ~= nil, "Net.RemovePlant")
+	H.ok(string.find(plot, "Net.RemovePlant.OnServerEvent:Connect(PlotService.removePlant)", 1, true) ~= nil, "PlotService handles it")
+	H.ok(string.find(plot, "not Sessions.allowRequest(s, REMOVES_PER_SECOND)", 1, true) ~= nil, "rate-limited")
+	H.ok(string.find(plot, "Selling.remove(s.profile, slot, now, Sessions.moneyMult(s))", 1, true) ~= nil, "checked against your own profile")
+	local a = string.find(plot, "local function buildPlantModel", 1, true)
+	local b = string.find(plot, "local function addSoil", 1, true)
+	local build = a and b and string.sub(plot, a, b) or ""
+	H.ok(build ~= "" and not string.find(build, "ProximityPrompt", 1, true) and not string.find(build, "\"Remove\"", 1, true), "no Remove prompt on plants")
+	H.ok(not string.find(plot, "KeyCode.R\n", 1, true) and not string.find(plot, "KeyCode.R\r", 1, true), "no R key")
+end)
+
 H.test("sell: only at the SELL stall (within SELL_STALL_DISTANCE of its prompt part)", function()
 	for _, case in { { nil, "no stall in the map" }, { Config.SELL_STALL_DISTANCE + 0.5, "too far" }, { math.huge, "no character" }, { 0 / 0, "NaN" } } do
 		local profile = profileWith({ plant(1, 1, 1, 10) })

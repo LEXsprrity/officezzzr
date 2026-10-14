@@ -773,6 +773,14 @@ function Config.isActiveTime(k: number, isNight: boolean): boolean
 	return (Config.ZONES[k].active == "night") == isNight
 end
 
+-- "Day x1.5" / "Night x1.5" while zone `k`'s plants earn their bonus, else nil (plant labels: words, no emoji).
+function Config.bonusLabel(k: number, isNight: boolean): string?
+	if not Config.isActiveTime(k, isNight) then
+		return nil
+	end
+	return string.format("%s x%g", if isNight then "Night" else "Day", Config.ACTIVE_TIME_MULT)
+end
+
 function Config.timeMult(k: number, isNight: boolean): number
 	return if Config.isActiveTime(k, isNight) then Config.ACTIVE_TIME_MULT else 1
 end
