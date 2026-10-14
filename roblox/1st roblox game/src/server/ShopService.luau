@@ -186,6 +186,8 @@ local function processReceipt(receiptInfo: { [string]: any }): Enum.ProductPurch
 			SpeedService.refresh(s)
 		elseif kind == "Trail" then
 			TrailService.apply(s.player.Character, s.profile.equippedTrail)
+		elseif kind == "PlotUpgrade" then
+			PlotService.refreshSlots(s) -- the new soil patch and the board's next prices
 		end
 		Sessions.pushFull(s)
 		local pack = grant.pack

@@ -30,9 +30,13 @@ export type PlotInfo = {
 	treadmillLabel: TextLabel, -- the sign over the belt
 	soil: Folder,
 	plants: Folder,
-	upgradeBoard: BasePart, -- the "Upgrade Plot" sign at the gate; PlotService adds its prompt and text
-	upgradeLabels: { level: TextLabel, perk: TextLabel, price: TextLabel },
+	upgradeBoard: BasePart, -- the "Upgrade" sign at the gate; PlotService adds its prompts and text
+	upgradeLabels: UpgradeLabels,
 }
+
+-- What PlotService writes on an Upgrade board (WorldBuilder.setUpgradeBoard). `buttons` (the row holding
+-- the two buttons, hidden at the last level) is optional, so a hand-made board only needs the labels.
+export type UpgradeLabels = { level: TextLabel, cash: TextLabel, robux: TextLabel, buttons: GuiObject? }
 
 export type NestInfo = {
 	zone: number,
@@ -158,6 +162,102 @@ local function studs<T>(p: T, faces: { string }?): T
 		(p :: any)[face] = Enum.SurfaceType.Studs
 	end
 	return p
+end
+
+-- Each plot's Upgrade board (docs/references/08-upgrade-sign-reference.png): a dark navy panel in a
+-- studded frame, on a short post.
+local BOARD_SIZE = Vector2.new(7.6, 4.8)
+local BOARD_RIM = 0.8 -- the frame's width
+local BOARD_NAVY = Color3.fromRGB(30, 36, 60)
+local BOARD_CORNER = Color3.fromRGB(44, 54, 92)
+local BOARD_POST = Color3.fromRGB(24, 29, 50)
+local BOARD_PPS = 50 -- SurfaceGui pixels per stud
+local BOARD_TEXT = {
+	open = Color3.fromRGB(110, 240, 70), -- "Level 6 > Level 7"
+	max = Color3.fromRGB(255, 210, 60), -- "MAX LEVEL"
+	empty = Color3.fromRGB(190, 195, 210), -- nobody owns the plot
+}
+local BOARD_BUTTONS = {
+	{ name = "Cash", text = "$500", fill = Color3.fromRGB(225, 40, 40), edge = Color3.fromRGB(90, 10, 10), width = 0.58 },
+	{ name = "Robux", text = "R$ 25", fill = Color3.fromRGB(165, 45, 230), edge = Color3.fromRGB(55, 10, 80), width = 0.38 },
+}
+
+-- The board's SurfaceGui, inside the frame: "Upgrade" (white, outlined), "Level X > Level Y" (green) and
+-- a row of two buttons, red with the money price and purple with the Robux price. PlotService finds the
+-- labels it writes by name: Level, Cash and Robux, and hides the Buttons row at the last level.
+local function buildUpgradeGui(board: BasePart)
+	local gui = Instance.new("SurfaceGui")
+	gui.Face = Enum.NormalId.Front
+	gui.SizingMode = Enum.SurfaceGuiSizingMode.PixelsPerStud
+	gui.PixelsPerStud = BOARD_PPS
+	gui.LightInfluence = 0
+	gui.MaxDistance = 45
+	gui.Parent = board
+	local inset = UDim.new(0, math.round((BOARD_RIM + 0.15) * BOARD_PPS))
+	local padding = Instance.new("UIPadding")
+	padding.PaddingLeft = inset
+	padding.PaddingRight = inset
+	padding.PaddingTop = inset
+	padding.PaddingBottom = inset
+	padding.Parent = gui
+	local function list(parent: Instance, direction: Enum.FillDirection, gap: number)
+		local layout = Instance.new("UIListLayout")
+		layout.FillDirection = direction
+		layout.HorizontalAlignment = Enum.HorizontalAlignment.Center
+		layout.VerticalAlignment = Enum.VerticalAlignment.Center
+		layout.SortOrder = Enum.SortOrder.LayoutOrder
+		layout.Padding = UDim.new(gap, 0)
+		layout.Parent = parent
+	end
+	local function text(parent: Instance, name: string, value: string, color: Color3, size: UDim2, order: number): TextLabel
+		local label = Instance.new("TextLabel")
+		label.Name = name
+		label.BackgroundTransparency = 1
+		label.Size = size
+		label.Font = Enum.Font.FredokaOne
+		label.TextScaled = true
+		label.Text = value
+		label.TextColor3 = color
+		label.LayoutOrder = order
+		local stroke = Instance.new("UIStroke")
+		stroke.Thickness = 3
+		stroke.Color = Color3.fromRGB(15, 15, 25)
+		stroke.Parent = label
+		label.Parent = parent
+		return label
+	end
+	list(gui, Enum.FillDirection.Vertical, 0.03)
+	text(gui, "Title", "Upgrade", Color3.new(1, 1, 1), UDim2.fromScale(1, 0.3), 1)
+	text(gui, "Level", "Level 1 > Level 2", BOARD_TEXT.open, UDim2.fromScale(1, 0.22), 2)
+	local row = Instance.new("Frame")
+	row.Name = "Buttons"
+	row.BackgroundTransparency = 1
+	row.Size = UDim2.fromScale(1, 0.4)
+	row.LayoutOrder = 3
+	row.Parent = gui
+	list(row, Enum.FillDirection.Horizontal, 0.04)
+	for i, spec in BOARD_BUTTONS do
+		local button = Instance.new("Frame")
+		button.Name = spec.name .. "Button"
+		button.BackgroundColor3 = spec.fill
+		button.Size = UDim2.fromScale(spec.width, 1)
+		button.LayoutOrder = i
+		local corner = Instance.new("UICorner")
+		corner.CornerRadius = UDim.new(0, 8)
+		corner.Parent = button
+		local edge = Instance.new("UIStroke")
+		edge.Thickness = 3
+		edge.Color = spec.edge
+		edge.Parent = button
+		local shine = Instance.new("UIGradient") -- a little lighter at the top, like a raised button
+		shine.Color = ColorSequence.new(Color3.new(1, 1, 1), Color3.fromRGB(190, 190, 190))
+		shine.Rotation = 90
+		shine.Parent = button
+		local label = text(button, spec.name, spec.text, Color3.new(1, 1, 1), UDim2.fromScale(0.88, 0.78), 1)
+		label.AnchorPoint = Vector2.new(0.5, 0.5)
+		label.Position = UDim2.fromScale(0.5, 0.5)
+		button.Parent = row
+	end
 end
 
 -- Plots and the shop plaza (spot MAX_PLAYERS + 1) alternate sides of the walkway, column by column.
@@ -364,51 +464,29 @@ local function buildPlot(world: Folder, index: number)
 	-- PlotService writes the owner's live rate on it ("+X Speed/s").
 	billboard(tmSignPart, "🏃 TREADMILL", UDim2.fromScale(10, 3.6), Vector3.zero, 60)
 
-	-- "Upgrade Plot" board just outside the gate, beside the path (like an "Upgrade Pen" sign). Small and
-	-- sized in studs, so it reads only up close. PlotService writes the owner's level and price on it and
-	-- owns its prompt. The board is the gameplay piece; its posts and trim are the UpgradeSign slot.
-	local boardPos = at(-17, -4, 3.4)
+	-- "Upgrade" board just outside the gate, beside the path: a chunky dark navy sign on a short post, with
+	-- "Level X > Level Y" and two buttons, a red one with the money price and a purple one with the Robux
+	-- price. Sized in studs, so it reads only up close. PlotService writes it (WorldBuilder.setUpgradeBoard)
+	-- and owns its two prompts. The board (the panel with the text) is the gameplay piece; its studded
+	-- frame and post are the UpgradeSign slot.
+	local boardPos = at(-17, -4, BOARD_SIZE.Y / 2 + 2)
 	local boardCF = Props.lookAt(boardPos, boardPos + Vector3.new(0, 0, toWalk)) -- front face toward the walkway
 	Assets.swap("UpgradeSign", model, Assets.facing(Vector3.new(boardPos.X, GROUND, boardPos.Z), Vector3.new(0, 0, toWalk)), function(into)
+		local w, h, rim = BOARD_SIZE.X, BOARD_SIZE.Y, BOARD_RIM
+		local front = CFrame.new(0, 0, -0.15) -- the frame stands a little proud of the panel
 		for _, s in { -1, 1 } do
-			deco(into, "UpgradePost", Vector3.new(0.6, 3.4, 0.6), boardCF * CFrame.new(s * 2.4, -2.3, 0.3), Color3.fromRGB(110, 70, 40), Enum.Material.Wood)
+			studs(deco(into, "UpgradeFrame", Vector3.new(w, rim, 1), boardCF * front * CFrame.new(0, s * (h - rim) / 2, 0), BOARD_NAVY), { "FrontSurface", "TopSurface" })
+			studs(deco(into, "UpgradeFrame", Vector3.new(rim, h - 2 * rim, 1), boardCF * front * CFrame.new(s * (w - rim) / 2, 0, 0), BOARD_NAVY), { "FrontSurface" })
+			for _, t in { -1, 1 } do
+				studs(deco(into, "UpgradeCorner", Vector3.new(rim + 0.2, rim + 0.2, 1.15), boardCF * front * CFrame.new(s * (w - rim) / 2, t * (h - rim) / 2, 0), BOARD_CORNER), { "FrontSurface", "TopSurface" })
+			end
 		end
-		deco(into, "UpgradeBoardTrim", Vector3.new(6.4, 0.4, 0.5), boardCF * CFrame.new(0, 1.9, 0), color, Enum.Material.SmoothPlastic)
+		local postHeight = boardPos.Y - GROUND - h / 2 + 0.2
+		studs(deco(into, "UpgradePost", Vector3.new(1.4, postHeight, 1), boardCF * CFrame.new(0, -(h / 2 + postHeight / 2 - 0.2), 0.05), BOARD_POST), { "FrontSurface" })
 	end, Vector3.new(1.2, 1.5, 0))
-	local upgradeBoard = tag(deco(model, "UpgradeBoard", Vector3.new(6, 3.6, 0.4), boardCF, Color3.fromRGB(70, 46, 28), Enum.Material.WoodPlanks),
+	local upgradeBoard = tag(studs(deco(model, "UpgradeBoard", Vector3.new(BOARD_SIZE.X, BOARD_SIZE.Y, 0.6), boardCF, BOARD_NAVY), { "BackSurface" }),
 		"UpgradeBoard", "PlotIndex", index)
-	local boardGui = Instance.new("SurfaceGui")
-	boardGui.Face = Enum.NormalId.Front
-	boardGui.SizingMode = Enum.SurfaceGuiSizingMode.PixelsPerStud
-	boardGui.PixelsPerStud = 50
-	boardGui.LightInfluence = 0
-	boardGui.MaxDistance = 45
-	boardGui.Parent = upgradeBoard
-	local boardList = Instance.new("UIListLayout")
-	boardList.HorizontalAlignment = Enum.HorizontalAlignment.Center
-	boardList.VerticalAlignment = Enum.VerticalAlignment.Center
-	boardList.SortOrder = Enum.SortOrder.LayoutOrder
-	boardList.Parent = boardGui
-	local function boardLine(name: string, text: string, textColor: Color3, height: number, order: number)
-		local label = Instance.new("TextLabel")
-		label.Name = name
-		label.BackgroundTransparency = 1
-		label.Size = UDim2.fromScale(0.92, height)
-		label.Font = Enum.Font.FredokaOne
-		label.TextScaled = true
-		label.Text = text
-		label.TextColor3 = textColor
-		label.LayoutOrder = order
-		local stroke = Instance.new("UIStroke")
-		stroke.Thickness = 3
-		stroke.Color = Color3.fromRGB(25, 20, 30)
-		stroke.Parent = label
-		label.Parent = boardGui
-	end
-	boardLine("Title", "⬆️ UPGRADE PLOT", Color3.fromRGB(255, 225, 90), 0.3, 1)
-	boardLine("Level", "Level 1 → 2", Color3.new(1, 1, 1), 0.24, 2)
-	boardLine("Perk", "", Color3.fromRGB(200, 240, 255), 0.16, 3)
-	boardLine("Price", "", Color3.fromRGB(120, 255, 120), 0.26, 4)
+	buildUpgradeGui(upgradeBoard)
 
 	local soil = tag(Instance.new("Folder"), "Soil", "PlotIndex", index)
 	soil.Name = "Soil"
@@ -698,14 +776,16 @@ function WorldBuilder.adopt(world: Instance): ({ PlotInfo }?, { NestInfo }?, { s
 		if tmSign and not tmLabel then
 			table.insert(problems, `{scope}: the treadmill sign {tmSign:GetFullName()} has no TextLabel`)
 		end
-		local labels = {}
-		for key, name in { level = "Level", perk = "Perk", price = "Price" } do
+		local labels: { [string]: any } = {}
+		for key, name in { level = "Level", cash = "Cash", robux = "Robux" } do
 			labels[key] = board and findLabel(board, name)
 			if board and not labels[key] then
-				table.insert(problems, `{scope}: the Upgrade Plot board has no "{name}" TextLabel`)
+				table.insert(problems, `{scope}: the Upgrade board has no "{name}" TextLabel`)
 			end
 		end
-		if not (model and floor and pad and belt and signLabel and tmLabel and board and spawn and labels.level and labels.perk and labels.price) then
+		local buttons = board and board:FindFirstChild("Buttons", true)
+		labels.buttons = if buttons and buttons:IsA("GuiObject") then buttons else nil
+		if not (model and floor and pad and belt and signLabel and tmLabel and board and spawn and labels.level and labels.cash and labels.robux) then
 			continue
 		end
 		-- The plants and soil folders are rebuilt at runtime, so they are made if missing.
@@ -797,10 +877,38 @@ WorldBuilder.SIGN_ICONS = {
 	["🛒 SHOP"] = "Shop",
 	["🏃 TRAIL SHOP"] = "TrailShop",
 	["📖 INDEX"] = "Index",
-	["⬆️ UPGRADE PLOT"] = "PlotUpgrade",
 	["🏠 Empty Plot"] = "Home",
 	["🏃 TREADMILL"] = "Treadmill",
 } :: { [string]: string }
+
+-- Writes a plot's Upgrade board. `level` is the owner's plot level (nil: nobody owns the plot) and `robux`
+-- the price on the purple button (default: the tier's placeholder, Config.plotUpgradeProduct). Below the
+-- last level: "Level X > Level Y" and both buttons (the red one with the money price and the PlotUpgrade
+-- icon, the purple one with the Robux icon); at the last level "MAX LEVEL" and no buttons.
+function WorldBuilder.setUpgradeBoard(labels: UpgradeLabels, level: number?, robux: number?)
+	local open = level ~= nil and level < Config.PLOT_LEVEL_MAX
+	if labels.buttons then
+		labels.buttons.Visible = open
+	end
+	if level == nil then
+		labels.level.Text = "Empty plot"
+		labels.level.TextColor3 = BOARD_TEXT.empty
+	elseif not open then
+		labels.level.Text = "MAX LEVEL"
+		labels.level.TextColor3 = BOARD_TEXT.max
+	else
+		labels.level.Text = `Level {level} > Level {level + 1}`
+		labels.level.TextColor3 = BOARD_TEXT.open
+	end
+	if open then
+		local _, product = Config.plotUpgradeProduct(level :: number)
+		Icons.set(labels.cash, "PlotUpgrade", Format.money(Config.plotUpgradePrice((level :: number) + 1)), 0.8)
+		Icons.set(labels.robux, "Robux", Format.robux(robux or (product :: Config.DevProduct).robux), 0.8)
+	else
+		Icons.set(labels.cash, {}, "")
+		Icons.set(labels.robux, {}, "")
+	end
+end
 
 -- Puts the uploaded icons on the map's signs at runtime, so map/World.rbxm itself keeps the emoji text and
 -- never needs regenerating for icons. Does nothing while no icon is uploaded. Returns how many signs changed.
