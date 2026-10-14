@@ -513,8 +513,9 @@ end
 ----------------------------------------------------------------------------------------------------
 -- Corridor & zones
 ----------------------------------------------------------------------------------------------------
--- Beside each nest, on the left of a runner coming from the base, a small chunky studded orange plank on a
--- short thick post facing them, about chest height (owner's reference): "👟 700M" over "recommended", the
+-- Just in front of each sleeping boss (base side) and a little to its left, a few studs from its nose (owner's
+-- reference, docs/references/11-pods-by-the-boss.png), a small chunky studded orange plank on a short
+-- thick post facing the runners coming from the base, about chest height: "👟 700M" over "recommended", the
 -- zone's recommended Speed (the Meadow's says "Start here"), bold italic with a dark outline. The text is
 -- GREEN once your Speed reaches it and RED below (Config.speedPlankColor; Client/SpeedPlanks recolours
 -- the plank tagged Role = "SpeedPlank" + ZoneIndex for each player). The zones have no gates, arches or
@@ -525,14 +526,22 @@ WorldBuilder.PLANK_SIZE = Vector3.new(6, 3.5, 1) -- the board
 WorldBuilder.PLANK_POST_SIZE = Vector3.new(1.6, 1.8, 1.4) -- a short thick post: the board's bottom at 1.8
 local PLANK_PPS = 50 -- SurfaceGui pixels per stud
 local PLANK_FONT = Font.new("rbxasset://fonts/families/Montserrat.json", Enum.FontWeight.Heavy, Enum.FontStyle.Italic)
-WorldBuilder.SPEED_SIGN_OFFSET = Vector3.new(-24, 0, 20) -- ground point under the post, from the nest centre: just before the pods, toward the base
+WorldBuilder.SPEED_SIGN_GAP = 3 -- studs from the sleeping boss's nose (Config.BOSS_REACH front) to the post
+WorldBuilder.SPEED_SIGN_LEFT = 3 -- studs left of the boss's middle (toward the wall)
+
+-- The ground point under zone k's plank post.
+function WorldBuilder.speedSignGround(k: number): Vector3
+	local front = Config.BOSS_REACH[Config.ZONES[k].id].front
+	local home = Config.nestCenter(k) + Vector3.new(Config.GUARD_HOME_OFFSET, 0, 0)
+	return home - Vector3.new(front + WorldBuilder.SPEED_SIGN_GAP, 0, WorldBuilder.SPEED_SIGN_LEFT)
+end
 
 function WorldBuilder.speedSignText(k: number): (string, string)
 	return Format.speedPlank(Config.ZONES[k].req) -- Client/SpeedPlanks rewrites it from the same function
 end
 
 local function buildSpeedSign(folder: Instance, k: number)
-	local base = Config.nestCenter(k) + WorldBuilder.SPEED_SIGN_OFFSET
+	local base = WorldBuilder.speedSignGround(k)
 	local model = Instance.new("Model")
 	model.Name = "SpeedSign"
 	model.Parent = folder
@@ -589,7 +598,7 @@ local function buildNest(folder: Folder, k: number)
 	local core = tag(hidden(model, "NestCore", Vector3.new(2, 2, 2), CFrame.new(center + Vector3.new(0, 1, 0))), "NestCore", "ZoneIndex", k)
 	model.PrimaryPart = core
 	marker(core, "Center", CFrame.new(center), "NestCenter", "ZoneIndex", k)
-	-- Pods at the sleeping boss's right, a head start ahead of it, so thieves grab and run home with it behind them.
+	-- Pods in a loose cluster right by the sleeping boss's right flank (its wake-up is the thieves' head start).
 	for i = 1, Config.PODS_PER_NEST do
 		marker(core, "Pod" .. i, CFrame.new(center + Config.podOffset(k, i)), "Pod", "ZoneIndex", k):SetAttribute("PodIndex", i)
 	end
@@ -728,43 +737,19 @@ local function buildShops(world: Folder)
 end
 
 ----------------------------------------------------------------------------------------------------
--- Community rewards corner (docs/references/06-free-chest-and-leaderboard.png): the FREE chest on a green
--- glowing circle and the tall "MOST MONEY/s" board, against the inside of the front wall on the -Z side
--- of the corridor mouth, by the spawn. Every run to the corridor passes it, and it is off the walkway,
--- the plots and the plaza. RewardService finds both by their Role (WorldBuilder.rewardPoints).
+-- Community rewards corner (docs/references/06-free-chest-and-leaderboard.png): the FREE GIFT box's spot
+-- (where the free chest stood; owner request: no free chest, only the gift) and the tall "MOST MONEY/s"
+-- board, against the inside of the front wall on the -Z side of the corridor mouth, by the spawn. Every
+-- run to the corridor passes it, and it is off the walkway, the plots and the plaza. RewardService finds
+-- both by their Role (WorldBuilder.rewardPoints).
 ----------------------------------------------------------------------------------------------------
-local CHEST_POS = Vector3.new(Config.CORRIDOR_START_X - 10, GROUND, -(HALF_W + 28)) -- ground point under the chest (the gift box stands 11 further out)
+local GIFT_POS = Vector3.new(Config.CORRIDOR_START_X - 10, GROUND, -(HALF_W + 28)) -- ground point under the gift box
+local GIFT_SPOT_SIZE = Vector3.new(4, 1, 4) -- the invisible marker part, resting on the ground
 local MONEY_BOARD_POS = Vector3.new(Config.CORRIDOR_START_X - 4, GROUND, -(HALF_W + 14)) -- ground point under the board
 local MONEY_PANEL = Vector2.new(12, 18) -- the list panel (studs); its bottom edge is 4 studs up
 local MONEY_PPS = 40
-local CHEST_RED = Color3.fromRGB(205, 45, 40)
-local CHEST_GOLD = Color3.fromRGB(255, 196, 40)
-local FREE_GREEN = Color3.fromRGB(90, 255, 70)
 local BOARD_CYAN = Color3.fromRGB(95, 205, 255)
 local BOARD_BLUE = Color3.fromRGB(40, 125, 235)
-
--- The chest's look (asset slot FreeChest): a red chest with a round lid, gold bands, lock and a green gem.
--- `cf` is the ground point under it, front (-Z) toward the base.
-local function freeChest(into: Instance, cf: CFrame)
-	local function piece(name: string, size: Vector3, offset: CFrame, color: Color3, shape: Enum.PartType?)
-		local p = deco(into, name, size, cf * offset, color)
-		if shape then
-			p.Shape = shape
-		end
-		return p
-	end
-	piece("ChestBody", Vector3.new(6.4, 3.2, 4.2), CFrame.new(0, 1.9, 0), CHEST_RED)
-	piece("ChestLid", Vector3.new(6.4, 4.2, 4.2), CFrame.new(0, 3.5, 0), CHEST_RED, Enum.PartType.Cylinder) -- along X: a half-round lid
-	piece("ChestBase", Vector3.new(6.8, 0.5, 4.6), CFrame.new(0, 0.55, 0), CHEST_GOLD)
-	piece("ChestRim", Vector3.new(6.8, 0.4, 4.6), CFrame.new(0, 3.4, 0), CHEST_GOLD)
-	for _, x in { -2.2, 2.2 } do
-		piece("ChestBand", Vector3.new(0.6, 3.2, 4.5), CFrame.new(x, 1.9, 0), CHEST_GOLD)
-		piece("LidBand", Vector3.new(0.6, 4.5, 4.5), CFrame.new(x, 3.5, 0), CHEST_GOLD, Enum.PartType.Cylinder)
-	end
-	piece("ChestLock", Vector3.new(1.4, 1.6, 0.3), CFrame.new(0, 3.0, -2.2), CHEST_GOLD)
-	piece("Keyhole", Vector3.new(0.35, 0.7, 0.1), CFrame.new(0, 2.85, -2.38), Color3.fromRGB(40, 25, 20))
-	piece("ChestGem", Vector3.new(1, 0.5, 1), CFrame.new(0, 5.75, 0), Color3.fromRGB(60, 220, 80))
-end
 
 -- The board's frame (asset slot MoneyBoard): a studded cyan frame with a stepped blue cap on a pedestal.
 -- `panelCF` is the panel's centre, front toward the base.
@@ -859,55 +844,10 @@ local function buildRewards(world: Folder)
 	model.Parent = world
 	local toBase = -Vector3.xAxis
 
-	-- The chest on its green circle, "FREE!" above it and a countdown under that (written on each client:
-	-- the cooldown is per player). The prompt sits on an invisible part, so it stays when re-modelled.
-	local chestCF = Assets.facing(CHEST_POS + Vector3.new(0, 0.3, 0), toBase)
-	local rimDisc = Props.disc(model, "ChestCircle", 11, CHEST_POS, FREE_GREEN, Enum.Material.Neon, 0.15)
-	rimDisc.Transparency = 0.25
-	local fill = Props.disc(model, "ChestCircleFill", 9, CHEST_POS, Color3.fromRGB(170, 255, 190), Enum.Material.SmoothPlastic, 0.25)
-	fill.Transparency = 0.45
-	Assets.swap("FreeChest", model, chestCF, function(into)
-		freeChest(into, chestCF)
-	end, Vector3.new(1.3, 1.3, 1.3))
-	local host = hidden(model, "FreeChestPrompt", Vector3.new(6.4, 5, 4.4), chestCF * CFrame.new(0, 2.8, 0))
-	host:SetAttribute("Role", "FreeChest")
-	local prompt = Instance.new("ProximityPrompt")
-	prompt.ActionText = "Claim"
-	prompt.ObjectText = "Free Chest"
-	prompt.KeyboardKeyCode = Enum.KeyCode.E
-	prompt.HoldDuration = 0.3
-	prompt.MaxActivationDistance = 10
-	prompt.RequiresLineOfSight = false
-	prompt:SetAttribute("FreeChest", true)
-	prompt.Parent = host
-	local gui = Instance.new("BillboardGui")
-	gui.Name = "ChestSign"
-	gui.Size = UDim2.fromScale(10, 4.6)
-	gui.StudsOffsetWorldSpace = Vector3.new(0, 6.6, 0)
-	gui.MaxDistance = 120
-	gui.LightInfluence = 0
-	gui.Adornee = host
-	gui.Parent = host
-	for _, spec in {
-		{ name = "ChestFree", text = "FREE!", color = FREE_GREEN, y = 0, h = 0.68, stroke = 5, visible = true },
-		{ name = "ChestTimer", text = "", color = Color3.new(1, 1, 1), y = 0.7, h = 0.3, stroke = 3, visible = false },
-	} do
-		local l = Instance.new("TextLabel")
-		l.Name = spec.name
-		l.BackgroundTransparency = 1
-		l.Size = UDim2.fromScale(1, spec.h)
-		l.Position = UDim2.fromScale(0, spec.y)
-		l.Font = Enum.Font.FredokaOne
-		l.TextScaled = true
-		l.Text = spec.text
-		l.TextColor3 = spec.color
-		l.Visible = spec.visible
-		local stroke = Instance.new("UIStroke")
-		stroke.Thickness = spec.stroke
-		stroke.Color = Color3.fromRGB(10, 60, 15)
-		stroke.Parent = l
-		l.Parent = gui
-	end
+	-- The gift's spot (where the free chest stood): an invisible marker on the ground, facing the base.
+	-- RewardService builds the FREE GIFT box on it (GiftBox), so moving it in the map moves the gift.
+	local spot = hidden(model, "GiftSpot", GIFT_SPOT_SIZE, Assets.facing(GIFT_POS + Vector3.new(0, GIFT_SPOT_SIZE.Y / 2, 0), toBase))
+	spot:SetAttribute("Role", "GiftSpot")
 
 	-- The board: the panel with the list is the gameplay piece; its frame, cap and pedestal are the
 	-- MoneyBoard slot.
@@ -1124,16 +1064,16 @@ end
 -- the row frame, hidden when empty) and the Status line.
 export type MoneyBoardLabels = { rows: { { frame: GuiObject, name: TextLabel, value: TextLabel } }, status: TextLabel }
 
--- The community rewards' pieces, wherever the map has them: the free chest's prompt part (Role
--- "FreeChest", holding a ProximityPrompt) and the board's labels (the Role "MoneyBoard" part's Row1..RowN
+-- The community rewards' pieces, wherever the map has them: the gift box's spot (the part with Role
+-- "GiftSpot", where the free chest used to stand) and the board's labels (the Role "MoneyBoard" part's Row1..RowN
 -- and Status). A map without one is warned about and the game runs without that reward.
 function WorldBuilder.rewardPoints(world: Instance?): (BasePart?, MoneyBoardLabels?)
-	local chest: BasePart?, board: BasePart? = nil, nil
+	local spot: BasePart?, board: BasePart? = nil, nil
 	local all: { Instance } = if world then world:GetDescendants() else {}
 	for _, d in all do
 		local role = d:GetAttribute("Role")
-		if role == "FreeChest" and d:IsA("BasePart") and d:FindFirstChildOfClass("ProximityPrompt") then
-			chest = chest or d
+		if role == "GiftSpot" and d:IsA("BasePart") then
+			spot = spot or d
 		elseif role == "MoneyBoard" and d:IsA("BasePart") then
 			board = board or d
 		end
@@ -1155,13 +1095,13 @@ function WorldBuilder.rewardPoints(world: Instance?): (BasePart?, MoneyBoardLabe
 			labels = { rows = rows, status = status }
 		end
 	end
-	if not chest then
-		warn(`[WorldBuilder] the map has no free chest (a part with Role = "FreeChest" holding a ProximityPrompt)`)
+	if not spot then
+		warn(`[WorldBuilder] the map has no FREE GIFT spot (a part with Role = "GiftSpot")`)
 	end
 	if not labels then
 		warn(`[WorldBuilder] the map has no "MOST MONEY/s" board (a part with Role = "MoneyBoard" and its Row1.. / Status labels)`)
 	end
-	return chest, labels
+	return spot, labels
 end
 
 -- Writes the board: `rows` already ranked and formatted (Rewards.formatRow), `status` the line under the

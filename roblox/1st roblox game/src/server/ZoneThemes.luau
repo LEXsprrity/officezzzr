@@ -875,8 +875,8 @@ function ZoneThemes.theme(k: number): Theme
 end
 
 -- The nest's corner (Config.nestCenter), as world bounds x0, x1, z0, z1: the boss sleeping against the left
--- wall (GUARD_HOME_OFFSET along, its body reaching ~24 studs either way), its pods at its right and the
--- Speed plank just before them. No prop stands in it (pruneNest), so nothing pokes through the boss and
+-- wall (GUARD_HOME_OFFSET along, its body reaching ~24 studs either way), its pods by its right flank and
+-- the Speed plank by its nose. No prop stands in it (pruneNest), so nothing pokes through the boss and
 -- nothing lies under the pods; the floor, the walls and what runs along them (caps, vines, icicles, the
 -- Lava rivers' flat bands, the sky's planets) stay.
 function ZoneThemes.nestKeepOut(k: number): (number, number, number, number)

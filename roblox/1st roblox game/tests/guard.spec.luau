@@ -1,4 +1,5 @@
--- Soft gates: the guard wakes after its zone's wakeDelay, then chases at walkSpeedFor(zone.req) * GUARD_SPEED_FACTOR (1)
+-- Soft gates: the guard wakes after Config.wakeDelay (a GUARD_HEAD_START-stud head start at the recommended Speed plus
+-- its zone's wakeDelay slack), then chases at walkSpeedFor(zone.req) * GUARD_SPEED_FACTOR (1)
 -- and catches within CATCH_DISTANCE of the path it walked since its last tick.
 local H = require("./harness")
 local Vector3 = H.Vector3
@@ -24,7 +25,7 @@ type SimOpts = {
 
 -- Simulates one steal: the thief grabs a pod and runs straight back toward base at the WalkSpeed
 -- of `speedStat`; the guard's MoveTo is integrated at its WalkSpeed. Returns outcome, time and the
--- thief's final X and the closest the guard got while the thief was in the corridor.
+-- thief's final X and the closest the awake guard got while the thief was in the corridor.
 local function simulate(k: number, speedStat: number, opts: SimOpts?): (string, number, number, number)
 	local o: SimOpts = opts or {}
 	local center = Config.nestCenter(k) -- on the left side of the corridor
@@ -56,7 +57,7 @@ local function simulate(k: number, speedStat: number, opts: SimOpts?): (string, 
 			playerPos -= Vector3.new(walk * DT, 0, 0)
 		end
 		local safe = playerPos.X < Config.CORRIDOR_START_X
-		if not safe then
+		if not safe and brain.state ~= "Waking" then -- (the pods lie right by the sleeping guard)
 			local gap = playerPos - guardPos
 			closest = math.min(closest, Vector3.new(gap.X, 0, gap.Z).Magnitude)
 		end
@@ -119,20 +120,25 @@ H.test("guard: chase speed is walkSpeedFor(req) * 1.0 for every zone", function(
 	end
 end)
 
-H.test("guard: every zone has its own wake-up delay, and the guard uses it", function()
+H.test("guard: every guard wakes after a 28-stud head start at the recommended Speed, plus its zone's slack", function()
+	H.eq(Config.GUARD_HEAD_START, 28)
 	local want = { Meadow = 0.5, Desert = 0, Jungle = 0.1, Lava = 0.1, Snow = 0.1, Space = 0.1, Spirit = 0.1 }
 	for k, zone in Config.ZONES do
 		H.eq(zone.wakeDelay, want[zone.id], zone.id)
-		H.eq(GuardBrain.new(k, Vector3.new(0, 0, 0)).wakeDelay, zone.wakeDelay, zone.id)
+		local delay = Config.wakeDelay(k)
+		H.near((delay - zone.wakeDelay) * Config.walkSpeedFor(zone.req), Config.GUARD_HEAD_START, 1e-6, `{zone.id}: the head start in studs`)
+		H.eq(GuardBrain.new(k, Vector3.new(0, 0, 0)).wakeDelay, delay, zone.id)
 	end
 end)
 
-H.test("guard: the Desert guard (no delay) wakes the moment a seed is taken", function()
+H.test("guard: the Desert guard (no slack) wakes as soon as its head start has run out", function()
 	local brain = GuardBrain.new(2, Vector3.new(0, 0, 0))
 	GuardBrain.alert(brain, 10)
 	local target = { { id = 1, pos = Vector3.new(-40, 0, 0), safe = false } }
-	local cmd = GuardBrain.step(brain, 10, Vector3.new(0, 0, 0), target)
-	H.eq(brain.state, "Chasing", "first tick after the steal is a chase")
+	local cmd = GuardBrain.step(brain, 10 + Config.wakeDelay(2) - 0.01, Vector3.new(0, 0, 0), target)
+	H.eq(brain.state, "Waking", "still waking up")
+	cmd = GuardBrain.step(brain, 10 + Config.wakeDelay(2), Vector3.new(0, 0, 0), target)
+	H.eq(brain.state, "Chasing", "chasing the moment the head start is gone")
 	H.ok(cmd.woke, "woke flag")
 end)
 
@@ -184,8 +190,8 @@ H.test("guard: the lowest Speed that escapes is at least 45% of the recommended 
 		local need = if zone.id == "Desert" then 0.3 else 0.45
 		H.ok(share >= need, `{zone.id}: escapes from {math.floor(share * 1000) / 10}% of the recommended Speed`)
 		H.ok(share < 1, `{zone.id}: the recommended Speed itself escapes`)
-		table.insert(lines, string.format("%s: delay %.2fs, escape from Speed %.3g (%.1f%% of rec, WalkSpeed %.1f vs guard %.1f), slack %.1fs",
-			zone.id, zone.wakeDelay, zone.req * share, 100 * share, Config.walkSpeedFor(zone.req * share), Config.guardChaseSpeed(k), slackOf(k)))
+		table.insert(lines, string.format("%s: wakes after %.2fs, escape from Speed %.3g (%.1f%% of rec, WalkSpeed %.1f vs guard %.1f), slack %.1fs",
+			zone.id, Config.wakeDelay(k), zone.req * share, 100 * share, Config.walkSpeedFor(zone.req * share), Config.guardChaseSpeed(k), slackOf(k)))
 	end
 	print("        escape thresholds  " .. table.concat(lines, "\n                           "))
 end)

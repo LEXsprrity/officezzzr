@@ -1,8 +1,8 @@
 --!strict
 -- Pure: the community rewards' rules (TODO 6). The Free Gift (Speed for members of the owner's community,
--- once per account), the free chest in the base (minutes of income on a per-player cooldown) and the
--- "MOST MONEY/s" board (encoding for the OrderedDataStore, merging, formatting). RewardService does the
--- Roblox side around it (group checks, prompts, the DataStore, the board's labels).
+-- once per account) and the "MOST MONEY/s" board (encoding for the OrderedDataStore, merging,
+-- formatting). RewardService does the Roblox side around it (group checks, the DataStore, the board's
+-- labels). (The free chest is gone: owner request, the FREE GIFT box stands where it was.)
 --
 -- Why only the group counts: likes can't be checked in game, and Roblox's Community Rules don't allow
 -- prizes in exchange for something (a like or a favourite). The window asks for a like and a favourite
@@ -20,7 +20,6 @@ type Profile = {
 	money: number,
 	freeGift: boolean,
 	giftShown: boolean,
-	chestAt: number,
 }
 
 ----------------------------------------------------------------------------------------------------
@@ -93,31 +92,6 @@ function Rewards.cachedMember(cache: MemberCache, userId: number, now: number, c
 		cache[userId] = { member = member, at = now }
 	end
 	return member
-end
-
-----------------------------------------------------------------------------------------------------
--- Free chest
-----------------------------------------------------------------------------------------------------
--- Seconds until the chest is ready for a player who last claimed at `chestAt` (0 = never). A claim time
--- in the future (clocks differ a little between servers) waits at most one cooldown.
-function Rewards.chestReadyIn(chestAt: number, now: number): number
-	if chestAt <= 0 then
-		return 0
-	end
-	return math.clamp(chestAt + Config.FREE_CHEST_COOLDOWN - now, 0, Config.FREE_CHEST_COOLDOWN)
-end
-
--- Opens the chest for `p` at unix time `now` with `income` ($/s, every multiplier). Returns the money paid,
--- or nil and the seconds left.
-function Rewards.claimChest(p: Profile, now: number, income: number): (number?, number)
-	local left = Rewards.chestReadyIn(p.chestAt, now)
-	if left > 0 then
-		return nil, left
-	end
-	local amount = Config.freeChestAmount(income)
-	p.money += amount
-	p.chestAt = now
-	return amount, Config.FREE_CHEST_COOLDOWN
 end
 
 ----------------------------------------------------------------------------------------------------

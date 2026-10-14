@@ -1,7 +1,8 @@
--- Community rewards (TODO 6): the Free Gift's claim rules (group only, once, 0 id = coming soon), the free
--- chest's cooldown and payout, the "MOST MONEY/s" board's pure parts (encoding, merging, formatting, the
--- DataStore fallback), the v4 save fields, and the chest + board in the generated and committed maps.
+-- Community rewards (TODO 6): the Free Gift's claim rules (group only, once, 0 id = coming soon), no free
+-- chest any more, the "MOST MONEY/s" board's pure parts (encoding, merging, formatting, the DataStore
+-- fallback), the v4 save fields, and the gift spot + board in the generated and committed maps.
 -- RewardService (group checks, prompts, the OrderedDataStore loop) is a thin Roblox wrapper Lune can't run.
+local fs = require("@lune/fs")
 local serde = require("@lune/serde")
 local H = require("./harness")
 local MapTool = require("../tools/map_tool")
@@ -11,7 +12,6 @@ local ProfileStore = H.server("ProfileStore")
 local WorldBuilder = H.server("WorldBuilder")
 local GiftBox = H.server("GiftBox")
 local Vector3 = H.Vector3
-local Enum = require("@lune/roblox").Enum
 
 local GROUP = 1234567
 local NOW = 1_800_000_000
@@ -112,43 +112,23 @@ H.test("rewards: the membership cache keeps a yes, re-checks a no after a few se
 end)
 
 ----------------------------------------------------------------------------------------------------
--- Free chest
+-- No free chest (owner request): only the Free Gift, where the chest stood
 ----------------------------------------------------------------------------------------------------
-H.test("rewards: the chest pays max($1K, 5 min of income) every 15 min per player", function()
-	H.eq(Config.FREE_CHEST_COOLDOWN, 15 * 60)
-	H.eq(Config.freeChestAmount(0), Config.FREE_CHEST_MIN, "the floor")
-	H.eq(Config.freeChestAmount(1), Config.FREE_CHEST_MIN, "$1/s is under the floor")
-	H.eq(Config.freeChestAmount(1e6), 1e6 * Config.FREE_CHEST_MINUTES * 60, "5 min of $1M/s")
-	H.eq(Config.freeChestAmount(-5), Config.FREE_CHEST_MIN)
-	H.eq(Config.freeChestAmount(0 / 0), Config.FREE_CHEST_MIN)
+H.test("rewards: the free chest is gone (no payout, no claim, no slot, no sound); old saves keep chestAt", function()
+	H.eq(Config.FREE_CHEST_COOLDOWN, nil)
+	H.eq(Config.freeChestAmount, nil)
+	H.eq(Rewards.claimChest, nil)
+	H.eq(Rewards.chestReadyIn, nil)
+	local Assets = H.server("Assets")
+	H.ok(not table.find(Assets.SLOTS, "FreeChest"), "no FreeChest asset slot")
+	for _, path in { "src/server/RewardService.luau", "src/client/Rewards.client.luau", "src/client/Effects.client.luau", "src/server/Sessions.luau" } do
+		local source = fs.readFile(path)
+		H.ok(not string.find(source, "FreeChest", 1, true) and not string.find(source, "chestAt", 1, true), `{path}: no chest claim, countdown or sound`)
+	end
+	-- a save that claimed the chest still loads and saves it unchanged (nothing reads it)
 	local p = ProfileStore.defaultProfile()
-	p.money = 10
-	local amount, left = Rewards.claimChest(p, NOW, 2e6)
-	H.eq(amount, 2e6 * 300)
-	H.eq(left, Config.FREE_CHEST_COOLDOWN)
-	H.eq(p.money, 10 + 2e6 * 300)
-	H.eq(p.chestAt, NOW)
-	-- Not again until the cooldown is over.
-	local again, wait = Rewards.claimChest(p, NOW + 60, 2e6)
-	H.eq(again, nil)
-	H.eq(wait, Config.FREE_CHEST_COOLDOWN - 60)
-	H.eq(p.money, 10 + 2e6 * 300, "nothing paid")
-	H.eq(Rewards.chestReadyIn(p.chestAt, NOW + Config.FREE_CHEST_COOLDOWN - 1), 1)
-	H.ok(Rewards.claimChest(p, NOW + Config.FREE_CHEST_COOLDOWN, 0), "ready right at the cooldown")
-	H.eq(p.money, 10 + 2e6 * 300 + Config.FREE_CHEST_MIN)
-end)
-
-H.test("rewards: the chest's cooldown survives a rejoin and odd clocks", function()
-	local p = ProfileStore.defaultProfile()
-	H.eq(Rewards.chestReadyIn(p.chestAt, NOW), 0, "a new player's chest is ready")
-	Rewards.claimChest(p, NOW, 0)
-	local back = roundTrip(p)
-	H.eq(back.chestAt, NOW, "saved")
-	H.eq(Rewards.claimChest(back, NOW + 120, 0), nil, "rejoining doesn't reset it")
-	H.eq(Rewards.chestReadyIn(back.chestAt, NOW + 120), Config.FREE_CHEST_COOLDOWN - 120)
-	-- A server whose clock is behind sees a claim "in the future": it waits one cooldown at most.
-	H.eq(Rewards.chestReadyIn(NOW + 3600, NOW), Config.FREE_CHEST_COOLDOWN)
-	H.eq(Rewards.chestReadyIn(NOW - 10 * 3600, NOW), 0)
+	p.chestAt = NOW
+	H.eq(roundTrip(p).chestAt, NOW)
 end)
 
 ----------------------------------------------------------------------------------------------------
@@ -249,7 +229,7 @@ end)
 ----------------------------------------------------------------------------------------------------
 -- Saves
 ----------------------------------------------------------------------------------------------------
-H.test("rewards: v3 saves load with the gift unclaimed, the window unseen and the chest ready (v4)", function()
+H.test("rewards: v3 saves load with the gift unclaimed, the window unseen and chestAt 0 (v4; the chest is gone, the field stays)", function()
 	H.ok(ProfileStore.VERSION >= 4, "v4 added these fields")
 	local v3 = { v = 3, money = 12, speed = 34, plotLevel = 2, trails = { "Grey" }, trail = "Grey", plants = {}, index = {} }
 	local p = ProfileStore.deserialize(serde.decode("json", serde.encode("json", v3)))
@@ -277,27 +257,19 @@ end)
 -- World
 ----------------------------------------------------------------------------------------------------
 local function checkRewardsCorner(world: any, label: string)
-	local chest, board = WorldBuilder.rewardPoints(world)
-	H.ok(chest, `{label}: the chest's prompt part`)
+	local spot, board = WorldBuilder.rewardPoints(world)
+	H.ok(spot, `{label}: the gift's spot`)
 	H.ok(board, `{label}: the board's labels`)
-	local prompt = chest:FindFirstChildOfClass("ProximityPrompt")
-	H.eq(prompt.ActionText, "Claim")
-	H.ok(prompt.MaxActivationDistance <= Config.FREE_CHEST_DISTANCE, "the prompt works where the server accepts it")
+	H.ok(spot.Transparency >= 1 and not spot.CanCollide, `{label}: the spot is an invisible marker`)
 	H.eq(#board.rows, Config.MONEY_BOARD_ROWS, "ten rows")
 	H.eq(board.status.Text, "Loading...", "until the first update")
-	local rewards = world:FindFirstChild("Rewards")
-	H.ok(rewards and rewards:FindFirstChild("FreeChest") and rewards.FreeChest:GetAttribute("AssetSlot") == "FreeChest", "the FreeChest asset slot")
-	H.ok(rewards:FindFirstChild("ChestCircle") and rewards.ChestCircle.Material == Enum.Material.Neon, "the green glowing circle")
-	local free, timer
-	for _, d in rewards:GetDescendants() do
-		if d:IsA("TextLabel") and d.Text == "FREE!" then
-			free = d
-		elseif d:IsA("TextLabel") and d.Name == "ChestTimer" then
-			timer = d
-		end
+	-- no free chest left anywhere in the map: no model, circle, "FREE!" sign, countdown or prompt
+	for _, d in world:GetDescendants() do
+		local chesty = string.find(d.Name, "Chest", 1, true) ~= nil or d:GetAttribute("AssetSlot") == "FreeChest"
+			or d:GetAttribute("Role") == "FreeChest" or d:GetAttribute("FreeChest") ~= nil
+			or (d:IsA("TextLabel") and d.Text == "FREE!")
+		H.ok(not chesty, `{label}: a free chest piece is left ({d:GetFullName()})`)
 	end
-	H.ok(free and free.TextColor3.G > 0.9 and free:FindFirstChildOfClass("UIStroke").Thickness >= 4, "a big green outlined FREE!")
-	H.ok(timer and timer.Visible == false, "a countdown label, hidden until a claim")
 	local title
 	for _, d in board.status.Parent:GetChildren() do
 		if d:IsA("TextLabel") and d.Text == "MOST MONEY/s" then
@@ -305,20 +277,26 @@ local function checkRewardsCorner(world: any, label: string)
 		end
 	end
 	H.ok(title, "the MOST MONEY/s title")
-	return chest, board
+	return spot, board
 end
 
-H.test("rewards: the base has the free chest and the MOST MONEY/s board, out of everyone's way", function()
+-- Where the free chest stood (WorldBuilder, before the owner removed it): the gift box takes its place.
+local CHEST_GROUND = Vector3.new(Config.CORRIDOR_START_X - 10, Config.GROUND_Y, -(Config.CORRIDOR_WIDTH / 2 + 28))
+
+H.test("rewards: the base has the gift's spot (where the free chest stood) and the MOST MONEY/s board, out of everyone's way", function()
 	local plots = WorldBuilder.build()
 	local world = H.workspace:FindFirstChild("World")
-	local chest, board = checkRewardsCorner(world, "generated")
+	local spot, board = checkRewardsCorner(world, "generated")
+	local ground = GiftBox.groundCFrame(spot)
+	H.ok((ground.Position - CHEST_GROUND).Magnitude < 1e-3, "the gift's spot is the chest's old ground point")
+	H.ok(ground.LookVector:Dot(-Vector3.xAxis) > 0.99, "facing the base, like the chest did")
 	local panel = board.status.Parent.Parent
 	H.eq(panel:GetAttribute("Role"), "MoneyBoard")
 	-- Inside the base, off the walkway (|z| < 18) and the corridor mouth (|z| < HALF_W), clear of every plot
 	-- and the plaza, on the -Z side.
 	local half = Config.PLOT_SIZE / 2
-	-- `margin`: the chest's circle (11 across) around its prompt part, the board's frame around its panel.
-	for _, piece in { { part = chest, margin = 3 }, { part = panel, margin = 1.5 } } do
+	-- `margin`: the gift's circle around its 4-stud spot, the board's frame around its panel.
+	for _, piece in { { part = spot, margin = GiftBox.CIRCLE / 2 - 1.5 }, { part = panel, margin = 1.5 } } do
 		local part = piece.part
 		local cf, s = part.CFrame, part.Size / 2
 		local function extent(axis: any): number -- half the part's world size along `axis`, plus the margin
@@ -327,17 +305,16 @@ H.test("rewards: the base has the free chest and the MOST MONEY/s board, out of 
 		local p, ex, ez = cf.Position, extent(Vector3.xAxis), extent(Vector3.zAxis)
 		H.ok(p.X + ex <= Config.CORRIDOR_START_X and p.Z < 0, `{part.Name} in the base (in front of the wall), -Z side`)
 		H.ok(math.abs(p.Z) - ez > Config.CORRIDOR_WIDTH / 2, `{part.Name} clear of the walkway and the corridor mouth`)
-		for spot = 1, Config.MAX_PLAYERS + 1 do
-			local col = (spot - 1) // 2
+		for i = 1, Config.MAX_PLAYERS + 1 do
+			local col = (i - 1) // 2
 			local cx = Config.PLOT_FIRST_X - col * Config.PLOT_SPACING_X
-			local cz = (if spot % 2 == 1 then 1 else -1) * Config.PLOT_OFFSET_Z
-			H.ok(math.abs(p.X - cx) > half + ex or math.abs(p.Z - cz) > half + ez, `{part.Name} clear of spot {spot}`)
+			local cz = (if i % 2 == 1 then 1 else -1) * Config.PLOT_OFFSET_Z
+			H.ok(math.abs(p.X - cx) > half + ex or math.abs(p.Z - cz) > half + ez, `{part.Name} clear of spot {i}`)
 		end
 	end
-	H.ok((world.Rewards.ChestCircle.CFrame.Position - chest.CFrame.Position).Magnitude < 1 + chest.Size.Y, "the circle is under the chest")
 	H.ok(panel.CFrame.LookVector:Dot(-Vector3.xAxis) > 0.99, "the board faces into the base")
 	H.ok(panel.Size.Y <= 20 and panel.Size.X <= 14, "not too big")
-	H.ok((chest.CFrame.Position - panel.CFrame.Position).Magnitude < 30, "the chest stands by the board")
+	H.ok((spot.CFrame.Position - panel.CFrame.Position).Magnitude < 30, "the gift stands by the board")
 	-- The board's rows get written
 	WorldBuilder.setMoneyBoard(board, { { name = "A", value = "$1K" } }, "This server")
 	H.eq(board.rows[1].frame.Visible, true)
@@ -348,19 +325,21 @@ H.test("rewards: the base has the free chest and the MOST MONEY/s board, out of 
 	H.eq(#plots, Config.MAX_PLAYERS)
 end)
 
-H.test("rewards: the committed map/World.rbxm has the chest and the board", function()
+H.test("rewards: the committed map/World.rbxm has the gift's spot where the chest stood, the board, and no free chest", function()
 	local world = MapTool.load(MapTool.PATH)
-	checkRewardsCorner(world, "map/World.rbxm")
+	local spot = checkRewardsCorner(world, "map/World.rbxm")
+	H.ok((GiftBox.groundCFrame(spot).Position - CHEST_GROUND).Magnitude < 1e-3, "the gift's spot is where the chest stood")
 	H.ok(WorldBuilder.adopt(world), "and the map still validates")
 end)
 
--- The gift box RewardService builds beside the chest: the prompt that opens the Free Gift window and the
--- floating "FREE GIFT", on its own circle next to the chest's, still clear of the walkway and the plots.
+-- The gift box RewardService builds on the gift's spot: the prompt that opens the Free Gift window and the
+-- floating "FREE GIFT", on its circle where the free chest stood, still clear of the walkway, the board
+-- and the plots.
 local function checkGiftBox(world: any, label: string)
-	local chest, board = WorldBuilder.rewardPoints(world)
-	H.ok(chest and board, label)
-	local model, prompt = GiftBox.build(chest)
-	H.eq(model.Parent, chest.Parent, `{label}: next to the chest, in the Rewards model`)
+	local spot, board = WorldBuilder.rewardPoints(world)
+	H.ok(spot and board, label)
+	local model, prompt = GiftBox.build(spot)
+	H.eq(model.Parent, spot.Parent, `{label}: in the Rewards model`)
 	H.eq(prompt:GetAttribute("FreeGift"), true, "its prompt opens the Free Gift window (Rewards.client)")
 	H.eq(prompt.ObjectText, "Free Gift")
 	H.ok(prompt.RequiresLineOfSight == false and prompt.MaxActivationDistance >= 8, "easy to trigger")
@@ -373,11 +352,11 @@ local function checkGiftBox(world: any, label: string)
 	H.ok(sign and sign:FindFirstChildOfClass("UIStroke").Thickness >= 4 and sign.Parent:IsA("BillboardGui"), "a big outlined FREE GIFT floats above it")
 	local body = model:FindFirstChild("GiftBody")
 	local flat = Vector3.new(1, 0, 1)
-	local gap = ((body.CFrame.Position - chest.CFrame.Position) * flat).Magnitude
-	H.ok(gap >= (11 + GiftBox.CIRCLE) / 2 and gap <= 14, `{label}: beside the chest ({gap} studs), circles apart`)
-	H.ok(math.abs(model.GiftCircle.CFrame.Position.Y - world.Rewards.ChestCircle.CFrame.Position.Y) < 0.5, "on the ground like the chest's circle")
+	H.ok(((body.CFrame.Position - CHEST_GROUND) * flat).Magnitude < 0.01, `{label}: exactly where the free chest stood`)
+	H.ok(math.abs(model.GiftCircle.CFrame.Position.Y - Config.GROUND_Y) < 0.5, "its circle on the ground")
+	H.ok(math.abs(body.CFrame.Position.Y - body.Size.Y / 2 - Config.GROUND_Y) < 0.5, "the box on the ground")
 	local panel = board.status.Parent.Parent
-	H.ok(((body.CFrame.Position - panel.CFrame.Position) * flat).Magnitude > ((chest.CFrame.Position - panel.CFrame.Position) * flat).Magnitude, "on the far side from the board")
+	H.ok(((body.CFrame.Position - panel.CFrame.Position) * flat).Magnitude < 30, "by the board")
 	local p, r = body.CFrame.Position, GiftBox.CIRCLE / 2
 	H.ok(p.X + r <= Config.CORRIDOR_START_X and p.Z < 0, "in the base, -Z side")
 	H.ok(math.abs(p.Z) - r > Config.CORRIDOR_WIDTH / 2, "clear of the walkway and the corridor mouth")
@@ -388,16 +367,19 @@ local function checkGiftBox(world: any, label: string)
 		end
 	end
 	H.ok(sideWall and math.abs(p.Z) + r < math.abs(sideWall.CFrame.Position.Z) - 2, `{label}: inside the base, clear of its side wall`)
+	-- clear of the board (its panel is 12 wide along Z, facing the base, its frame a little wider)
+	local b = panel.CFrame.Position
+	H.ok(math.abs(p.Z - b.Z) > r + panel.Size.X / 2 + 1 or math.abs(p.X - b.X) > r + 3, `{label}: clear of the board`)
 	local half = Config.PLOT_SIZE / 2
-	for spot = 1, Config.MAX_PLAYERS + 1 do
-		local cx = Config.PLOT_FIRST_X - ((spot - 1) // 2) * Config.PLOT_SPACING_X
-		local cz = (if spot % 2 == 1 then 1 else -1) * Config.PLOT_OFFSET_Z
-		H.ok(math.abs(p.X - cx) > half + r or math.abs(p.Z - cz) > half + r, `clear of spot {spot}`)
+	for i = 1, Config.MAX_PLAYERS + 1 do
+		local cx = Config.PLOT_FIRST_X - ((i - 1) // 2) * Config.PLOT_SPACING_X
+		local cz = (if i % 2 == 1 then 1 else -1) * Config.PLOT_OFFSET_Z
+		H.ok(math.abs(p.X - cx) > half + r or math.abs(p.Z - cz) > half + r, `clear of spot {i}`)
 	end
 	model:Destroy()
 end
 
-H.test("rewards: a gift box with a FREE GIFT prompt stands beside the free chest", function()
+H.test("rewards: a gift box with a FREE GIFT prompt stands where the free chest stood", function()
 	WorldBuilder.build()
 	checkGiftBox(H.workspace:FindFirstChild("World"), "generated")
 	checkGiftBox(MapTool.load(MapTool.PATH), "map/World.rbxm")

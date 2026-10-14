@@ -210,13 +210,34 @@ H.test("bosses: asleep at its nest against the left wall, the body fits without 
 		for i = 1, Config.PODS_PER_NEST do
 			local p = Config.nestCenter(k) + Config.podOffset(k, i)
 			local besideIt = p.Z - 1.5 > home.Z + reach
-			local aheadOfIt = p.X + 1.5 < home.X + lo.Z
-			H.ok(besideIt or aheadOfIt, `{zone.id}: pod {i} clear of the sleeping body`)
+			H.ok(besideIt, `{zone.id}: pod {i} beside the sleeping body, clear of it`)
+			H.ok(p.Z - 1.5 < home.Z + Config.BOSS_REACH[zone.id].side + 8, `{zone.id}: pod {i} right next to its (sleeping) flank`)
+			H.ok(p.X > home.X + lo.Z - 6 and p.X < home.X + math.max(hi.Z, 6) + 6, `{zone.id}: pod {i} along its body, not in front of it`)
 			H.ok(p.Z > home.Z, `{zone.id}: pod {i} at its right, toward the middle`)
 		end
 	end
 	-- the line is set by the widest boss: it sleeps right by the wall (narrower ones a little off it)
 	H.ok(closest < 2, `the widest boss's flank is within 2 studs of the wall ({closest})`)
+end)
+
+H.test("bosses: Config.BOSS_REACH (where the pods and the Speed plank go) is each sleeping boss's reach, measured", function()
+	for _, zone in Config.ZONES do
+		local rig, profile, model = rigOf(zone)
+		local lo, hi = Assets.bounds(model)
+		local restSide = if profile.halfWidth then profile.halfWidth * model:GetAttribute("RigScale") else math.max(-lo.X, hi.X)
+		local side, front = 0, 0 -- the sleeping (curled, lying) bones, breathing through a few seconds
+		for i = 0, 20 do
+			local _, world = BossRigs.solve(rig, BossRigs.pose(profile, { state = "Sleeping", t = i * 0.3, age = 2, phase = 0, move = 0 }))
+			for _, cf in world do
+				side = math.max(side, math.abs(cf.Position.X))
+				front = math.max(front, -cf.Position.Z)
+			end
+		end
+		local reach = Config.BOSS_REACH[zone.id]
+		local needSide, needFront = math.max(restSide, side + 2.5), math.max(-lo.Z, front + 2.5)
+		H.ok(reach.side >= needSide and reach.side <= needSide + 0.2, `{zone.id}: side {reach.side}, measured {needSide} (rest {restSide}, sleeping bones {side})`)
+		H.ok(reach.front >= needFront and reach.front <= needFront + 0.2, `{zone.id}: front {reach.front}, measured {needFront} (rest {-lo.Z}, sleeping bones {front})`)
+	end
 end)
 
 H.test("bosses: placed anywhere (Pivot), the pet's RootPart lands on the guard's feet facing its front", function()

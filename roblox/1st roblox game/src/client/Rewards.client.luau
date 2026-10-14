@@ -1,12 +1,11 @@
 -- Community rewards UI (TODO 6, docs/references/06-*.png), kept out of HUD.client (near Luau's 200-locals
 -- limit) but drawn in the same window style, inside the HUD's ScreenGui so it shares its scale and the
 -- toasts show above it:
---   * the gift box by the free chest (GiftBox, server): its prompt (attribute FreeGift) opens the window;
+--   * the gift box where the free chest used to stand (GiftBox, server): its prompt (attribute FreeGift)
+--     opens the window;
 --   * the "Free Gift!" window: a cyan title bar, the Speed bag, "~ LIMITED TIME! ~ 10,000 SPEED!", three
 --     steps (like, favourite, join the community) and the CLAIM! button. Only the community membership is
---     checked, on the server (RewardService); the like and the favourite are friendly asks;
---   * the free chest's countdown and prompt text (the cooldown is per player, so each client writes its
---     own copy of the chest's labels).
+--     checked, on the server (RewardService); the like and the favourite are friendly asks.
 local AvatarEditorService = game:GetService("AvatarEditorService")
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -25,7 +24,7 @@ local StatsUpdate = remotes:WaitForChild("StatsUpdate") :: RemoteEvent
 local LootEvent = remotes:WaitForChild("LootEvent") :: RemoteEvent
 
 local groupReady = Config.COMMUNITY_GROUP_ID > 0
-local state = { freeGift = false, chestAt = 0 }
+local state = { freeGift = false }
 
 ----------------------------------------------------------------------------------------------------
 -- The HUD's look (see HUD.client: "Tiny UI kit" and "Modals")
@@ -315,7 +314,7 @@ end)
 hud:GetPropertyChangedSignal("AbsoluteSize"):Connect(fit)
 
 ----------------------------------------------------------------------------------------------------
--- The gift box by the free chest: its prompt opens the window ("Open" until claimed, then "View")
+-- The gift box: its prompt opens the window ("Open" until claimed, then "View")
 ----------------------------------------------------------------------------------------------------
 local giftPrompts: { ProximityPrompt } = {}
 game:GetService("ProximityPromptService").PromptTriggered:Connect(function(prompt: ProximityPrompt)
@@ -349,9 +348,6 @@ StatsUpdate.OnClientEvent:Connect(function(changed: { [string]: any })
 	if type(changed.freeGift) == "boolean" then
 		state.freeGift = changed.freeGift
 	end
-	if type(changed.chestAt) == "number" then
-		state.chestAt = changed.chestAt
-	end
 	update()
 end)
 
@@ -374,44 +370,16 @@ LootEvent.OnClientEvent:Connect(function(kind: string, data: any)
 	end
 end)
 
-----------------------------------------------------------------------------------------------------
--- The free chest: "FREE!" when it's ready for this player, a countdown under it when it isn't
-----------------------------------------------------------------------------------------------------
-local chestPrompt: ProximityPrompt? = nil
-local chestTimer: TextLabel? = nil
+-- The gift box's prompt, as it streams in.
 local function watch(d: Instance)
 	if d:IsA("ProximityPrompt") and d:GetAttribute("FreeGift") then
 		if not table.find(giftPrompts, d) then
 			table.insert(giftPrompts, d)
 		end
 		update()
-	elseif d:IsA("ProximityPrompt") and d:GetAttribute("FreeChest") then
-		chestPrompt = d
-	elseif d:IsA("TextLabel") and d.Name == "ChestTimer" then
-		chestTimer = d
 	end
 end
 workspace.DescendantAdded:Connect(watch)
 for _, d in workspace:GetDescendants() do
 	watch(d)
 end
-
-task.spawn(function()
-	while true do
-		local left = 0
-		if state.chestAt > 0 then
-			left = math.clamp(state.chestAt + Config.FREE_CHEST_COOLDOWN - workspace:GetServerTimeNow(), 0, Config.FREE_CHEST_COOLDOWN)
-		end
-		local ready = left < 1
-		local timer = chestTimer
-		if timer and timer.Parent then
-			timer.Visible = not ready
-			timer.Text = `Ready in {Format.clock(left)}`
-		end
-		local prompt = chestPrompt
-		if prompt and prompt.Parent then
-			prompt.ActionText = if ready then "Claim" else Format.clock(left)
-		end
-		task.wait(0.5)
-	end
-end)
