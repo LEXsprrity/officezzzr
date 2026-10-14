@@ -604,7 +604,7 @@ Config.DEVELOPER_PRODUCTS = {
 	PackSpace = { id = 0, kind = "Pack", label = "Starpetal Pack", robux = 2000, zone = 6 },
 	PackSpirit = { id = 0, kind = "Pack", label = "Lotus Wyrm Pack", robux = 3000, zone = 7 },
 
-	-- Speed10K/100K/1M are also the HUD's quick-buy buttons under the level bar
+	-- Speed packs: the Shop's blue SPEED cards
 	Speed10K = { id = 0, kind = "Speed", label = "+10K Speed", robux = 9, amount = 10e3 },
 	Speed100K = { id = 0, kind = "Speed", label = "+100K Speed", robux = 36, amount = 100e3 },
 	Speed150K = { id = 0, kind = "Speed", label = "+150K Speed", robux = 64, amount = 150e3 },

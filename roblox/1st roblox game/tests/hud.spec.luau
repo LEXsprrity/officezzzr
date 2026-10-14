@@ -1,5 +1,5 @@
--- The HUD's pure parts: Speed levels (the level bar), the "LEVEL N!" trigger, and the three quick-buy
--- Speed products under the bar (+10K / +100K / +1M), granted through the normal receipt path.
+-- The HUD: Speed levels (for the "LEVEL N!" pop-up), the Shop's small Speed products (+10K / +100K / +1M),
+-- granted through the normal receipt path, and the layout: no level bar, only Shop and Index on the left.
 local H = require("./harness")
 local Config = H.shared("Config")
 local Format = H.shared("Format")
@@ -106,7 +106,7 @@ H.test("level up: no pop-up on the first stats, one per new level, the highest w
 	H.eq(show, nil, "nor coming back to a level already announced")
 end)
 
-H.test("quick-buy: Speed10K, Speed100K and Speed1M are id = 0 Speed products, coming soon until set", function()
+H.test("Speed packs: Speed10K, Speed100K and Speed1M are id = 0 Speed products, coming soon until set", function()
 	local p = ProfileStore.defaultProfile()
 	for name, want in { Speed10K = { 10e3, 9 }, Speed100K = { 100e3, 36 }, Speed1M = { 1e6, 76 } } do
 		local product = Config.DEVELOPER_PRODUCTS[name]
@@ -121,7 +121,7 @@ H.test("quick-buy: Speed10K, Speed100K and Speed1M are id = 0 Speed products, co
 	end
 end)
 
-H.test("quick-buy: each grants its Speed exactly once per receipt", function()
+H.test("Speed packs: each grants its Speed exactly once per receipt", function()
 	local p = ProfileStore.defaultProfile()
 	local function never(): number
 		error("Speed packs don't roll")
@@ -146,6 +146,47 @@ H.test("quick-buy: each grants its Speed exactly once per receipt", function()
 	end
 	H.eq(p.money, 0)
 	H.eq(saves, 6)
+end)
+
+----------------------------------------------------------------------------------------------------
+-- The HUD's layout (from the source: Lune can't run a LocalScript)
+----------------------------------------------------------------------------------------------------
+local fs = require("@lune/fs")
+local HUD = fs.readFile("src/client/HUD.client.luau")
+local REWARDS = fs.readFile("src/client/Rewards.client.luau")
+
+H.test("HUD: no level bar and no quick-buy buttons; bottom left is just Speed and money", function()
+	for _, gone in { "levelPanel", "levelBar", "levelFill", "QUICK_BUY", "quickRow", "quickPrices", "refreshQuickBuy", "levelMultLabel" } do
+		H.ok(not string.find(HUD, gone, 1, true), `"{gone}" is gone from the HUD`)
+	end
+	H.ok(string.find(HUD, "local speedValue", 1, true) and string.find(HUD, "local moneyValue", 1, true), "the Speed and money readouts stay")
+	H.ok(string.find(HUD, "announceLevel(announce)", 1, true), `"LEVEL N!" still pops up`)
+end)
+
+H.test("HUD: the left column has only Shop and Index (and Slow Mode); Trails opens from its stall", function()
+	local buttons = {}
+	for name in string.gmatch(HUD, "\nsideButton%(%d+, \"(%w+)\"") do
+		table.insert(buttons, name)
+	end
+	H.eq(table.concat(buttons, ","), "Shop,Index")
+	H.ok(string.find(HUD, "Name = \"SlowMode\"", 1, true), "the Slow Mode switch")
+	H.ok(string.find(HUD, "opens == \"Trails\"", 1, true), "the TRAIL SHOP stall still opens the Trail Shop")
+	H.ok(not string.find(REWARDS, "LeftColumn", 1, true), "Rewards.client adds no Gift button to the column")
+	H.ok(string.find(REWARDS, "GetAttribute(\"FreeGift\")", 1, true), "the gift box's prompt opens the Free Gift window")
+end)
+
+H.test("Shop: bright cards with light rays, green R$ buttons, no filler text or SOON tags", function()
+	H.ok(not string.find(HUD, "Added to your Speed right away", 1, true), "no filler line on the Speed cards")
+	H.ok(not string.find(HUD, "\"SOON\"", 1, true) and not string.find(HUD, "soonTag", 1, true), "no SOON tags on the prices")
+	H.ok(string.find(HUD, "local function sunburst", 1, true), "the cards' sunburst")
+	H.ok(string.find(HUD, "Speed = Color3.fromRGB(30, 165, 255)", 1, true), "Speed cards blue")
+	H.ok(string.find(HUD, "Money = Color3.fromRGB(70, 205, 30)", 1, true), "Money cards green")
+	H.ok(string.find(HUD, "ROBUX_GREEN = Color3.fromRGB(105, 235, 25)", 1, true), "bright green R$ buttons")
+	-- every Speed product's label splits into the green number and the word ("+150K" / "SPEED")
+	for _, entry in Config.products("Speed") do
+		local amount, rest = string.match(string.upper(entry.product.label), "^(%S+)%s+(.+)$")
+		H.ok(amount and string.sub(amount, 1, 1) == "+" and rest == "SPEED", entry.product.label)
+	end
 end)
 
 return nil

@@ -1,7 +1,7 @@
 -- Community rewards UI (TODO 6, docs/references/06-*.png), kept out of HUD.client (near Luau's 200-locals
 -- limit) but drawn in the same window style, inside the HUD's ScreenGui so it shares its scale and the
 -- toasts show above it:
---   * the Gift button on top of the HUD's left column, with a red "!" until the gift is claimed;
+--   * the gift box by the free chest (GiftBox, server): its prompt (attribute FreeGift) opens the window;
 --   * the "Free Gift!" window: a cyan title bar, the Speed bag, "~ LIMITED TIME! ~ 10,000 SPEED!", three
 --     steps (like, favourite, join the community) and the CLAIM! button. Only the community membership is
 --     checked, on the server (RewardService); the like and the favourite are friendly asks;
@@ -316,40 +316,29 @@ end)
 hud:GetPropertyChangedSignal("AbsoluteSize"):Connect(fit)
 
 ----------------------------------------------------------------------------------------------------
--- The Gift button on top of the HUD's left column (same look as Shop / Index / Trails)
+-- The gift box by the free chest: its prompt opens the window ("Open" until claimed, then "View")
 ----------------------------------------------------------------------------------------------------
-local column = hud:WaitForChild("LeftColumn", 10)
-local giftButton = new("TextButton", {
-	Name = "Gift", Size = UDim2.fromOffset(92, 74), BackgroundColor3 = Color3.fromRGB(255, 80, 160), Text = "", AutoButtonColor = true, LayoutOrder = 0,
-	Parent = column or hud,
-}, deco(14, 4))
-if not column then -- the HUD changed: stand on its own at the left
-	giftButton.AnchorPoint = Vector2.new(0, 0.5)
-	giftButton.Position = UDim2.new(0, 14, 0.4, 0)
-end
-new("UIGradient", { Rotation = 90, Color = ColorSequence.new(WHITE, Color3.fromRGB(200, 200, 200)), Parent = giftButton })
-iconLabel(giftButton, "Gift", "🎁", { Size = UDim2.fromOffset(46, 46), AnchorPoint = Vector2.new(0.5, 0), Position = UDim2.new(0.5, 0, 0, 2) })
-bold(giftButton, 3, { Text = "Gift", Size = UDim2.new(1, -6, 0, 26), Position = UDim2.new(0, 3, 1, -28) })
-local badge = new("Frame", {
-	Size = UDim2.fromOffset(26, 26), AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.new(1, -4, 0, 4), BackgroundColor3 = Color3.fromRGB(240, 70, 70),
-	Visible = false, ZIndex = 3, Parent = giftButton,
-}, { new("UICorner", { CornerRadius = UDim.new(1, 0) }), new("UIStroke", { Thickness = 2, Color = WHITE }) })
-bold(badge, 2, { Text = "!", Size = UDim2.new(1, -6, 1, -6), Position = UDim2.fromOffset(3, 3), ZIndex = 3 })
-giftButton.Activated:Connect(function()
-	if window.Visible then
-		window.Visible = false
-	else
+local giftPrompts: { ProximityPrompt } = {}
+game:GetService("ProximityPromptService").PromptTriggered:Connect(function(prompt: ProximityPrompt)
+	if prompt:GetAttribute("FreeGift") and not window.Visible then
+		clickSound:Play()
 		open()
 	end
 end)
 
 local function update()
-	badge.Visible = groupReady and not state.freeGift
+	for i = #giftPrompts, 1, -1 do
+		local prompt = giftPrompts[i]
+		if prompt.Parent then
+			prompt.ActionText = if state.freeGift then "View" else "Open"
+		else
+			table.remove(giftPrompts, i) -- streamed out or rebuilt
+		end
+	end
 	if window.Visible then
 		render()
 	end
 end
-update()
 
 ----------------------------------------------------------------------------------------------------
 -- Server updates
@@ -392,7 +381,12 @@ end)
 local chestPrompt: ProximityPrompt? = nil
 local chestTimer: TextLabel? = nil
 local function watch(d: Instance)
-	if d:IsA("ProximityPrompt") and d:GetAttribute("FreeChest") then
+	if d:IsA("ProximityPrompt") and d:GetAttribute("FreeGift") then
+		if not table.find(giftPrompts, d) then
+			table.insert(giftPrompts, d)
+		end
+		update()
+	elseif d:IsA("ProximityPrompt") and d:GetAttribute("FreeChest") then
 		chestPrompt = d
 	elseif d:IsA("TextLabel") and d.Name == "ChestTimer" then
 		chestTimer = d
