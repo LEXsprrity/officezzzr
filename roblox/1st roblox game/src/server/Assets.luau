@@ -25,7 +25,7 @@ end
 Assets.SLOTS = {
 	"Tree", "BlossomTree", "Bush", "Rock", "Flower", "Lamp", "FencePost", "FenceSection",
 	"Meadow_Flower", "Meadow_Mushroom",
-	"Desert_Cactus", "Desert_Skull", "Desert_Bone", "Desert_Mesa",
+	"Desert_Cactus", "Desert_Skull", "Desert_Bone", "Desert_Mesa", "Desert_Pyramid",
 	"Jungle_Tree", "Jungle_Fern", "Jungle_Log",
 	"Lava_Volcano", "Lava_Rock", "Lava_Obsidian",
 	"Snow_Pine", "Snow_Snowman", "Snow_Crystal",
@@ -59,6 +59,34 @@ Assets.SOLID = {
 	FencePost = true, FenceSection = true,
 	ShopStall = true, ShopStall_Shop = true, ShopStall_Trails = true, ShopStall_Index = true, ShopStall_Sell = true,
 } :: { [string]: boolean }
+
+-- The map's art direction is clean and cartoony (flat bright plastic, studs, simple checkers), so the
+-- realistic materials (textured grass, sand, rock, wood, metal...) are banned from it. A drop-in map piece
+-- that uses one gets plain plastic instead (same colour), unless its Model has KeepMaterials = true.
+-- Creatures and guardians keep theirs. tests/world.spec checks the built map against this list.
+Assets.REALISTIC = {
+	Grass = "Plastic", LeafyGrass = "Plastic", Sand = "Plastic", Sandstone = "Plastic", Ground = "Plastic", Mud = "Plastic",
+	Rock = "SmoothPlastic", Slate = "SmoothPlastic", Basalt = "SmoothPlastic", Granite = "SmoothPlastic", Marble = "SmoothPlastic",
+	Limestone = "SmoothPlastic", Pebble = "Plastic", Cobblestone = "Plastic", Brick = "Plastic", Concrete = "SmoothPlastic",
+	Asphalt = "SmoothPlastic", Pavement = "SmoothPlastic", Salt = "SmoothPlastic", CrackedLava = "SmoothPlastic",
+	Snow = "SmoothPlastic", Ice = "SmoothPlastic", Glacier = "SmoothPlastic",
+	Wood = "Plastic", WoodPlanks = "Plastic", Fabric = "SmoothPlastic", Carpet = "SmoothPlastic", Leather = "SmoothPlastic",
+	Metal = "SmoothPlastic", CorrodedMetal = "SmoothPlastic", DiamondPlate = "SmoothPlastic", Foil = "SmoothPlastic",
+	Cardboard = "SmoothPlastic", Plaster = "SmoothPlastic", Rubber = "SmoothPlastic", ClayRoofTiles = "SmoothPlastic",
+	CeramicTiles = "SmoothPlastic", RoofShingles = "SmoothPlastic",
+} :: { [string]: string }
+
+local function cartoonize(model: Instance)
+	for _, d in model:GetDescendants() do
+		if d:IsA("BasePart") then
+			local plain = Assets.REALISTIC[d.Material.Name]
+			if plain then
+				d.Material = (Enum.Material :: any)[plain]
+			end
+			d.MaterialVariant = ""
+		end
+	end
+end
 
 -- Other names a file or folder may have (compared without case, accents, spaces or underscores).
 Assets.ALIASES = {
@@ -330,6 +358,11 @@ local function fitClone(slot: string, source: Instance, settings: Instance, cfra
 		-- Pivot: the bottom centre of its bounds, axes turned by Yaw (front = -Z after the turn).
 		local bottom = Vector3.new(((lo :: Vector3).X + (hi :: Vector3).X) / 2, (lo :: Vector3).Y, ((lo :: Vector3).Z + (hi :: Vector3).Z) / 2)
 		local pivot = turn:Inverse() * CFrame.new(bottom)
+
+		local keepMaterials = settings:GetAttribute("KeepMaterials") == true or source:GetAttribute("KeepMaterials") == true
+		if not keepMaterials and not string.match(slot, "^Creature_") and not string.match(slot, "^Guard_") then
+			cartoonize(model)
+		end
 
 		local solid = Assets.SOLID[slot] == true
 		for _, p in parts do

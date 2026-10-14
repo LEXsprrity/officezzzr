@@ -1,6 +1,5 @@
 -- Every TICK: measure each character's HumanoidRootPart movement on the server, grant Speed
 -- (walking or treadmill), enforce the movement sanity check, and set WalkSpeed from the Speed stat.
-local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Config = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("Config"))
 local Treadmill = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("Treadmill"))
@@ -62,17 +61,6 @@ function SpeedService.teleport(player: Player, cf: CFrame)
 	end
 end
 
-local function reachEnd(s: Sessions.Session)
-	s.profile.reachedEnd = true
-	Net.LootEvent:FireClient(s.player, "End", {})
-	for _, other in Players:GetPlayers() do
-		if other ~= s.player then
-			Net.toast(other, `⛩️ {s.player.DisplayName} reached the End of the Line!`, "gold")
-		end
-	end
-	Sessions.pushFull(s)
-end
-
 local function tickPlayer(s: Sessions.Session, dt: number, now: number)
 	local root, hum = rootOf(s.player)
 	if not root or not hum then
@@ -109,9 +97,6 @@ local function tickPlayer(s: Sessions.Session, dt: number, now: number)
 		hum.WalkSpeed = wanted
 	end
 
-	if not s.profile.reachedEnd and pos.X >= Config.END_X - 40 then
-		reachEnd(s)
-	end
 	if s.profile.speed ~= before then
 		Sessions.pushCore(s)
 	end

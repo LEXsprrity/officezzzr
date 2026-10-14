@@ -116,7 +116,7 @@ Botão direito na pasta **Arvores** → **Save to File...** → `assets/Arvores.
 
 - Prende tudo no lugar (**Anchored**). A decoração **não colide**: os jogadores e os guardiões passam através dela, então ela nunca atrapalha a corrida. Exceções: cercas (`FencePost`, `FenceSection`) e barracas (`ShopStall...`) mantêm a colisão que você salvou.
 - Remove scripts que vierem dentro do modelo.
-- Mantém materiais, cores e texturas.
+- Mantém cores e texturas. **Materiais realistas viram plástico**: o mapa tem visual de desenho, limpo (plástico liso ou com studs, cores fortes), então Grass, Sand, Slate, Wood, Metal, Fabric e afins viram `Plastic`/`SmoothPlastic` na mesma cor. Quer manter os seus materiais? Adicione ao Model o atributo **`KeepMaterials`** (Boolean) = `true`. Criaturas e guardiões mantêm sempre os materiais.
 - Luzes e partículas: se a peça original tinha luz (postes, lanternas, vulcões, ninhos), seu modelo ganha a mesma luz no mesmo ponto. Se o seu modelo já tiver um `PointLight` ou um `ParticleEmitter`, vale o seu.
 - Criaturas: o jogo continua colocando o brilho de raridade (aura, halo, partículas) e as cores das mutações. Malhas com textura não mudam de cor nas mutações (Gold, Night...), mas ganham as partículas e a luz.
 - Guardiões: seu modelo vira o corpo do gigante e desliza junto com ele na perseguição. **Animação ainda não funciona**: um modelo com rig fica parado na pose em que foi salvo.
@@ -141,7 +141,7 @@ Botão direito na pasta **Arvores** → **Save to File...** → `assets/Arvores.
 | `Tree` | árvore redonda (tronco + copa) | 🌼 Meadow (a base agora fica sem árvores) | 18 a 25 | ~16 a 27 |
 | `BlossomTree` | árvore florida (rosa) | não aparece agora (a base ficou limpa); fica para uso futuro | ~21 | ~20 |
 | `Bush` | arbusto | 🌼 Meadow | 3,5 a 6 | 7 a 15 |
-| `Rock` | pedra | Meadow, lagos do Spirit Garden | 1,3 a 3 | 4 a 9 |
+| `Rock` | pedra | não aparece agora (os lagos ficaram lisos) | 1,3 a 3 | 4 a 9 |
 | `Flower` | flor (cabo + flor) | Jungle (e Meadow se não houver `Meadow_Flower`) | 2 a 4 | ~3 |
 | `Lamp` | poste de luz | não aparece agora (a base ficou limpa); fica para uso futuro | ~10,5 | ~5 |
 | `FencePost` | um poste da cerca | em volta dos lotes | ~5 | ~2 |
@@ -156,7 +156,8 @@ Botão direito na pasta **Arvores** → **Save to File...** → `assets/Arvores.
 | `Desert_Cactus` | cacto saguaro | 🦂 Desert | 9 a 15 | 4 a 10 |
 | `Desert_Skull` | esqueleto gigante deitado (crânio olhando para +X) | 🦂 Desert | ~6 | ~13 × 45 de comprimento |
 | `Desert_Bone` | osso solto no chão | 🦂 Desert | ~1 | ~2 × 6 |
-| `Desert_Mesa` | rocha em degraus (mesa) | 🦂 Desert | 11 a 14 | 14 a 27 |
+| `Desert_Mesa` | rocha em degraus (mesa) | não aparece agora (o deserto ficou mais limpo; a pirâmide é `Desert_Pyramid`) | 11 a 14 | 14 a 27 |
+| `Desert_Pyramid` | pirâmide em degraus | 🦂 Desert | ~19 | ~34 |
 | `Jungle_Tree` | árvore alta com copa sobre o caminho (frente = caminho) | 🦖 Jungle | 31 a 42 | ~36 × 51 |
 | `Jungle_Fern` | samambaia | 🦖 Jungle | ~3,3 | 15 a 19 |
 | `Jungle_Log` | tronco caído (comprimento ao longo do X) | 🦖 Jungle | ~3 | ~18 |
@@ -171,13 +172,13 @@ Botão direito na pasta **Arvores** → **Save to File...** → `assets/Arvores.
 | `Space_Asteroid` | asteroide flutuando | 👽 Deep Space | 4 a 10 | 5 a 13 |
 | `Space_Mushroom` | cogumelo alienígena neon | 👽 Deep Space | 4 a 8 | 6 a 8 |
 | `Space_UFO` | disco voador (o feixe de luz embaixo continua) | 👽 Deep Space | ~16 | ~29 |
-| `Spirit_Torii` | portal torii vermelho atravessando o corredor (também o dourado do fim) | ⛩️ Spirit Garden, Fim | 43 a 52 | ~68 |
+| `Spirit_Torii` | portal torii vermelho atravessando o corredor | ⛩️ Spirit Garden | ~55 | ~196 |
 | `Spirit_Lantern` | lanterna de pedra (frente = caminho) | ⛩️ Spirit Garden | ~7 | ~6 |
 | `Spirit_CherryTree` | cerejeira inclinada sobre o caminho (frente = caminho) | ⛩️ Spirit Garden | 18 a 22 | ~27 a 37 |
 
 ### Arcos e ninhos (um por zona)
 
-O **arco** é a entrada da zona: pilares + viga + enfeite. A placa com o nome da zona e a linha brilhante no chão continuam do jogo. Ele atravessa o corredor inteiro (frente = -X, para quem chega). Altura ~60 a 90, largura ~74.
+O **arco** é a entrada da zona: pilares + viga + enfeite. A placa com o nome da zona e a linha brilhante no chão continuam do jogo. É um portão grande e robusto: dois pilares grossos encostados nas paredes, uma viga por cima com um "telhado" e uma viga mais baixa (a placa fica pendurada nela). Ele atravessa o corredor inteiro (frente = -X, para quem chega). Altura ~80 a 110, largura ~240.
 
 O **ninho** é a planta-mãe com o monte de terra, as pedras e a flor brilhante. As 4 sementes ficam num meio-círculo de 8 studs em volta do centro, a 2,5 de altura: deixe esse espaço livre. O texto "Mother Plant", a luz e as partículas continuam. Altura até ~40, largura ~28.
 
@@ -197,11 +198,11 @@ O **ninho** é a planta-mãe com o monte de terra, as pedras e a flor brilhante.
 |---|---|---|---|---|
 | `Treadmill` | a estrutura da esteira (moldura, corrimãos, painel). A faixa preta onde se corre continua do jogo: ela fica invisível e toma o tamanho e a altura da peça do modelo com "Belt" no nome, então o Speed conta exatamente onde se vê a faixa. Frente = virada para a entrada do lote | cada lote | até ~16 | 8 × 21 |
 | `UpgradeSign` | o suporte da placa "Upgrade" (moldura com studs e o poste curto). O painel azul-escuro com o texto e os botões continua do jogo | na frente de cada lote | ~7 | ~8 |
-| `ShopStall` | barraca da praça das lojas (balcão, fundo, toldo). Frente = calçada. Vale para as barracas SHOP, TRAIL SHOP e INDEX (não para a SELL) | praça das lojas | ~21 | 18 × 21 |
-| `ShopStall_Shop` | só a barraca 🛒 SHOP (se existir, vale mais que `ShopStall`) | praça das lojas | ~21 | 18 × 21 |
-| `ShopStall_Trails` | só a barraca 🏃 TRAIL SHOP | praça das lojas | ~21 | 18 × 21 |
-| `ShopStall_Index` | só a barraca 📖 INDEX | praça das lojas | ~21 | 18 × 21 |
-| `ShopStall_Sell` | só a barraca SELL (vender plantas): balcão de madeira, quatro postes e o toldo vermelho e branco. O círculo verde no chão e o texto "SELL" continuam do jogo. Sem modelo, fica a barraca do jogo (não usa `ShopStall`) | praça das lojas | ~14 | 18 × 13 |
+| `ShopStall` | barraca da praça das lojas (quatro postes de madeira, balcão de pedra cinza com corrimãos, toldo listrado com bordas arredondadas). O anel brilhante no chão e o título flutuante continuam do jogo. Frente = calçada. Vale para as barracas SHOP, TRAIL SHOP e INDEX (não para a SELL) | praça das lojas | ~17 | 17 × 13 |
+| `ShopStall_Shop` | só a barraca 🛒 SHOP (se existir, vale mais que `ShopStall`) | praça das lojas | ~17 | 17 × 13 |
+| `ShopStall_Trails` | só a barraca 🏃 TRAIL SHOP | praça das lojas | ~17 | 17 × 13 |
+| `ShopStall_Index` | só a barraca 📖 INDEX | praça das lojas | ~17 | 17 × 13 |
+| `ShopStall_Sell` | só a barraca SELL (vender plantas): a mesma barraca, com o toldo vermelho e branco. O anel verde no chão e o texto "SELL" continuam do jogo. Sem modelo, fica a barraca do jogo (não usa `ShopStall`) | praça das lojas | ~17 | 17 × 13 |
 | `FreeChest` | o baú grátis "FREE!" (vermelho e dourado). O círculo verde no chão, o texto "FREE!", a contagem e o prompt "Claim" continuam do jogo. Frente = virada para a base | canto das recompensas, junto ao muro ao lado da entrada do corredor | ~6 | ~7 × 5 |
 | `MoneyBoard` | a moldura do quadro "MOST MONEY/s" (moldura com studs, o topo e o pedestal). O painel com o título e a lista dos 10 melhores continua do jogo (12 × 18 studs, a 4 studs do chão) | ao lado do baú grátis | ~23 | ~16 |
 | `SpawnSign` | a placa grande "🌱 STEAL A SEED 🌱" que flutua na entrada do corredor. O apoio é a borda de baixo da placa. **O texto tem que estar no seu modelo** (textura ou letras 3D) | entrada do corredor | ~12 | ~44 |

@@ -381,6 +381,13 @@ local function checkGiftBox(world: any, label: string)
 	local p, r = body.CFrame.Position, GiftBox.CIRCLE / 2
 	H.ok(p.X + r <= Config.CORRIDOR_START_X and p.Z < 0, "in the base, -Z side")
 	H.ok(math.abs(p.Z) - r > Config.CORRIDOR_WIDTH / 2, "clear of the walkway and the corridor mouth")
+	local sideWall: any = nil
+	for _, d in world.Base:GetChildren() do -- the base's -Z side wall: the box stays in front of it
+		if d:IsA("BasePart") and d.Name == "Wall" and d.CFrame.Position.Z < -Config.CORRIDOR_WIDTH / 2 and d.Size.Z > 100 then
+			sideWall = d
+		end
+	end
+	H.ok(sideWall and math.abs(p.Z) + r < math.abs(sideWall.CFrame.Position.Z) - 2, `{label}: inside the base, clear of its side wall`)
 	local half = Config.PLOT_SIZE / 2
 	for spot = 1, Config.MAX_PLAYERS + 1 do
 		local cx = Config.PLOT_FIRST_X - ((spot - 1) // 2) * Config.PLOT_SPACING_X

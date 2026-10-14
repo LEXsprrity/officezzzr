@@ -2,7 +2,7 @@
 
 A Roblox "steal-and-run" game in Luau, built with [Rojo](https://rojo.space) 7. It replaces Coin Rush.
 
-Players get a fenced plot. From spawn, one long walled corridor runs through seven themed zones. Each zone has a sleeping giant guardian next to a glowing mother plant. Grab a seed pod, the guardian wakes and chases you, and you run home and plant it. It sprouts into a plant-creature with a weight ("2,018,798 Kg") that earns money. Money buys **trails** (they multiply the Speed you gain by moving) and **plot upgrades** (more slots, more income); Speed gets you further down the corridor, and further zones grow better seeds. **The goal is to reach the End of the Line.**
+Players get a fenced plot. From spawn, one long walled corridor runs through seven themed zones. Each zone has a sleeping giant guardian next to a glowing mother plant. Grab a seed pod, the guardian wakes and chases you, and you run home and plant it. It sprouts into a plant-creature with a weight ("2,018,798 Kg") that earns money. Money buys **trails** (they multiply the Speed you gain by moving) and **plot upgrades** (more slots, more income); Speed gets you further down the corridor, and further zones grow better seeds. **The goal is to reach the Spirit Garden, the last stage, and grow its seeds.**
 
 | # | Zone | Guardian | Seed | Recommended Speed | Length (studs) |
 |---|---|---|---|---|---|
@@ -403,11 +403,11 @@ Each planted seed grows into its zone's creature (`CreatureModels`). The creatur
 | `src/server/Main.server.luau` | `ServerScriptService.Server` | Bootstrap: collision groups, world, services, join/leave, autosave, BindToClose |
 | `src/server/Net.luau` | 〃 | Creates the fixed remotes |
 | `src/server/Sessions.luau` | 〃 | Per-player runtime state, multipliers, StatsUpdate + leaderstats |
-| `src/server/WorldBuilder.luau` | 〃 | Adopts the hand-edited map by its Role attributes (`load`/`adopt`), or builds it from primitives: base, 5 plots + treadmills, the Upgrade board at each plot entrance (studded navy sign, money and Robux buttons), the shop plaza (walk-up stalls: 🛒 Shop, 🏃 Trail Shop, 📖 Index, SELL), zone arches + signs, nests, the End |
-| `src/server/ZoneThemes.luau` | 〃 | Per-zone floor, walls, props and particle ambience for the 7 zones |
+| `src/server/WorldBuilder.luau` | 〃 | Adopts the hand-edited map by its Role attributes (`load`/`adopt`), or builds it from primitives: base, 5 plots + treadmills, the Upgrade board at each plot entrance (studded navy sign, money and Robux buttons), the shop plaza (walk-up stalls: 🛒 Shop, 🏃 Trail Shop, 📖 Index, SELL), zone gates + signs, nests (the Spirit Garden's back wall ends the corridor) |
+| `src/server/ZoneThemes.luau` | 〃 | Per-zone floor, walls, gates, props and particle ambience for the 7 zones, in a clean cartoony style (flat bright plastic, studs, checkers; no realistic materials) |
 | `src/server/Props.luau` | 〃 | Primitive kit (blocks, ellipsoids, overlays, lights, emitters) and reusable props |
 | `src/server/SpeedLogic.luau` | 〃 | *Pure*: per-tick gain, cap, treadmill, sanity check |
-| `src/server/SpeedService.luau` | 〃 | 0.25 s loop: applies SpeedLogic, WalkSpeed, rubber-band, End of the Line |
+| `src/server/SpeedService.luau` | 〃 | 0.25 s loop: applies SpeedLogic, WalkSpeed, rubber-band |
 | `src/server/GuardBrain.luau` | 〃 | *Pure*: guard state machine (sleep/wake/chase/catch/return/stun) |
 | `src/server/GuardService.luau` | 〃 | Builds the giants, 10 Hz MoveTo loop, catches, bat |
 | `src/server/SeedService.luau` | 〃 | Nests, pods, steal prompts, carry weld, return/regrow |

@@ -1,6 +1,7 @@
--- Generates the whole map from primitives: base area with 8 fenced plots (each with a treadmill),
--- the walled corridor split into themed zones (ZoneThemes) with entry arches, a mother-plant nest
--- per zone, and the End. Decoration is anchored and non-colliding (see Props).
+-- Generates the whole map from primitives: base area with a fenced plot per player (each with a treadmill),
+-- the walled corridor split into themed zones (ZoneThemes) with a chunky gate at each entrance, a
+-- mother-plant nest per zone; the Spirit Garden's back wall ends it. Decoration is anchored and non-colliding
+-- (see Props). Clean cartoony look only: flat bright plastic, studs and checkers (ZoneThemes header).
 --
 -- The map is hand-editable: map/World.rbxm (Rojo puts it at Workspace.World) is the source of truth, and
 -- WorldBuilder.load() ADOPTS it at server start instead of rebuilding. Every piece gameplay needs carries
@@ -49,7 +50,8 @@ export type NestInfo = {
 local GROUND = Config.GROUND_Y
 local HALF_W = Config.CORRIDOR_WIDTH / 2
 local BASE_MIN_X = Config.PLOT_FIRST_X - Config.PLOT_SPACING_X * (Config.PLOT_COLUMNS - 1) - Config.PLOT_SIZE / 2 - 14
-local BASE_HALF_Z = Config.PLOT_OFFSET_Z + Config.PLOT_SIZE / 2 + 14
+-- The base is wider than the corridor mouth, so the rewards corner fits beside it against the front wall.
+local BASE_HALF_Z = math.max(Config.PLOT_OFFSET_Z + Config.PLOT_SIZE / 2 + 14, HALF_W + 48)
 
 local box, deco, ball, cylinder, flat = Props.box, Props.deco, Props.ball, Props.cylinder, Props.flat
 
@@ -153,16 +155,9 @@ local WALL_TOP = Color3.fromRGB(90, 214, 64)
 local FENCE_POST = Color3.fromRGB(84, 64, 58)
 local FENCE_RAIL = Color3.fromRGB(198, 108, 56)
 local TILE = 14 -- lawn checker; a plot (84 studs) is 6 x 6 tiles
-local WALL_ROWS = 4 -- wall checker rows (WALL_HEIGHT 44 → 11-stud tiles)
+local WALL_ROWS = 4 -- wall checker rows (WALL_HEIGHT 52 → 13-stud tiles)
 
--- The classic studded plastic look on the given faces (default: the top).
-local function studs<T>(p: T, faces: { string }?): T
-	(p :: any).Material = Enum.Material.Plastic
-	for _, face in faces or { "TopSurface" } do
-		(p :: any)[face] = Enum.SurfaceType.Studs
-	end
-	return p
-end
+local studs = Props.studs -- the classic studded plastic look on the given faces (default: the top)
 
 -- Each plot's Upgrade board (docs/references/08-upgrade-sign-reference.png): a dark navy panel in a
 -- studded frame, on a short post.
@@ -444,7 +439,7 @@ local function buildPlot(world: Folder, index: number, posts: { [string]: boolea
 	billboard(signPart, "🏠 Empty Plot", UDim2.fromScale(16, 3.6), Vector3.zero, 75)
 
 	-- Planting pad just inside the gate, on a rim in the plot's colour
-	tag(box(model, "PlantPad", Vector3.new(10, 1, 10), CFrame.new(at(0, 10, 1.2)), Color3.fromRGB(120, 80, 50), Enum.Material.Ground), "PlantPad", "PlotIndex", index)
+	tag(studs(box(model, "PlantPad", Vector3.new(10, 1, 10), CFrame.new(at(0, 10, 1.2)), Color3.fromRGB(150, 100, 64))), "PlantPad", "PlotIndex", index)
 	flat(model, "PadRim", 12, 12, at(0, 10, 1), color, Enum.Material.SmoothPlastic, nil, 0.3)
 
 	-- Treadmill: stand on it to gain Speed (AFK works). It doesn't move you: the client plays the run
@@ -454,7 +449,7 @@ local function buildPlot(world: Folder, index: number, posts: { [string]: boolea
 	local tmU, tmW0, tmLen, tmWide = 30, 12, 18, 5.2
 	local beltCenter = at(tmU, tmW0 + tmLen / 2, 1.5)
 	local belt = tag(box(model, "TreadmillBelt", Vector3.new(tmWide, 1, tmLen), CFrame.new(beltCenter) * facingIn,
-		Color3.fromRGB(40, 40, 45), Enum.Material.DiamondPlate), "TreadmillBelt", "PlotIndex", index)
+		Color3.fromRGB(40, 40, 45)), "TreadmillBelt", "PlotIndex", index)
 	local tex = Instance.new("Texture")
 	tex.Name = "Stripes"
 	tex.Texture = "rbxasset://textures/SurfaceTextures/DiamondPlate.png"
@@ -511,44 +506,24 @@ end
 ----------------------------------------------------------------------------------------------------
 -- Corridor & zones
 ----------------------------------------------------------------------------------------------------
--- The zone's entry arch: two pillars flush with the walls, a beam over the top, the name sign
--- (name + recommended Speed + guardian) and a glowing threshold line on the floor. The sign and the
--- threshold stay; the rest (with the zone's ornament) is the Arch_<zone> slot.
+-- The zone's gate (ZoneThemes.gate): chunky pillars flush with the walls, a big beam over the corridor
+-- with a cap and a tie beam, and the zone's ornament; that is the Arch_<zone> slot. The name sign (name +
+-- recommended Speed + guardian) hanging under the tie beam and the glowing threshold line on the floor stay.
 local function buildArch(folder: Instance, k: number)
 	local zone = Config.ZONES[k]
 	local theme = ZoneThemes.theme(k)
 	local x0 = Config.zoneStartX(k)
-	local h = Config.WALL_HEIGHT
-	local x = x0 + 3
+	local x = x0 + 6
 	Assets.swap("Arch_" .. zone.id, folder, Assets.facing(Vector3.new(x, GROUND, 0), -Vector3.xAxis), function(into)
-		for _, s in { -1, 1 } do
-			box(into, "GatePillar", Vector3.new(6, h + 10, 6), CFrame.new(x, GROUND + (h + 10) / 2, s * (HALF_W - 1)), theme.arch, theme.archMaterial)
-			ball(into, "PillarCap", 8, Vector3.new(x, GROUND + h + 12, s * (HALF_W - 1)), theme.accent, Enum.Material.Neon)
-		end
-		deco(into, "ArchBeam", Vector3.new(7, 5, Config.CORRIDOR_WIDTH + 10), CFrame.new(x, GROUND + h + 6, 0), theme.arch, theme.archMaterial)
-		deco(into, "ArchTrim", Vector3.new(7.4, 1, Config.CORRIDOR_WIDTH + 10.4), CFrame.new(x, GROUND + h + 3.2, 0), theme.accent, Enum.Material.Neon)
-		ZoneThemes.archOrnament(into, k, x)
+		ZoneThemes.gate(into, k, x)
 	end, Vector3.new(1, 1.5, 0))
-	sign(folder, Vector3.new(x - 3.6, GROUND + h - 4, 0), Vector2.new(Config.CORRIDOR_WIDTH - 12, 13), {
+	sign(folder, Vector3.new(x0 + 1.4, ZoneThemes.GATE_SIGN_Y, 0), ZoneThemes.GATE_SIGN_SIZE, {
 		{ text = `{zone.icon} {string.upper(zone.name)} {zone.icon}`, color = Color3.new(1, 1, 1), scale = 1.5 },
 		{ text = `⚡ Recommended Speed: {Format.short(zone.req)}`, color = Color3.fromRGB(255, 232, 90) },
 		{ text = `Guardian: {zone.guard}`, color = theme.signText },
 	} :: any, theme.sign, Enum.Material.SmoothPlastic)
-	flat(folder, "Threshold", 3, Config.CORRIDOR_WIDTH, Vector3.new(x0 + 1.5, GROUND, 0), theme.accent, Enum.Material.Neon, nil, 0.1)
+	flat(folder, "Threshold", 3, Config.CORRIDOR_WIDTH, Vector3.new(x0 + 1.5, GROUND, 0), theme.accent, Enum.Material.Neon, nil, 0.3)
 end
-
-local function torii(folder: Instance, x: number, color: Color3, height: number)
-	Assets.swap("Spirit_Torii", folder, Assets.facing(Vector3.new(x, GROUND, 0), -Vector3.xAxis), function(into)
-		for _, s in { -1, 1 } do
-			deco(into, "ToriiPillar", Vector3.new(3, height, 3), CFrame.new(x, GROUND + height / 2, s * (HALF_W - 6)), color, Enum.Material.SmoothPlastic)
-			deco(into, "ToriiFoot", Vector3.new(4, 2, 4), CFrame.new(x, GROUND + 1, s * (HALF_W - 6)), Color3.fromRGB(35, 30, 35))
-		end
-		deco(into, "ToriiBeam", Vector3.new(4, 2.5, Config.CORRIDOR_WIDTH), CFrame.new(x, GROUND + height, 0), color)
-		deco(into, "ToriiCap", Vector3.new(5, 1.2, Config.CORRIDOR_WIDTH + 4), CFrame.new(x, GROUND + height + 1.8, 0), Color3.fromRGB(35, 30, 35))
-		deco(into, "ToriiBeam", Vector3.new(3, 1.5, Config.CORRIDOR_WIDTH - 12), CFrame.new(x, GROUND + height - 5, 0), color)
-	end, Vector3.new(1, 1.5, 0))
-end
-WorldBuilder.torii = torii
 
 -- The zone's nest. Its gameplay piece is NestCore, an invisible part where the mother bulb glows: it holds
 -- the "Mother Plant" label and the tagged Attachments for the nest centre, the pods and the guard's home.
@@ -565,13 +540,13 @@ local function buildNest(folder: Folder, k: number)
 
 	-- Non-colliding so neither runners nor the giant snag on it.
 	Assets.swap("Nest_" .. zone.id, model, Assets.facing(center, -Vector3.xAxis), function(into)
-		cylinder(into, "Mound", 1, 22, center + Vector3.new(0, 0.2, 0), theme.mound, Enum.Material.Ground)
+		studs(cylinder(into, "Mound", 1, 22, center + Vector3.new(0, 0.2, 0), theme.mound))
 		Props.disc(into, "GlowRing", 26, center, zone.seedColor, Enum.Material.Neon, 0.15)
 		for i = 1, 8 do
 			local a = i / 8 * math.pi * 2
-			Props.rock(into, center + Vector3.new(math.cos(a) * 12.5, 0, math.sin(a) * 12.5), Vector3.new(3, 2.2, 2.6), theme.nestStone, theme.nestStoneMaterial, a, false)
+			Props.rock(into, center + Vector3.new(math.cos(a) * 12.5, 0, math.sin(a) * 12.5), Vector3.new(3, 2.2, 2.6), theme.nestStone, Enum.Material.SmoothPlastic, a, false)
 		end
-		cylinder(into, "Stem", 14, 2, center + Vector3.new(0, 8, 0), Color3.fromRGB(60, 170, 60), Enum.Material.Grass)
+		cylinder(into, "Stem", 14, 2, center + Vector3.new(0, 8, 0), Color3.fromRGB(70, 190, 70))
 		local bulb = ball(into, "MotherBulb", 8, center + Vector3.new(0, 16, 0), zone.seedColor, Enum.Material.Neon)
 		local light = Instance.new("PointLight")
 		light.Color = zone.seedColor
@@ -582,7 +557,7 @@ local function buildNest(folder: Folder, k: number)
 			local a = i * math.pi / 2 + math.pi / 4
 			Props.blob(into, "Leaf", Vector3.new(10, 0.8, 4.5),
 				CFrame.new(center + Vector3.new(math.cos(a) * 5, 9, math.sin(a) * 5)) * CFrame.Angles(0, -a, math.rad(20)),
-				theme.leaf, Enum.Material.Grass)
+				theme.leaf)
 		end
 		Props.emitOn(bulb, {
 			color = zone.seedColor, rate = 6, lifetime = NumberRange.new(1.5, 2.5), speed = NumberRange.new(2, 4),
@@ -602,91 +577,85 @@ local function buildNest(folder: Folder, k: number)
 	marker(core, "GuardHome", CFrame.new(center + Vector3.new(Config.GUARD_HOME_OFFSET, 0, 0)), "GuardHome", "ZoneIndex", k)
 end
 
+-- The corridor: one folder per zone (floor, walls, props, gate, nest). The Spirit Garden is the last stage
+-- and its back wall closes the corridor (ZoneThemes): there is no finish line or "end" area.
 local function buildCorridor(world: Folder)
 	local corridor = Instance.new("Folder")
 	corridor.Name = "Corridor"
 	corridor.Parent = world
 	local rng = Random.new(20260930)
-	local h = Config.WALL_HEIGHT
 
 	for k, zone in Config.ZONES do
 		local zoneFolder = Instance.new("Folder")
 		zoneFolder.Name = string.format("%d_%s", k, zone.id)
 		zoneFolder.Parent = corridor
-		ZoneThemes.build(zoneFolder, k, rng, { torii = torii })
+		ZoneThemes.build(zoneFolder, k, rng)
 		buildArch(zoneFolder, k)
 		buildNest(zoneFolder, k)
 	end
-
-	-- End of the line
-	local endFolder = Instance.new("Folder")
-	endFolder.Name = "End"
-	endFolder.Parent = corridor
-	box(endFolder, "EndWall", Vector3.new(4, h, Config.CORRIDOR_WIDTH + 8), CFrame.new(Config.END_X + 2, GROUND + h / 2, 0), Color3.fromRGB(210, 40, 45))
-	torii(endFolder, Config.END_X - 40, Color3.fromRGB(255, 200, 60), 32)
-	local pad = box(endFolder, "EndPad", Vector3.new(30, 1, Config.CORRIDOR_WIDTH - 8), CFrame.new(Config.END_X - 18, GROUND + 0.5, 0),
-		Color3.fromRGB(255, 215, 0), Enum.Material.Neon)
-	pad.CanCollide = false
-	Props.emitter(endFolder, "EndConfetti", Vector3.new(30, 1, Config.CORRIDOR_WIDTH - 8), Vector3.new(Config.END_X - 18, GROUND + 30, 0), {
-		color = ColorSequence.new({
-			ColorSequenceKeypoint.new(0, Color3.fromRGB(255, 80, 120)),
-			ColorSequenceKeypoint.new(0.5, Color3.fromRGB(255, 220, 60)),
-			ColorSequenceKeypoint.new(1, Color3.fromRGB(90, 200, 255)),
-		}),
-		rate = 20, lifetime = NumberRange.new(4, 6), speed = NumberRange.new(2, 5), size = NumberSequence.new(0.5),
-		direction = Enum.NormalId.Bottom, acceleration = Vector3.new(0, -3, 0), rotSpeed = NumberRange.new(-180, 180), lightEmission = 0.6,
-	})
-	sign(endFolder, Vector3.new(Config.END_X - 1, GROUND + h - 12, 0), Vector2.new(Config.CORRIDOR_WIDTH - 8, 14), {
-		{ text = "⛩️ END OF THE LINE ⛩️", color = Color3.fromRGB(255, 230, 90) },
-		{ text = "You made it!", color = Color3.new(1, 1, 1) },
-	}, Color3.fromRGB(120, 20, 30))
 end
 
 ----------------------------------------------------------------------------------------------------
 -- Shop plaza: walk-up stalls in the spot after the last plot. Each stall's prompt carries an
 -- "OpensShop" attribute; the HUD opens that menu when the local player triggers it.
 ----------------------------------------------------------------------------------------------------
+-- Every stall has the same cartoon market-stall look (owner's reference): four studded wooden posts, a
+-- grey stone counter with rails under it on three sides, a striped scalloped awning in the stall's colour
+-- and white, a glowing ring on the floor in front and a big floating title. The SELL stall is the red one
+-- with the green ring (docs/references/09-sell-stall-reference.png); the server measures the sell
+-- distance from its prompt part (WorldBuilder.sellPoints).
 local STALLS = {
-	{ opens = "Shop", label = "🛒 SHOP", color = Color3.fromRGB(255, 90, 160), stripe = Color3.fromRGB(255, 235, 245) },
-	{ opens = "Trails", label = "🏃 TRAIL SHOP", color = Color3.fromRGB(60, 160, 255), stripe = Color3.fromRGB(235, 245, 255) },
-	{ opens = "Index", label = "📖 INDEX", color = Color3.fromRGB(160, 100, 255), stripe = Color3.fromRGB(245, 235, 255) },
-	-- Sell old plants (docs/references/09-sell-stall-reference.png): an open wooden stall with a red-and-white
-	-- awning, a soft green glowing circle on the floor in front and big red "SELL" text over it. The server
-	-- measures the sell distance from its prompt part (WorldBuilder.sellPoints).
-	{ opens = "Sell", label = "SELL", color = Color3.fromRGB(225, 35, 45), stripe = Color3.fromRGB(250, 248, 245), action = "Sell plants" },
+	{ opens = "Shop", label = "🛒 SHOP", color = Color3.fromRGB(255, 200, 40), ring = Color3.fromRGB(255, 225, 60), title = Color3.fromRGB(255, 225, 70) },
+	{ opens = "Trails", label = "🏃 TRAIL SHOP", color = Color3.fromRGB(60, 160, 255), ring = Color3.fromRGB(90, 210, 255), title = Color3.fromRGB(120, 210, 255) },
+	{ opens = "Index", label = "📖 INDEX", color = Color3.fromRGB(165, 95, 255), ring = Color3.fromRGB(190, 140, 255), title = Color3.fromRGB(205, 160, 255) },
+	{ opens = "Sell", label = "SELL", color = Color3.fromRGB(225, 35, 45), ring = Color3.fromRGB(70, 255, 140), title = Color3.fromRGB(235, 30, 40), action = "Sell plants" },
 }
-local STALL_SPACING = 21 -- four 18-stud awnings across the 84-stud plaza
-local SELL_WOOD = Color3.fromRGB(150, 112, 78)
-local SELL_WOOD_DARK = Color3.fromRGB(104, 76, 56)
-local SELL_GLOW = Color3.fromRGB(70, 255, 140)
-local SELL_TEXT = Color3.fromRGB(235, 30, 40)
+local STALL_SPACING = 21 -- four 16.4-stud awnings across the 84-stud plaza
+local STALL_DEPTH = 9 -- front posts to back posts
+local STALL_STRIPE = Color3.fromRGB(255, 255, 250)
+local STALL_WOOD = Color3.fromRGB(150, 98, 58)
+local STALL_STONE = Color3.fromRGB(150, 152, 168)
+local STALL_STONE_DARK = Color3.fromRGB(96, 98, 116)
 
--- The SELL stall's look (asset slot ShopStall_Sell, which doesn't fall back to ShopStall): a long plank
--- counter, four posts, a back shelf and the striped awning with a striped valance on its front edge.
-local function sellStall(into: Instance, at: (number, number, number) -> Vector3, u: number, w0: number, side: number, stall: { [string]: any })
-	box(into, "Counter", Vector3.new(16, 3.4, 2.6), CFrame.new(at(u, w0, 1.7)), SELL_WOOD_DARK, Enum.Material.WoodPlanks)
-	box(into, "CounterTop", Vector3.new(17, 0.6, 3.6), CFrame.new(at(u, w0, 3.7)), SELL_WOOD, Enum.Material.WoodPlanks)
-	deco(into, "CounterPlank", Vector3.new(16.4, 0.5, 0.4), CFrame.new(at(u, w0 - 1.4, 2.2)), SELL_WOOD, Enum.Material.WoodPlanks)
-	deco(into, "Shelf", Vector3.new(16, 0.6, 2), CFrame.new(at(u, w0 + 6.8, 4.5)), SELL_WOOD, Enum.Material.WoodPlanks)
-	for _, du in { -7.5, 7.5 } do
-		for _, post in { { w = -1, h = 11.4 }, { w = 7, h = 13.4 } } do -- up to the sloping awning
-			box(into, "Post", Vector3.new(1, post.h, 1), CFrame.new(at(u + du, w0 + post.w, post.h / 2)), SELL_WOOD_DARK, Enum.Material.Wood)
+-- The stall's look (asset slot ShopStall_<menu>; Shop, Trails and Index fall back to ShopStall). `at` maps
+-- (across, in from the plaza's front edge, up) to the world; `w0` is the counter's front line.
+local function marketStall(into: Instance, at: (number, number, number) -> Vector3, u: number, w0: number, side: number, stall: { [string]: any })
+	local half = 7.3
+	local mid = w0 + STALL_DEPTH / 2
+	for _, du in { -half, half } do
+		for _, post in { { w = w0, h = 11 }, { w = w0 + STALL_DEPTH, h = 13.4 } } do -- up to the sloping awning
+			studs(box(into, "Post", Vector3.new(1.4, post.h, 1.4), CFrame.new(at(u + du, post.w, post.h / 2)), STALL_WOOD))
+			studs(deco(into, "PostFoot", Vector3.new(2.2, 1, 2.2), CFrame.new(at(u + du, post.w, 0.5)), STALL_STONE_DARK))
+		end
+		-- the side counter and its rails
+		studs(box(into, "Counter", Vector3.new(2.6, 1, STALL_DEPTH), CFrame.new(at(u + du, mid, 4.2)), STALL_STONE))
+		for _, y in { 1.6, 3 } do
+			studs(box(into, "CounterRail", Vector3.new(0.6, 0.6, STALL_DEPTH), CFrame.new(at(u + du, mid, y)), STALL_WOOD))
 		end
 	end
+	studs(box(into, "Counter", Vector3.new(2 * half + 1.4, 1, 2.6), CFrame.new(at(u, w0, 4.2)), STALL_STONE))
+	for _, y in { 1.6, 3 } do
+		studs(box(into, "CounterRail", Vector3.new(2 * half, 0.6, 0.6), CFrame.new(at(u, w0, y)), STALL_WOOD))
+	end
+	-- Striped awning sloping down toward the walkway, with a scalloped edge along the front.
 	local tilt = CFrame.Angles(math.rad(-side * 14), 0, 0)
-	for s = 0, 7 do
-		local color = if s % 2 == 0 then stall.color else stall.stripe
-		local cf = CFrame.new(at(u - 7.875 + s * 2.25, w0 + 3, 12.6)) * tilt
-		deco(into, "Awning", Vector3.new(2.25, 0.5, 11), cf, color, Enum.Material.Fabric)
-		deco(into, "Valance", Vector3.new(2.25, 1.2, 0.4), cf * CFrame.new(0, -0.8, -side * 5.4), color, Enum.Material.Fabric)
+	local stripes, width = 8, 2.05
+	for s = 0, stripes - 1 do
+		local color = if s % 2 == 0 then stall.color else STALL_STRIPE
+		local cf = CFrame.new(at(u - (stripes - 1) / 2 * width + s * width, mid, 13)) * tilt
+		deco(into, "Awning", Vector3.new(width, 0.5, STALL_DEPTH + 3), cf, color)
+		local edge = cf * CFrame.new(0, -0.6, -side * (STALL_DEPTH + 3) / 2)
+		deco(into, "Valance", Vector3.new(width, 1, 0.3), edge, color)
+		local scallop = deco(into, "Scallop", Vector3.new(0.3, width, width), edge * CFrame.new(0, -0.5, 0) * CFrame.Angles(0, math.rad(90), 0), color)
+		scallop.Shape = Enum.PartType.Cylinder
 	end
 end
 
--- The soft green glowing circle in front of the SELL stall: a Neon rim under a lighter, see-through fill.
-local function sellCircle(parent: Instance, pos: Vector3)
-	local rim = Props.disc(parent, "SellCircle", 17, pos, SELL_GLOW, Enum.Material.Neon, 0.15)
+-- The glowing ring in front of a stall: a Neon rim under a lighter, see-through fill.
+local function stallRing(parent: Instance, name: string, pos: Vector3, color: Color3)
+	local rim = Props.disc(parent, name, 15, pos, color, Enum.Material.Neon, 0.15)
 	rim.Transparency = 0.25
-	local fill = Props.disc(parent, "SellCircleFill", 14.6, pos, Color3.fromRGB(170, 255, 190), Enum.Material.SmoothPlastic, 0.25)
+	local fill = Props.disc(parent, name .. "Fill", 12.6, pos, color:Lerp(Color3.new(1, 1, 1), 0.55), Enum.Material.SmoothPlastic, 0.25)
 	fill.Transparency = 0.45
 end
 
@@ -711,36 +680,19 @@ local function buildShops(world: Folder)
 		local w0 = 18 -- counter's distance in from the plaza's front edge
 		local selling = stall.opens == "Sell"
 		-- The stall (ShopStall_<menu> slot, else ShopStall) faces the walkway.
-		Assets.swap("ShopStall_" .. stall.opens, model, Assets.facing(at(u, w0 + 3.5, 0), Vector3.new(0, 0, -side)), function(into)
-			if selling then
-				sellStall(into, at, u, w0, side, stall)
-				return
-			end
-			box(into, "Counter", Vector3.new(16, 4, 3), CFrame.new(at(u, w0, 2)), stall.color, Enum.Material.WoodPlanks)
-			deco(into, "CounterTop", Vector3.new(17, 0.6, 4), CFrame.new(at(u, w0, 4.3)), Color3.fromRGB(250, 245, 235), Enum.Material.SmoothPlastic)
-			box(into, "Back", Vector3.new(16, 12, 1), CFrame.new(at(u, w0 + 8, 6)), stall.color, Enum.Material.WoodPlanks)
-			for _, du in { -7.5, 7.5 } do
-				for _, dw in { -1, 8 } do
-					box(into, "Post", Vector3.new(1, 12, 1), CFrame.new(at(u + du, w0 + dw, 6)), Color3.fromRGB(110, 70, 40), Enum.Material.Wood)
-				end
-			end
-			-- Striped awning sloping down toward the walkway
-			local tilt = CFrame.Angles(math.rad(-side * 14), 0, 0)
-			for s = 0, 7 do
-				deco(into, "Awning", Vector3.new(2.25, 0.5, 12), CFrame.new(at(u - 7.875 + s * 2.25, w0 + 2.5, 12.5)) * tilt,
-					if s % 2 == 0 then stall.color else stall.stripe, Enum.Material.Fabric)
-			end
+		Assets.swap("ShopStall_" .. stall.opens, model, Assets.facing(at(u, w0 + STALL_DEPTH / 2, 0), Vector3.new(0, 0, -side)), function(into)
+			marketStall(into, at, u, w0, side, stall)
 		end, Vector3.new(1, 1.5, 1.5))
-		local signPart = deco(model, "StallSign", Vector3.new(1, 1, 1), CFrame.new(at(u, w0, if selling then 18 else 17)), stall.color)
+		stallRing(model, if selling then "SellCircle" else "StallRing", at(u, 8, 0.3), stall.ring) -- on the sand, in front of the counter
+
+		-- A big title floating over the awning, in the stall's colour with a dark outline.
+		local signPart = deco(model, "StallSign", Vector3.new(1, 1, 1), CFrame.new(at(u, w0 + STALL_DEPTH / 2, 19)), stall.color)
 		signPart.Transparency = 1
-		local signLabel = billboard(signPart, stall.label, if selling then UDim2.fromScale(13, 4.6) else UDim2.fromScale(15, 3), Vector3.zero, 90)
-		if selling then -- big red "SELL" with a dark outline, like the reference
-			signLabel.TextColor3 = SELL_TEXT
-			local stroke = signLabel:FindFirstChildOfClass("UIStroke") :: UIStroke
-			stroke.Thickness = 5
-			stroke.Color = Color3.fromRGB(70, 8, 12)
-			sellCircle(model, at(u, 7, 0.3)) -- on the plaza's sand, in front of the counter
-		end
+		local signLabel = billboard(signPart, stall.label, if selling then UDim2.fromScale(13, 4.6) else UDim2.fromScale(16, 4), Vector3.zero, 110)
+		signLabel.TextColor3 = stall.title
+		local stroke = signLabel:FindFirstChildOfClass("UIStroke") :: UIStroke
+		stroke.Thickness = 5
+		stroke.Color = stall.color:Lerp(Color3.new(0, 0, 0), 0.7)
 
 		-- The prompt sits on an invisible part at the counter, so it stays when the stall is re-modelled.
 		local promptHost = hidden(model, "StallPrompt", Vector3.new(16, 4, 3), CFrame.new(at(u, w0, 2)))
@@ -762,7 +714,7 @@ end
 -- of the corridor mouth, by the spawn. Every run to the corridor passes it, and it is off the walkway,
 -- the plots and the plaza. RewardService finds both by their Role (WorldBuilder.rewardPoints).
 ----------------------------------------------------------------------------------------------------
-local CHEST_POS = Vector3.new(Config.CORRIDOR_START_X - 10, GROUND, -(HALF_W + 32)) -- ground point under the chest
+local CHEST_POS = Vector3.new(Config.CORRIDOR_START_X - 10, GROUND, -(HALF_W + 28)) -- ground point under the chest (the gift box stands 11 further out)
 local MONEY_BOARD_POS = Vector3.new(Config.CORRIDOR_START_X - 4, GROUND, -(HALF_W + 14)) -- ground point under the board
 local MONEY_PANEL = Vector2.new(12, 18) -- the list panel (studs); its bottom edge is 4 studs up
 local MONEY_PPS = 40

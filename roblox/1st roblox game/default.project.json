@@ -51,7 +51,7 @@
         "ColorShift_Top": [1.0, 0.957, 0.871],
         "ColorShift_Bottom": [0.157, 0.216, 0.314],
         "EnvironmentDiffuseScale": 1,
-        "EnvironmentSpecularScale": 0.4,
+        "EnvironmentSpecularScale": 0.2,
         "GlobalShadows": true,
         "ShadowSoftness": 0.1,
         "ExposureCompensation": 0
@@ -73,7 +73,7 @@
           "Color": [0.784, 0.894, 1.0],
           "Decay": [0.431, 0.627, 0.863],
           "Glare": 0,
-          "Haze": 0.4
+          "Haze": 0.25
         }
       },
       "Bloom": {

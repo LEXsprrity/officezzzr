@@ -172,6 +172,15 @@ H.test("map: tools/apply_assets.luau puts new models into the map where the piec
 	H.ok(WorldBuilder.adopt(after) ~= nil, "still validates")
 end)
 
+H.test("map: map/World.rbxm has the cartoony look (no realistic materials), the 192-stud corridor and no finish area", function()
+	local world = MapTool.load(MapTool.PATH)
+	local bad = Layout.realisticBits(world)
+	H.eq(#bad, 0, "realistic bits: " .. table.concat(bad, ", ", 1, math.min(#bad, 8)))
+	H.eq(world.Corridor:FindFirstChild("End"), nil, "no End folder")
+	local floor = world.Corridor:FindFirstChild("1_Meadow"):FindFirstChild("Floor")
+	H.ok(floor and math.abs(floor.Size.Z - Config.CORRIDOR_WIDTH) < 1e-3, "the corridor floor is CORRIDOR_WIDTH wide")
+end)
+
 H.test("map: map/World.rbxm has clean shared plot fences, no plot gates, no FASTEST board and plot-sized treadmills", function()
 	local world = MapTool.load(MapTool.PATH)
 	local plots = WorldBuilder.adopt(world)

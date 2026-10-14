@@ -1924,8 +1924,6 @@ LootEvent.OnClientEvent:Connect(function(kind: string, data: any)
 		end
 	elseif kind == "Offline" then
 		toast(`While you were away ({Format.clock(data.seconds)}): +{Format.money(data.amount)}`, "gold", 6)
-	elseif kind == "End" then
-		toast("⛩️ YOU REACHED THE END OF THE LINE! ⛩️", "gold", 8)
 	elseif kind == "PackRoll" then
 		queueReveal(data)
 	elseif kind == "DayNight" then

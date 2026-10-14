@@ -23,7 +23,7 @@ LightingLook.LIGHTING = {
 	ColorShift_Bottom = { rgb(40, 55, 80), rgb(40, 50, 110) },
 	ExposureCompensation = { 0, 0.3 },
 	EnvironmentDiffuseScale = { 1, 0.6 },
-	EnvironmentSpecularScale = { 0.4, 0.3 },
+	EnvironmentSpecularScale = { 0.2, 0.3 }, -- low by day: flat plastic, not glossy
 } :: Look
 
 LightingLook.EFFECTS = {
@@ -31,7 +31,7 @@ LightingLook.EFFECTS = {
 		Density = { 0.2, 0.24 },
 		Color = { rgb(200, 228, 255), rgb(96, 120, 200) },
 		Decay = { rgb(110, 160, 220), rgb(54, 70, 150) },
-		Haze = { 0.4, 0.6 },
+		Haze = { 0.25, 0.6 }, -- a clear blue sky by day
 	},
 	ColorCorrectionEffect = {
 		TintColor = { rgb(255, 253, 248), rgb(208, 220, 255) },
