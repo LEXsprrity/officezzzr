@@ -114,7 +114,7 @@ H.test("guard: chase speed is walkSpeedFor(req) * 1.0 for every zone", function(
 end)
 
 H.test("guard: every zone has its own wake-up delay, and the guard uses it", function()
-	local want = { Meadow = 0.5, Desert = 0, Jungle = 0.15, Lava = 0.25, Snow = 0.3, Space = 0.3, Spirit = 0.5 }
+	local want = { Meadow = 0.5, Desert = 0, Jungle = 0, Lava = 0.1, Snow = 0.1, Space = 0.1, Spirit = 0.1 }
 	for k, zone in Config.ZONES do
 		H.eq(zone.wakeDelay, want[zone.id], zone.id)
 		H.eq(GuardBrain.new(k, Vector3.new(0, 0, 0)).wakeDelay, zone.wakeDelay, zone.id)
@@ -149,9 +149,10 @@ end)
 H.test("guard: a faster guard catches a fast runner despite 10 Hz MoveTo sampling", function()
 	-- Regression: aiming at the sampled position left the guard one tick (> CATCH_DISTANCE) behind.
 	-- No wake-up delay here: this is about the chase itself.
+	-- (0.8: at 0.9 the Desert's 264-stud run home is too short for the guard to close a 30-stud head start)
 	for k = 2, #Config.ZONES do
 		local zone = Config.ZONES[k]
-		local walk = Config.guardChaseSpeed(k) * 0.9
+		local walk = Config.guardChaseSpeed(k) * 0.8
 		H.ok(walk / Config.GUARD_HZ > Config.CATCH_DISTANCE, "runner outpaces one catch radius per tick")
 		H.eq(simulate(k, 0, { walk = walk, wakeDelay = 0 }), "caught", zone.id)
 	end
@@ -167,12 +168,15 @@ H.test("guard: a player AT the recommended speed who runs at once reaches the ba
 	end
 end)
 
-H.test("guard: the lowest Speed that escapes is at least 50% of the recommended Speed (zones 2-7)", function()
+H.test("guard: the lowest Speed that escapes is at least 45% of the recommended Speed (zones 3-7; Desert 30%)", function()
+	-- Short zones (Config.zoneLength) mean short runs home, where a slower thief loses little ground: with
+	-- 0.3 s of slack the Desert's 264-stud run can only hold ~30%, the Jungle's 640 ~47%.
 	local lines = {}
 	for k = 2, #Config.ZONES do
 		local zone = Config.ZONES[k]
 		local share = escapeShare(k)
-		H.ok(share >= 0.5, `{zone.id}: escapes from {math.floor(share * 1000) / 10}% of the recommended Speed`)
+		local need = if zone.id == "Desert" then 0.3 else 0.45
+		H.ok(share >= need, `{zone.id}: escapes from {math.floor(share * 1000) / 10}% of the recommended Speed`)
 		H.ok(share < 1, `{zone.id}: the recommended Speed itself escapes`)
 		table.insert(lines, string.format("%s: delay %.2fs, escape from Speed %.3g (%.1f%% of rec, WalkSpeed %.1f vs guard %.1f), slack %.1fs",
 			zone.id, zone.wakeDelay, zone.req * share, 100 * share, Config.walkSpeedFor(zone.req * share), Config.guardChaseSpeed(k), slackOf(k)))
@@ -180,20 +184,21 @@ H.test("guard: the lowest Speed that escapes is at least 50% of the recommended 
 	print("        escape thresholds  " .. table.concat(lines, "\n                           "))
 end)
 
-H.test("guard: at the recommended Speed there is >= 0.5 s of slack to start running (Desert: 0.3 s)", function()
-	-- The Desert's run home is only ~580 studs: any head start worth 0.4+ s also lets players under 50% of
-	-- its recommended Speed escape, and the 50% gate wins. Every other zone gets the full 0.5 s.
+H.test("guard: at the recommended Speed there is >= 0.3 s of slack to start running, in every zone", function()
+	-- More slack is a bigger head start, which also lets slower thieves escape; 0.3 s keeps the gates above.
 	for k = 2, #Config.ZONES do
 		local zone = Config.ZONES[k]
-		local need = if zone.id == "Desert" then 0.3 else 0.5
+		local need = 0.3
 		H.eq(simulate(k, zone.req, { reaction = need }), "escaped", `{zone.id} reacting {need}s late`)
 		H.ok(slackOf(k) >= need - 1e-6, zone.id)
 	end
 end)
 
-H.test("guard: at ~70% of the recommended WalkSpeed you get caught, in every zone", function()
-	for k, zone in Config.ZONES do
-		local walk = Config.walkSpeedFor(zone.req) * 0.7 -- the Meadow's 11.2 is below the 16 floor, but the gate still holds
+H.test("guard: at ~70% of the recommended WalkSpeed you get caught (zones 2-7)", function()
+	-- (the Meadow's guard is the tutorial: its 64-stud run home is too short to catch anyone running)
+	for k = 2, #Config.ZONES do
+		local zone = Config.ZONES[k]
+		local walk = Config.walkSpeedFor(zone.req) * 0.7
 		local outcome, t, x = simulate(k, 0, { walk = walk })
 		H.eq(outcome, "caught", `{zone.id} at WalkSpeed {walk}`)
 		H.ok(t < Config.CHASE_TIMEOUT, "caught before the timeout")

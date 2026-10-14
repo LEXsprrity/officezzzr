@@ -41,7 +41,7 @@ end)
 H.test("lighting: vivid by day, and night stays readable (bright blue ambient, not murky)", function()
 	local cc = LightingLook.EFFECTS.ColorCorrectionEffect
 	H.ok(cc.Saturation[1] >= 0.2 and cc.Saturation[1] <= 0.35, "day saturation up")
-	H.ok(LightingLook.EFFECTS.Atmosphere.Density[1] <= 0.25, "thin air by day")
+	H.ok(LightingLook.EFFECTS.Atmosphere.Density[1] <= 0.1, "thin air by day")
 	local nightAmbient = LightingLook.LIGHTING.OutdoorAmbient[2]
 	H.ok(nightAmbient.B > nightAmbient.R and (nightAmbient.R + nightAmbient.G + nightAmbient.B) / 3 > 0.5, "night ambient is blue and bright")
 end)
@@ -68,6 +68,22 @@ H.test("lighting: default.project.json ships the day look", function()
 	end
 	local clock = lighting["$properties"].ClockTime
 	H.ok(clock >= LightingLook.DAY_CLOCK[1] and clock <= LightingLook.DAY_CLOCK[2], "Studio shows a day-time clock")
+end)
+
+H.test("lighting: from spawn you see to the end of the map (no streaming cut-off, thin air, no fog)", function()
+	local project = serde.decode("json", fs.readFile("default.project.json"))
+	local ws = project.tree.Workspace["$properties"] or {}
+	-- The whole map is always there: either streaming is off, or its radius covers base to back wall.
+	local span = Config.END_X + 400 -- the base reaches ~250 studs behind x = 0; the camera can stand anywhere
+	H.ok(ws.StreamingEnabled == false or (ws.StreamingMinRadius or 0) >= span, `streaming would cut the map ({ws.StreamingEnabled}, min radius {ws.StreamingMinRadius})`)
+	local props = project.tree.Lighting["$properties"]
+	H.ok(props.FogEnd == nil or props.FogEnd >= 100000, "no Lighting fog")
+	local atmosphere = LightingLook.EFFECTS.Atmosphere
+	for i, phase in { "day", "night" } do
+		H.ok(atmosphere.Density[i] <= 0.1, `{phase}: thin air ({atmosphere.Density[i]})`)
+		H.ok(atmosphere.Haze[i] <= 0.3, `{phase}: little haze ({atmosphere.Haze[i]})`)
+	end
+	H.eq(atmosphere.Haze[1], 0, "a clear day")
 end)
 
 H.test("lighting: the sun stays high all day, sets and rises inside the night fades, and the clock never jumps", function()

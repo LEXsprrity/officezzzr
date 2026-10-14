@@ -1,7 +1,7 @@
--- Generates the whole map from primitives: base area with a fenced plot per player (two dirt beds, a grass
--- path, a treadmill in front),
--- the walled corridor split into themed zones (ZoneThemes) with a chunky gate at each entrance, a
--- mother-plant nest per zone; the Spirit Garden's back wall ends it. Decoration is anchored and non-colliding
+-- Generates the whole map from primitives: base area with a fenced plot per player (two dirt beds and a
+-- grass path inside, a treadmill in front), the walled corridor split into themed zones (ZoneThemes; no
+-- gates or zone signs, just floor and wall colours), a mother-plant nest per zone with a small "recommended
+-- Speed" plank beside it; the Spirit Garden's back wall ends it. Decoration is anchored and non-colliding
 -- (see Props). Clean cartoony look only: flat bright plastic, studs and checkers (ZoneThemes header).
 --
 -- The map is hand-editable: map/World.rbxm (Rojo puts it at Workspace.World) is the source of truth, and
@@ -80,43 +80,6 @@ local function hidden(parent: Instance, name: string, size: Vector3, cf: CFrame)
 	p.Transparency = 1
 	p.CastShadow = false
 	return p
-end
-
--- A board facing -X (toward players coming from base) with big text lines.
-local function sign(parent: Instance, pos: Vector3, size: Vector2, lines: { { text: string, color: Color3 } }, boardColor: Color3, material: Enum.Material?)
-	local board = box(parent, "Sign", Vector3.new(size.X, size.Y, 1), Props.lookAt(pos, pos - Vector3.xAxis), boardColor, material)
-	board.CanCollide = false
-	local gui = Instance.new("SurfaceGui")
-	gui.Face = Enum.NormalId.Front
-	gui.SizingMode = Enum.SurfaceGuiSizingMode.PixelsPerStud
-	gui.PixelsPerStud = 20
-	gui.LightInfluence = 0
-	gui.Parent = board
-	local list = Instance.new("UIListLayout")
-	list.HorizontalAlignment = Enum.HorizontalAlignment.Center
-	list.VerticalAlignment = Enum.VerticalAlignment.Center
-	list.SortOrder = Enum.SortOrder.LayoutOrder
-	list.Parent = gui
-	local total = 0
-	for _, line in lines do
-		total += (line :: any).scale or 1
-	end
-	for i, line in lines do
-		local label = Instance.new("TextLabel")
-		label.BackgroundTransparency = 1
-		label.Size = UDim2.fromScale(0.94, ((line :: any).scale or 1) / total)
-		label.Font = Enum.Font.FredokaOne
-		label.TextScaled = true
-		label.Text = line.text
-		label.TextColor3 = line.color
-		label.LayoutOrder = i
-		local stroke = Instance.new("UIStroke")
-		stroke.Thickness = 4
-		stroke.Color = Color3.fromRGB(25, 20, 30)
-		stroke.Parent = label
-		label.Parent = gui
-	end
-	return board
 end
 
 local function billboard(adornee: BasePart, text: string, size: UDim2, offset: Vector3, maxDistance: number): TextLabel
@@ -356,15 +319,6 @@ local function buildBase(world: Folder)
 		local frontLen = BASE_HALF_Z + 4 - HALF_W
 		plainWall(base, Vector3.new(Config.CORRIDOR_START_X + 2, GROUND, s * (HALF_W + frontLen / 2)), Vector3.zAxis, -Vector3.xAxis, frontLen)
 	end
-
-	-- The big sign floats over the corridor mouth; a drop-in SpawnSign hangs from the same bottom edge.
-	local signPos = Vector3.new(Config.CORRIDOR_START_X - 6, GROUND + 22, 0)
-	Assets.swap("SpawnSign", base, Assets.facing(signPos - Vector3.new(0, 6, 0), -Vector3.xAxis), function(into)
-		sign(into, signPos, Vector2.new(44, 12), {
-			{ text = "🌱 STEAL A SEED 🌱", color = Color3.fromRGB(255, 240, 120), scale = 1.4 },
-			{ text = "Grab a seed. Run. Plant it. Get faster.", color = Color3.new(1, 1, 1) },
-		} :: any, Color3.fromRGB(70, 170, 80))
-	end, Vector3.new(1, 1, 0))
 end
 
 ----------------------------------------------------------------------------------------------------
@@ -568,23 +522,61 @@ end
 ----------------------------------------------------------------------------------------------------
 -- Corridor & zones
 ----------------------------------------------------------------------------------------------------
--- The zone's gate (ZoneThemes.gate): chunky pillars flush with the walls, a big beam over the corridor
--- with a cap and a tie beam, and the zone's ornament; that is the Arch_<zone> slot. The name sign (name +
--- recommended Speed + guardian) hanging under the tie beam and the glowing threshold line on the floor stay.
-local function buildArch(folder: Instance, k: number)
-	local zone = Config.ZONES[k]
-	local theme = ZoneThemes.theme(k)
-	local x0 = Config.zoneStartX(k)
-	local x = x0 + 6
-	Assets.swap("Arch_" .. zone.id, folder, Assets.facing(Vector3.new(x, GROUND, 0), -Vector3.xAxis), function(into)
-		ZoneThemes.gate(into, k, x)
-	end, Vector3.new(1, 1.5, 0))
-	sign(folder, Vector3.new(x0 + 1.4, ZoneThemes.GATE_SIGN_Y, 0), ZoneThemes.GATE_SIGN_SIZE, {
-		{ text = `{zone.icon} {string.upper(zone.name)} {zone.icon}`, color = Color3.new(1, 1, 1), scale = 1.5 },
-		{ text = `⚡ Recommended Speed: {Format.short(zone.req)}`, color = Color3.fromRGB(255, 232, 90) },
-		{ text = `Guardian: {zone.guard}`, color = theme.signText },
-	} :: any, theme.sign, Enum.Material.SmoothPlastic)
-	flat(folder, "Threshold", 3, Config.CORRIDOR_WIDTH, Vector3.new(x0 + 1.5, GROUND, 0), theme.accent, Enum.Material.Neon, nil, 0.3)
+-- Beside each nest, on the left of a runner coming from the base, a small chunky wooden plank on a post
+-- facing them: "👟 700K / recommended", the zone's recommended Speed (the Meadow's says "Start here"). The
+-- zones have no gates, arches or name signs (owner playtest); this little plank is the only zone sign.
+local PLANK = Color3.fromRGB(226, 130, 50)
+local PLANK_POST = Color3.fromRGB(196, 104, 44)
+local PLANK_TEXT = Color3.fromRGB(110, 255, 80)
+local PLANK_SIZE = Vector3.new(10, 5, 1.4) -- the board: chunky, about a player's height off the ground
+local PLANK_PPS = 40 -- SurfaceGui pixels per stud
+WorldBuilder.SPEED_SIGN_OFFSET = Vector3.new(-10, 0, -26) -- ground point under the post, from the nest centre
+
+function WorldBuilder.speedSignText(k: number): (string, string)
+	local req = Config.ZONES[k].req
+	if req <= 0 then
+		return "🌱 Start here", "grab a seed!"
+	end
+	return `👟 {Format.short(req)}`, "recommended"
+end
+
+local function buildSpeedSign(folder: Instance, k: number)
+	local base = Vector3.new(Config.nestX(k), GROUND, 0) + WorldBuilder.SPEED_SIGN_OFFSET
+	local model = Instance.new("Model")
+	model.Name = "SpeedSign"
+	model.Parent = folder
+	local postH = 4
+	studs(deco(model, "PlankPost", Vector3.new(1.4, postH, 1.6), CFrame.new(base + Vector3.new(0, postH / 2, 0)), PLANK_POST),
+		{ "FrontSurface", "BackSurface", "LeftSurface", "RightSurface" })
+	local center = base + Vector3.new(0, postH + PLANK_SIZE.Y / 2, 0)
+	local plank = studs(deco(model, "Plank", PLANK_SIZE, Props.lookAt(center, center - Vector3.xAxis), PLANK),
+		{ "TopSurface", "FrontSurface", "BackSurface" })
+	model.PrimaryPart = plank
+
+	local gui = Instance.new("SurfaceGui")
+	gui.Face = Enum.NormalId.Front
+	gui.SizingMode = Enum.SurfaceGuiSizingMode.PixelsPerStud
+	gui.PixelsPerStud = PLANK_PPS
+	gui.LightInfluence = 0
+	gui.MaxDistance = 400
+	gui.Parent = plank
+	local top, bottom = WorldBuilder.speedSignText(k)
+	for _, line in { { name = "Speed", text = top, y = 0.08, h = 0.5 }, { name = "Recommended", text = bottom, y = 0.58, h = 0.32 } } do
+		local label = Instance.new("TextLabel")
+		label.Name = line.name
+		label.BackgroundTransparency = 1
+		label.Position = UDim2.fromScale(0.05, line.y)
+		label.Size = UDim2.fromScale(0.9, line.h)
+		label.Font = Enum.Font.FredokaOne
+		label.TextScaled = true
+		label.Text = line.text
+		label.TextColor3 = PLANK_TEXT
+		local stroke = Instance.new("UIStroke")
+		stroke.Thickness = 4
+		stroke.Color = Color3.fromRGB(40, 24, 16)
+		stroke.Parent = label
+		label.Parent = gui
+	end
 end
 
 -- The zone's nest. Its gameplay piece is NestCore, an invisible part where the mother bulb glows: it holds
@@ -639,7 +631,7 @@ local function buildNest(folder: Folder, k: number)
 	marker(core, "GuardHome", CFrame.new(center + Vector3.new(Config.GUARD_HOME_OFFSET, 0, 0)), "GuardHome", "ZoneIndex", k)
 end
 
--- The corridor: one folder per zone (floor, walls, props, gate, nest). The Spirit Garden is the last stage
+-- The corridor: one folder per zone (floor, walls, props, nest, Speed plank). The Spirit Garden is the last stage
 -- and its back wall closes the corridor (ZoneThemes): there is no finish line or "end" area.
 local function buildCorridor(world: Folder)
 	local corridor = Instance.new("Folder")
@@ -652,7 +644,7 @@ local function buildCorridor(world: Folder)
 		zoneFolder.Name = string.format("%d_%s", k, zone.id)
 		zoneFolder.Parent = corridor
 		ZoneThemes.build(zoneFolder, k, rng)
-		buildArch(zoneFolder, k)
+		buildSpeedSign(zoneFolder, k)
 		buildNest(zoneFolder, k)
 	end
 end
