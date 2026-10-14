@@ -1,0 +1,112 @@
+{
+  "Bag": {
+    "assetId": "99243086853667",
+    "assetType": "Image",
+    "imageId": "99243086853667"
+  },
+  "Bat": {
+    "assetId": "85053152297182",
+    "assetType": "Image",
+    "imageId": "85053152297182"
+  },
+  "Close": {
+    "assetId": "92707569262568",
+    "assetType": "Image",
+    "imageId": "92707569262568"
+  },
+  "DoubleMoney": {
+    "assetId": "83557479696002",
+    "assetType": "Image",
+    "imageId": "83557479696002"
+  },
+  "ExtraSlots": {
+    "assetId": "95521515036924",
+    "assetType": "Image",
+    "imageId": "95521515036924"
+  },
+  "Gift": {
+    "assetId": "74001403380769",
+    "assetType": "Image",
+    "imageId": "74001403380769"
+  },
+  "Home": {
+    "assetId": "135634506350041",
+    "assetType": "Image",
+    "imageId": "135634506350041"
+  },
+  "Index": {
+    "assetId": "80961147867982",
+    "assetType": "Image",
+    "imageId": "80961147867982"
+  },
+  "Leaderboard": {
+    "assetId": "134378637044983",
+    "assetType": "Image",
+    "imageId": "134378637044983"
+  },
+  "Lock": {
+    "assetId": "114529354186446",
+    "assetType": "Image",
+    "imageId": "114529354186446"
+  },
+  "Money": {
+    "assetId": "112609736720413",
+    "assetType": "Image",
+    "imageId": "112609736720413"
+  },
+  "Plants": {
+    "assetId": "85835687373029",
+    "assetType": "Image",
+    "imageId": "85835687373029"
+  },
+  "PlotUpgrade": {
+    "assetId": "134084019366945",
+    "assetType": "Image",
+    "imageId": "134084019366945"
+  },
+  "Robux": {
+    "assetId": "101357320341048",
+    "assetType": "Image",
+    "imageId": "101357320341048"
+  },
+  "SeedPack": {
+    "assetId": "107938233741877",
+    "assetType": "Image",
+    "imageId": "107938233741877"
+  },
+  "Seeds": {
+    "assetId": "83123035456262",
+    "assetType": "Image",
+    "imageId": "83123035456262"
+  },
+  "Shop": {
+    "assetId": "84789249799350",
+    "assetType": "Image",
+    "imageId": "84789249799350"
+  },
+  "SleepDust": {
+    "assetId": "118449694996630",
+    "assetType": "Image",
+    "imageId": "118449694996630"
+  },
+  "Speed": {
+    "assetId": "132529696666459",
+    "assetType": "Image",
+    "imageId": "132529696666459"
+  },
+  "Star": {
+    "assetId": "82950881757837",
+    "assetType": "Image",
+    "imageId": "82950881757837"
+  },
+  "TrailShop": {
+    "assetId": "114969127966156",
+    "assetType": "Image",
+    "imageId": "114969127966156"
+  },
+  "Treadmill": {
+    "assetId": "135986955777794",
+    "assetType": "Image",
+    "imageId": "135986955777794"
+  }
+}
