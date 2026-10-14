@@ -159,7 +159,7 @@ end
 -- a little different in every zone, each resting on the floor. They stay about GUARD_HOME_OFFSET ahead of
 -- its root along the run home: the guard chases at the runner's speed, so that head start along X is what
 -- holds (a sideways gap closes to about half during the chase; tests/guard.spec).
-local POD_SCATTER = { { -4, 17 }, { -11, 23 }, { -5, 28 }, { -13, 15 }, { -8, 21 }, { -2, 25 } }
+local POD_SCATTER = { { -4, 17 }, { -12, 24 }, { -5, 29 }, { -13, 16.5 }, { -8, 21 }, { -2, 25 } }
 function Config.podOffset(k: number, i: number): Vector3
 	local base = POD_SCATTER[(i - 1) % #POD_SCATTER + 1]
 	local jx = ((k * 13 + i * 7) % 5 - 2) * 0.6
