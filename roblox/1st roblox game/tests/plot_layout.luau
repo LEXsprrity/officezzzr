@@ -145,7 +145,8 @@ function Layout.treadmillsFit(plots: { any }, label: string)
 		local c = plot.center
 		H.ok(lo.X > c.X + 7 or hi.X < c.X - 7, `{label}: plot {i} treadmill beside the entrance path, not on it`)
 		local w, d = hi.X - lo.X, hi.Z - lo.Z
-		H.ok(math.max(w, d) <= 13 and math.min(w, d) <= 8 and hi.Y - lo.Y <= 10, `{label}: plot {i} treadmill is character-sized ({hi - lo})`)
+		-- (tier 1 is about 6 x 12; the widest tiers' side decorations reach about 11.5 x 14.5)
+		H.ok(math.max(w, d) <= 15 and math.min(w, d) <= 12 and hi.Y - lo.Y <= 10, `{label}: plot {i} treadmill is character-sized ({hi - lo})`)
 		local belt = plot.belt
 		local bp = belt.CFrame.Position
 		H.ok(bp.X >= lo.X - 0.5 and bp.X <= hi.X + 0.5 and bp.Z >= lo.Z - 0.5 and bp.Z <= hi.Z + 0.5, `{label}: plot {i} belt lies on its treadmill`)

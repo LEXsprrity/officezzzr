@@ -196,7 +196,17 @@ O **ninho** é a planta-mãe com o monte de terra, as pedras e a flor brilhante.
 
 | Nome | O que é | Onde aparece | Altura | Largura máx. |
 |---|---|---|---|---|
-| `Treadmill` | a estrutura da esteira (moldura, corrimãos, painel). A faixa preta onde se corre continua do jogo: ela fica invisível e toma o tamanho e a altura da peça do modelo com "Belt" no nome, então o Speed conta exatamente onde se vê a faixa. Fica fora do lote, na frente dele (entre a cerca e o caminho), do tamanho de um personagem. Frente = virada para o caminho de entrada do lote | cada lote | até ~16 | 7 × 12 |
+| `Treadmill` | a esteira de um lote vazio e da vista do Studio, **só se não houver** os modelos por nível abaixo (sem este arquivo, ela usa o `Treadmill_T1`). A faixa preta onde se corre continua do jogo: ela fica invisível e toma o tamanho e a altura da peça do modelo chamada `Belt` (ou, se não houver, da primeira com "Belt" no nome), então o Speed conta exatamente onde se vê a faixa. Fica fora do lote, na frente dele (entre a cerca e o caminho), do tamanho de um personagem. Frente = virada para o caminho de entrada do lote | cada lote | até ~10 | 12 × 14,5 |
+| `Treadmill_T1` | a esteira do nível 1 (x2), a de todo lote vazio | cada lote | até ~10 | 12 × 14,5 |
+| `Treadmill_T2` | a esteira do nível 2 | cada lote | até ~10 | 12 × 14,5 |
+| `Treadmill_T3` | a esteira do nível 3 | cada lote | até ~10 | 12 × 14,5 |
+| `Treadmill_T4` | a esteira do nível 4 | cada lote | até ~10 | 12 × 14,5 |
+| `Treadmill_T5` | a esteira do nível 5 | cada lote | até ~10 | 12 × 14,5 |
+| `Treadmill_T6` | a esteira do nível 6 | cada lote | até ~10 | 12 × 14,5 |
+| `Treadmill_T7` | a esteira do nível 7 | cada lote | até ~10 | 12 × 14,5 |
+| `Treadmill_T8` | a esteira do nível 8 | cada lote | até ~10 | 12 × 14,5 |
+| `Treadmill_T9` | a esteira do nível 9 | cada lote | até ~10 | 12 × 14,5 |
+| `Treadmill_T10` | a esteira do nível 10 (o máximo) | cada lote | até ~10 | 12 × 14,5 |
 | `UpgradeSign` | o suporte da placa "Upgrade" (moldura com studs e o poste curto). O painel azul-escuro com o texto e os botões continua do jogo | na frente de cada lote | ~7 | ~8 |
 | `ShopStall` | barraca da praça das lojas (quatro postes de madeira, balcão de pedra cinza com corrimãos, toldo listrado com bordas arredondadas). O anel brilhante no chão e o título flutuante continuam do jogo. Frente = calçada. Vale para as barracas SHOP, TRAIL SHOP e INDEX (não para a SELL) | praça das lojas | ~17 | 17 × 13 |
 | `ShopStall_Shop` | só a barraca 🛒 SHOP (se existir, vale mais que `ShopStall`) | praça das lojas | ~17 | 17 × 13 |
@@ -205,6 +215,14 @@ O **ninho** é a planta-mãe com o monte de terra, as pedras e a flor brilhante.
 | `ShopStall_Sell` | só a barraca SELL (vender plantas): a mesma barraca, com o toldo vermelho e branco. O anel verde no chão e o texto "SELL" continuam do jogo. Sem modelo, fica a barraca do jogo (não usa `ShopStall`) | praça das lojas | ~17 | 17 × 13 |
 | `FreeChest` | o baú grátis "FREE!" (vermelho e dourado). O círculo verde no chão, o texto "FREE!", a contagem e o prompt "Claim" continuam do jogo. Frente = virada para a base | canto das recompensas, junto ao muro ao lado da entrada do corredor | ~6 | ~7 × 5 |
 | `MoneyBoard` | a moldura do quadro "MOST MONEY/s" (moldura com studs, o topo e o pedestal). O painel com o título e a lista dos 10 melhores continua do jogo (12 × 18 studs, a 4 studs do chão) | ao lado do baú grátis | ~23 | ~16 |
+
+#### Esteiras por nível (`Treadmill_T1` ... `Treadmill_T10`)
+
+Cada lote mostra a esteira do nível **atual** do dono; quando ele compra o próximo nível, o modelo troca na hora, no mesmo lugar. Um lote vazio mostra o nível 1. Um nível sem modelo usa o do nível abaixo.
+
+- Os 10 modelos atuais vêm de `models/treadmills/Treadmills.rbxl` (os modelos comprados) e são gerados com `lune run tools/export_treadmills.luau` (veja `models/treadmills/LEIA-ME.md`).
+- Cada modelo já vem no tamanho do jogo (`KeepScale` = `true`), com `Yaw` = `180` (o painel fica no lado +Z) e uma peça **invisível** chamada `Belt` em cima da faixa onde se corre: a esteira do jogo copia o tamanho e a altura dela. Se fizer um modelo novo, ponha essa peça `Belt` (Transparency 1) exatamente sobre a faixa, do fundo até o painel.
+- Depois de trocar um modelo de nível: `lune run tools/apply_assets.luau --all` (o mapa mostra o nível 1).
 
 ### Criaturas (aparecem quando uma semente é plantada)
 

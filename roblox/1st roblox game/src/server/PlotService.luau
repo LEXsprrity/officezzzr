@@ -517,6 +517,8 @@ end
 -- server pays a second there and the "+X" popups over the runner show). Refreshed with every payout. The prompts say what they buy; at the last tier they switch off.
 local function renderTreadmillSign(state: PlotState)
 	local s = state.owner and Sessions.get(state.owner)
+	-- the treadmill shows the owner's tier (an empty plot: tier 1); a no-op unless the tier changed
+	TreadmillBoard.showTier(state.treadmill, if s then s.profile.treadmillTier else 1)
 	if not s then
 		TreadmillBoard.render(state.treadmill, {})
 		for _, prompt in treadmillPrompts(state) do

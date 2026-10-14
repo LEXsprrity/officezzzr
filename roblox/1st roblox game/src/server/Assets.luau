@@ -44,13 +44,28 @@ for _, zone in Config.ZONES do
 	table.insert(Assets.SLOTS, "Guard_" .. compact(zone.guard))
 end
 
+-- The treadmill's look for each treadmill tier: a plot's treadmill shows its owner's current tier
+-- (TreadmillBoard.showTier; an empty plot shows tier 1). "Treadmill_T3" is tier 3's model.
+function Assets.treadmillSlot(tier: number): string
+	return "Treadmill_T" .. math.clamp(math.floor(tier), 1, Config.TREADMILL_MAX)
+end
+for tier = 1, Config.TREADMILL_MAX do
+	table.insert(Assets.SLOTS, Assets.treadmillSlot(tier))
+end
+
 -- When a slot has no model, the game tries its fallback before building the piece from code.
 Assets.FALLBACK = {
 	Meadow_Flower = "Flower",
 	ShopStall_Shop = "ShopStall",
 	ShopStall_Trails = "ShopStall",
 	ShopStall_Index = "ShopStall",
+	-- the map's treadmill piece (the Studio view, an empty plot) looks like tier 1 unless assets/ has its own
+	-- Treadmill model; a tier without a model looks like the tier below it
+	Treadmill = "Treadmill_T1",
 } :: { [string]: string }
+for tier = 2, Config.TREADMILL_MAX do
+	Assets.FALLBACK[Assets.treadmillSlot(tier)] = Assets.treadmillSlot(tier - 1)
+end
 -- (ShopStall_Sell has no fallback: the SELL stall keeps its own red-and-white look until it gets its own model.)
 
 -- Solid slots keep the collision the model was saved with; every other slot is pure decoration.
@@ -167,12 +182,14 @@ function Assets.get(slot: string): (Instance?, string?)
 		warnOnce("unknown:" .. slot, `[Assets] the code asked for an unknown slot "{slot}" (add it to Assets.SLOTS)`)
 	end
 	local s: string? = slot
-	while s do
+	local tried = 0
+	while s and tried <= #Assets.SLOTS do -- (a fallback loop can't hang the game)
 		local template = own(s)
 		if template then
 			return template, s
 		end
 		s = Assets.FALLBACK[s]
+		tried += 1
 	end
 	return nil
 end
@@ -206,12 +223,13 @@ local function partsOf(root: Instance): { BasePart }
 	return out
 end
 
--- Axis-aligned bounds of the visible parts under `root`, in `frame`'s space (world space if nil).
-function Assets.bounds(root: Instance, frame: CFrame?): (Vector3?, Vector3?)
+-- Axis-aligned bounds of the visible parts under `root` (every part with `hidden`), in `frame`'s space
+-- (world space if nil).
+function Assets.bounds(root: Instance, frame: CFrame?, hidden: boolean?): (Vector3?, Vector3?)
 	local inv = if frame then frame:Inverse() else CFrame.identity
 	local x0, y0, z0, x1, y1, z1 = math.huge, math.huge, math.huge, -math.huge, -math.huge, -math.huge
 	for _, p in partsOf(root) do
-		if p.Transparency >= 1 then
+		if p.Transparency >= 1 and not hidden then
 			continue
 		end
 		local cf = inv * p.CFrame
@@ -483,12 +501,26 @@ local function carryEffects(group: Model, placed: Model, fit: Vector3)
 end
 
 -- Gameplay parts that sit under a slot's visuals: when the slot gets a model, the part (a sibling of the
--- group, by name) is hidden, resized to the footprint of the model's part whose name contains `topOf` and
--- its top raised or lowered to that part's top, so players stand on the model's surface and the part covers
--- exactly what they see. The part keeps working (e.g. the belt check).
+-- group, by name) is hidden, resized to the footprint of the model's part named `topOf` (or else the first
+-- whose name contains it; an invisible marker part counts) and its top raised or lowered to that part's
+-- top, so players stand on the model's surface and the part covers exactly what they see. The part keeps
+-- working (e.g. the belt check).
 local UNDER_MODEL: { [string]: { part: string, topOf: string } } = {
 	Treadmill = { part = "TreadmillBelt", topOf = "Belt" },
 }
+
+local function surfaceOf(placed: Model, name: string): BasePart?
+	local exact = placed:FindFirstChild(name, true)
+	if exact and exact:IsA("BasePart") then
+		return exact
+	end
+	for _, d in placed:GetDescendants() do
+		if d:IsA("BasePart") and string.find(d.Name, name, 1, true) then
+			return d
+		end
+	end
+	return nil
+end
 
 local function fitUnder(slot: string, placed: Model)
 	local rule = UNDER_MODEL[slot]
@@ -502,23 +534,23 @@ local function fitUnder(slot: string, placed: Model)
 			d.Transparency = 1
 		end
 	end
-	for _, d in placed:GetDescendants() do
-		if d:IsA("BasePart") and string.find(d.Name, rule.topOf, 1, true) then
-			-- The model's part in the gameplay part's own axes: take its footprint and its top.
-			local lo, hi = Assets.bounds(d, under.CFrame)
-			if lo and hi then
-				local mid = ((lo :: Vector3) + (hi :: Vector3)) / 2
-				under.Size = Vector3.new((hi :: Vector3).X - (lo :: Vector3).X, under.Size.Y, (hi :: Vector3).Z - (lo :: Vector3).Z)
-				under.CFrame = under.CFrame * CFrame.new(mid.X, (hi :: Vector3).Y - under.Size.Y / 2, mid.Z)
-			end
-			break
-		end
+	local surface = surfaceOf(placed, rule.topOf)
+	-- The model's part in the gameplay part's own axes: take its footprint and its top.
+	local lo, hi
+	if surface then
+		lo, hi = Assets.bounds(surface, under.CFrame, true)
+	end
+	if lo and hi then
+		local mid = ((lo :: Vector3) + (hi :: Vector3)) / 2
+		under.Size = Vector3.new((hi :: Vector3).X - (lo :: Vector3).X, under.Size.Y, (hi :: Vector3).Z - (lo :: Vector3).Z)
+		under.CFrame = under.CFrame * CFrame.new(mid.X, (hi :: Vector3).Y - under.Size.Y / 2, mid.Z)
 	end
 end
 
--- Replaces a slot group (a piece built from code, or an earlier model) with the slot's model, at the
--- group's current pivot (so hand moves are kept) and in its FitSize. Returns the new model, or nil.
-function Assets.replace(group: Model): Model?
+-- Replaces a slot group (a piece built from code, or an earlier model) with the slot's model (or with
+-- `with`, another slot's model, e.g. a treadmill tier's), at the group's current pivot (so hand moves are
+-- kept) and in its FitSize. The new model keeps the group's slot. Returns the new model, or nil.
+function Assets.replace(group: Model, with: string?): Model?
 	local slot = group:GetAttribute("AssetSlot")
 	local pivot = Assets.pivotOf(group)
 	if type(slot) ~= "string" or not pivot or not group.Parent then
@@ -526,7 +558,7 @@ function Assets.replace(group: Model): Model?
 	end
 	local fit = group:GetAttribute("FitSize")
 	local fitSize = if typeof(fit) == "Vector3" then fit else nil
-	local placed = Assets.place(slot, group.Parent, pivot :: CFrame, fitSize)
+	local placed = Assets.place(with or slot, group.Parent, pivot :: CFrame, fitSize)
 	if not placed then
 		return nil
 	end

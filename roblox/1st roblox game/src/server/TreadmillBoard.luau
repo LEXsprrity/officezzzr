@@ -262,6 +262,30 @@ function TreadmillBoard.follow(board: Board)
 	anchor.Position = Treadmill.stepTextOffset(board.belt.Size)
 end
 
+-- Shows treadmill tier `tier`'s model on the board's plot (assets/Treadmill_T<tier>, or the nearest lower
+-- tier that has one), where the plot's treadmill stands now and in the same space. The hidden belt follows
+-- the new model's belt (Assets.fitUnder), and the board and the "+X/s" text follow the belt. Does nothing
+-- when that model is already shown or no tier has a model (the built-in frame stays). Returns whether it
+-- swapped.
+function TreadmillBoard.showTier(board: Board, tier: number): boolean
+	local tm = board.plot:FindFirstChild("Treadmill")
+	local template = Assets.get(Assets.treadmillSlot(tier))
+	if not (tm and tm:IsA("Model") and template) then
+		return false
+	end
+	-- (Asset is the model's name; Template the file's, for a file that is a folder of variants)
+	if tm:GetAttribute("Asset") == template.Name or tm:GetAttribute("Template") == template.Name then
+		return false
+	end
+	local placed = Assets.replace(tm, Assets.treadmillSlot(tier))
+	if not placed then
+		return false
+	end
+	placed:SetAttribute("Template", template.Name)
+	TreadmillBoard.follow(board)
+	return true
+end
+
 -- Writes the board and the "+X/s" text. Below the last tier: "Level X > Level Y" and both buttons
 -- (the red one with the money price and the Treadmill icon, the purple one with the Robux icon); at the
 -- last tier "MAX" and no buttons; with no owner "Empty plot", no buttons and no step text.
