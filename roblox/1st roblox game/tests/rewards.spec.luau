@@ -35,7 +35,7 @@ end
 -- Free Gift
 ----------------------------------------------------------------------------------------------------
 H.test("rewards: the Free Gift is 10,000 Speed for community members, once per account", function()
-	H.eq(Config.FREE_GIFT_SPEED, 10_000)
+	H.eq(Config.FREE_GIFT_SPEED, 25_000)
 	local p = ProfileStore.defaultProfile()
 	p.speed = 500
 	local yes, calls = member(true)

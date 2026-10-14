@@ -1,114 +1,22 @@
--- The HUD: Speed levels (for the "LEVEL N!" pop-up), the Shop's small Speed products (+10K / +100K / +1M),
--- granted through the normal receipt path, and the layout: no level bar, only Shop and Index on the left.
+-- The HUD: no Speed levels (v7 removed them with the "LEVEL N!" pop-up: the Speed per step is flat), the
+-- Shop's small Speed products (+25K / +150K / +750K), granted through the normal receipt path, and the
+-- layout: no level bar, only Shop and Index on the left.
 local H = require("./harness")
 local Config = H.shared("Config")
 local Format = H.shared("Format")
 local Shop = H.server("Shop")
 local ProfileStore = H.server("ProfileStore")
-local Sim = require("./progression_sim")
 
-local NICE = { [1] = true, [1.5] = true, [2] = true, [2.5] = true, [3] = true, [4] = true, [5] = true, [7.5] = true }
-
-local function mantissa(x: number): number
-	local m = x / 10 ^ math.floor(math.log10(x))
-	return math.round(m * 1000) / 1000
-end
-
-H.test("speed levels: level 1 at 0, strictly increasing, nice round thresholds", function()
-	H.eq(Config.SPEED_LEVELS[1], 0)
-	local level, start, nextAt = Config.speedLevel(0)
-	H.eq(level, 1)
-	H.eq(start, 0)
-	H.eq(nextAt, Config.SPEED_LEVELS[2])
-	for n = 2, #Config.SPEED_LEVELS + 12 do
-		local t = Config.speedLevelThreshold(n)
-		H.ok(t > Config.speedLevelThreshold(n - 1), `level {n} above level {n - 1}`)
-		H.ok(NICE[mantissa(t)], `level {n} at {Format.short(t)} is a nice number`)
-		H.ok(not string.find(Format.short(t), "%.%d%d"), `"{Format.short(t)}" reads short`)
+H.test("speed levels are gone: no level table, no level maths, no level-up sound, no compounding gain", function()
+	for _, gone in { "SPEED_LEVELS", "speedLevel", "speedLevelThreshold", "levelUp", "gainPerStud", "GAIN_PER_STUD", "GAIN_PIVOT", "GAIN_EXPONENT" } do
+		H.eq((Config :: any)[gone], nil, `Config.{gone}`)
 	end
-	-- past the table: 10B, 20B, 50B, 100B
-	local n = #Config.SPEED_LEVELS
-	H.eq(Config.speedLevelThreshold(n + 1), 10e9)
-	H.eq(Config.speedLevelThreshold(n + 2), 20e9)
-	H.eq(Config.speedLevelThreshold(n + 3), 50e9)
-	H.eq(Config.speedLevelThreshold(n + 4), 100e9)
+	H.eq(Config.SOUNDS.LevelUp, nil, "the level-up ping went with the pop-up")
 end)
 
-H.test("speed levels: every zone's recommended Speed is a level; 25-30 levels to the Spirit Garden", function()
-	for k, zone in Config.ZONES do
-		local level, start = Config.speedLevel(zone.req)
-		H.eq(start, zone.req, `{zone.name} starts a level`)
-		if k > 1 then
-			H.ok(Config.speedLevel(zone.req - 1) == level - 1, `{zone.name}: one Speed short is the level below`)
-		end
-	end
-	local spirit = Config.speedLevel(Config.ZONES[#Config.ZONES].req)
-	H.ok(spirit >= 25 and spirit <= 30, `level {spirit} at 5B`)
-end)
-
-H.test("speed levels: speedLevel is monotonic and consistent with its thresholds", function()
-	local last = 0
-	local speed = 0
-	while speed < 1e15 do
-		local level, start, nextAt = Config.speedLevel(speed)
-		H.ok(level >= last, `monotonic at {speed}`)
-		H.ok(start <= speed and speed < nextAt, `{speed} in [{start}, {nextAt})`)
-		H.eq(start, Config.speedLevelThreshold(level))
-		H.eq(nextAt, Config.speedLevelThreshold(level + 1))
-		last = level
-		speed = speed * 1.07 + 13
-	end
-	-- exactly on and just under each threshold
-	for n = 2, #Config.SPEED_LEVELS + 9 do
-		local t = Config.speedLevelThreshold(n)
-		H.eq((Config.speedLevel(t)), n, `on {Format.short(t)}`)
-		H.eq((Config.speedLevel(t * 0.999)), n - 1, `under {Format.short(t)}`)
-	end
-	-- garbage in, sane level out
-	H.eq((Config.speedLevel(-5)), 1)
-	H.eq((Config.speedLevel(0 / 0)), 1)
-	local huge, hs, hn = Config.speedLevel(math.huge)
-	H.ok(huge > 100 and hs < hn and hn < math.huge, "infinite Speed is clamped")
-end)
-
-H.test("speed levels: a free player levels up every few minutes early and keeps levelling up all game", function()
-	local free = Sim.run()
-	local spirit = Config.speedLevel(Config.ZONES[#Config.ZONES].req)
-	H.ok(#free.levels >= spirit, "the free player reaches the Spirit Garden's level")
-	H.ok(free.levels[2] <= 2 * 60, `level 2 at {Sim.clock(free.levels[2])}`)
-	local gaps = {}
-	for n = 2, spirit do
-		local gap = free.levels[n] - free.levels[n - 1]
-		table.insert(gaps, Sim.clock(gap))
-		if free.levels[n] <= 30 * 60 then
-			H.ok(gap <= 10 * 60, `level {n} came {Sim.clock(gap)} after the last (first half hour)`)
-		end
-		H.ok(gap <= 75 * 60, `level {n} came {Sim.clock(gap)} after the last`)
-	end
-	print("        free player's level gaps: " .. table.concat(gaps, ", "))
-end)
-
-H.test("level up: no pop-up on the first stats, one per new level, the highest when several at once", function()
-	local best, show = Config.levelUp(nil, 12)
-	H.eq(best, 12)
-	H.eq(show, nil, "joining at level 12 isn't a level-up")
-	best, show = Config.levelUp(best, 12)
-	H.eq(show, nil, "same level")
-	best, show = Config.levelUp(best, 13)
-	H.eq(show, 13)
-	best, show = Config.levelUp(best, 18) -- a Speed pack jumps five levels
-	H.eq(show, 18, "only the highest")
-	H.eq(best, 18)
-	best, show = Config.levelUp(best, 17)
-	H.eq(show, nil, "never announces going down")
-	H.eq(best, 18, "keeps the best")
-	best, show = Config.levelUp(best, 18)
-	H.eq(show, nil, "nor coming back to a level already announced")
-end)
-
-H.test("Speed packs: Speed10K, Speed100K and Speed1M are id = 0 Speed products, coming soon until set", function()
+H.test("Speed packs: Speed25K, Speed150K and Speed750K are id = 0 Speed products, coming soon until set", function()
 	local p = ProfileStore.defaultProfile()
-	for name, want in { Speed10K = { 10e3, 9 }, Speed100K = { 100e3, 36 }, Speed1M = { 1e6, 76 } } do
+	for name, want in { Speed25K = { 25e3, 9 }, Speed150K = { 150e3, 36 }, Speed750K = { 750e3, 76 } } do
 		local product = Config.DEVELOPER_PRODUCTS[name]
 		H.ok(product ~= nil, name)
 		H.eq(product.kind, "Speed", name)
@@ -132,7 +40,7 @@ H.test("Speed packs: each grants its Speed exactly once per receipt", function()
 		return true
 	end
 	local total = 0
-	for i, c in { { "Speed10K", 10e3 }, { "Speed100K", 100e3 }, { "Speed1M", 1e6 } } do
+	for i, c in { { "Speed25K", 25e3 }, { "Speed150K", 150e3 }, { "Speed750K", 750e3 } } do
 		total += c[2]
 		local confirm, status, grant = Shop.processReceipt(p, c[1], "q" .. i, 0, never, save)
 		H.eq(confirm, true)
@@ -160,7 +68,10 @@ H.test("HUD: no level bar and no quick-buy buttons; bottom left is just Speed an
 		H.ok(not string.find(HUD, gone, 1, true), `"{gone}" is gone from the HUD`)
 	end
 	H.ok(string.find(HUD, "local speedValue", 1, true) and string.find(HUD, "local moneyValue", 1, true), "the Speed and money readouts stay")
-	H.ok(string.find(HUD, "announceLevel(announce)", 1, true), `"LEVEL N!" still pops up`)
+	-- no "LEVEL N!" pop-up either (v7: no Speed levels)
+	for _, gone in { "announceLevel", "levelUpLabel", "bestLevel", "speedLevel", "levelUp(", "LEVEL {level}!" } do
+		H.ok(not string.find(HUD, gone, 1, true), `"{gone}" is gone from the HUD`)
+	end
 end)
 
 H.test("HUD: the left column has only Shop and Index (and Slow Mode); Trails opens from its stall", function()

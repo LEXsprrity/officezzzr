@@ -78,7 +78,7 @@ H.test("data: a new player gets defaults (plot level 1 = 5 slots, Grey trail, no
 	H.eq(Config.plotSlots(p.plotLevel), 5)
 	H.ok(p.trails.Grey, "everyone owns the Grey trail")
 	H.eq(p.equippedTrail, "Grey")
-	H.eq(Config.trailMult(p.equippedTrail), 1.5)
+	H.eq(Config.trailMult(p.equippedTrail), 1)
 	H.eq(next(p.items), nil, "the inventory starts empty")
 	H.eq(Config.TREADMILL_TIERS[p.treadmillTier].mult, 2)
 	H.eq(p.money, 0)
@@ -203,6 +203,73 @@ H.test("data: items listed in Config.START_ITEMS are saved and loaded (sanitized
 	end)
 	Config.START_ITEMS = before
 	assert(ok, err)
+end)
+
+----------------------------------------------------------------------------------------------------
+-- v7: the flat Speed per step shrank the Speed scale; older saves' Speed is moved onto it
+----------------------------------------------------------------------------------------------------
+-- How many zones a Speed has reached on a scale of zone reqs.
+local function zonesReached(speed: number, reqs: { number }): number
+	local n = 0
+	for _, req in reqs do
+		if speed >= req then
+			n += 1
+		end
+	end
+	return n
+end
+
+local NEW_REQ = {}
+for k, zone in Config.ZONES do
+	NEW_REQ[k] = zone.req
+end
+
+H.test("v7 Speed migration: every old zone's recommended Speed lands exactly on the new one", function()
+	H.ok(ProfileStore.VERSION >= 7)
+	local old = ProfileStore.LEGACY_ZONE_REQ
+	H.eq(#old, #Config.ZONES)
+	for k, zone in Config.ZONES do
+		H.near(ProfileStore.migrateSpeed(old[k]), zone.req, zone.req * 1e-9 + 1e-9, zone.id)
+	end
+	H.eq(ProfileStore.migrateSpeed(0), 0)
+	H.eq(ProfileStore.migrateSpeed(-5), 0)
+	H.eq(ProfileStore.migrateSpeed(0 / 0), 0, "NaN-safe")
+	H.ok(ProfileStore.migrateSpeed(math.huge) < math.huge, "infinite Speed is clamped")
+end)
+
+H.test("v7 Speed migration: monotonic and keeps every zone reached (nobody stuck, nobody leapfrogs)", function()
+	local last = -1
+	local speed = 0
+	while speed < 1e15 do
+		local new = ProfileStore.migrateSpeed(speed)
+		H.ok(new >= last, `monotonic at {speed}`)
+		H.eq(zonesReached(new, NEW_REQ), zonesReached(speed, ProfileStore.LEGACY_ZONE_REQ), `zones reached at old Speed {speed}`)
+		last = new
+		speed = speed * 1.13 + 7
+	end
+	-- the same share of the way between two zones (log scale): halfway Jungle -> Lava stays halfway
+	local half = math.sqrt(500e3 * 5e6)
+	H.near(ProfileStore.migrateSpeed(half), math.sqrt(Config.ZONES[3].req * Config.ZONES[4].req), 1e-3)
+	-- below the Desert: linear
+	H.near(ProfileStore.migrateSpeed(5e3), Config.ZONES[2].req / 2, 1e-9)
+	-- past the Spirit Garden it keeps growing, but on the new (slower) scale: 10x the old Spirit is ~3x the new
+	local spirit = Config.ZONES[#Config.ZONES].req
+	local past = ProfileStore.migrateSpeed(50e9)
+	H.ok(past > 2 * spirit and past < 4 * spirit, `50B -> {past}`)
+end)
+
+H.test("v7 Speed migration: older saves (v1-v6) are moved once; v7 saves load as they are", function()
+	for _, v in { 1, 2, 3, 4, 5, 6 } do
+		local data = { v = v, money = 7e12, speed = 5e9, plotLevel = 20, slots = 24, trails = { "Grey", "Red" }, trail = "Red" }
+		local p = ProfileStore.deserialize(serde.decode("json", serde.encode("json", data)))
+		H.near(p.speed, Config.ZONES[#Config.ZONES].req, 1e-3, `v{v}: 5B -> the Spirit Garden`)
+		H.eq(p.money, 7e12, `v{v}: money untouched`)
+		local back = ProfileStore.deserialize(serde.decode("json", serde.encode("json", ProfileStore.serialize(p))))
+		H.eq(back.speed, p.speed, `v{v}: saved as v{ProfileStore.VERSION}, not migrated again`)
+	end
+	H.eq(ProfileStore.deserialize({ speed = 10e3 }).speed, Config.ZONES[2].req, "no version: the oldest format")
+	H.eq(ProfileStore.deserialize({ v = 7, speed = 10e3 }).speed, 10e3)
+	H.eq(ProfileStore.deserialize({ v = 7, speed = 5e9 }).speed, 5e9)
 end)
 
 return nil

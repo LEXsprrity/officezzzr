@@ -562,8 +562,9 @@ H.test("treadmill board: PlotService builds it per plot, writes it and puts the 
 end)
 
 H.test("treadmill step: what one step pays, as text", function()
-	H.eq(Treadmill.perStep(0, nil, 2), Config.speedPerStud(0, nil) * 2)
-	H.eq(Treadmill.perStep(5000, "Grey", 3), Config.speedPerStud(5000, "Grey") * 3)
+	H.eq(Treadmill.perStep(0, nil, 2), Config.speedPerStud(nil) * 2)
+	H.eq(Treadmill.perStep(5e6, "Blue", 2), Treadmill.perStep(0, "Blue", 2), "the same at any Speed (flat gain)")
+	H.eq(Treadmill.perStep(5000, "Grey", 3), Config.speedPerStud("Grey") * 3)
 	H.eq(Treadmill.perSecond(20, 5000, nil, 3), 20 * Treadmill.perStep(5000, nil, 3))
 	H.eq(Treadmill.perSecond(1e6, 5000, nil, 3), Config.GAIN_CAP_STUDS_PER_TICK / Config.TICK * Treadmill.perStep(5000, nil, 3), "capped like SpeedLogic")
 	H.eq(Treadmill.gainText(0.5), "+0.5")
@@ -593,7 +594,7 @@ H.test("treadmill step: what one step pays, as text", function()
 	-- and the treadmill sums match SpeedLogic's treadmill gain for a whole second
 	local SpeedLogic = H.server("SpeedLogic")
 	local walk, speed = 24, 1e5
-	local mult = Config.speedPerStud(speed, nil)
+	local mult = Config.speedPerStud(nil)
 	H.ok(math.abs(SpeedLogic.treadmillGain(walk, 1, mult, 2.5) - Treadmill.perSecond(walk, speed, nil, 2.5)) < 1e-6, "same as the server's gain")
 end)
 
@@ -612,7 +613,7 @@ H.test("treadmill sign: the '+X/s' over the treadmill is exactly what a second o
 				local tm = Config.treadmillMult(tier)
 				local paid = 0
 				for _ = 1, ticks do
-					paid += SpeedLogic.treadmillGain(walk, Config.TICK, Config.speedPerStud(speed, trail), tm)
+					paid += SpeedLogic.treadmillGain(walk, Config.TICK, Config.speedPerStud(trail), tm)
 				end
 				-- the sign (PlotService) and the popups (Effects.client) both use Treadmill.perSecond with these stats
 				local shown = Treadmill.perSecond(walk, speed, trail, tm)
@@ -634,7 +635,7 @@ H.test("treadmill sign: the '+X/s' over the treadmill is exactly what a second o
 	local sessions = fs.readFile("src/server/Sessions.luau")
 	H.ok(string.find(sessions, "walkSpeed = s.walkSpeed", 1, true) ~= nil, "the client gets the same WalkSpeed")
 	H.ok(string.find(fs.readFile("src/server/SpeedService.luau"), "mult = Sessions.speedPerStud(s)", 1, true) ~= nil
-		and string.find(sessions, "Config.speedPerStud(s.profile.speed, s.profile.equippedTrail)", 1, true) ~= nil, "the server pays Speed per stud from the same stats")
+		and string.find(sessions, "Config.speedPerStud(s.profile.equippedTrail)", 1, true) ~= nil, "the server pays Speed per stud from the same stats (the trail; flat at any Speed)")
 end)
 
 -- The treadmill's model (assets/Treadmill.rbxm) or the built-in frame, the belt, the lock and the board all
@@ -759,7 +760,7 @@ end)
 -- Saves
 ----------------------------------------------------------------------------------------------------
 H.test("treadmill saves: v1-v4 tiers keep their multiplier (x2, Robux x3, Robux x5); v5+ keeps the tier", function()
-	H.eq(ProfileStore.VERSION, 6)
+	H.ok(ProfileStore.VERSION >= 6)
 	for old, mult in { 2, 3, 5 } do
 		for _, v in { 1, 2, 3, 4 } do
 			local data = { v = v, money = 1, speed = 2, treadmillTier = old, plotLevel = 1, slots = 5, trails = { "Grey" }, trail = "Grey" }

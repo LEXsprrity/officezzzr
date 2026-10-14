@@ -164,7 +164,7 @@ H.test("planting: settle moves only the plants that don't fit (off a bed, overla
 end)
 
 H.test("planting saves: v5 slot plants get their old slot's spot; v6 round-trips spots; bad spots fall back", function()
-	H.eq(ProfileStore.VERSION, 6)
+	H.ok(ProfileStore.VERSION >= 6)
 	local v5 = {
 		v = 5, money = 1, speed = 2, plotLevel = 3, trails = { "Grey" }, trail = "Grey", treadmillTier = 1,
 		plants = { { s = 1, z = 1, r = 1, t = 100 }, { s = 7, z = 2, r = 3, m = "Gold", t = 200 }, { s = 40, z = 7, r = 5, t = 300 } },
@@ -178,9 +178,9 @@ H.test("planting saves: v5 slot plants get their old slot's spot; v6 round-trips
 	end
 	H.eq(p.plants[2].slot, 7, "the slot number stays as the id (its weight variance doesn't change)")
 	H.eq(p.plants[2].mutation, "Gold")
-	-- saved again as v6, the spots come back exactly (no second migration)
+	-- saved again (v6+), the spots come back exactly (no second migration)
 	local data = ProfileStore.serialize(p)
-	H.eq(data.v, 6)
+	H.eq(data.v, ProfileStore.VERSION)
 	H.eq(data.plants[1].px, p.plants[1].x)
 	p.plants[1].x, p.plants[1].z = -21.25, 30.5 -- a freely placed plant
 	local back = ProfileStore.deserialize(serde.decode("json", serde.encode("json", ProfileStore.serialize(p))))

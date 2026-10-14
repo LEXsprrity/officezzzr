@@ -317,70 +317,6 @@ local function fitLeftColumn()
 end
 
 ----------------------------------------------------------------------------------------------------
--- "LEVEL N!" (centred low, above the hotbar): pops in, holds, fades. Only one at a time: a new level
--- while it shows replaces it (Config.levelUp already picks the highest).
-----------------------------------------------------------------------------------------------------
-local announceLevel: (level: number) -> ()
-do
-	local levelUpLabel = bold(gui, 5, {
-		Name = "LevelUp", Text = "", AnchorPoint = Vector2.new(0.5, 1), Position = UDim2.new(0.5, 0, 1, -150), Size = UDim2.fromOffset(420, 76),
-		Visible = false, ZIndex = 15,
-	})
-	new("UIGradient", { Rotation = 90, Color = ColorSequence.new(Color3.fromRGB(255, 238, 70), Color3.fromRGB(255, 150, 25)), Parent = levelUpLabel })
-	local levelUpSub = bold(levelUpLabel, 3, { Text = "", Size = UDim2.new(1, 0, 0, 30), Position = UDim2.new(0, 0, 1, 0), ZIndex = 15 })
-	local levelUpScale = new("UIScale", { Parent = levelUpLabel })
-	local levelUpSound = new("Sound", { SoundId = Config.SOUNDS.LevelUp, Volume = 0.6, Parent = SoundService })
-	local levelUpToken = 0
-	local levelUpFades: { Tween } = {}
-
-	local function setLevelUpTransparency(t: number, info: TweenInfo?)
-		for _, label in { levelUpLabel, levelUpSub } do
-			local stroke = label:FindFirstChildOfClass("UIStroke") :: UIStroke
-			if info then
-				local a = TweenService:Create(label, info, { TextTransparency = t })
-				local b = TweenService:Create(stroke, info, { Transparency = t })
-				a:Play()
-				b:Play()
-				table.insert(levelUpFades, a)
-				table.insert(levelUpFades, b)
-			else
-				label.TextTransparency = t
-				stroke.Transparency = t
-			end
-		end
-	end
-
-	function announceLevel(level: number)
-		levelUpToken += 1
-		local token = levelUpToken
-		for _, tween in levelUpFades do
-			tween:Cancel()
-		end
-		table.clear(levelUpFades)
-		if not levelUpLabel.Visible then
-			levelUpSound:Play() -- one ping per pop-up, not per level
-		end
-		levelUpLabel.Text = `LEVEL {level}!`
-		levelUpSub.Text = `x{Config.trailMult(stats.equippedTrail)} Multiplier`
-		setLevelUpTransparency(0)
-		levelUpLabel.Visible = true
-		levelUpScale.Scale = 0.3
-		TweenService:Create(levelUpScale, TweenInfo.new(0.3, Enum.EasingStyle.Back, Enum.EasingDirection.Out), { Scale = 1 }):Play()
-		task.delay(0.3 + 1.2, function()
-			if token ~= levelUpToken then
-				return
-			end
-			setLevelUpTransparency(1, TweenInfo.new(0.4))
-			task.delay(0.45, function()
-				if token == levelUpToken then
-					levelUpLabel.Visible = false
-				end
-			end)
-		end)
-	end
-end
-
-----------------------------------------------------------------------------------------------------
 -- Hotbar (bottom centre): Bat
 ----------------------------------------------------------------------------------------------------
 local hotbar = new("Frame", {
@@ -1218,12 +1154,12 @@ end
 -- Trail Shop icon tinted over a ribbon of the trail's colours, an "x2 Speed" pill, then a green $ button
 -- and a purple R$ button, or Equip / Equipped once owned.
 ----------------------------------------------------------------------------------------------------
--- "+0.5", "+12.3", "+1.2K": the Speed one step (stud) pays right now (Config.speedPerStud)
+-- "+1", "+1.25", "+3": the Speed one step (stud) pays with the equipped trail (Config.speedPerStud)
 local renderTrails: () -> ()
 do
 	local function perStepText(): string
-		local x = Config.speedPerStud(stats.speed or 0, stats.equippedTrail)
-		return "+" .. (if x < 100 then string.format("%.1f", x) else Format.short(x))
+		local x = Config.speedPerStud(stats.equippedTrail)
+		return "+" .. (if x < 100 then (string.gsub(string.format("%.2f", x), "%.?0+$", "")) else Format.short(x))
 	end
 
 	local function trailCard(parent: Instance, order: number, t: Config.Trail): Frame
@@ -1832,18 +1768,9 @@ end
 -- Refresh from stats
 ----------------------------------------------------------------------------------------------------
 local lastUnlocked = -1
-local bestLevel: number? = nil -- highest level seen; nil until the server first sends our Speed
 local function refresh(changed: { [string]: any })
 	speedValue.Text = Format.short(stats.speed)
 	moneyValue.Text = Format.money(stats.money)
-
-	if changed.speed ~= nil then
-		local announce
-		bestLevel, announce = Config.levelUp(bestLevel, (Config.speedLevel(stats.speed)))
-		if announce then
-			announceLevel(announce)
-		end
-	end
 
 	local c = stats.carrying
 	carryBanner.Visible = c ~= false and c ~= nil

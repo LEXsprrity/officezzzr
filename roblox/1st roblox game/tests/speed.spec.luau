@@ -20,9 +20,11 @@ local function tracker(pos: Vector3, walkSpeed: number?)
 	return s
 end
 
-H.test("speed: WalkSpeed = clamp(16 + a*log10(1+Speed), 16, 180)", function()
+H.test("speed: WalkSpeed = clamp(16 + a*log10(1 + Speed/pivot), 16, 180)", function()
 	H.eq(Config.walkSpeedFor(0), 16)
-	H.near(Config.walkSpeedFor(9), 16 + Config.WALKSPEED_LOG_SCALE, 1e-9)
+	H.near(Config.walkSpeedFor(9 * Config.WALKSPEED_PIVOT), 16 + Config.WALKSPEED_LOG_SCALE, 1e-9)
+	H.eq(Config.walkSpeedFor(-5), 16)
+	H.eq(Config.walkSpeedFor(0 / 0), 16, "NaN-safe")
 	H.eq(Config.walkSpeedFor(1e30), Config.MAX_WALKSPEED)
 	local last = 0
 	for e = 0, 12 do
@@ -144,6 +146,16 @@ H.test("speed: server teleports reset tracking (no false positive after knockbac
 	SpeedLogic.teleported(s, Vector3.new(300, 0, 0))
 	local _, verdict = SpeedLogic.step(s, Vector3.new(300 + 16 * DT, 0, 0), DT, opts(16))
 	H.eq(verdict, "ok")
+end)
+
+H.test("speed: each zone's recommended Speed runs within 10% of its pre-v7 WalkSpeed (what the guards are tuned for)", function()
+	local ProfileStore = H.server("ProfileStore")
+	for k, zone in Config.ZONES do
+		local before = math.clamp(16 + 16 * math.log10(1 + ProfileStore.LEGACY_ZONE_REQ[k]), 16, 180) -- the pre-v7 curve
+		local now = Config.walkSpeedFor(zone.req)
+		H.ok(math.abs(now - before) <= before * 0.1, `{zone.id}: {now} vs {before}`)
+	end
+	H.ok(Config.walkSpeedFor(Config.ZONES[#Config.ZONES].req) < Config.MAX_WALKSPEED, "the cap is past the Spirit Garden")
 end)
 
 return nil

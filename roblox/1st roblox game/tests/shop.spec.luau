@@ -83,13 +83,13 @@ end)
 ----------------------------------------------------------------------------------------------------
 H.test("trails: seven tiers with the agreed multipliers, prices and Robux products", function()
 	local want = {
-		{ "Grey", "Common", 1.5, 0, nil, nil },
-		{ "Green", "Uncommon", 2, 5e3, "TrailGreen", 16 },
-		{ "Blue", "Rare", 2.5, 75e3, "TrailBlue", 24 },
-		{ "Purple", "Epic", 3, 1.5e6, "TrailPurple", 40 },
-		{ "Golden", "Legendary", 3.5, 30e6, "TrailGolden", 64 },
-		{ "Red", "Mythic", 4, 20e9, "TrailRed", 100 },
-		{ "Rainbow", "Secret", 5, 1e12, "TrailRainbow", 180 },
+		{ "Grey", "Common", 1, 0, nil, nil },
+		{ "Green", "Uncommon", 1.25, 5e3, "TrailGreen", 16 },
+		{ "Blue", "Rare", 1.5, 75e3, "TrailBlue", 24 },
+		{ "Purple", "Epic", 1.75, 1.5e6, "TrailPurple", 40 },
+		{ "Golden", "Legendary", 2, 30e6, "TrailGolden", 64 },
+		{ "Red", "Mythic", 2.5, 20e9, "TrailRed", 100 },
+		{ "Rainbow", "Secret", 3, 1e12, "TrailRainbow", 180 },
 	}
 	H.eq(#Config.TRAILS, #want)
 	for i, w in want do
@@ -108,8 +108,8 @@ H.test("trails: seven tiers with the agreed multipliers, prices and Robux produc
 		end
 	end
 	H.eq(Config.DEFAULT_TRAIL, "Grey")
-	H.eq(Config.trailMult("Rainbow"), 5)
-	H.eq(Config.trailMult("nope"), 1.5, "unknown -> the free trail")
+	H.eq(Config.trailMult("Rainbow"), 3)
+	H.eq(Config.trailMult("nope"), 1, "unknown -> the free trail")
 end)
 
 H.test("trails: every player owns and wears the free Grey trail from the start", function()
@@ -159,14 +159,14 @@ H.test("trails: the equipped trail multiplies Speed gained walking and on the tr
 			SpeedLogic.step(s, Vector3.new(0, 0, 0), DT, { walkSpeed = 80, onTreadmill = false, mult = 1, treadmillMult = 2 })
 		end
 		local to = if onTreadmill then Vector3.new(0, 0, 0) else Vector3.new(80 * DT, 0, 0)
-		local g = SpeedLogic.step(s, to, DT, { walkSpeed = 80, onTreadmill = onTreadmill, mult = Config.speedPerStud(0, trail), treadmillMult = 2 })
+		local g = SpeedLogic.step(s, to, DT, { walkSpeed = 80, onTreadmill = onTreadmill, mult = Config.speedPerStud(trail), treadmillMult = 2 })
 		return g
 	end
 	for _, onTreadmill in { false, true } do
 		local grey = gain("Grey", onTreadmill)
-		H.near(grey, 80 * DT * Config.GAIN_PER_STUD * 1.5 * (if onTreadmill then 2 else 1), 1e-9, "Grey x1.5 at 0 Speed")
+		H.near(grey, 80 * DT * Config.BASE_SPEED_PER_STUD * (if onTreadmill then 2 else 1), 1e-9, "Grey x1: the flat base")
 		for _, t in Config.TRAILS do
-			H.near(gain(t.id, onTreadmill), grey / 1.5 * t.mult, 1e-9, t.id)
+			H.near(gain(t.id, onTreadmill), grey * t.mult, 1e-9, t.id)
 		end
 	end
 end)
@@ -340,7 +340,7 @@ H.test("robux: the agreed Speed, Money and Treadmill products, all id = 0 stubs;
 		end
 		return table.concat(out, " ")
 	end
-	H.eq(amounts("Speed", "amount"), "10000/9 100000/36 150000/64 1000000/76 10000000/560 50000000/1200 500000000/1600 1000000000/2400")
+	H.eq(amounts("Speed", "amount"), "25000/9 150000/36 250000/64 750000/76 3000000/560 10000000/1200 25000000/1600 50000000/2400")
 	H.eq(amounts("Money", "amount"), "24000/40 200000/80 800000/200 4000000/400 8000000/640")
 	H.eq(amounts("Money", "minutes"), "10/40 30/80 60/200 180/400 360/640")
 	H.eq(amounts("TreadmillUpgrade", "tier"), "1/19 2/39 3/79")
@@ -361,7 +361,7 @@ H.test("robux: id = 0 products say coming soon; only the treadmill's own upgrade
 		H.eq(product, nil, name)
 		H.ok(why and string.find(why, "coming soon"), why)
 	end
-	withIds({ TreadmillT1 = 301, TreadmillT2 = 302, TreadmillT3 = 304, Speed1B = 303 }, function()
+	withIds({ TreadmillT1 = 301, TreadmillT2 = 302, TreadmillT3 = 304, Speed50M = 303 }, function()
 		H.ok((Shop.canPrompt(p, "TreadmillT1")), "tier 1 -> T1")
 		H.eq((Shop.canPrompt(p, "TreadmillT2")), nil, "not a later tier's product")
 		p.treadmillTier = 5
@@ -373,7 +373,7 @@ H.test("robux: id = 0 products say coming soon; only the treadmill's own upgrade
 			H.eq(got, nil, name .. " at the last tier")
 			H.ok(why and string.find(why, "fully upgraded"), why)
 		end
-		H.ok((Shop.canPrompt(p, "Speed1B")), "Speed packs are always open")
+		H.ok((Shop.canPrompt(p, "Speed50M")), "Speed packs are always open")
 	end)
 end)
 
@@ -383,9 +383,9 @@ H.test("robux: Speed and treadmill receipts grant exactly once", function()
 		{ "Speed150K", function()
 			return p.speed
 		end, 150e3 },
-		{ "Speed1B", function()
+		{ "Speed50M", function()
 			return p.speed
-		end, 150e3 + 1e9 },
+		end, 150e3 + 50e6 },
 		{ "TreadmillT1", function()
 			return p.treadmillTier
 		end, 2 },
@@ -490,11 +490,14 @@ H.test("migration: old Speed Gain tiers become the nearest trail at or below (ne
 		local p = ProfileStore.deserialize({ v = 2, money = 100, speedMultTier = tier })
 		H.eq(p.equippedTrail, id, `x{old}`)
 		H.ok(p.trails[id] and p.trails.Grey, "owned, plus the free one")
-		local mult = Config.trailMult(p.equippedTrail)
+		-- compared with the trails' multipliers of the time (v3-v6; v7 shrank every trail)
+		local legacy = ProfileStore.LEGACY_TRAIL_MULT
+		local mult = legacy[p.equippedTrail]
 		H.ok(mult >= math.min(old, 5), `x{old} -> x{mult}`)
 		-- nearest at or below: no trail sits between the old multiplier and the one given
 		for _, t in Config.TRAILS do
-			H.ok(not (t.mult > mult and t.mult <= old), `{t.id} would have been nearer for x{old}`)
+			H.ok(legacy[t.id] ~= nil, `{t.id} has a legacy multiplier`)
+			H.ok(not (legacy[t.id] > mult and legacy[t.id] <= old), `{t.id} would have been nearer for x{old}`)
 		end
 	end
 end)

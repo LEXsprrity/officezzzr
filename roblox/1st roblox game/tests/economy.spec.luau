@@ -4,8 +4,8 @@ local H = require("./harness")
 local Config = H.shared("Config")
 local Format = H.shared("Format")
 
-H.test("zones: 7 zones with the agreed recommended speeds", function()
-	local want = { 0, 10e3, 500e3, 5e6, 50e6, 500e6, 5e9 }
+H.test("zones: 7 zones with the agreed recommended speeds (the flat-gain scale, v7)", function()
+	local want = { 0, 25e3, 500e3, 2e6, 7.5e6, 25e6, 75e6 }
 	H.eq(#Config.ZONES, 7)
 	for k, req in want do
 		H.eq(Config.ZONES[k].req, req, Config.ZONES[k].id)
@@ -60,11 +60,18 @@ H.test("zones: zoneAtX maps corridor positions to zones, base to nil", function(
 	H.eq(Config.zoneAtX(Config.END_X - 1), #Config.ZONES)
 end)
 
-H.test("economy: a full plot of zone-k Commons earns zone k+1's recommended Speed in dollars in PAYBACK_SECONDS", function()
+H.test("economy: a full plot of zone-k Commons earns zone k+1's ZONE_CASH in dollars in PAYBACK_SECONDS", function()
 	H.eq(Config.ECONOMY_SLOTS, 10, "income is balanced for 10 plants, whatever SLOTS_START is")
+	H.eq(#Config.ZONE_CASH, #Config.ZONES, "one money anchor per zone")
 	for k = 1, #Config.ZONES - 1 do
 		local perSecond = Config.seedIncome(k) * Config.ECONOMY_SLOTS
-		H.near(perSecond * Config.PAYBACK_SECONDS, Config.ZONES[k + 1].req, 1e-3, Config.ZONES[k].id)
+		H.near(perSecond * Config.PAYBACK_SECONDS, Config.ZONE_CASH[k + 1], 1e-3, Config.ZONES[k].id)
+		H.ok(Config.ZONE_CASH[k + 1] > Config.ZONE_CASH[k], "deeper zones pay more")
+	end
+	-- the money anchors are the pre-v7 recommended Speeds: shrinking the Speed scale didn't move the money one
+	local ProfileStore = H.server("ProfileStore")
+	for k, cash in Config.ZONE_CASH do
+		H.eq(cash, ProfileStore.LEGACY_ZONE_REQ[k], Config.ZONES[k].id)
 	end
 	H.near(Config.seedIncome(1), 10e3 / 3000, 1e-9, "the money scale is unchanged by the rework")
 end)

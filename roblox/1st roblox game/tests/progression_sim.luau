@@ -25,7 +25,7 @@ export type Options = {
 
 export type Result = {
 	arrivals: { number }, -- seconds until Speed >= ZONES[k].req
-	levels: { number }, -- seconds until Speed level n (Config.speedLevel)
+	track: { number }, -- Speed at the end of each minute (for tuning)
 	buys: { { t: number, what: string, price: number } },
 	finalSpeed: number,
 	finalMoney: number,
@@ -65,7 +65,7 @@ function Sim.run(opts: Options?): Result
 	local trailIndex = 1
 	local plants: { Plant } = {}
 	local arrivals: { number } = {}
-	local levels: { number } = {}
+	local track: { number } = {}
 	local buys = {}
 	local income = 0
 	local incomeAt = -math.huge
@@ -86,12 +86,12 @@ function Sim.run(opts: Options?): Result
 				arrivals[k] = t
 			end
 		end
-		for n = #levels + 1, (Config.speedLevel(speed)) do
-			levels[n] = t
+		if t % 60 == 0 then
+			track[t // 60] = speed
 		end
 	end
 
-	-- One second: earn money, and Speed at `perStudMult` x WalkSpeed studs (0 when not moving).
+	-- One second: earn money, and Speed at `mult` (the treadmill's, or 1) x WalkSpeed studs (0 when not moving).
 	local function second(moving: boolean, mult: number)
 		if t - incomeAt >= 10 then
 			refreshIncome()
@@ -99,7 +99,7 @@ function Sim.run(opts: Options?): Result
 		money += income
 		if moving then
 			local studs = math.min(Config.walkSpeedFor(speed), Config.GAIN_CAP_STUDS_PER_TICK / Config.TICK)
-			speed += studs * Config.gainPerStud(speed) * Config.TRAILS[trailIndex].mult * mult
+			speed += studs * Config.speedPerStud(Config.TRAILS[trailIndex].id) * mult
 		end
 		t += 1
 		noteArrivals()
@@ -200,7 +200,7 @@ function Sim.run(opts: Options?): Result
 	refreshIncome()
 	return {
 		arrivals = arrivals,
-		levels = levels,
+		track = track,
 		buys = buys,
 		finalSpeed = speed,
 		finalMoney = money,
@@ -224,6 +224,9 @@ function Sim.clock(seconds: number?): string
 	return string.format("%dm %02ds", m, seconds % 60)
 end
 
+-- The Speed packs the Robux comparisons buy at t = 0: about what the old +1M and +10M cost (76 + 560 R$).
+Sim.PACKS = { Config.DEVELOPER_PRODUCTS.Speed750K.amount :: number, Config.DEVELOPER_PRODUCTS.Speed3M.amount :: number }
+
 -- Targets for a free, active player (cumulative play time), from the owner via Pixel.
 Sim.TARGETS = { Desert = 5 * 60, Jungle = 30 * 60, Lava = 75 * 60, Snow = 3 * 3600, Space = 6 * 3600, Spirit = 12.5 * 3600 }
 
@@ -233,10 +236,14 @@ function Sim.report(): string
 	local free = Sim.run()
 	local top = Config.TREADMILL_MAX
 	local tread = Sim.run({ treadmillTier = top })
-	local packs = Sim.run({ treadmillTier = top, speedPacks = { 1e6, 10e6 } })
+	local packs = Sim.run({ treadmillTier = top, speedPacks = Sim.PACKS })
+	local packTotal = 0
+	for _, amount in Sim.PACKS do
+		packTotal += amount
+	end
 	local afk = Sim.run({ afk = true, limitHours = 80 })
 	local x = `x{Config.treadmillMult(top)}`
-	local lines = { `| Zone | Rec. Speed | Target | Free player | ±50% window | AFK farmer | Treadmill {x} (R$) | {x} + 11M Speed packs (R$) |`, "|---|---|---|---|---|---|---|---|" }
+	local lines = { `| Zone | Rec. Speed | Target | Free player | ±50% window | AFK farmer | Treadmill {x} (R$) | {x} + {Format.short(packTotal)} Speed packs (R$) |`, "|---|---|---|---|---|---|---|---|" }
 	for k, zone in Config.ZONES do
 		local target = Sim.TARGETS[zone.id]
 		table.insert(lines, string.format("| %s %s | %s | %s | **%s** | %s | %s | %s | %s |", zone.icon, zone.name, Format.short(zone.req),

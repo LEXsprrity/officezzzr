@@ -1,5 +1,6 @@
--- Free-to-play progression: the Speed curve (gain per stud compounds with Speed), and a simulated free
--- player (tests/progression_sim) who reaches every zone within about ±50% of the owner's targets.
+-- Free-to-play progression: a flat Speed per step (base x trail; x the tier on a treadmill, nothing that
+-- grows with Speed), and a simulated free player (tests/progression_sim) who reaches every zone within
+-- about ±50% of the owner's targets, each zone taking clearly longer than the one before.
 -- Treadmill tiers bought with money speed it up; Robux (treadmill upgrades, Speed packs) shortens it a
 -- lot but is never required; AFK farming on the treadmill is far slower than running the corridor.
 local H = require("./harness")
@@ -8,20 +9,41 @@ local Sim = require("./progression_sim")
 
 local free = Sim.run()
 
-H.test("progression: Speed per step starts small and compounds with Speed (sublinearly)", function()
-	H.eq(Config.gainPerStud(0), Config.GAIN_PER_STUD)
-	local last = 0
-	for e = 0, 10 do
-		local g = Config.gainPerStud(10 ^ e)
-		H.ok(g > last, "grows with Speed")
-		H.ok(g < 10 ^ e or e == 0, "sublinear: never more than the Speed you already have")
-		last = g
-	end
-	H.eq(Config.gainPerStud(-5), Config.GAIN_PER_STUD, "negative Speed is treated as 0")
-	-- the trail multiplies the curve
+H.test("progression: Speed per step is flat: the base x the trail's small multiplier, whatever your Speed", function()
+	H.eq(Config.BASE_SPEED_PER_STUD, 1)
 	for _, t in Config.TRAILS do
-		H.near(Config.speedPerStud(5e6, t.id), Config.gainPerStud(5e6) * t.mult, 1e-9, t.id)
+		H.eq(Config.speedPerStud(t.id), Config.BASE_SPEED_PER_STUD * t.mult, t.id)
 	end
+	H.eq(Config.speedPerStud(nil), Config.BASE_SPEED_PER_STUD, "no trail: the free one (x1)")
+	H.eq(Config.speedPerStud("Hacked"), Config.BASE_SPEED_PER_STUD, "unknown trail: the free one")
+	-- trails stay a little multiplier: x1 (free) rising to x3
+	H.eq(Config.TRAILS[1].mult, 1)
+	H.eq(Config.TRAILS[#Config.TRAILS].mult, 3)
+	for i = 2, #Config.TRAILS do
+		H.ok(Config.TRAILS[i].mult > Config.TRAILS[i - 1].mult, `{Config.TRAILS[i].id} beats the trail before it`)
+	end
+	-- the treadmill pays WalkSpeed x base x trail x tier per second, at any Speed
+	local SpeedLogic = H.server("SpeedLogic")
+	local dt = Config.TICK
+	for _, speed in { 0, 25e3, 75e6, 1e12 } do
+		local walk = Config.walkSpeedFor(speed)
+		local want = math.min(walk * dt, Config.GAIN_CAP_STUDS_PER_TICK) * Config.BASE_SPEED_PER_STUD * 1.5 * 2.5
+		H.near(SpeedLogic.treadmillGain(walk, dt, Config.speedPerStud("Blue"), 2.5), want, 1e-9, `at {speed} Speed`)
+	end
+end)
+
+H.test("progression: each zone takes clearly longer than the one before; the Spirit Garden in ~10-14 h", function()
+	local last = 0
+	local parts = {}
+	for k = 2, #Config.ZONES do
+		local took = free.arrivals[k] - free.arrivals[k - 1]
+		table.insert(parts, `{Config.ZONES[k].id} +{Sim.clock(took)}`)
+		H.ok(took >= last * 1.5, `{Config.ZONES[k].id} took {Sim.clock(took)}, the zone before {Sim.clock(last)}`)
+		last = took
+	end
+	print("        time per zone: " .. table.concat(parts, ", "))
+	local spirit = free.arrivals[#Config.ZONES]
+	H.ok(spirit >= 10 * 3600 and spirit <= 14 * 3600, `Spirit Garden at {Sim.clock(spirit)}`)
 end)
 
 H.test("progression: a free player reaches every zone within ±50% of the target times", function()
@@ -58,7 +80,7 @@ end)
 H.test("progression: Robux shortens it noticeably (treadmill upgrades, Speed packs) but isn't needed", function()
 	-- every treadmill tier bought with Robux at the start (TreadmillT1..T3, 9 receipts)
 	local tread = Sim.run({ treadmillTier = Config.TREADMILL_MAX })
-	local packs = Sim.run({ treadmillTier = Config.TREADMILL_MAX, speedPacks = { 1e6, 10e6 } })
+	local packs = Sim.run({ treadmillTier = Config.TREADMILL_MAX, speedPacks = Sim.PACKS })
 	local spirit = #Config.ZONES
 	H.ok(tread.arrivals[spirit] <= free.arrivals[spirit] * 0.7, `x{Config.treadmillMult(Config.TREADMILL_MAX)} treadmill: {Sim.clock(tread.arrivals[spirit])} vs {Sim.clock(free.arrivals[spirit])}`)
 	H.ok(packs.arrivals[spirit] < tread.arrivals[spirit], "Speed packs on top help further")

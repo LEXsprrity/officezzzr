@@ -77,8 +77,9 @@ Treadmill.RUN_ANIM_SPEED = 2.75
 -- What standing on it pays, and the text over it
 ----------------------------------------------------------------------------------------------------
 -- Speed one step (stud of belt) pays on a treadmill with multiplier `treadmillMult` (Config.speedPerStud x tier).
-function Treadmill.perStep(speed: number, trailId: string?, treadmillMult: number): number
-	return Config.speedPerStud(speed, trailId) * treadmillMult
+-- `_speed` is unused since the gain stopped growing with Speed (v7); kept so callers needn't change.
+function Treadmill.perStep(_speed: number, trailId: string?, treadmillMult: number): number
+	return Config.speedPerStud(trailId) * treadmillMult
 end
 
 -- Speed per second standing on it: the full walking rate (WalkSpeed studs/s, capped like SpeedLogic) x perStep.
