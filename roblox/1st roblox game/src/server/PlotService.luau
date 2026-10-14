@@ -1,5 +1,6 @@
 -- Plots: assignment, planting (server ProximityPrompt on the plot's pad), plant-creature models,
 -- and income. Weight is a closed-form function of plantedAt: one payout loop, no per-plant ticking.
+local MarketplaceService = game:GetService("MarketplaceService")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Shared = ReplicatedStorage:WaitForChild("Shared")
 local Config = require(Shared:WaitForChild("Config"))
@@ -345,10 +346,50 @@ function PlotService.removePlant(player: Player, slot: number)
 end
 
 ----------------------------------------------------------------------------------------------------
--- Plot upgrades (money only): the board at each plot's gate, and the Shop's "PlotUpgrade"
+-- Plot upgrades: the board at each plot's gate (money or Robux), and the Shop's "PlotUpgrade" (money)
 ----------------------------------------------------------------------------------------------------
-local function upgradePrompt(state: PlotState): ProximityPrompt?
-	return state.info.upgradeBoard:FindFirstChildWhichIsA("ProximityPrompt", true)
+local UPGRADE_PROMPT_DISTANCE = 9
+
+-- The board's two owner-only prompts (money and Robux).
+local function upgradePrompts(state: PlotState): { ProximityPrompt }
+	local list = {}
+	for _, d in state.info.upgradeBoard:GetDescendants() do
+		if d:IsA("ProximityPrompt") then
+			table.insert(list, d)
+		end
+	end
+	return list
+end
+
+-- The purple button's price: the tier's placeholder until its product has an id, then the Dashboard
+-- price. GetProductInfo works on the server too, and the price is the same for everyone who reads the
+-- board, so the server fetches it once per id (cached, pcall'd) and redraws the boards when it arrives.
+local robuxPrices: { [number]: number } = {}
+local priceFetching: { [number]: boolean } = {}
+local renderAllBoards: () -> ()
+local function boardRobuxPrice(product: Config.DevProduct): number
+	if product.id == 0 then
+		return product.robux
+	end
+	local cached = robuxPrices[product.id]
+	if cached then
+		return cached
+	end
+	if not priceFetching[product.id] then
+		priceFetching[product.id] = true
+		task.spawn(function()
+			local ok, info = pcall(MarketplaceService.GetProductInfo, MarketplaceService, product.id, Enum.InfoType.Product)
+			if ok and type(info) == "table" and type(info.PriceInRobux) == "number" then
+				robuxPrices[product.id] = info.PriceInRobux
+				renderAllBoards()
+			else
+				task.delay(60, function() -- let a later render try again
+					priceFetching[product.id] = nil
+				end)
+			end
+		end)
+	end
+	return product.robux
 end
 
 -- The treadmill sign shows what standing on it pays its owner right now (WalkSpeed x Speed per stud x
@@ -364,38 +405,26 @@ local function renderTreadmillSign(state: PlotState)
 	Icons.set(state.info.treadmillLabel, "Treadmill", `🏃 TREADMILL x{tier}\n+{Format.short(perSecond)} Speed/s`)
 end
 
--- Writes the owner's level, perk and price on the board (and the prompt's text).
+-- Writes the owner's level and both prices on the board ("MAX LEVEL" and no buttons at the last level).
+-- The prompts only work while there is a level to buy (Enabled is owned by the client-side owner filter).
 local function renderUpgradeSign(state: PlotState)
-	local labels = state.info.upgradeLabels
-	local prompt = upgradePrompt(state)
 	local s = state.owner and Sessions.get(state.owner)
-	if not s then
-		labels.level.Text = "Level 1"
-		labels.perk.Text = "Claim this plot to upgrade it"
-		labels.price.Text = ""
-		return
-	end
-	local level = s.profile.plotLevel
-	local price = Config.priceOf("PlotUpgrade", s.profile)
-	if not price then
-		labels.level.Text = `Level {level} · MAX`
-		labels.perk.Text = `{Config.plotSlots(level)} slots · cash x{Config.plotMoneyMult(level)}`
-		labels.price.Text = "Fully upgraded!"
-		if prompt then
-			prompt.MaxActivationDistance = 0 -- nothing left to buy (Enabled is owned by the client-side owner filter)
-		end
-		return
-	end
-	labels.level.Text = `Level {level} → {level + 1}`
-	labels.perk.Text = `+1 slot · cash x{Config.plotMoneyMult(level)} → x{Config.plotMoneyMult(level + 1)}`
-	labels.price.Text = Format.money(price)
-	if prompt then
-		prompt.MaxActivationDistance = 9
+	local level = if s then s.profile.plotLevel else nil
+	local _, product = Config.plotUpgradeProduct(level or Config.PLOT_LEVEL_MAX)
+	WorldBuilder.setUpgradeBoard(state.info.upgradeLabels, level, if product then boardRobuxPrice(product) else nil)
+	for _, prompt in upgradePrompts(state) do
+		prompt.MaxActivationDistance = if product then UPGRADE_PROMPT_DISTANCE else 0
 	end
 end
 
--- Buys the next plot level for money (from the board's prompt or the Shop). The ExtraSlots pass stacks
--- on top of the level's slots.
+renderAllBoards = function()
+	for _, state in plots do
+		renderUpgradeSign(state)
+	end
+end
+
+-- Buys the next plot level for money (from the board's red button or the Shop). The ExtraSlots pass
+-- stacks on top of the level's slots.
 function PlotService.upgrade(player: Player)
 	local s = Sessions.get(player)
 	local state = plotOf(player)
@@ -408,7 +437,6 @@ function PlotService.upgrade(player: Player)
 		return
 	end
 	PlotService.refreshSlots(s)
-	renderUpgradeSign(state)
 	Sessions.pushFull(s)
 	local level = s.profile.plotLevel
 	Net.LootEvent:FireClient(player, "Bought", {
@@ -417,6 +445,37 @@ function PlotService.upgrade(player: Player)
 	})
 end
 
+-- The board's purple button: opens the Robux prompt for the product of the plot's level tier (a product
+-- without an id says "coming soon"). ProcessReceipt (ShopService) grants the level.
+function PlotService.promptRobuxUpgrade(player: Player)
+	local s = Sessions.get(player)
+	if not s then
+		return
+	end
+	local name = Config.plotUpgradeProduct(s.profile.plotLevel)
+	if not name then
+		Net.toast(player, "Your plot is fully upgraded!", "red")
+		return
+	end
+	local product, why = Shop.canPrompt(s.profile, name)
+	if not product then
+		Net.toast(player, why or "Unknown product", "red")
+		return
+	end
+	MarketplaceService:PromptProductPurchase(player, product.id)
+end
+
+-- The board's prompts, under its buttons (x: share of the board's width; seen from the front, the red
+-- button is on the board's +X side).
+local UPGRADE_PROMPTS = {
+	{ name = "UpgradeCash", object = "Cash", x = 0.16, hold = 0.3, key = Enum.KeyCode.E, pad = Enum.KeyCode.ButtonX, buy = function(player: Player)
+		PlotService.upgrade(player)
+	end },
+	{ name = "UpgradeRobux", object = "Robux", x = -0.23, hold = 0, key = Enum.KeyCode.F, pad = Enum.KeyCode.ButtonY, buy = function(player: Player)
+		PlotService.promptRobuxUpgrade(player)
+	end },
+}
+
 ----------------------------------------------------------------------------------------------------
 -- Assignment
 ----------------------------------------------------------------------------------------------------
@@ -424,28 +483,34 @@ function PlotService.init(infos: { WorldBuilder.PlotInfo })
 	for i, info in infos do
 		local state: PlotState = { info = info, owner = nil, models = {}, scales = {} }
 		plots[i] = state
-		-- Owner-only "Upgrade" prompt on the gate's board (the client hides other players' prompts).
-		-- Just the key bubble, under the board: the board already shows the level and price.
-		local anchor = Instance.new("Attachment")
-		anchor.Name = "UpgradePromptAnchor"
-		anchor.Position = Vector3.new(0, -info.upgradeBoard.Size.Y / 2 - 1.2, 0)
-		anchor.Parent = info.upgradeBoard
-		local upgrade = Instance.new("ProximityPrompt")
-		upgrade.ActionText = ""
-		upgrade.ObjectText = ""
-		upgrade.HoldDuration = 0.3
-		upgrade.MaxActivationDistance = 9
-		upgrade.RequiresLineOfSight = false
-		upgrade.KeyboardKeyCode = Enum.KeyCode.E
-		upgrade:SetAttribute("OwnerUserId", 0)
-		upgrade.Parent = anchor
-		upgrade.Triggered:Connect(function(player: Player)
-			local char = player.Character
-			local root = char and char:FindFirstChild("HumanoidRootPart") :: BasePart?
-			if state.owner == player and root and (root.Position - info.upgradeBoard.Position).Magnitude <= 14 then
-				PlotService.upgrade(player)
-			end
-		end)
+		-- Two owner-only prompts on the gate's board (the client hides other players' prompts), one under
+		-- each button: E buys with money, F with Robux. Different keys, so both show at once. The server
+		-- re-checks the owner and the distance.
+		local board = info.upgradeBoard
+		for _, spec in UPGRADE_PROMPTS do
+			local anchor = Instance.new("Attachment")
+			anchor.Name = spec.name .. "PromptAnchor"
+			anchor.Position = Vector3.new(spec.x * board.Size.X, -board.Size.Y / 2 - 0.6, 0)
+			anchor.Parent = board
+			local prompt = Instance.new("ProximityPrompt")
+			prompt.Name = spec.name
+			prompt.ActionText = "Upgrade"
+			prompt.ObjectText = spec.object
+			prompt.HoldDuration = spec.hold
+			prompt.MaxActivationDistance = UPGRADE_PROMPT_DISTANCE
+			prompt.RequiresLineOfSight = false
+			prompt.KeyboardKeyCode = spec.key
+			prompt.GamepadKeyCode = spec.pad
+			prompt:SetAttribute("OwnerUserId", 0)
+			prompt.Parent = anchor
+			prompt.Triggered:Connect(function(player: Player)
+				local char = player.Character
+				local root = char and char:FindFirstChild("HumanoidRootPart") :: BasePart?
+				if state.owner == player and root and (root.Position - board.Position).Magnitude <= 14 then
+					spec.buy(player)
+				end
+			end)
+		end
 		renderUpgradeSign(state)
 
 		local prompt = Instance.new("ProximityPrompt")
@@ -474,8 +539,7 @@ function PlotService.assign(s: Sessions.Session): WorldBuilder.PlotInfo?
 			if padPrompt then
 				padPrompt:SetAttribute("OwnerUserId", s.player.UserId)
 			end
-			local boardPrompt = upgradePrompt(state)
-			if boardPrompt then
+			for _, boardPrompt in upgradePrompts(state) do
 				boardPrompt:SetAttribute("OwnerUserId", s.player.UserId)
 			end
 			renderTreadmillSign(state)
@@ -510,20 +574,20 @@ function PlotService.release(player: Player)
 	if padPrompt then
 		padPrompt:SetAttribute("OwnerUserId", 0)
 	end
-	local boardPrompt = upgradePrompt(state)
-	if boardPrompt then
+	for _, boardPrompt in upgradePrompts(state) do
 		boardPrompt:SetAttribute("OwnerUserId", 0)
 	end
 	renderUpgradeSign(state)
 	renderTreadmillSign(state)
 end
 
--- After a plot upgrade or the slots gamepass.
+-- After a plot upgrade (money or a Robux receipt) or the slots gamepass: soil, plants and the board.
 function PlotService.refreshSlots(s: Sessions.Session)
 	local state = plotOf(s.player)
 	if state then
 		renderSoil(state, Sessions.maxSlots(s))
 		pushPlants(s, os.time())
+		renderUpgradeSign(state)
 	end
 end
 

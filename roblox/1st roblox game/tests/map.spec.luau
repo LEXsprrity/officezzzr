@@ -43,7 +43,7 @@ H.test("map: map/World.rbxm loads, has every required piece and gives usable plo
 		H.ok(not WorldBuilder.onBelt(plot.belt, top.Position + Vector3.new(0, 0, plot.belt.Size.Z)), `plot {i}: beside it doesn't`)
 		H.ok((plot.pad.CFrame.Position - plot.center).Magnitude < Config.PLOT_SIZE, `plot {i} pad`)
 		H.ok(plot.signLabel:IsA("TextLabel") and plot.treadmillLabel:IsA("TextLabel"), `plot {i} labels`)
-		H.ok(plot.upgradeLabels.level and plot.upgradeLabels.perk and plot.upgradeLabels.price, `plot {i} board labels`)
+		H.ok(plot.upgradeLabels.level and plot.upgradeLabels.cash and plot.upgradeLabels.robux and plot.upgradeLabels.buttons, `plot {i} board labels`)
 		H.ok(plot.soil:IsA("Folder") and plot.plants:IsA("Folder"), `plot {i} folders`)
 	end
 	for k, nest in nests do

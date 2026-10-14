@@ -217,9 +217,12 @@ H.test("world: each plot has a small, non-colliding Upgrade Plot board just outs
 		H.ok(board.CFrame.LookVector:Dot(Vector3.new(0, 0, -side)) > 0.99, "its front faces the walkway")
 		local gui = board:FindFirstChildOfClass("SurfaceGui")
 		H.ok(gui ~= nil and gui.Face == Enum.NormalId.Front, "text on the front face")
-		for _, key in { "level", "perk", "price" } do
+		for _, key in { "level", "cash", "robux" } do
 			H.ok(plot.upgradeLabels[key]:IsA("TextLabel") and plot.upgradeLabels[key]:IsDescendantOf(gui), key .. " label")
 		end
+		H.ok(plot.upgradeLabels.buttons and plot.upgradeLabels.buttons:IsDescendantOf(gui), "the buttons row")
+		H.ok(plot.upgradeLabels.cash:IsDescendantOf(plot.upgradeLabels.buttons) and plot.upgradeLabels.robux:IsDescendantOf(plot.upgradeLabels.buttons),
+			"both prices sit on the buttons")
 	end
 end)
 
