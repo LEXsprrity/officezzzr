@@ -3,7 +3,8 @@
 -- is the player's own, and when the client loops the run-in-place animation. A belt is the part tagged
 -- Role = "TreadmillBelt" with its plot's PlotIndex attribute (WorldBuilder). Only your own treadmill
 -- pays Speed (SpeedService checks your plot's belt), so only your own one plays the animation. Also: what
--- standing on it pays, where its Upgrade board and "+X/step" text go, and the lock that keeps you on it.
+-- standing on it pays, where its Upgrade board and "+X/s" text go, the lock that keeps you on it, and the
+-- invisible wall that keeps everyone else off it.
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Shared = ReplicatedStorage:WaitForChild("Shared")
 local Config = require(Shared:WaitForChild("Config"))
@@ -20,7 +21,8 @@ local function facingCFrame(pos: Vector3, dir: Vector3): CFrame
 end
 
 -- The belt's front end (where the runner faces: the treadmill's console) is its local +Z end. WorldBuilder
--- turns the belt to look into the plot and puts the stop at the end nearest the entrance.
+-- turns the belt so its front end points away from the plot, toward the middle walkway, and puts the
+-- console (or the built-in stop) there.
 Treadmill.FRONT = 1
 
 -- Is `pos` (a HumanoidRootPart's position) standing on a belt with this CFrame and Size: inside its
@@ -52,6 +54,16 @@ function Treadmill.standing(belts: { BasePart }, pos: Vector3, myPlot: number?):
 	return if myPlot ~= nil and plot == myPlot then "own" else "other"
 end
 
+-- Somebody else's treadmill: an invisible solid box over its belt (Effects.client makes one, on this client
+-- only, for every belt that isn't the player's), so they can't step onto it. It covers the belt's footprint
+-- and a little more, from just above the belt to BLOCK_HEIGHT studs: walking into it stops you and it
+-- is too tall to jump onto. Returns its CFrame and Size.
+Treadmill.BLOCK_HEIGHT = 9
+function Treadmill.blockBox(beltCF: CFrame, beltSize: Vector3): (CFrame, Vector3)
+	local size = Vector3.new(beltSize.X + 0.6, Treadmill.BLOCK_HEIGHT, beltSize.Z + 0.6)
+	return beltCF * CFrame.new(0, beltSize.Y / 2 + 0.05 + size.Y / 2, 0), size
+end
+
 -- Whether the client loops the run animation: alive and on their own treadmill (locked there, so walking
 -- doesn't move them: the sprint plays whatever keys are held).
 function Treadmill.shouldRun(standing: ("own" | "other")?, alive: boolean): boolean
@@ -71,6 +83,8 @@ function Treadmill.perStep(_speed: number, trailId: string?, treadmillMult: numb
 end
 
 -- Speed per second standing on it: the full walking rate (WalkSpeed studs/s, capped like SpeedLogic) x perStep.
+-- What the server pays a second (SpeedLogic.treadmillGain every tick), the "+X" popups over the runner and
+-- the "+X/s" text over the treadmill all show this one number.
 function Treadmill.perSecond(walkSpeed: number, speed: number, trailId: string?, treadmillMult: number): number
 	return math.min(walkSpeed, Config.GAIN_CAP_STUDS_PER_TICK / Config.TICK) * Treadmill.perStep(speed, trailId, treadmillMult)
 end
@@ -80,13 +94,21 @@ function Treadmill.gainText(x: number): string
 	return "+" .. (if x < 100 then string.format("%.1f", x) else Format.short(x))
 end
 
+-- The text over the treadmill: "+60.9/s", the same number as the popups.
+function Treadmill.rateText(perSecond: number): string
+	return Treadmill.gainText(perSecond) .. "/s"
+end
+
+-- The "+X/s" text over the treadmill only shows up close (studs).
+Treadmill.RATE_TEXT_DISTANCE = 35
+
 -- The belt's long axis is its local Z unless it is wider than long.
 local function axes(beltSize: Vector3): (boolean, number, number)
 	local alongZ = beltSize.Z >= beltSize.X
 	return alongZ, (if alongZ then beltSize.Z else beltSize.X) / 2, (if alongZ then beltSize.X else beltSize.Z) / 2
 end
 
--- Where the "+X/step" text floats, in the belt's own space: over the front end, a little in from it.
+-- Where the "+X/s" text floats, in the belt's own space: over the front end, a little in from it.
 function Treadmill.stepTextOffset(beltSize: Vector3): Vector3
 	local alongZ, halfAlong = axes(beltSize)
 	local inFrom = Treadmill.FRONT * math.max(0, halfAlong - 2)
@@ -98,26 +120,27 @@ end
 -- The Upgrade board next to it
 ----------------------------------------------------------------------------------------------------
 Treadmill.BOARD_SIZE = Vector2.new(7.6, 4.8) -- the panel (studs), like the plot's Upgrade board
-Treadmill.BOARD_GAP = 1.2 -- from the treadmill's back end to the board's near edge
+Treadmill.BOARD_GAP = 1.2 -- from the treadmill's side to the board's near edge
 Treadmill.BOARD_LIFT = 2 -- the panel's bottom edge above the ground
 
 -- The board's CFrame for a belt at `beltCF`/`beltSize` whose treadmill stands on the ground at `groundY`.
--- The treadmill stands in front of its plot (`plotCenter`), between the fence and the walkway: the board
--- stands in line with it, just past its back end (behind the runner), its width along the belt, and its
--- front face (-Z) turned away from the plot's middle, toward the walkway. `clearAlong` is how far the
--- treadmill (its frame or model) reaches past the belt's centre along it (default: the belt plus its frame).
-function Treadmill.boardCFrame(beltCF: CFrame, beltSize: Vector3, plotCenter: Vector3, groundY: number, clearAlong: number?): CFrame
-	local alongZ, halfAlong = axes(beltSize)
+-- The treadmill stands in front of its plot (`plotCenter`), between the fence and the walkway, its runner
+-- facing the walkway: the board stands beside it, level with the belt's middle, on the side away from the
+-- plot's middle (off the entrance path), and faces the way the runner does (front face -Z toward the
+-- walkway). `clearSide` is how far the treadmill (its frame or model) reaches sideways from the belt's
+-- centre line (default: the belt plus its frame).
+function Treadmill.boardCFrame(beltCF: CFrame, beltSize: Vector3, plotCenter: Vector3, groundY: number, clearSide: number?): CFrame
+	local alongZ, _, halfLat = axes(beltSize)
 	local along = beltCF:VectorToWorldSpace((if alongZ then Vector3.zAxis else Vector3.xAxis) * Treadmill.FRONT)
 	local lateral = beltCF:VectorToWorldSpace(if alongZ then Vector3.xAxis else Vector3.zAxis)
 	along = Vector3.new(along.X, 0, along.Z).Unit
 	lateral = Vector3.new(lateral.X, 0, lateral.Z).Unit
 	local flat = Vector3.new(beltCF.Position.X, 0, beltCF.Position.Z)
-	local reach = (clearAlong or (halfAlong + 1.3)) + Treadmill.BOARD_GAP + Treadmill.BOARD_SIZE.X / 2
-	local pos = flat - along * reach + Vector3.new(0, groundY + Treadmill.BOARD_LIFT + Treadmill.BOARD_SIZE.Y / 2, 0)
 	local away = flat - Vector3.new(plotCenter.X, 0, plotCenter.Z)
-	local facing = lateral * (if lateral:Dot(away) < 0 then -1 else 1)
-	return facingCFrame(pos, facing)
+	local side = lateral * (if lateral:Dot(away) < 0 then -1 else 1)
+	local reach = (clearSide or (halfLat + 1.3)) + Treadmill.BOARD_GAP + Treadmill.BOARD_SIZE.X / 2
+	local pos = flat + side * reach + Vector3.new(0, groundY + Treadmill.BOARD_LIFT + Treadmill.BOARD_SIZE.Y / 2, 0)
+	return facingCFrame(pos, along)
 end
 
 -- What the board says: the owner's tier ("Level 7 > Level 8"), "MAX" at the last tier (no buttons), or

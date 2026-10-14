@@ -1,9 +1,10 @@
 --!strict
--- Shared UI juice for the client scripts (HUD, Rewards, DayTimer):
+-- Shared UI juice for the client scripts (HUD, Rewards, DayTimer, Effects):
 --   * UiFx.pop(button): the button inflates with a springy pop while the mouse is over it or a finger holds
 --     it, squashes a little while the mouse holds it down, and springs back on release. A UIScale named
 --     "Pop" does it; a button outside a layout is scaled about its centre (its AnchorPoint moves to the
 --     centre while it is popped and back once it rests, so it never shifts).
+--   * UiFx.worldPop(button, how): the same pop for a button painted on a board in the world (Effects).
 --   * UiFx.watch(root): pop() on every button already under `root` and every one added later (the Shop's
 --     cards are rebuilt on every render). A button with the attribute NoPop, or its own UIScale, is skipped.
 --   * UiFx.relief(label): text with relief instead of flat 2D: a bevel gradient (lighter top, darker
@@ -181,6 +182,39 @@ function UiFx.pop(b: GuiButton)
 			update()
 		end
 	end)
+end
+
+-- A button painted on a board in the world (a SurfaceGui on a part gets no mouse events: a ClickDetector
+-- over it calls this): "hover" inflates it with the same springy pop, "rest" shrinks it back, "press"
+-- squashes it and springs back to the hover size. It grows its Size (it sits in a centred row layout, so
+-- it grows about its centre); the size it had the first time is its rest size.
+local worldBase: { [GuiObject]: UDim2 } = setmetatable({}, { __mode = "k" }) :: any
+local worldTween: { [GuiObject]: Tween } = setmetatable({}, { __mode = "k" }) :: any
+function UiFx.worldPop(g: GuiObject, how: "hover" | "rest" | "press")
+	local base = worldBase[g] or g.Size
+	worldBase[g] = base
+	local function sized(k: number): UDim2
+		return UDim2.new(base.X.Scale * k, base.X.Offset * k, base.Y.Scale * k, base.Y.Offset * k)
+	end
+	local old = worldTween[g]
+	if old then
+		old:Cancel()
+	end
+	local tween
+	if how == "press" then
+		tween = TweenService:Create(g, SQUASH, { Size = sized(UiFx.PRESS) })
+		tween.Completed:Connect(function(state)
+			if state == Enum.PlaybackState.Completed and worldTween[g] == tween then
+				local back = TweenService:Create(g, SPRING, { Size = sized(UiFx.HOVER) })
+				worldTween[g] = back
+				back:Play()
+			end
+		end)
+	else
+		tween = TweenService:Create(g, if how == "hover" then GROW else SHRINK, { Size = sized(if how == "hover" then UiFx.HOVER else 1) })
+	end
+	worldTween[g] = tween
+	tween:Play()
 end
 
 function UiFx.watch(root: Instance)

@@ -2,37 +2,11 @@
 -- (walking or treadmill), enforce the movement sanity check, and set WalkSpeed from the Speed stat.
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Config = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("Config"))
-local Treadmill = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("Treadmill"))
-local Net = require(script.Parent:WaitForChild("Net"))
 local Sessions = require(script.Parent:WaitForChild("Sessions"))
 local SpeedLogic = require(script.Parent:WaitForChild("SpeedLogic"))
 local WorldBuilder = require(script.Parent:WaitForChild("WorldBuilder"))
 
 local SpeedService = {}
-
--- Every plot's belt (SpeedService.init), to tell a player standing on somebody else's treadmill that it
--- pays them nothing: once per step onto it, at most every OTHER_BELT_TOAST_GAP seconds.
-local belts: { BasePart } = {}
-local OTHER_BELT_TOAST_GAP = 20
-local onOtherBelt: { [Player]: boolean } = setmetatable({}, { __mode = "k" }) :: any
-local otherBeltToastAt: { [Player]: number } = setmetatable({}, { __mode = "k" }) :: any
-
-function SpeedService.init(plots: { WorldBuilder.PlotInfo })
-	belts = {}
-	for _, info in plots do
-		table.insert(belts, info.belt)
-	end
-end
-
-local function checkOtherBelt(s: Sessions.Session, pos: Vector3, now: number)
-	local player = s.player
-	local other = Treadmill.standing(belts, pos, if s.plot then s.plot.index else nil) == "other"
-	if other and not onOtherBelt[player] and now - (otherBeltToastAt[player] or -math.huge) >= OTHER_BELT_TOAST_GAP then
-		otherBeltToastAt[player] = now
-		Net.toast(player, "🏃 This isn't your treadmill! Only the one on your own plot gives you Speed.", "red")
-	end
-	onOtherBelt[player] = other or nil
-end
 
 local function rootOf(player: Player): (BasePart?, Humanoid?)
 	local char = player.Character
@@ -67,10 +41,8 @@ local function tickPlayer(s: Sessions.Session, dt: number, now: number)
 		return
 	end
 	local pos = root.Position
+	-- Only your own plot's belt pays; nobody can step onto somebody else's (Effects.client blocks it).
 	local onTreadmill = s.plot ~= nil and WorldBuilder.onBelt(s.plot.belt, pos)
-	if not onTreadmill then
-		checkOtherBelt(s, pos, now)
-	end
 	local gain, verdict, back = SpeedLogic.step(s.tracker, pos, dt, {
 		walkSpeed = s.walkSpeed,
 		onTreadmill = onTreadmill,

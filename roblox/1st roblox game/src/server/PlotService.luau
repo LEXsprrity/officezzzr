@@ -24,7 +24,7 @@ local PlotService = {}
 
 type PlotState = {
 	info: WorldBuilder.PlotInfo,
-	treadmill: TreadmillBoard.Board, -- the treadmill's Upgrade board and "+X/step" text
+	treadmill: TreadmillBoard.Board, -- the treadmill's Upgrade board and "+X/s" text
 	owner: Player?,
 	models: { [number]: Model }, -- by plant id (`slot`)
 	scales: { [number]: number },
@@ -126,7 +126,7 @@ local function buildPlantModel(state: PlotState, plant: ProfileStore.Plant, weig
 	gui.Size = UDim2.fromOffset(170, 66)
 	gui.Adornee = body:FindFirstChild("InfoAnchor") :: Attachment
 	gui.SizeOffset = Vector2.new(0, 0.5)
-	gui.MaxDistance = 90
+	gui.MaxDistance = 60
 	gui.LightInfluence = 0
 	gui.Parent = body
 	local list = Instance.new("UIListLayout")
@@ -513,8 +513,8 @@ local function treadmillPrompts(state: PlotState): { ProximityPrompt }
 end
 
 -- The board shows its owner's tier ("Level X > Level Y") and the next tier's prices, or "MAX"; the text
--- over the belt what one step on it pays the owner right now (Speed per stud x the tier's multiplier).
--- Refreshed with every payout. The prompts say what they buy; at the last tier they switch off.
+-- over the belt what a second on it pays the owner right now (Treadmill.perSecond: the same number the
+-- server pays a second there and the "+X" popups over the runner show). Refreshed with every payout. The prompts say what they buy; at the last tier they switch off.
 local function renderTreadmillSign(state: PlotState)
 	local s = state.owner and Sessions.get(state.owner)
 	if not s then
@@ -532,7 +532,7 @@ local function renderTreadmillSign(state: PlotState)
 		tier = tier,
 		cash = price,
 		robux = robux,
-		perStep = Treadmill.perStep(s.profile.speed, s.profile.equippedTrail, Sessions.treadmillMult(s)),
+		perSecond = Treadmill.perSecond(s.walkSpeed, s.profile.speed, s.profile.equippedTrail, Sessions.treadmillMult(s)),
 	})
 	for _, prompt in treadmillPrompts(state) do
 		prompt.ActionText = if price then `Upgrade to x{Config.treadmillMult(tier + 1)}` else "Maxed"
@@ -605,6 +605,9 @@ local BUTTON_HITS = {
 	Robux = { x = -0.233, y = -0.175, w = 0.29, h = 0.25 },
 }
 local BUTTON_CLICK_DISTANCE = 14
+-- Over a button the mouse keeps Roblox's normal arrow (a ClickDetector's default is the pointing hand);
+-- the button itself inflates instead, like the HUD's.
+local BUTTON_CURSOR = "rbxasset://textures/Cursors/KeyboardMouse/ArrowFarCursor.png"
 
 type ButtonSpec = { name: string, object: string, x: number, hold: number, key: Enum.KeyCode, pad: Enum.KeyCode, buy: (Player) -> () }
 
@@ -644,7 +647,13 @@ local function addBoardButtons(panel: BasePart, hitParent: Instance, specs: { Bu
 		hit.Transparency = 1
 		hit.Size = Vector3.new(area.w * panel.Size.X, area.h * panel.Size.Y, 0.3)
 		hit.CFrame = panel.CFrame * CFrame.new(area.x * panel.Size.X, area.y * panel.Size.Y, -(panel.Size.Z / 2 + 0.55)) -- over the front face
+		-- The painted button it sits over: Effects.client inflates it while the mouse is over the hit area.
+		local painted = Instance.new("ObjectValue")
+		painted.Name = "Painted"
+		painted.Value = panel:FindFirstChild(spec.object .. "Button", true)
+		painted.Parent = hit
 		local click = Instance.new("ClickDetector")
+		click.CursorIcon = BUTTON_CURSOR -- the normal arrow, not the pointing hand
 		click.MaxActivationDistance = 0 -- Effects.client opens it for the owner (Reach)
 		click:SetAttribute("Reach", BUTTON_CLICK_DISTANCE)
 		click:SetAttribute("OwnerUserId", 0)

@@ -173,12 +173,10 @@ local function buildGuard(info: WorldBuilder.NestInfo): Guard
 	end
 
 	local head = model:FindFirstChild("Head") :: BasePart
-	-- The rigged boss shows its own animated Zzz and expressions, so its status label starts empty.
+	-- The rigged boss shows its own animated Zzz and expressions, so its status label starts empty. No name
+	-- floats over it (owner playtest), and the status shows only fairly close.
 	local statusY = if rigged then GiantMole.HEAD_LABEL_OFFSETS.status else 3 * S
-	local nameY = if rigged then GiantMole.HEAD_LABEL_OFFSETS.name else 1.6 * S
-	local status = WorldBuilder.billboard(head, if rigged then "" else "💤", UDim2.fromOffset(120, 60), Vector3.new(0, statusY, 0), 300)
-	local nameLabel = WorldBuilder.billboard(head, zone.guard, UDim2.fromOffset(240, 30), Vector3.new(0, nameY, 0), 200)
-	nameLabel.TextColor3 = Color3.fromRGB(255, 200, 200)
+	local status = WorldBuilder.billboard(head, if rigged then "" else "💤", UDim2.fromOffset(120, 60), Vector3.new(0, statusY, 0), 100)
 
 	model.Parent = info.model.Parent
 	root:SetNetworkOwner(nil)
