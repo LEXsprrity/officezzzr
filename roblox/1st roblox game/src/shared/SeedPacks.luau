@@ -172,9 +172,13 @@ function SeedPacks.takeFromBag(bag: { [string]: number }, key: string): boolean
 	return true
 end
 
-function SeedPacks.seedName(zone: number, rarity: number, mutation: string?): string
+-- What a seed is called until it is planted: "Rare Seed", "Gold Epic Seed". Its flower is a surprise (owner
+-- request): PlotService picks it at random when it is planted, and from then on the plant goes by the
+-- flower's name. No zone seed name either ("Rare Starpetal" on every pod read repetitive). `zone` is kept
+-- so every caller still says which seed it means.
+function SeedPacks.seedName(_zone: number, rarity: number, mutation: string?): string
 	local prefix = if mutation then mutation .. " " else ""
-	return `{prefix}{Config.RARITIES[rarity].id} {Config.ZONES[zone].seed}`
+	return `{prefix}{Config.RARITIES[rarity].id} Seed`
 end
 
 return SeedPacks

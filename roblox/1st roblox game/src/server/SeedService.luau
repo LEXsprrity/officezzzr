@@ -3,6 +3,7 @@
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Shared = ReplicatedStorage:WaitForChild("Shared")
 local Config = require(Shared:WaitForChild("Config"))
+local SeedPacks = require(Shared:WaitForChild("SeedPacks"))
 local Net = require(script.Parent:WaitForChild("Net"))
 local Sessions = require(script.Parent:WaitForChild("Sessions"))
 local WorldBuilder = require(script.Parent:WaitForChild("WorldBuilder"))
@@ -27,9 +28,9 @@ local rng = Random.new()
 -- Set by Main: GuardService.alert
 SeedService.onStolen = nil :: ((zone: number, player: Player) -> ())?
 
+-- "Rare Seed": a pod or carried seed never says its flower (a surprise until planted; SeedPacks.seedName).
 function SeedService.seedName(zone: number, rarity: number, mutation: string?): string
-	local prefix = if mutation then mutation .. " " else ""
-	return `{prefix}{Config.RARITIES[rarity].id} {Config.ZONES[zone].seed}`
+	return SeedPacks.seedName(zone, rarity, mutation)
 end
 
 local function isNight(): boolean

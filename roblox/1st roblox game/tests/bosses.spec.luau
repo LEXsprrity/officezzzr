@@ -191,6 +191,34 @@ H.test("bosses: 2-3.7x a player tall, taller in later zones, on the ground, insi
 	end
 end)
 
+H.test("bosses: asleep at its nest against the left wall, the body fits without sliding and clears its pods", function()
+	local wall = Config.CORRIDOR_WIDTH / 2 - 1 -- GuardAnimator's WALL
+	local closest = math.huge
+	for k, zone in Config.ZONES do
+		local model = placed(zone)
+		local lo, hi = Assets.bounds(model)
+		local profile = BossRigs.PROFILES[model:GetAttribute("BossRig")]
+		if profile.halfWidth then -- as GuardAnimator measures it (rest bounds in a T-pose)
+			local w = profile.halfWidth * model:GetAttribute("RigScale")
+			lo, hi = Vector3.new(-w, lo.Y, lo.Z), Vector3.new(w, hi.Y, hi.Z)
+		end
+		local home = Config.nestCenter(k) + Vector3.new(Config.GUARD_HOME_OFFSET, 0, 0)
+		H.eq(BossRigs.wallShift(home, Vector3.new(-1, 0, 0), lo, hi, wall), Vector3.zero, `{zone.id}: no slide needed at home`)
+		closest = math.min(closest, home.Z - math.max(-lo.X, hi.X) + wall) -- how far its flank stays off the wall
+		-- facing -X, its width spans home.Z +- `reach` and its front (model -Z, lo.Z) points at the base
+		local reach = math.max(-lo.X, hi.X)
+		for i = 1, Config.PODS_PER_NEST do
+			local p = Config.nestCenter(k) + Config.podOffset(k, i)
+			local besideIt = p.Z - 1.5 > home.Z + reach
+			local aheadOfIt = p.X + 1.5 < home.X + lo.Z
+			H.ok(besideIt or aheadOfIt, `{zone.id}: pod {i} clear of the sleeping body`)
+			H.ok(p.Z > home.Z, `{zone.id}: pod {i} at its right, toward the middle`)
+		end
+	end
+	-- the line is set by the widest boss: it sleeps right by the wall (narrower ones a little off it)
+	H.ok(closest < 2, `the widest boss's flank is within 2 studs of the wall ({closest})`)
+end)
+
 H.test("bosses: placed anywhere (Pivot), the pet's RootPart lands on the guard's feet facing its front", function()
 	local zone = Config.ZONES[1]
 	local at = CFrame.new(120, 3, -40) * CFrame.Angles(0, math.rad(90), 0)

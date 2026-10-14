@@ -229,7 +229,6 @@ do
 		["src/client/Rewards.client.luau"] = { "iconLabel%(" },
 		["src/client/ZoneBanner.client.luau"] = { "face = \"" }, -- the zone banner's faces (owner-approved design)
 		["src/client/DayTimer.client.luau"] = { "emoji%(" }, -- the timer's phase icon
-		["src/client/Planting.client.luau"] = { "cancel%.Text = \"✖\"" }, -- the cancel button's X
 	}
 
 	H.test("UI text has no decorative emoji (header icons, icon buttons and the lock 🔒 only)", function()

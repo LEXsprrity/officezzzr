@@ -3,11 +3,12 @@
 -- see-through preview follows the mouse (or your last tap, or the spot in front of you on a gamepad) over
 -- your own plot's brown dirt beds: green where the seed may go, red where it may not (Shared/Planting, the
 -- same rules the server checks). Click (tap, or R2 on a gamepad) to plant there: the client only sends the
--- spot (remote PlantSeed); PlotService.plantAt checks it all again and plants. Q or the ✖ button cancels a
+-- spot (remote PlantSeed); PlotService.plantAt checks it all again and plants. Q or the Cancel word cancels a
 -- bagged seed. Kept out of HUD.client (its register headroom at -O0).
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local RunService = game:GetService("RunService")
+local TweenService = game:GetService("TweenService")
 local UserInputService = game:GetService("UserInputService")
 
 local Shared = ReplicatedStorage:WaitForChild("Shared")
@@ -23,7 +24,7 @@ local player = Players.LocalPlayer
 
 local GOOD = Color3.fromRGB(90, 255, 120)
 local BAD = Color3.fromRGB(255, 80, 80)
-local HINT_RANGE = 90 -- the hint shows while carrying within this many studs of your plot
+local HINT_RANGE = 90 -- a refusal shows while carrying within this many studs of your plot
 local SEND_GAP = 0.3 -- seconds between two plant requests
 
 ----------------------------------------------------------------------------------------------------
@@ -122,62 +123,44 @@ local function showPreview(pos: Vector3?, ok: boolean, rarity: number)
 end
 
 ----------------------------------------------------------------------------------------------------
--- The hint under the screen's middle (and the ✖ that cancels a bagged seed)
+-- No hint box (owner: no flat 2D boxes; the green/red preview already says where the seed may go). A
+-- refused click shows why for a moment, as small relief text centred near the bottom, and a bagged seed
+-- gets a relief "Cancel" word under it (Q cancels too).
 ----------------------------------------------------------------------------------------------------
 local gui = Instance.new("ScreenGui")
 gui.Name = "PlantingHint"
 gui.ResetOnSpawn = false
 gui.DisplayOrder = 5
 gui.Enabled = false
-local hint = Instance.new("Frame")
-hint.AnchorPoint = Vector2.new(0.5, 1)
-hint.Position = UDim2.new(0.5, 0, 1, -150)
-hint.Size = UDim2.fromOffset(360, 40)
-hint.BackgroundColor3 = Color3.fromRGB(30, 34, 50)
-hint.BackgroundTransparency = 0.2
-hint.Parent = gui
-local corner = Instance.new("UICorner")
-corner.CornerRadius = UDim.new(0, 10)
-corner.Parent = hint
 local label = Instance.new("TextLabel")
+label.Name = "Reason"
 label.BackgroundTransparency = 1
-label.Position = UDim2.fromOffset(10, 4)
-label.Size = UDim2.new(1, -56, 1, -8)
-label.Font = Enum.Font.FredokaOne
+label.AnchorPoint = Vector2.new(0.5, 1)
+label.Position = UDim2.new(0.5, 0, 1, -150)
+label.Size = UDim2.fromOffset(320, 26)
+label.FontFace = Font.new("rbxasset://fonts/families/FredokaOne.json", Enum.FontWeight.Bold)
 label.TextScaled = true
-label.TextColor3 = Color3.new(1, 1, 1)
+label.TextColor3 = BAD
 label.Text = ""
-label.Parent = hint
-local stroke = Instance.new("UIStroke")
-stroke.Thickness = 2
-stroke.Parent = label
+label.Visible = false
+label.Parent = gui
+UiFx.relief(label, 3, 3)
 local cancel = Instance.new("TextButton")
-cancel.AnchorPoint = Vector2.new(1, 0.5)
-cancel.Position = UDim2.new(1, -5, 0.5, 0)
-cancel.Size = UDim2.fromOffset(34, 32)
-cancel.BackgroundColor3 = Color3.fromRGB(220, 50, 50)
-cancel.Font = Enum.Font.FredokaOne
+cancel.Name = "Cancel"
+cancel.BackgroundTransparency = 1
+cancel.AnchorPoint = Vector2.new(0.5, 1)
+cancel.Position = UDim2.new(0.5, 0, 1, -116)
+cancel.Size = UDim2.fromOffset(110, 30)
+cancel.FontFace = Font.new("rbxasset://fonts/families/FredokaOne.json", Enum.FontWeight.Bold)
 cancel.TextScaled = true
 cancel.TextColor3 = Color3.new(1, 1, 1)
-cancel.Text = "✖"
-cancel.Parent = hint
+cancel.Text = "Cancel"
+cancel.Parent = gui
+UiFx.relief(cancel :: any, 3, 3)
 UiFx.pop(cancel)
-local cancelCorner = Instance.new("UICorner")
-cancelCorner.CornerRadius = UDim.new(0, 8)
-cancelCorner.Parent = cancel
 gui.Parent = player:WaitForChild("PlayerGui")
 
 local refusedUntil, refusedText = 0, ""
-
-local function inputWord(): string
-	local last = UserInputService:GetLastInputType()
-	if last == Enum.UserInputType.Touch then
-		return "Tap"
-	elseif string.find(last.Name, "Gamepad", 1, true) then
-		return "Press R2 on"
-	end
-	return "Click"
-end
 
 local function updateHint(nearPlot: boolean)
 	local rarity = seedRarity()
@@ -186,14 +169,8 @@ local function updateHint(nearPlot: boolean)
 		return
 	end
 	cancel.Visible = bag ~= nil
-	if os.clock() < refusedUntil then
-		label.Text = refusedText
-		label.TextColor3 = BAD
-		return
-	end
-	label.TextColor3 = Color3.new(1, 1, 1)
-	local what = if bag then bag.name else "your seed"
-	label.Text = `{inputWord()} your brown dirt to plant {what}`
+	label.Visible = os.clock() < refusedUntil
+	label.Text = refusedText
 end
 
 local function stopBag()
@@ -328,6 +305,46 @@ RunService.RenderStepped:Connect(function()
 end)
 
 ----------------------------------------------------------------------------------------------------
+-- The reveal: a seed's flower is a surprise until it is planted (PlotService draws it then), so its name
+-- pops up over the new plant in its rarity's colour, as relief text, and floats away after a moment.
+----------------------------------------------------------------------------------------------------
+local REVEAL_SECONDS = 2
+local function reveal(name: string, pos: Vector3, color: Color3)
+	local anchor = Instance.new("Attachment")
+	anchor.Name = "PlantReveal"
+	anchor.WorldPosition = pos
+	anchor.Parent = workspace.Terrain
+	local board = Instance.new("BillboardGui")
+	board.Adornee = anchor
+	board.AlwaysOnTop = true
+	board.LightInfluence = 0
+	board.Size = UDim2.fromOffset(300, 44)
+	board.StudsOffsetWorldSpace = Vector3.new(0, 1.5, 0)
+	board.Parent = player:WaitForChild("PlayerGui")
+	local text = Instance.new("TextLabel")
+	text.BackgroundTransparency = 1
+	text.AnchorPoint = Vector2.new(0.5, 0.5)
+	text.Position = UDim2.fromScale(0.5, 0.5)
+	text.Size = UDim2.new(1, -8, 1, -8)
+	text.FontFace = Font.new("rbxasset://fonts/families/FredokaOne.json", Enum.FontWeight.Bold)
+	text.TextScaled = true
+	text.TextColor3 = color
+	text.Text = name
+	text.Parent = board
+	UiFx.relief(text, 3, 3)
+	local scale = Instance.new("UIScale")
+	scale.Scale = 0.4
+	scale.Parent = board
+	TweenService:Create(scale, TweenInfo.new(0.35, Enum.EasingStyle.Back, Enum.EasingDirection.Out), { Scale = 1 }):Play()
+	TweenService:Create(board, TweenInfo.new(REVEAL_SECONDS, Enum.EasingStyle.Quad, Enum.EasingDirection.Out),
+		{ StudsOffsetWorldSpace = Vector3.new(0, 4, 0) }):Play()
+	task.delay(REVEAL_SECONDS, function()
+		board:Destroy()
+		anchor:Destroy()
+	end)
+end
+
+----------------------------------------------------------------------------------------------------
 -- Server updates
 ----------------------------------------------------------------------------------------------------
 StatsUpdate.OnClientEvent:Connect(function(partial: any)
@@ -360,5 +377,10 @@ LootEvent.OnClientEvent:Connect(function(kind: string, data: any)
 		lastTouch = nil
 	elseif kind == "Planted" then
 		stopBag() -- one seed per Plant press; press Plant again for the next
+		if type(data) == "table" and type(data.name) == "string" and typeof(data.pos) == "Vector3" then
+			local mut = Config.mutationById(if type(data.mutation) == "string" then data.mutation else nil)
+			local rarity = Config.RARITIES[if type(data.rarity) == "number" then data.rarity else 1] or Config.RARITIES[1]
+			reveal(data.name, data.pos, if mut then mut.color else rarity.color)
+		end
 	end
 end)

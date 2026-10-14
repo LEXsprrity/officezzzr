@@ -702,6 +702,30 @@ function CreatureModels.variantOf(zoneIndex: number, rarityIndex: number, pick: 
 	return if #names > 0 then names[(math.floor(pick) - 1) % #names + 1] else nil
 end
 
+-- A planted seed's flower, drawn at random among the zone's plant models of its rarity (a surprise until it
+-- is planted; PlotService keeps it in the plant's `variant`). nil when the zone has no plant models.
+function CreatureModels.randomVariant(zoneIndex: number, rarityIndex: number, roll: () -> number): string?
+	local names = CreatureModels.variants(zoneIndex, rarityIndex)
+	return if #names > 0 then names[math.clamp(math.floor(roll() * #names) + 1, 1, #names)] else nil
+end
+
+-- The `pick` for build that makes a plant's flower: its saved `variant`'s place among the models, or (a
+-- save from before variants were kept, or a model since removed) its id, the old slot-based pick.
+function CreatureModels.pickOf(zoneIndex: number, rarityIndex: number, variant: string?, slot: number): number
+	if variant then
+		local i = table.find(CreatureModels.variants(zoneIndex, rarityIndex), variant)
+		if i then
+			return i
+		end
+	end
+	return slot
+end
+
+-- The model name of a plant's flower (see pickOf), or nil for the built-in creature.
+function CreatureModels.flowerOf(zoneIndex: number, rarityIndex: number, variant: string?, slot: number): string?
+	return CreatureModels.variantOf(zoneIndex, rarityIndex, CreatureModels.pickOf(zoneIndex, rarityIndex, variant, slot))
+end
+
 -- Scales a placed creature (around its soil pivot) to `scale` times its build size, and records `scale`
 -- (the logical scale) for the client's idle sway. Uploaded templates were already fitted with ScaleTo,
 -- which is absolute, so their BaseScale is multiplied in; procedural creatures have none (1).

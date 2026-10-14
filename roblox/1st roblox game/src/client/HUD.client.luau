@@ -438,7 +438,7 @@ local function renderSeeds()
 		local mut = Config.mutationById(e.mutation)
 		local f = card(1 + i, (if mut then mut.color else rarity.color):Lerp(Color3.new(0, 0, 0), 0.3), 54)
 		text(f, {
-			Text = `{SeedPacks.seedName(e.zone, e.rarity, e.mutation)} x{e.count}`,
+			Text = `{SeedPacks.seedName(e.zone, e.rarity, e.mutation)} x{e.count} · {Config.ZONES[e.zone].name}`, -- (the flower is a surprise)
 			Size = UDim2.new(1, -98, 1, -10), Position = UDim2.fromOffset(6, 5), TextXAlignment = Enum.TextXAlignment.Left,
 		})
 		button(f, "Plant", COLORS.money, UDim2.fromOffset(84, 40), function()

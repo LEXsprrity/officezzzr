@@ -43,7 +43,7 @@ Algumas peças fazem o jogo funcionar. Elas têm um **atributo `Role`** (veja em
 | `PlotSign` | a placa na cerca, ao lado da entrada, com o nome do dono | `PlotN → OwnerSign` |
 | `UpgradeBoard` | o painel da placa "Upgrade" (com os textos Level / Cash / Robux; a fila de botões `Buttons` é opcional) | `PlotN → UpgradeBoard` |
 | `PlotOrigin`, `Spawn` | pontos (Attachments) dentro do chão do lote | `PlotN → Floor` |
-| `Nest` | o modelo do ninho de cada zona | `World → Corridor → N_Zona → Nest_Zona` |
+| `Nest` | o ninho de cada zona (sem peças visíveis) | `World → Corridor → N_Zona → Nest_Zona` |
 | `NestCore` | a peça invisível no centro do ninho, com os pontos `Center`, `Pod1`...`Pod4` (as sementes) e `GuardHome` (onde o guardião dorme) | `Nest_Zona → NestCore` |
 
 - Mover o **chão de um lote** leva junto os pontos das plantas e o ponto de spawn. Mover o **NestCore** leva junto as sementes e a casa do guardião.
@@ -65,7 +65,7 @@ Cada arquivo nesta pasta (`roblox/1st roblox game/assets/`) troca **um tipo de p
 - **Polígonos**: o Roblox aceita até ~20 mil triângulos por peça (MeshPart). Para o jogo rodar bem:
   - flores, pedras, arbustos, postes: **até ~1.000** triângulos;
   - árvores, cactos, lanternas: **até ~3.000**;
-  - ninhos, barracas, criaturas: **até ~8.000**;
+  - barracas, criaturas: **até ~8.000**;
   - guardiões: **até ~15.000**.
 - **Poucas peças**: 1 a 5 MeshParts por modelo (por exemplo, tronco + copa). Árvores e flores aparecem centenas de vezes no mapa.
 - **Materiais e texturas**: o mais leve é usar só a cor + material do Roblox (Wood, Grass, Slate...) depois de importar, como na `arvore_variant3`. Se usar textura, uma imagem por malha, PNG até 1024×1024, embutida no FBX.
@@ -117,13 +117,13 @@ Botão direito na pasta **Arvores** → **Save to File...** → `assets/Arvores.
 - Prende tudo no lugar (**Anchored**). A decoração **não colide**: os jogadores e os guardiões passam através dela, então ela nunca atrapalha a corrida. Exceções: cercas (`FencePost`, `FenceSection`) e barracas (`ShopStall...`) mantêm a colisão que você salvou.
 - Remove scripts que vierem dentro do modelo.
 - Mantém cores e texturas. **Materiais realistas viram plástico**: o mapa tem visual de desenho, limpo (plástico liso ou com studs, cores fortes), então Grass, Sand, Slate, Wood, Metal, Fabric e afins viram `Plastic`/`SmoothPlastic` na mesma cor. Quer manter os seus materiais? Adicione ao Model o atributo **`KeepMaterials`** (Boolean) = `true`. Criaturas e guardiões mantêm sempre os materiais.
-- Luzes e partículas: se a peça original tinha luz (postes, lanternas, vulcões, ninhos), seu modelo ganha a mesma luz no mesmo ponto. Se o seu modelo já tiver um `PointLight` ou um `ParticleEmitter`, vale o seu.
+- Luzes e partículas: se a peça original tinha luz (postes, lanternas, vulcões), seu modelo ganha a mesma luz no mesmo ponto. Se o seu modelo já tiver um `PointLight` ou um `ParticleEmitter`, vale o seu.
 - Criaturas: o jogo continua colocando o brilho de raridade (aura, halo, partículas) e as cores das mutações. Malhas com textura não mudam de cor nas mutações (Gold, Night...), mas ganham as partículas e a luz.
 - Guardiões: os 7 guardiões já são os pets com rig que o dono comprou (`models/bosses/Pets.rbxl`, exportados por `lune run tools/export_bosses.luau`), animados pelo código (`src/shared/BossRigs.luau`). Um modelo **seu** com o nome de um guardião troca o pet: ele vira o corpo do gigante e desliza junto com ele na perseguição, mas fica parado na pose em que foi salvo (a animação por código só conhece os rigs dos pets; veja `models/bosses/LEIA-ME.md`).
 
 ### 6. Como conferir
 
-1. Depois que o dono rodar `lune run tools/apply_assets.luau` e recriar o `StealASeed.rbxlx`, abra o arquivo: o modelo aparece no mapa **sem apertar Play** (árvores, cercas, ninhos...).
+1. Depois que o dono rodar `lune run tools/apply_assets.luau` e recriar o `StealASeed.rbxlx`, abra o arquivo: o modelo aparece no mapa **sem apertar Play** (árvores, cercas, barracas...).
 2. Aperte **Play**: ele aparece no jogo também. As criaturas aparecem quando você planta uma semente, e os guardiões ficam nos ninhos.
 3. Se aparecer a peça antiga, veja o **Output**: avisos com `[Assets]` dizem o que deu errado (nome que não bate, modelo sem peças, pasta vazia).
 4. Modelo **cinza** ou **invisível** só no jogo publicado: os meshes que o 3D Importer enviou estão na **sua** conta. O dono precisa ter permissão para usá-los (Creator Hub → o asset → Permissions, ou envie os meshes para o grupo do jogo).
@@ -180,17 +180,7 @@ Botão direito na pasta **Arvores** → **Save to File...** → `assets/Arvores.
 
 As zonas não têm arcos, portões nem placas com o nome: uma zona passa para a outra pela cor do chão e das paredes. Ao lado de cada ninho há uma plaquinha de madeira num poste ("👟 700K recommended"); ela é do jogo e não tem modelo (dá para mover ou apagar à mão no mapa).
 
-O **ninho** fica do lado ESQUERDO do corredor (quem vem da base): uma mancha redonda na cor das sementes, com algumas pedrinhas em volta. Não tem mais planta-mãe. As 4 sementes ficam espalhadas sobre a mancha, até ~15 studs do centro do ninho, do lado da base, a 2,5 de altura: deixe esse espaço livre. As partículas da mancha continuam. Altura até ~40, largura ~28.
-
-| Ninho | Zona |
-|---|---|
-| `Nest_Meadow` | 🌼 Meadow |
-| `Nest_Desert` | 🦂 Desert |
-| `Nest_Jungle` | 🦖 Jungle |
-| `Nest_Lava` | 🌋 Lava Fields |
-| `Nest_Snow` | ❄️ Snow Peaks |
-| `Nest_Space` | 👽 Deep Space |
-| `Nest_Spirit` | ⛩️ Spirit Garden |
+O **ninho** fica bem no canto ESQUERDO do corredor (quem vem da base), encostado na parede: o guardião dorme ali, com o flanco junto da parede, e as 4 sementes ficam soltas no chão à direita dele (para o meio do corredor), um pouco à frente. Não tem planta-mãe nem mancha, anel ou pedrinhas debaixo das sementes, e por isso o ninho **não tem modelo**: é só a peça invisível `NestCore` com os pontos. Os enfeites das paredes (árvores, cactos, pedras...) deixam esse canto livre sozinhos.
 
 ### Base, lotes e lojas
 

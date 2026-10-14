@@ -108,15 +108,16 @@ local function setIncomeLabel(label: TextLabel, zone: number, perSecond: number,
 	label.TextColor3 = if bonus then Config.OFF_TIME_COLOR else INCOME_GREEN
 end
 
--- What a plant is called: the flower model it grew into (CreatureModels.variantOf with its id, the same pick
--- as its model), after its mutation: "Daisy", "Gold Desert Wild Flower". Without plant models (the
--- built-in creature) it keeps its seed's name.
+-- What a plant is called: the flower model it grew into (its `variant`, drawn when it was planted; older
+-- plants: CreatureModels.variantOf with its id, the same pick as its model), after its mutation: "Daisy",
+-- "Gold Desert Wild Flower". Without plant models (the built-in creature) it goes by its zone's seed.
 function PlotService.plantName(plant: ProfileStore.Plant): string
-	local variant = CreatureModels.variantOf(plant.zone, plant.rarity, plant.slot)
+	local prefix = if plant.mutation then plant.mutation .. " " else ""
+	local variant = CreatureModels.flowerOf(plant.zone, plant.rarity, plant.variant, plant.slot)
 	if not variant then
-		return SeedService.seedName(plant.zone, plant.rarity, plant.mutation)
+		return `{prefix}{Config.RARITIES[plant.rarity].id} {Config.ZONES[plant.zone].seed}`
 	end
-	return `{if plant.mutation then plant.mutation .. " " else ""}{Format.plantName(variant)}`
+	return `{prefix}{Format.plantName(variant)}`
 end
 
 local function buildPlantModel(state: PlotState, plant: ProfileStore.Plant, weight: number, income: number, scale: number): Model
@@ -124,7 +125,7 @@ local function buildPlantModel(state: PlotState, plant: ProfileStore.Plant, weig
 	local mut = Config.mutationById(plant.mutation)
 	-- The creature (with its rarity/mutation flair and "Mutation" attribute) comes from CreatureModels,
 	-- built at the origin; it is pivoted onto the slot below.
-	local model = CreatureModels.build(plant.zone, plant.rarity, plant.mutation, plant.slot)
+	local model = CreatureModels.build(plant.zone, plant.rarity, plant.mutation, CreatureModels.pickOf(plant.zone, plant.rarity, plant.variant, plant.slot))
 	model.Name = "Plant_" .. plant.slot
 	local body = model.PrimaryPart :: BasePart
 
@@ -238,11 +239,11 @@ local function plotOf(player: Player): PlotState?
 end
 
 -- The Index (collection book) entries a plant fills: "zone:rarity", its flower "zone:rarity:Daisy" (model
--- name, CreatureModels.variantOf) and its mutation "zone:Gold". Marks them in the profile and returns the
+-- name, CreatureModels.flowerOf) and its mutation "zone:Gold". Marks them in the profile and returns the
 -- new ones.
 function PlotService.indexKeys(plant: ProfileStore.Plant): { string }
 	local keys = { `{plant.zone}:{plant.rarity}` }
-	local variant = CreatureModels.variantOf(plant.zone, plant.rarity, plant.slot)
+	local variant = CreatureModels.flowerOf(plant.zone, plant.rarity, plant.variant, plant.slot)
 	if variant then
 		table.insert(keys, `{plant.zone}:{plant.rarity}:{variant}`)
 	end
@@ -263,13 +264,19 @@ local function discover(profile: ProfileStore.Profile, plant: ProfileStore.Plant
 	return new
 end
 
--- Plants a seed (carried or from the seed bag) at (x, z) in the plot's space, under a new id: model, Index,
--- income and client updates.
+-- Plants a seed (carried or from the seed bag) at (x, z) in the plot's space, under a new id: its flower is
+-- drawn now, at random among the zone's plant models of its rarity (a surprise until planted; kept in
+-- `variant`), then model, Index, income and client updates. "Planted" carries the flower's name and the
+-- spot over the plant, where the client pops the name up for a moment (the reveal).
+local flowerRng = Random.new()
 local function plantSeed(player: Player, s: Sessions.Session, state: PlotState, x: number, z: number, zone: number, rarity: number, mutation: string?)
 	local now = os.time()
 	local plant: ProfileStore.Plant = {
 		slot = Planting.newId(s.profile.plants :: any), zone = zone, rarity = rarity, mutation = mutation, plantedAt = now,
 		x = math.round(x * 100) / 100, z = math.round(z * 100) / 100,
+		variant = CreatureModels.randomVariant(zone, rarity, function()
+			return flowerRng:NextNumber()
+		end),
 	}
 	table.insert(s.profile.plants, plant)
 	spawnPlant(state, plant, now)
@@ -279,12 +286,21 @@ local function plantSeed(player: Player, s: Sessions.Session, state: PlotState, 
 	pushPlants(s, now)
 	Sessions.pushFull(s)
 	local weight = PlotService.plantStats(plant, now)
+	local model = state.models[plant.slot]
+	local top = restOf(state.info, plant).Position
+	if model then
+		local cf, size = model:GetBoundingBox()
+		top = cf.Position + Vector3.new(0, size.Y / 2, 0)
+	end
 	Net.LootEvent:FireClient(player, "Planted", {
 		name = PlotService.plantName(plant),
 		weight = weight,
 		rarity = rarity,
+		mutation = mutation,
+		pos = top,
 		newIndex = newEntries,
 	})
+	return plant
 end
 
 local function finite(v: Vector3): boolean
@@ -344,9 +360,9 @@ function PlotService.plantAt(player: Player, pos: any, bagKey: any)
 		return
 	end
 	local x, z = Planting.toLocal(state.info.origin, pos)
-	plantSeed(player, s, state, x, z, zone, rarity, mutation)
+	local plant = plantSeed(player, s, state, x, z, zone, rarity, mutation)
 	if not bagKey and Config.announcesLegendary(zone, rarity, false) then
-		Net.announce(Config.legendaryAnnouncement(player.DisplayName, zone, mutation), "gold")
+		Net.announce(Config.legendaryAnnouncement(player.DisplayName, zone, mutation, PlotService.plantName(plant)), "gold")
 	end
 end
 
