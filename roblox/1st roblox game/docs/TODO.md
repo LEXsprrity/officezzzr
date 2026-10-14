@@ -3,7 +3,7 @@
 Pedidos de 14/10/2026. As imagens de referência estão em `docs/references/`.
 Marcar com `[x]` quando estiver feito e junto ao jogo.
 
-- [ ] **1. Tirar o Sleep Dust.** Remover a mecânica toda (hotbar tecla 2, produto na loja, inventário). Saves antigos que têm Sleep Dust continuam a carregar.
+- [x] **1. Tirar o Sleep Dust.** Remover a mecânica toda (hotbar tecla 2, produto na loja, inventário). Saves antigos que têm Sleep Dust continuam a carregar.
 
 - [ ] **2. HUD nova e mais simples, igual à referência.**
   - Canto inferior esquerdo só com o ícone de Speed (o nosso, com um "+") e o valor em rosa, e o ícone de dinheiro com o valor em verde, com texto grande e contorno. Ref: `02-simple-hud-speed-money.png`.

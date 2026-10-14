@@ -1,5 +1,5 @@
 -- Builds one sleeping giant per zone and runs them at ~10 Hz: GuardBrain decides, this applies it
--- with Humanoid:MoveTo (no pathfinding) and handles catches, bat stuns and Sleep Dust.
+-- with Humanoid:MoveTo (no pathfinding) and handles catches and bat stuns.
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Config = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("Config"))
 local Net = require(script.Parent:WaitForChild("Net"))
@@ -324,21 +324,6 @@ function GuardService.batHit(player: Player): boolean
 		return true
 	end
 	return false
-end
-
--- Sleep Dust: the nearest sleeping guard stays asleep longer after the next steal.
-function GuardService.dust(player: Player): string?
-	local root = SpeedService.rootOf(player)
-	if not root then
-		return nil
-	end
-	local g = nearestGuard(root.Position, Config.SLEEP_DUST_RANGE, function(g)
-		return g.brain.state == "Sleeping"
-	end)
-	if g and GuardBrain.dust(g.brain, os.clock()) then
-		return Config.ZONES[g.zone].guard
-	end
-	return nil
 end
 
 return GuardService

@@ -18,7 +18,6 @@ export type Brain = {
 	chaseStarted: number,
 	stunnedUntil: number,
 	afterStun: GuardState,
-	dustedUntil: number,
 	targetId: any?,
 	lastChasePos: Vector3?, -- where the guard was on the previous chase tick (for the swept catch)
 }
@@ -44,7 +43,6 @@ function GuardBrain.new(zoneIndex: number, home: Vector3): Brain
 		chaseStarted = 0,
 		stunnedUntil = 0,
 		afterStun = "Sleeping",
-		dustedUntil = 0,
 		targetId = nil,
 	}
 end
@@ -69,22 +67,11 @@ end
 -- A seed was taken from this guard's nest.
 function GuardBrain.alert(brain: Brain, now: number)
 	if brain.state == "Sleeping" or brain.state == "Returning" then
-		local extra = if now < brain.dustedUntil then Config.SLEEP_DUST_EXTRA else 0
-		brain.dustedUntil = 0 -- one steal uses up the dust
 		brain.state = "Waking"
-		brain.wakeAt = now + brain.wakeDelay + extra
+		brain.wakeAt = now + brain.wakeDelay
 	elseif brain.state == "Stunned" then
 		brain.afterStun = "Chasing"
 	end
-end
-
--- Sleep Dust only works on a sleeping guard.
-function GuardBrain.dust(brain: Brain, now: number): boolean
-	if brain.state ~= "Sleeping" then
-		return false
-	end
-	brain.dustedUntil = now + Config.SLEEP_DUST_LASTS
-	return true
 end
 
 function GuardBrain.stun(brain: Brain, now: number, seconds: number): boolean

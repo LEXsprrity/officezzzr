@@ -400,10 +400,9 @@ Config.TREADMILL_TIERS = {
 	{ mult = 3, product = "TreadmillX3" },
 	{ mult = 5, product = "TreadmillX5" },
 } :: { { mult: number, product: string? } }
-Config.SLEEP_DUST_EXTRA = 5 -- guard stays asleep this much longer
-Config.SLEEP_DUST_RANGE = 60
-Config.SLEEP_DUST_LASTS = 60 -- a dusted nest stays dusted this long
-Config.START_ITEMS = { SleepDust = 3 } :: { [string]: number }
+-- Every item the inventory can hold, with how many a new player starts with (an item that starts at 0
+-- is listed as 0). There are none right now; saved items not listed here are dropped on load.
+Config.START_ITEMS = {} :: { [string]: number }
 
 Config.BAT_RANGE = 14
 Config.BAT_STUN = 2
@@ -444,7 +443,6 @@ Config.RECEIPT_HISTORY = 100 -- processed Robux PurchaseIds kept per profile, so
 --   Speed     + `amount` Speed
 --   Money     max(`amount`, `minutes` of the buyer's current income), so late-game packs stay useful
 --   Treadmill the treadmill at TREADMILL_TIERS[`tier`]
---   Dust      `count` Sleep Dust
 --   Trail     owns and equips Config.TRAILS[`trail`]
 ----------------------------------------------------------------------------------------------------
 export type DevProduct = {
@@ -456,7 +454,6 @@ export type DevProduct = {
 	amount: number?,
 	minutes: number?,
 	tier: number?,
-	count: number?,
 	trail: string?,
 }
 Config.DEVELOPER_PRODUCTS = {
@@ -478,8 +475,6 @@ Config.DEVELOPER_PRODUCTS = {
 
 	TreadmillX3 = { id = 0, kind = "Treadmill", label = "Treadmill x3", robux = 60, tier = 2 },
 	TreadmillX5 = { id = 0, kind = "Treadmill", label = "Treadmill x5", robux = 200, tier = 3 },
-
-	SleepDust3 = { id = 0, kind = "Dust", label = "3 Sleep Dust", robux = 25, count = 3 },
 
 	TrailGreen = { id = 0, kind = "Trail", label = "Green Trail", robux = 16, trail = "Green" },
 	TrailBlue = { id = 0, kind = "Trail", label = "Blue Trail", robux = 24, trail = "Blue" },

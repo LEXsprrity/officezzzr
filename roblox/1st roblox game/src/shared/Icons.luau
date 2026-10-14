@@ -22,7 +22,6 @@ Icons.TOKENS = {
 	PlotUpgrade = { "⬆️", "🏡" },
 	Seeds = { "🌱" },
 	Plants = { "🪴" },
-	SleepDust = { "💤" },
 	Bat = { "🏏" },
 	Lock = { "🔒" },
 	Close = { "✖" },

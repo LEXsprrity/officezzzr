@@ -70,6 +70,7 @@ end)
 
 H.test("money: the removed money-shop config is gone", function()
 	for _, key in { "SPEED_MULT_TIERS", "SPEED_BUY_FRACTION", "SPEED_BUY_MIN", "SLOT_BASE_PRICE", "SLOT_PRICE_GROWTH", "SLEEP_DUST_PRICE",
+		"SLEEP_DUST_EXTRA", "SLEEP_DUST_RANGE", "SLEEP_DUST_LASTS",
 		"PRICE_PER_SPEED", "POTIONS", "POTION_MIN_PRICE", "POTION_INCOME_SECONDS" } do
 		H.eq((Config :: any)[key], nil, "Config." .. key)
 	end
@@ -330,9 +331,9 @@ H.test("plot: upgrading charges money, adds a level, and stops at the max", func
 end)
 
 ----------------------------------------------------------------------------------------------------
--- Robux: speed, money, treadmill and Sleep Dust products
+-- Robux: speed, money and treadmill products
 ----------------------------------------------------------------------------------------------------
-H.test("robux: the agreed Speed, Money, Treadmill and Sleep Dust products, all id = 0 stubs", function()
+H.test("robux: the agreed Speed, Money and Treadmill products, all id = 0 stubs; no Sleep Dust", function()
 	local function amounts(kind: string, field: string): string
 		local out = {}
 		for _, e in Config.products(kind) do
@@ -345,10 +346,11 @@ H.test("robux: the agreed Speed, Money, Treadmill and Sleep Dust products, all i
 	H.eq(amounts("Money", "amount"), "24000/40 200000/80 800000/200 4000000/400 8000000/640")
 	H.eq(amounts("Money", "minutes"), "10/40 30/80 60/200 180/400 360/640")
 	H.eq(amounts("Treadmill", "tier"), "2/60 3/200")
-	H.eq(amounts("Dust", "count"), "3/25")
+	H.eq(#Config.products("Dust"), 0, "Sleep Dust was removed")
+	H.eq(Config.DEVELOPER_PRODUCTS.SleepDust3, nil)
 	for name, product in Config.DEVELOPER_PRODUCTS do
 		H.ok(product.kind == "Pack" or product.kind == "Speed" or product.kind == "Money" or product.kind == "Treadmill"
-			or product.kind == "Dust" or product.kind == "Trail", name .. " has a known kind")
+			or product.kind == "Trail", name .. " has a known kind")
 		H.ok(#name <= 24 and string.match(name, "^%a%w*$"), name .. " fits the Product:<name> remote id")
 	end
 end)
@@ -369,7 +371,7 @@ H.test("robux: id = 0 products say coming soon; owned treadmill tiers aren't pro
 	end)
 end)
 
-H.test("robux: Speed, treadmill and Sleep Dust receipts grant exactly once", function()
+H.test("robux: Speed and treadmill receipts grant exactly once", function()
 	local p = ProfileStore.defaultProfile()
 	local cases = {
 		{ "Speed150K", function()
@@ -384,9 +386,6 @@ H.test("robux: Speed, treadmill and Sleep Dust receipts grant exactly once", fun
 		{ "TreadmillX3", function() -- arriving late (a raced prompt) never lowers the tier
 			return p.treadmillTier
 		end, 3 },
-		{ "SleepDust3", function()
-			return p.items.SleepDust
-		end, Config.START_ITEMS.SleepDust + 3 },
 	}
 	for i, c in cases do
 		local name, read, want = c[1], c[2], c[3]
@@ -404,6 +403,26 @@ H.test("robux: Speed, treadmill and Sleep Dust receipts grant exactly once", fun
 	end
 	H.eq(Config.TREADMILL_TIERS[p.treadmillTier].mult, 5)
 	H.eq(p.money, 0, "none of these touch money")
+end)
+
+H.test("robux: a receipt for an unknown product (e.g. the removed SleepDust3) is not confirmed and changes nothing", function()
+	local p = ProfileStore.defaultProfile()
+	local before = serde.encode("json", ProfileStore.serialize(p))
+	local saved = false
+	for _, name in { "SleepDust3", "Nonsense" } do
+		local confirm, status, grant = Shop.processReceipt(p, name, "u-" .. name, 0, never, function()
+			saved = true
+			return true
+		end)
+		H.eq(confirm, false, name .. " -> NotProcessedYet")
+		H.eq(status, "unknown")
+		H.eq(grant, nil)
+	end
+	local confirm, status = Shop.processReceipt(p, nil, "u-nil", 0, never, yes)
+	H.eq(confirm, false, "a product id that maps to no name -> NotProcessedYet")
+	H.eq(status, "unavailable")
+	H.eq(saved, false, "nothing was saved")
+	H.eq(serde.encode("json", ProfileStore.serialize(p)), before, "nothing granted, no receipt id remembered")
 end)
 
 H.test("robux: a failed save isn't confirmed and its retry doesn't grant twice", function()

@@ -23,9 +23,8 @@ The Meadow is deliberately short (200 studs) so a new player grabs a first seed 
 | **E** at your gate's board | ⬆️ Upgrade Plot (next level for money; only the owner sees the prompt) |
 | **R** (hold) | Remove one of your plants (refunds 30 s of its income) |
 | **1** | Bat: stuns a nearby awake guard for 2 s (4 s cooldown) |
-| **2** | Sleep Dust: the nearest sleeping guard stays asleep 5 s longer after the next steal |
 | 🏃 (on the Speed panel) | Trail Shop: buy trails for $ or R$, equip one. The panel shows your WalkSpeed and **+X Speed/step** |
-| 🛒 / 📖 | Shop (seed packs, plot upgrade, Speed, money, treadmill, items, passes) / Index (collection book) |
+| 🛒 / 📖 | Shop (seed packs, plot upgrade, Speed, money, treadmill, passes) / Index (collection book) |
 | 🐢 Slow | Slow Mode: clamps your own WalkSpeed to 16 for moving around the base |
 | 🌱 🪴 (right) | Seeds (incl. your 🎒 seed bag: **Plant** at your pad) / Plants menus |
 
@@ -47,7 +46,7 @@ Our version of "eggs with odds": **two premium, late-game packs, Robux only**. E
 - **Reveal.** A reel spins through candidate seeds, lands on the server's result and bursts in its rarity colour.
 
 ## Economy: what money and Robux buy
-**In-game money buys only two things: trails and plot upgrades.** Everything else in the Shop is Robux (developer products and gamepasses). There is no money path to Speed, slots, the treadmill or Sleep Dust (`Shop.buy` refuses them, and tests check it).
+**In-game money buys only two things: trails and plot upgrades.** Everything else in the Shop is Robux (developer products and gamepasses). There is no money path to Speed, slots or the treadmill (`Shop.buy` refuses them, and tests check it).
 
 ### 🏃 Trails (money or Robux)
 A trail is a coloured `Trail` that streams behind your character (two Attachments on the HumanoidRootPart, made by the server so everyone sees it, rebuilt on every respawn and every equip). The equipped trail multiplies the Speed you **gain** from walking and the treadmill. You own trails (saved) and equip one at a time. Any tier can be bought directly, without the one below it. Buying one equips it.
@@ -97,7 +96,6 @@ Every developer product ships as an `id = 0` stub with a placeholder price: clic
 | -- SPEED -- | `Speed150K` 64 R$, `Speed1M` 200, `Speed10M` 560, `Speed50M` 1,200, `Speed500M` 1,600, `Speed1B` 2,400 | adds to your Speed stat |
 | -- MONEY -- | `Money24K` 40 R$, `Money200K` 80, `Money800K` 200, `Money4M` 400, `Money8M` 640 | **max(fixed amount, N minutes of your current income)**: $24K / 10 min, $200K / 30 min, $800K / 60 min, $4M / 180 min, $8M / 360 min. Fixed amounts go worthless late, so late players get the income share. The card shows what you'd get right now. |
 | -- TREADMILL -- | `TreadmillX3` 60 R$, `TreadmillX5` 200 | your treadmill at x3 / x5 (`TREADMILL_TIERS`; x5 can be bought directly; owned tiers aren't prompted) |
-| -- ITEMS -- | `SleepDust3` 25 R$ | 3 Sleep Dust |
 | trails | `TrailGreen` … `TrailRainbow` | owns and equips the trail (owned trails aren't prompted) |
 | -- SEED PACKS -- | `PackSpace`, `PackSpirit` | see Seed packs |
 | -- PASSES -- | gamepasses `DoubleMoney`, `ExtraSlots` | unchanged |
@@ -108,7 +106,7 @@ Each Robux card also has a purple 🎁 gift button. Gifting isn't built yet: it 
 Saves from before the rework (v1/v2) are migrated on load, once (the next save is v3):
 - **Speed Gain tier → trail**, the nearest multiplier at or below it, owned and equipped: x1 → Grey (x1.5), x2 → Green (x2), x3 → Purple (x3), x5 → Rainbow (x5). Nobody's multiplier goes down, except that x10 and x25 are above the best trail: those players get Rainbow (x5) **and the money they paid for the x10/x25 tiers back** ($250M, and $250M + $10B).
 - **Slots → plot level** = slots − 5 + 1 (clamped to 1–26), so everyone keeps exactly their slots. The plot's income multiplier comes with the level.
-- Treadmill tier, Sleep Dust, plants, Index, seed bag and receipts are kept as they are.
+- Treadmill tier, plants, Index, seed bag and receipts are kept as they are. Removed items (potions, Sleep Dust) are dropped from the inventory.
 
 ### Progression: Speed per step compounds
 Money can't buy Speed, so Speed comes from moving (× the trail), the treadmill (x2, or x3/x5 with Robux) and Robux Speed packs. The zone reqs grow exponentially (10K → 5B) but the studs anyone can walk only grow linearly. So the Speed each stud ("step") pays **grows with your current Speed**:
@@ -160,7 +158,7 @@ luau-lsp analyze --definitions=globalTypes.d.luau --sourcemap=sourcemap.json src
 - Game Settings → Security → **Enable Studio Access to API Services**. Without it saving is off, and the game tells you so in a toast.
 - Game Settings → Places → **Max Players = 5**, one plot each. A 6th player is kicked with a "server full" message.
 - Gamepasses are stubs. Put real ids in `Config.GAMEPASSES` to turn them on.
-- Everything sold for Robux except the 2 gamepasses is a developer-product stub. Create the **22 developer products** below on the Creator Dashboard (your experience → Monetization → Developer Products) and paste each id into its `Config.DEVELOPER_PRODUCTS` key. The price comes from the Dashboard (the placeholders are only shown until then). The place must be published for `PromptProductPurchase`/`GetProductInfo` to work.
+- Everything sold for Robux except the 2 gamepasses is a developer-product stub. Create the **21 developer products** below on the Creator Dashboard (your experience → Monetization → Developer Products) and paste each id into its `Config.DEVELOPER_PRODUCTS` key. The price comes from the Dashboard (the placeholders are only shown until then). The place must be published for `PromptProductPurchase`/`GetProductInfo` to work.
 
   | ✅ | `Config.DEVELOPER_PRODUCTS` key | Dashboard name | Price (placeholder) | Grants |
   |---|---|---|---|---|
@@ -179,7 +177,6 @@ luau-lsp analyze --definitions=globalTypes.d.luau --sourcemap=sourcemap.json src
   | ☐ | `Money8M` | Cash Vault | 640 R$ | max($8M, 360 min of income) |
   | ☐ | `TreadmillX3` | Treadmill x3 | 60 R$ | treadmill x3 |
   | ☐ | `TreadmillX5` | Treadmill x5 | 200 R$ | treadmill x5 |
-  | ☐ | `SleepDust3` | 3 Sleep Dust | 25 R$ | 3 Sleep Dust |
   | ☐ | `TrailGreen` | Green Trail | 16 R$ | owns + equips the Green trail (x2) |
   | ☐ | `TrailBlue` | Blue Trail | 24 R$ | Blue trail (x2.5) |
   | ☐ | `TrailPurple` | Purple Trail | 40 R$ | Purple trail (x3) |
@@ -199,12 +196,12 @@ luau-lsp analyze --definitions=globalTypes.d.luau --sourcemap=sourcemap.json src
 - Guardians and plant-creatures are spawned at runtime, so they only appear in Play.
 
 ### UI icons (`icons/`)
-The HUD and the world signs use the 22 PNG icons in `icons/` (256x256, "Free Icon Pack" by @gvesster). Roblox can only show **uploaded** images (`rbxassetid://<id>`), so each icon has an asset id in **`icons/ids.json`**. Rojo turns that file into the ModuleScript `ReplicatedStorage.Shared.IconIds` (Rojo 7 makes any plain `.json` file a ModuleScript returning its data; mapped in `default.project.json`), and `Config.ICONS` reads it. Updating ids never means editing Lua.
+The HUD and the world signs use the 21 PNG icons in `icons/` (256x256, "Free Icon Pack" by @gvesster). Roblox can only show **uploaded** images (`rbxassetid://<id>`), so each icon has an asset id in **`icons/ids.json`**. Rojo turns that file into the ModuleScript `ReplicatedStorage.Shared.IconIds` (Rojo 7 makes any plain `.json` file a ModuleScript returning its data; mapped in `default.project.json`), and `Config.ICONS` reads it. Updating ids never means editing Lua.
 
 - **`0` = not uploaded yet: the emoji stays.** Every icon stands in for an emoji (or `R$`) in some text (`Icons.TOKENS`). While its id is 0 the text is shown exactly as before, so with every id at 0 (the repo default) the game looks the same as without icons.
 - **One helper.** `Icons.image(key)` gives `"rbxassetid://<id>"` or nil. `Icons.set(label, keys, text, size?, textSize?)` writes every icon label: with no uploaded icon it is just `label.Text = text`; with one it empties the label and lays out an `IconRow` inside it: square `ImageLabel`s (`ScaleType.Fit`, `size` x the label height) and the text pieces, styled like the label (font, colour, stroke). The emoji can be in front (`🛒 Shop`), inline (`Buy · R$ 2,000` → Buy · [R$] 2,000), at both ends (`⚡ FASTEST HERE ⚡`), or above the text (`🏏\nBat`). One key whose emoji isn't in the text puts the icon in front (`$1.2K` → [Money] $1.2K, `-- SEED PACKS --`); a list of keys only replaces emoji that are there (so `{ "Lock" }` on "✅ Rec. Speed" adds nothing).
 - **Sizes per context** (`ICON` in the HUD, x the label height): shop card titles big (1), HUD buttons, panels and section titles medium (0.85), R$ price buttons and inline lines small (0.7).
-- **Where:** Shop/Index buttons, stalls and modal titles; the 🏃 Trail Shop button, stall and title; Speed and money panels; Speed/Money/Treadmill/Sleep Dust/pass cards and their sections; SEED PACKS (section, card band) and PLOT UPGRADE (section, card, gate board); every R$ button (Robux icon before the number); 🎁 gift buttons; 🌱/🪴 tabs, side titles, the carry banner and Plant buttons; the hotbar Bat and Sleep Dust; 🔒 on locked zones; the ✖ close button; ✨/🌟 mutation highlights (pack cards, Index, reel, reveal); 🎒 seed bag lines; the "Fastest here" board; the 🏠 plot and 🏃 treadmill signs. Emoji inside sentences (toasts, hints that mention "the 🛒 Shop") and the zone emoji stay text.
+- **Where:** Shop/Index buttons, stalls and modal titles; the 🏃 Trail Shop button, stall and title; Speed and money panels; Speed/Money/Treadmill/pass cards and their sections; SEED PACKS (section, card band) and PLOT UPGRADE (section, card, gate board); every R$ button (Robux icon before the number); 🎁 gift buttons; 🌱/🪴 tabs, side titles, the carry banner and Plant buttons; the hotbar Bat; 🔒 on locked zones; the ✖ close button; ✨/🌟 mutation highlights (pack cards, Index, reel, reveal); 🎒 seed bag lines; the "Fastest here" board; the 🏠 plot and 🏃 treadmill signs. Emoji inside sentences (toasts, hints that mention "the 🛒 Shop") and the zone emoji stay text.
 - **World signs** are set at runtime, so `map/World.rbxm` is untouched and keeps the emoji: `WorldBuilder.applyIcons` (end of `WorldBuilder.load`) gives the icon to the sign labels whose text is exactly one of `WorldBuilder.SIGN_ICONS` (the 3 stalls, each plot's Upgrade Plot title, plot sign and treadmill sign; hand-edited texts are left alone), and `PlotService`/`AmbientService` write the plot, treadmill and leaderboard signs through `Icons.set`.
 
 **Uploading** (Portuguese step by step: [icons/COMO_SUBIR_ICONES.md](icons/COMO_SUBIR_ICONES.md)):
@@ -239,7 +236,7 @@ lune run tools/upload_icons.luau             # upload every icon whose id is sti
 5. Get Speed (treadmill, or a Speed pack once its id is set), then try the Desert at about 3K Speed and at 10K Speed. At 3K: caught, seed back at the nest, knocked back. At 10K: the guard wakes at once and chases exactly as fast as you; run straight home and it never closes the gap. In the Spirit Garden (5B), the dragon shows ❗ for half a second first.
 6. Both players leave, then rejoin: money, Speed, plants, Index, owned/equipped trail and plot level are intact (API access must be on).
 7. Shop → -- SEED PACKS --: two cards, Starpetal and Lotus Wyrm. With stub ids, clicking either says "coming soon" and no money is charged. With real ids, buy a Starpetal Pack at 0 Speed: Studio shows a test purchase dialog (no real Robux) and the button shows the Dashboard price. The reel spins and lands, and a Deep Space seed shows up in 🌱 Seeds → 🎒 bag. Stand on your pad and press Plant. Rejoin: the bag is intact.
-8. Shop → every other section (Speed, Money, Treadmill, Items) and the R$ buttons on trail cards: with stub ids, "coming soon" and nothing charged; the 🎁 gift button says "Gifting is coming soon!". With real ids: a Speed pack adds Speed, a Money card pays exactly the amount it showed, Treadmill x5 makes the treadmill x5 and its card says Owned, Sleep Dust adds 3. No R$ item ever costs in-game money.
+8. Shop → every other section (Speed, Money, Treadmill) and the R$ buttons on trail cards: with stub ids, "coming soon" and nothing charged; the 🎁 gift button says "Gifting is coming soon!". With real ids: a Speed pack adds Speed, a Money card pays exactly the amount it showed, Treadmill x5 makes the treadmill x5 and its card says Owned. No R$ item ever costs in-game money.
 
 ## Rules the code enforces
 - **Server-authoritative.** Money, Speed, pickup, carry, planting and purchases all live on the server. The client only draws the HUD and VFX and runs Slow Mode. Every prompt and remote re-checks distance, ownership and state, and remotes are rate-limited.
@@ -252,7 +249,7 @@ lune run tools/upload_icons.luau             # upload every icon whose id is sti
 - **Growth.** Only `plantedAt` is saved. `weight = sprout × variance × (1 + 4·ease(age/20 min))` grows to 5× and stops. `income = seedIncome(zone) × rarity × mutation × sqrt(weight/sprout)`. A single 3 s payout loop evaluates the formula. There is no per-plant tick.
 - **Day and night plants.** Every zone is either ☀️ day (Meadow, Desert, Lava, Spirit) or 🌙 night (Jungle, Snow, Space), set by `Zone.active`. Its plants pay `ACTIVE_TIME_MULT` (1.5×) during their phase and 1× otherwise (`Config.timeMult`, from the shared `dayPhase` clock). The payout loop applies it, and the plant's billboard shows ☀️/🌙 plus a gold "1.5x!" while it is active. `plantIncome`/`incomeOf` stay the plain base, and the 30 s removal refund uses the base too. Offline income uses the cycle average: 300 s day and 150 s night give ×4/3 for day plants and ×7/6 for night plants.
 - **Economy** is formulas in `Config` (see "Economy" above). `seedIncome(k) = req[k+1] / (ECONOMY_SLOTS × 300 s)` with `ECONOMY_SLOTS = 10`: a 10-plant plot of zone-k Commons earns zone k+1's recommended Speed, in dollars, in about 5 minutes (the same money scale as before the rework). Money buys trails and plot levels (`Config.priceOf`); plot levels cost `500 × 3.1^(L−2)` and multiply income by `1 + 0.06 × (L−1)`.
-- **Data** (`ProfileStore`, format v3). `UpdateAsync` with retries and exponential backoff, autosave every 90 s, `BindToClose`. If a load fails, that session never saves, so it can't overwrite real data with defaults. Saved fields: money, Speed, owned trails + the equipped one, treadmill tier, plot level, plants (slot, zone, rarity, mutation, plantedAt), Index, items (Sleep Dust), the seed bag, the last 100 Robux receipt ids and `lastSeen`. v1 saves load with an empty bag and no receipts; v1/v2 saves get their Speed Gain tier turned into a trail and their slots into a plot level (see "Old saves" above). Potions were removed: potion timers and potion items in old saves are dropped on load. Offline income is capped at 1 h.
+- **Data** (`ProfileStore`, format v3). `UpdateAsync` with retries and exponential backoff, autosave every 90 s, `BindToClose`. If a load fails, that session never saves, so it can't overwrite real data with defaults. Saved fields: money, Speed, owned trails + the equipped one, treadmill tier, plot level, plants (slot, zone, rarity, mutation, plantedAt), Index, items (none are sold right now; only ids in `Config.START_ITEMS` load), the seed bag, the last 100 Robux receipt ids and `lastSeen`. v1 saves load with an empty bag and no receipts; v1/v2 saves get their Speed Gain tier turned into a trail and their slots into a plot level (see "Old saves" above). Potions and Sleep Dust were removed: potion timers and both items in old saves are dropped on load. Offline income is capped at 1 h.
 - **Art.** The map is generated from primitives by `WorldBuilder` (base, plots), `ZoneThemes` (the 7 zones) and the `Props` kit, then hand-edited in `map/World.rbxm`, and any piece can be swapped for a model from `assets/` (see "Drop-in models"). Only floors, walls and the wall-flush arch pillars collide. All props are anchored and non-colliding (no Touched, no raycasts), so they never block runners, guards or the camera. The corridor is about 2.3k parts and the whole map about 3.7k (tested below 6k/8k). Day/night lighting blends a warm day look into a blue, readable night (`Config.nightBlend`), and the client adds a per-zone colour grade.
 
 ### Soft gates: how soft they are
@@ -306,7 +303,7 @@ Each planted seed grows into its zone's creature (`CreatureModels`). The creatur
 | `src/shared/Format.luau` | `ReplicatedStorage.Shared` | `1.2K / 3.4M / 5B / 7.5T / 3Qa`, `2,018,798 Kg`, `m:ss` |
 | `src/shared/SeedPacks.luau` | 〃 | *Pure*: the two packs, odds tables, rolls, seed-bag keys |
 | `src/shared/Icons.luau` | 〃 | UI icons: `Icons.image(key)`, `Icons.set(label, keys, text)` (icon or the emoji fallback) |
-| `icons/ids.json` | `ReplicatedStorage.Shared.IconIds` | The 22 icons' image asset ids (0 = not uploaded); `icons/*.png` are the source images |
+| `icons/ids.json` | `ReplicatedStorage.Shared.IconIds` | The 21 icons' image asset ids (0 = not uploaded); `icons/*.png` are the source images |
 | `src/server/Main.server.luau` | `ServerScriptService.Server` | Bootstrap: collision groups, world, services, join/leave, autosave, BindToClose |
 | `src/server/Net.luau` | 〃 | Creates the fixed remotes |
 | `src/server/Sessions.luau` | 〃 | Per-player runtime state, multipliers, StatsUpdate + leaderstats |
@@ -315,8 +312,8 @@ Each planted seed grows into its zone's creature (`CreatureModels`). The creatur
 | `src/server/Props.luau` | 〃 | Primitive kit (blocks, ellipsoids, overlays, lights, emitters) and reusable props |
 | `src/server/SpeedLogic.luau` | 〃 | *Pure*: per-tick gain, cap, treadmill, sanity check |
 | `src/server/SpeedService.luau` | 〃 | 0.25 s loop: applies SpeedLogic, WalkSpeed, rubber-band, End of the Line |
-| `src/server/GuardBrain.luau` | 〃 | *Pure*: guard state machine (sleep/wake/chase/catch/return/stun/dust) |
-| `src/server/GuardService.luau` | 〃 | Builds the giants, 10 Hz MoveTo loop, catches, bat, Sleep Dust |
+| `src/server/GuardBrain.luau` | 〃 | *Pure*: guard state machine (sleep/wake/chase/catch/return/stun) |
+| `src/server/GuardService.luau` | 〃 | Builds the giants, 10 Hz MoveTo loop, catches, bat |
 | `src/server/SeedService.luau` | 〃 | Nests, pods, steal prompts, carry weld, return/regrow |
 | `src/server/PlotService.luau` | 〃 | Plot assignment, planting, plant-creatures, growth, payouts (x plot level), offline income, plot upgrades (the gate board) |
 | `src/server/CreatureModels.luau` | 〃 | Builds the seven plant-creatures from primitives (or a `Creature_` model), plus rarity/mutation flair and scale-by-weight |
@@ -337,7 +334,7 @@ Each planted seed grows into its zone's creature (`CreatureModels`). The creatur
 `ReplicatedStorage.Remotes`:
 - Client → server: `RequestBuy(itemId)`, `RequestUseItem(itemId)`.
   - `RequestBuy` ids: `PlotUpgrade` and `Trail:<id>` (money), `Product:<name>` (developer products, Robux only), `Pass:<name>` (gamepasses). For Robux the server only opens the prompt; `ProcessReceipt` grants.
-  - `RequestUseItem` ids: `Bat`, `SleepDust`, `Seed:<bagKey>` (plant from the seed bag), `Equip:<trailId>` (an owned trail).
+  - `RequestUseItem` ids: `Bat`, `Seed:<bagKey>` (plant from the seed bag), `Equip:<trailId>` (an owned trail).
 - Server → client: `StatsUpdate(partialStats)` (the client merges it), `LootEvent(kind, data)`, `IncomePopup(amount, position)`. Pack openings are `LootEvent("PackRoll", { packId, name, zone, result })`.
 - Stealing, planting and removing plants use server-side ProximityPrompts. Day/night is computed from the shared clock (`Config.dayPhase`), so it needs no remote.
 

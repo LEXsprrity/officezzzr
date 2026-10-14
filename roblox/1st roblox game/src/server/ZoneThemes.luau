@@ -191,7 +191,7 @@ local function meadowOrnament(folder: Instance, x: number)
 end
 
 ----------------------------------------------------------------------------------------------------
--- 2. Desert: sand, ripples, dunes, saguaros, skeletons, mesas, drifting dust
+-- 2. Desert: sand, ripples, dunes, saguaros, skeletons, mesas, drifting sand
 ----------------------------------------------------------------------------------------------------
 local function saguaro(F: Instance, p: Vector3, rng: Random)
 	local green = rgb(70, 172, 82)
