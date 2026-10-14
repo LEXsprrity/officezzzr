@@ -67,4 +67,15 @@ function Format.clock(seconds: number): string
 	return string.format("%d:%02d", seconds // 60, seconds % 60)
 end
 
+-- 178 -> "2m 58s", 45 -> "45s", 3725 -> "1h 2m" (the day/night timer: "in 2m 58s")
+function Format.countdown(seconds: number): string
+	seconds = math.max(0, math.floor(seconds))
+	if seconds >= 3600 then
+		return string.format("%dh %dm", seconds // 3600, seconds % 3600 // 60)
+	elseif seconds >= 60 then
+		return string.format("%dm %02ds", seconds // 60, seconds % 60)
+	end
+	return string.format("%ds", seconds)
+end
+
 return Format
