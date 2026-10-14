@@ -15,6 +15,7 @@ local Format = require(Shared:WaitForChild("Format"))
 local Icons = require(Shared:WaitForChild("Icons"))
 local Treadmill = require(Shared:WaitForChild("Treadmill"))
 local UiFx = require(Shared:WaitForChild("UiFx"))
+local BoardButton = require(Shared:WaitForChild("BoardButton"))
 
 local player = Players.LocalPlayer
 local remotes = ReplicatedStorage:WaitForChild("Remotes")
@@ -209,6 +210,68 @@ local function watchPrompt(prompt: ProximityPrompt)
 	prompt:GetAttributeChangedSignal("OwnerUserId"):Connect(apply)
 end
 
+-- The red $ button on your own Upgrade boards (the plot's and the treadmill's) turns green while you can
+-- afford it (BoardButton.cashColors): the server writes the price it shows on the painted button ("Price");
+-- your money comes with StatsUpdate. Somebody else's boards stay red.
+local myMoney: number? = nil
+local cashDetectors: { [ClickDetector]: boolean } = {}
+
+local function paintedOf(detector: ClickDetector): GuiObject?
+	local hit = detector.Parent
+	local painted = hit and hit:FindFirstChild("Painted")
+	local button = painted and painted:IsA("ObjectValue") and painted.Value
+	return if button and button:IsA("GuiObject") then button else nil
+end
+
+local function paintCash(detector: ClickDetector)
+	local button = paintedOf(detector)
+	if not button or button.Name ~= "CashButton" then
+		return
+	end
+	local mine = detector:GetAttribute("OwnerUserId") == player.UserId
+	local price = button:GetAttribute(BoardButton.PRICE_ATTRIBUTE)
+	local colors = BoardButton.cashColors(if mine then myMoney else nil, if type(price) == "number" then price else nil)
+	button.BackgroundColor3 = colors.fill
+	local edge = button:FindFirstChildOfClass("UIStroke")
+	if edge then
+		edge.Color = colors.edge
+	end
+end
+
+local function repaintCash()
+	for detector in cashDetectors do
+		if detector.Parent then
+			paintCash(detector)
+		else
+			cashDetectors[detector] = nil
+		end
+	end
+end
+
+-- Follows one board button's click detector: repaints when its owner, its painted button or the price changes.
+local function watchCash(detector: ClickDetector)
+	local hit = detector.Parent
+	local painted = hit and hit:FindFirstChild("Painted")
+	if not (painted and painted:IsA("ObjectValue")) then
+		return
+	end
+	local hooked: Instance? = nil
+	local function refresh()
+		local button = paintedOf(detector)
+		if button and button ~= hooked and button.Name == "CashButton" then
+			hooked = button
+			button:GetAttributeChangedSignal(BoardButton.PRICE_ATTRIBUTE):Connect(function()
+				paintCash(detector)
+			end)
+		end
+		paintCash(detector)
+	end
+	cashDetectors[detector] = true
+	painted.Changed:Connect(refresh)
+	detector:GetAttributeChangedSignal("OwnerUserId"):Connect(refresh)
+	refresh()
+end
+
 -- The Upgrade boards' painted buttons (PlotService): a ClickDetector on an invisible part over each, with
 -- its owner's OwnerUserId and its reach in "Reach". Only the owner can click or tap it (the server re-checks).
 -- The mouse keeps its normal arrow over it, and the painted button (the hit part's "Painted" value)
@@ -223,11 +286,10 @@ local function watchClick(detector: ClickDetector)
 	end
 	apply()
 	detector:GetAttributeChangedSignal("OwnerUserId"):Connect(apply)
+	watchCash(detector)
 	local function pop(how: "hover" | "rest" | "press")
-		local hit = detector.Parent
-		local painted = hit and hit:FindFirstChild("Painted")
-		local button = painted and painted:IsA("ObjectValue") and painted.Value
-		if button and button:IsA("GuiObject") then
+		local button = paintedOf(detector)
+		if button then
 			UiFx.worldPop(button, how)
 		end
 	end
@@ -488,7 +550,7 @@ local function beltTop(belt: BasePart): number
 end
 local nextPopup = 0
 -- What the Speed popups need from the stats (StatsUpdate sends partial tables).
-local stats = { speed = 0, walkSpeed = 0, equippedTrail = nil :: string?, treadmillMult = 1 }
+local stats = { treadmillTier = 1, equippedTrail = nil :: string? }
 
 StatsUpdate.OnClientEvent:Connect(function(partial: { [string]: any })
 	if type(partial) ~= "table" then
@@ -497,10 +559,12 @@ StatsUpdate.OnClientEvent:Connect(function(partial: { [string]: any })
 	if partial.plot ~= nil then
 		setMyPlot(if type(partial.plot) == "number" then partial.plot else nil)
 	end
-	for _, key in { "speed", "walkSpeed", "treadmillMult" } do
-		if type(partial[key]) == "number" then
-			(stats :: any)[key] = partial[key]
-		end
+	if type(partial.treadmillTier) == "number" then
+		stats.treadmillTier = partial.treadmillTier
+	end
+	if type(partial.money) == "number" and partial.money ~= myMoney then
+		myMoney = partial.money
+		repaintCash()
 	end
 	if type(partial.equippedTrail) == "string" then
 		stats.equippedTrail = partial.equippedTrail
@@ -572,7 +636,7 @@ end
 -- "[sneaker] +1.6K" over the character, floating up and fading: the Speed a second on the treadmill pays.
 local POPUP_LIFE = 2
 local function speedPopup(root: BasePart)
-	local amount = Treadmill.perSecond(stats.walkSpeed, stats.speed, stats.equippedTrail, stats.treadmillMult)
+	local amount = Treadmill.perSecond(stats.treadmillTier, stats.equippedTrail)
 	if amount <= 0 then
 		return
 	end

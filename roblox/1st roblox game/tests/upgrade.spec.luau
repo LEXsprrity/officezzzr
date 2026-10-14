@@ -283,4 +283,71 @@ H.test("upgrade board: the reference look (dark navy studded sign on a post, red
 	H.ok(purple.BackgroundColor3.R > 0.5 and purple.BackgroundColor3.B > 0.7 and purple.BackgroundColor3.G < 0.3, "purple Robux button")
 end)
 
+----------------------------------------------------------------------------------------------------
+-- The red $ button turns green when its owner can afford it (owner request)
+----------------------------------------------------------------------------------------------------
+local BoardButton = H.shared("BoardButton")
+
+local function same(a: Color3, b: Color3): boolean
+	return math.abs(a.R - b.R) < 1e-6 and math.abs(a.G - b.G) < 1e-6 and math.abs(a.B - b.B) < 1e-6
+end
+
+H.test("board $ button: green from money == price, red one below it; red with no money or nothing to buy", function()
+	H.ok(BoardButton.GREEN.fill.G > 0.6 and BoardButton.GREEN.fill.R < 0.4, "green")
+	H.ok(BoardButton.RED.fill.R > 0.7 and BoardButton.RED.fill.G < 0.3, "red")
+	for _, price in { 500, 1e6, Config.plotUpgradePrice(Config.PLOT_LEVEL_MAX), 100e12 } do
+		H.eq(BoardButton.cashColors(price, price), BoardButton.GREEN, `exactly {price}: affordable`)
+		H.eq(BoardButton.cashColors(price + 1, price), BoardButton.GREEN, `{price} + 1`)
+		H.eq(BoardButton.cashColors(price - 1, price), BoardButton.RED, `{price} - 1: not yet`)
+		H.eq(BoardButton.cashColors(price * (1 - 1e-9), price), BoardButton.RED, `a hair under {price}`)
+	end
+	H.eq(BoardButton.cashColors(0, 0), BoardButton.GREEN, "a free price")
+	H.eq(BoardButton.cashColors(nil, 500), BoardButton.RED, "not your board (no money known)")
+	H.eq(BoardButton.cashColors(1e30, nil), BoardButton.RED, "nothing to buy (maxed / empty plot)")
+	H.eq(BoardButton.cashColors(0 / 0, 500), BoardButton.RED, "NaN money")
+	H.eq(BoardButton.cashColors(500, 0 / 0), BoardButton.RED, "NaN price")
+end)
+
+H.test("board $ button: both boards are built red and carry the price they show, none when there is nothing to buy", function()
+	local TreadmillBoard = H.server("TreadmillBoard")
+	-- the plot's board
+	local labels = plots[3].upgradeLabels
+	local red = labels.cash.Parent
+	H.eq(red.Name, "CashButton", "the button PlotService's click area paints (Painted)")
+	H.ok(same(red.BackgroundColor3, BoardButton.RED.fill) and same(red:FindFirstChildOfClass("UIStroke").Color, BoardButton.RED.edge), "built red")
+	WorldBuilder.setUpgradeBoard(labels, 4)
+	H.eq(red:GetAttribute(BoardButton.PRICE_ATTRIBUTE), Config.plotUpgradePrice(5), "the price on the button")
+	WorldBuilder.setUpgradeBoard(labels, Config.PLOT_LEVEL_MAX)
+	H.eq(red:GetAttribute(BoardButton.PRICE_ATTRIBUTE), nil, "maxed: no price")
+	WorldBuilder.setUpgradeBoard(labels, nil)
+	H.eq(red:GetAttribute(BoardButton.PRICE_ATTRIBUTE), nil, "empty plot: no price")
+	-- the treadmill's board
+	local plot = plots[3]
+	local board = TreadmillBoard.build(plot.model, plot.belt, plot.center)
+	local tred = board.labels.cash.Parent
+	H.eq(tred.Name, "CashButton")
+	H.ok(same(tred.BackgroundColor3, BoardButton.RED.fill) and same(tred:FindFirstChildOfClass("UIStroke").Color, BoardButton.RED.edge), "built red")
+	TreadmillBoard.render(board, { tier = 2, cash = Config.TREADMILL_TIERS[3].price, robux = 19, perSecond = 1 })
+	H.eq(tred:GetAttribute(BoardButton.PRICE_ATTRIBUTE), Config.TREADMILL_TIERS[3].price)
+	TreadmillBoard.render(board, { tier = Config.TREADMILL_MAX, perSecond = 1 })
+	H.eq(tred:GetAttribute(BoardButton.PRICE_ATTRIBUTE), nil, "maxed: no price")
+	TreadmillBoard.render(board, {})
+	H.eq(tred:GetAttribute(BoardButton.PRICE_ATTRIBUTE), nil, "empty plot: no price")
+	board.model:Destroy()
+end)
+
+H.test("board $ button: Effects.client paints only its own boards' $ buttons, from its money and the price", function()
+	local effects = fs.readFile("src/client/Effects.client.luau")
+	H.ok(string.find(effects, "BoardButton.cashColors(if mine then myMoney else nil", 1, true) ~= nil, "the shared rule, with money only on your own boards")
+	H.ok(string.find(effects, "detector:GetAttribute(\"OwnerUserId\") == player.UserId", 1, true) ~= nil, "mine = the board's owner is me")
+	H.ok(string.find(effects, "GetAttributeChangedSignal(BoardButton.PRICE_ATTRIBUTE)", 1, true) ~= nil, "repaints when the price changes")
+	H.ok(string.find(effects, "partial.money", 1, true) ~= nil and string.find(effects, "repaintCash()", 1, true) ~= nil, "and when the money changes")
+	H.ok(string.find(effects, "watchCash(detector)", 1, true) ~= nil, "for every board button's click area")
+	H.ok(string.find(effects, "edge.Color = colors.edge", 1, true) ~= nil, "the outline too")
+	-- the server keeps painting both red (the client does the green)
+	for _, file in { "src/server/WorldBuilder.luau", "src/server/TreadmillBoard.luau" } do
+		H.ok(string.find(fs.readFile(file), "fill = BoardButton.RED.fill, edge = BoardButton.RED.edge", 1, true) ~= nil, file)
+	end
+end)
+
 return nil

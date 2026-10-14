@@ -15,7 +15,7 @@ local Config = H.shared("Config")
 local Sim = {}
 
 export type Options = {
-	treadmillTier: number?, -- the treadmill tier at t = 0 (default 1, the free x2; 6 = x5, bought with Robux)
+	treadmillTier: number?, -- the treadmill tier at t = 0 (default 1, the free one; higher ones bought with Robux)
 	speedPacks: { number }?, -- Speed bought with Robux at t = 0
 	noTreadmillUpgrades: boolean?, -- never buy treadmill tiers with money (the economy before they existed)
 	afk: boolean?, -- an AFK farmer (see above)
@@ -91,15 +91,19 @@ function Sim.run(opts: Options?): Result
 		end
 	end
 
-	-- One second: earn money, and Speed at `mult` (the treadmill's, or 1) x WalkSpeed studs (0 when not moving).
-	local function second(moving: boolean, mult: number)
+	-- One second: earn money, and Speed: running pays WalkSpeed studs x the trail, the treadmill its tier's
+	-- fixed rate x the trail (Config.treadmillPerSecond), standing still nothing.
+	local function second(how: "run" | "treadmill" | "still")
 		if t - incomeAt >= 10 then
 			refreshIncome()
 		end
 		money += income
-		if moving then
+		local trail = Config.TRAILS[trailIndex].id
+		if how == "run" then
 			local studs = math.min(Config.walkSpeedFor(speed), Config.GAIN_CAP_STUDS_PER_TICK / Config.TICK)
-			speed += studs * Config.speedPerStud(Config.TRAILS[trailIndex].id) * mult
+			speed += studs * Config.speedPerStud(trail)
+		elseif how == "treadmill" then
+			speed += Config.treadmillPerSecond(treadmillTier, trail)
 		end
 		t += 1
 		noteArrivals()
@@ -132,7 +136,7 @@ function Sim.run(opts: Options?): Result
 				table.insert(buys, { t = t, what = `Plot Level {level}`, price = price })
 			else
 				treadmillTier += 1
-				table.insert(buys, { t = t, what = `Treadmill x{Config.treadmillMult(treadmillTier)}`, price = price })
+				table.insert(buys, { t = t, what = `Treadmill Level {treadmillTier}`, price = price })
 			end
 			refreshIncome()
 		end
@@ -173,10 +177,10 @@ function Sim.run(opts: Options?): Result
 			local distance = 2 * (Config.nestX(k) - HOME_X + WALKWAY)
 			while distance > 0 do
 				distance -= Config.walkSpeedFor(speed)
-				second(true, 1)
+				second("run")
 			end
 			for _ = 1, TRIP_OVERHEAD do
-				second(false, 1)
+				second("still")
 			end
 			local isNight = Config.dayPhase(t)
 			local rarity, mutation = Config.rollSeed(k, if isNight then Config.NIGHT_LUCK else 1, isNight, rng)
@@ -192,7 +196,7 @@ function Sim.run(opts: Options?): Result
 			refreshIncome()
 		else
 			for _ = 1, IDLE_CHUNK do
-				second(true, Config.treadmillMult(treadmillTier))
+				second("treadmill")
 			end
 		end
 		shop()
@@ -242,7 +246,7 @@ function Sim.report(): string
 		packTotal += amount
 	end
 	local afk = Sim.run({ afk = true, limitHours = 80 })
-	local x = `x{Config.treadmillMult(top)}`
+	local x = `Level {top}`
 	local lines = { `| Zone | Rec. Speed | Target | Free player | ±50% window | AFK farmer | Treadmill {x} (R$) | {x} + {Format.short(packTotal)} Speed packs (R$) |`, "|---|---|---|---|---|---|---|---|" }
 	for k, zone in Config.ZONES do
 		local target = Sim.TARGETS[zone.id]
@@ -256,8 +260,22 @@ function Sim.report(): string
 		table.insert(buys, `{Sim.clock(b.t)} {b.what} ({Format.money(b.price)})`)
 	end
 	table.insert(lines, "")
-	table.insert(lines, `Free player at the Spirit Garden: {free.trail} trail, plot level {free.plotLevel}, treadmill x{Config.treadmillMult(free.treadmillTier)}, {Format.money(free.income)}/s, {Format.money(free.finalMoney)} unspent.`)
+	table.insert(lines, `Free player at the Spirit Garden: {free.trail} trail, plot level {free.plotLevel}, treadmill level {free.treadmillTier}, {Format.money(free.income)}/s, {Format.money(free.finalMoney)} unspent.`)
 	table.insert(lines, "Purchases: " .. table.concat(buys, " · "))
+	-- the treadmill tiers: fixed rate (x the trail), price, when the free player buys each
+	local boughtAt: { [number]: number } = {}
+	for _, b in free.buys do
+		local tier = tonumber(string.match(b.what, "^Treadmill Level (%d+)$"))
+		if tier then
+			boughtAt[tier] = b.t
+		end
+	end
+	table.insert(lines, "")
+	table.insert(lines, "| Treadmill | Speed/s (x trail) | Price | Free player buys it |")
+	table.insert(lines, "|---|---|---|---|")
+	for tier, tt in Config.TREADMILL_TIERS do
+		table.insert(lines, `| Level {tier} | +{Format.short(tt.perSecond)}/s | {if tt.price > 0 then Format.money(tt.price) else "free"} | {if tier == 1 then "start" elseif boughtAt[tier] then Sim.clock(boughtAt[tier]) else "after the Spirit Garden"} |`)
+	end
 	return table.concat(lines, "\n")
 end
 

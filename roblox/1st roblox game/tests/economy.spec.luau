@@ -60,12 +60,12 @@ H.test("zones: zoneAtX maps corridor positions to zones, base to nil", function(
 	H.eq(Config.zoneAtX(Config.END_X - 1), #Config.ZONES)
 end)
 
-H.test("economy: a full plot of zone-k Commons earns zone k+1's ZONE_CASH in dollars in PAYBACK_SECONDS", function()
+H.test("economy: a full plot of zone-k Commons earns zone k+1's ZONE_CASH (x INCOME_SCALE) in dollars in PAYBACK_SECONDS", function()
 	H.eq(Config.ECONOMY_SLOTS, 10, "income is balanced for 10 plants, whatever SLOTS_START is")
 	H.eq(#Config.ZONE_CASH, #Config.ZONES, "one money anchor per zone")
 	for k = 1, #Config.ZONES - 1 do
 		local perSecond = Config.seedIncome(k) * Config.ECONOMY_SLOTS
-		H.near(perSecond * Config.PAYBACK_SECONDS, Config.ZONE_CASH[k + 1], 1e-3, Config.ZONES[k].id)
+		H.near(perSecond * Config.PAYBACK_SECONDS, Config.ZONE_CASH[k + 1] * Config.INCOME_SCALE, 1e-3, Config.ZONES[k].id)
 		H.ok(Config.ZONE_CASH[k + 1] > Config.ZONE_CASH[k], "deeper zones pay more")
 	end
 	-- the money anchors are the pre-v7 recommended Speeds: shrinking the Speed scale didn't move the money one
@@ -73,7 +73,8 @@ H.test("economy: a full plot of zone-k Commons earns zone k+1's ZONE_CASH in dol
 	for k, cash in Config.ZONE_CASH do
 		H.eq(cash, ProfileStore.LEGACY_ZONE_REQ[k], Config.ZONES[k].id)
 	end
-	H.near(Config.seedIncome(1), 10e3 / 3000, 1e-9, "the money scale is unchanged by the rework")
+	H.near(Config.seedIncome(1), 10e3 / 3000 * Config.INCOME_SCALE, 1e-9, "the money scale is unchanged by the rework")
+	H.eq(Config.INCOME_SCALE, 1.25, "x1.25 makes up for the x1 / x0.8 day-night rates (were x1.5 / x1)")
 end)
 
 H.test("growth: weight grows from sprout to GROW_MAX_FACTOR x and then stops (closed form)", function()

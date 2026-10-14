@@ -1,4 +1,4 @@
--- Free-to-play progression: a flat Speed per step (base x trail; x the tier on a treadmill, nothing that
+-- Free-to-play progression: a flat Speed per step (base x trail; a treadmill pays its tier's fixed rate x the trail; nothing that
 -- grows with Speed), and a simulated free player (tests/progression_sim) who reaches every zone within
 -- about ±50% of the owner's targets, each zone taking clearly longer than the one before.
 -- Treadmill tiers bought with money speed it up; Robux (treadmill upgrades, Speed packs) shortens it a
@@ -22,14 +22,10 @@ H.test("progression: Speed per step is flat: the base x the trail's small multip
 	for i = 2, #Config.TRAILS do
 		H.ok(Config.TRAILS[i].mult > Config.TRAILS[i - 1].mult, `{Config.TRAILS[i].id} beats the trail before it`)
 	end
-	-- the treadmill pays WalkSpeed x base x trail x tier per second, at any Speed
+	-- the treadmill pays its tier's fixed rate x the trail per second (no Speed or WalkSpeed in it at all)
 	local SpeedLogic = H.server("SpeedLogic")
 	local dt = Config.TICK
-	for _, speed in { 0, 25e3, 75e6, 1e12 } do
-		local walk = Config.walkSpeedFor(speed)
-		local want = math.min(walk * dt, Config.GAIN_CAP_STUDS_PER_TICK) * Config.BASE_SPEED_PER_STUD * 1.5 * 2.5
-		H.near(SpeedLogic.treadmillGain(walk, dt, Config.speedPerStud("Blue"), 2.5), want, 1e-9, `at {speed} Speed`)
-	end
+	H.near(SpeedLogic.treadmillGain(dt, 3, Config.trailMult("Blue")), Config.TREADMILL_TIERS[3].perSecond * 1.5 * dt, 1e-9, "tier 3, Blue x1.5")
 end)
 
 H.test("progression: each zone takes clearly longer than the one before; the Spirit Garden in ~10-14 h", function()
@@ -82,7 +78,7 @@ H.test("progression: Robux shortens it noticeably (treadmill upgrades, Speed pac
 	local tread = Sim.run({ treadmillTier = Config.TREADMILL_MAX })
 	local packs = Sim.run({ treadmillTier = Config.TREADMILL_MAX, speedPacks = Sim.PACKS })
 	local spirit = #Config.ZONES
-	H.ok(tread.arrivals[spirit] <= free.arrivals[spirit] * 0.7, `x{Config.treadmillMult(Config.TREADMILL_MAX)} treadmill: {Sim.clock(tread.arrivals[spirit])} vs {Sim.clock(free.arrivals[spirit])}`)
+	H.ok(tread.arrivals[spirit] <= free.arrivals[spirit] * 0.7, `Level {Config.TREADMILL_MAX} treadmill: {Sim.clock(tread.arrivals[spirit])} vs {Sim.clock(free.arrivals[spirit])}`)
 	H.ok(packs.arrivals[spirit] < tread.arrivals[spirit], "Speed packs on top help further")
 	for k = 2, spirit do
 		H.ok(tread.arrivals[k] <= free.arrivals[k], `{Config.ZONES[k].id}: Robux never slows you down`)
@@ -92,11 +88,12 @@ end)
 H.test("progression: money treadmill tiers help, and the free player buys them all game", function()
 	local without = Sim.run({ noTreadmillUpgrades = true })
 	local spirit = #Config.ZONES
-	H.ok(free.arrivals[spirit] < without.arrivals[spirit] * 0.9,
+	-- (without them the fixed free rate never gets there in the sim's 40 h: nil)
+	H.ok(without.arrivals[spirit] == nil or free.arrivals[spirit] < without.arrivals[spirit] * 0.9,
 		`with tiers {Sim.clock(free.arrivals[spirit])}, without {Sim.clock(without.arrivals[spirit])}`)
 	local tiers = {}
 	for _, b in free.buys do
-		if string.match(b.what, "^Treadmill x") then
+		if string.match(b.what, "^Treadmill Level") then
 			table.insert(tiers, b.t)
 		end
 	end

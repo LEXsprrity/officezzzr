@@ -17,7 +17,7 @@ ProfileStore.__index = ProfileStore
 -- free chest's last claim. Older saves load with the gift unclaimed, the window not shown yet and the
 -- chest ready.
 -- v5 grew the treadmill from 3 tiers (x2, Robux x3, Robux x5) to Config.TREADMILL_TIERS (money or
--- Robux, one tier at a time). An older save's tier becomes the new tier with the same multiplier
+-- Robux, one tier at a time). An older save's tier becomes the v5 tier with the same multiplier
 -- (migrateTreadmillTier), so nobody's treadmill changes speed.
 -- v6 replaced the fixed plant slots with free planting: each plant saves where it stands on the plot (x, z in
 -- the plot's space, Shared/Planting) and keeps its slot number as its id. An older save's plant gets its old
@@ -27,6 +27,8 @@ ProfileStore.__index = ProfileStore
 -- 10K..5B to 25K..75M, and the trails from x1.5..x5 to x1..x3. An older save's Speed is moved onto the
 -- new scale by where it stood between the old zones (migrateSpeed), so everyone keeps every zone they had
 -- reached and the same share of the way to the next one. Money, trails and tiers stay as they were.
+-- Later the treadmill tiers changed from a multiplier to a fixed Speed per second each; a tier keeps its
+-- number, so `treadmillTier` saves unchanged (no new version).
 ProfileStore.VERSION = 7
 
 -- The zones' recommended Speed before v7 (Config.ZONES order), for migrateSpeed.
@@ -37,6 +39,11 @@ ProfileStore.LEGACY_TRAIL_MULT = { Grey = 1.5, Green = 2, Blue = 2.5, Purple = 3
 
 -- The multipliers of the v1-v4 treadmill tiers (`treadmillTier` 1..3).
 ProfileStore.LEGACY_TREADMILL_MULT = { 2, 3, 5 }
+
+-- The multipliers of the v5-v7 tiers 1..10, which paid the walking gain x this. Tiers now pay a fixed
+-- Speed per second (Config.TREADMILL_TIERS) but keep their number, so saves keep `treadmillTier` as it is;
+-- this only maps the v1-v4 tiers onto them (migrateTreadmillTier).
+ProfileStore.TIER_MULT_V5 = { 2, 2.25, 2.5, 2.75, 3, 3.5, 4, 5, 6, 8 }
 
 -- Items removed from the game (the potions, the guards' sleep item) may still be in saves of any version.
 -- Only ids listed in Config.START_ITEMS are loaded; anything else in `items` is dropped, and old potion
@@ -176,12 +183,12 @@ function ProfileStore.levelForSlots(slots: number): number
 end
 
 -- v1-v4 -> v5: an old treadmill tier (1..3) becomes the highest new tier whose multiplier isn't above
--- the old one (x2 -> 1, x3 -> 5, x5 -> 8 with today's table).
+-- the old one (x2 -> 1, x3 -> 5, x5 -> 8).
 function ProfileStore.migrateTreadmillTier(oldTier: number): number
 	local oldMult = ProfileStore.LEGACY_TREADMILL_MULT[oldTier] or ProfileStore.LEGACY_TREADMILL_MULT[1]
 	local best = 1
-	for tier, t in Config.TREADMILL_TIERS do
-		if t.mult <= oldMult then
+	for tier, mult in ProfileStore.TIER_MULT_V5 do
+		if mult <= oldMult then
 			best = tier
 		end
 	end

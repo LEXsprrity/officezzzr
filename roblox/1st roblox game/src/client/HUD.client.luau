@@ -14,6 +14,7 @@ local Config = require(Shared:WaitForChild("Config"))
 local Format = require(Shared:WaitForChild("Format"))
 local SeedPacks = require(Shared:WaitForChild("SeedPacks"))
 local Icons = require(Shared:WaitForChild("Icons"))
+local Treadmill = require(Shared:WaitForChild("Treadmill"))
 local UiFx = require(Shared:WaitForChild("UiFx"))
 
 local player = Players.LocalPlayer
@@ -29,7 +30,7 @@ pcall(StarterGui.SetCoreGuiEnabled, StarterGui, Enum.CoreGuiType.Backpack, false
 local stats: { [string]: any } = {
 	money = 0, speed = 0, walkSpeed = 16, income = 0, slots = Config.SLOTS_START, plotLevel = 1,
 	trails = { [Config.DEFAULT_TRAIL] = true }, equippedTrail = Config.DEFAULT_TRAIL, speedMult = Config.trailMult(Config.DEFAULT_TRAIL),
-	treadmillTier = 1, treadmillMult = 2,
+	treadmillTier = 1,
 	items = {}, index = {}, plants = {}, passes = {}, carrying = false, reachedEnd = false, seedBag = {},
 }
 
@@ -1236,10 +1237,14 @@ do
 		section("TREADMILL", nextOrder(), HEADING_GOLD)
 		local tier = stats.treadmillTier or 1
 		local treadPrice = Config.priceOf("TreadmillUpgrade", stats :: any)
+		-- "+60/s": a second on it at that tier with your equipped trail (the "+X/s" over the treadmill)
+		local function treadRate(t: number): string
+			return Treadmill.rateText(Treadmill.perSecond(t, stats.equippedTrail))
+		end
 		local treadCard = shopCard(cardGrid(nextOrder()), 1, CARD_COLORS.Treadmill,
-			if treadPrice then `x{Config.treadmillMult(tier + 1)} TREADMILL` else "MAX TREADMILL",
-			if treadPrice then `Tier {tier + 1}/{Config.TREADMILL_MAX} · now x{Config.treadmillMult(tier)}`
-				else `x{Config.treadmillMult(tier)} · stand on it to gain Speed`, "Treadmill")
+			if treadPrice then `LEVEL {tier + 1} TREADMILL` else "MAX TREADMILL",
+			if treadPrice then `{treadRate(tier)} > {treadRate(tier + 1)} · Level {tier + 1}/{Config.TREADMILL_MAX}`
+				else `{treadRate(tier)} · stand on it to gain Speed`, "Treadmill")
 		upgradeButtons(treadCard, treadPrice, "TreadmillUpgrade", Config.treadmillUpgradeProduct(tier))
 
 		-- Gamepasses (Robux), purple

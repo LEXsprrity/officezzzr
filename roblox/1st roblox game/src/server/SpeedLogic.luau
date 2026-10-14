@@ -18,7 +18,8 @@ export type Opts = {
 	walkSpeed: number, -- the server's WalkSpeed for this player (highest of this and last tick)
 	onTreadmill: boolean,
 	mult: number, -- Speed per stud: Config.speedPerStud (the flat base x the equipped trail)
-	treadmillMult: number, -- Config.treadmillMult of its tier
+	treadmillTier: number, -- the owner's treadmill tier (profile.treadmillTier)
+	trailMult: number, -- Config.trailMult of the equipped trail (the treadmill pays its tier's rate x this)
 }
 
 function SpeedLogic.newState(): State
@@ -41,10 +42,10 @@ function SpeedLogic.walkGain(dist: number, mult: number): number
 	return math.min(dist, Config.GAIN_CAP_STUDS_PER_TICK) * mult
 end
 
--- Treadmill = the full walking rate for this tick (as if you walked WalkSpeed*dt), times its tier.
--- Standing still (AFK) on it counts; the cap still applies to the walking part.
-function SpeedLogic.treadmillGain(walkSpeed: number, dt: number, mult: number, treadmillMult: number): number
-	return SpeedLogic.walkGain(walkSpeed * dt, mult) * treadmillMult
+-- Treadmill: the tier's fixed Speed per second (Config.treadmillRate) x the equipped trail's multiplier,
+-- for `dt` seconds. Nothing else: not WalkSpeed, not the Speed you have. Standing still (AFK) on it counts.
+function SpeedLogic.treadmillGain(dt: number, tier: number, trailMult: number): number
+	return Config.treadmillRate(tier) * trailMult * dt
 end
 
 function SpeedLogic.allowedPerTick(walkSpeed: number, dt: number): number
@@ -78,7 +79,7 @@ function SpeedLogic.step(state: State, pos: Vector3, dt: number, opts: Opts): (n
 	state.lastGood = pos
 
 	if opts.onTreadmill then
-		return SpeedLogic.treadmillGain(opts.walkSpeed, dt, opts.mult, opts.treadmillMult), "ok", nil
+		return SpeedLogic.treadmillGain(dt, opts.treadmillTier, opts.trailMult), "ok", nil
 	end
 	return SpeedLogic.walkGain(dist, opts.mult), "ok", nil
 end
