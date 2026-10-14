@@ -1,13 +1,13 @@
 -- Day/night lighting: both looks apply to a real (Lune) Lighting and its effects (every property name and
 -- value type is checked against the Roblox reflection database), default.project.json ships the day look,
--- and the clock keeps the sun high by day and never jumps.
+-- the sun and the moon stand still (one fixed clock per phase), and each flip hides behind a fade to black.
 local fs = require("@lune/fs")
 local serde = require("@lune/serde")
 local roblox = require("@lune/roblox")
 local H = require("./harness")
 
 local Config = H.shared("Config")
-local LightingLook = H.server("LightingLook")
+local LightingLook = H.shared("LightingLook")
 
 local cycle = Config.DAY_SECONDS + Config.NIGHT_SECONDS
 local effects = {}
@@ -75,7 +75,7 @@ H.test("lighting: default.project.json ships the day look", function()
 		end
 	end
 	local clock = lighting["$properties"].ClockTime
-	H.ok(clock >= LightingLook.DAY_CLOCK[1] and clock <= LightingLook.DAY_CLOCK[2], "Studio shows a day-time clock")
+	H.eq(clock, LightingLook.DAY_CLOCK, "Studio shows the day clock")
 end)
 
 H.test("lighting: from spawn you see to the end of the map (no streaming cut-off, thin air, no fog)", function()
@@ -94,22 +94,52 @@ H.test("lighting: from spawn you see to the end of the map (no streaming cut-off
 	H.eq(atmosphere.Haze[1], 0, "a clear day")
 end)
 
-H.test("lighting: the sun stays high all day, sets and rises inside the night fades, and the clock never jumps", function()
-	local prev = LightingLook.clockTime(0)
-	for s = 1, cycle * 2 do
-		local now = s
-		local clock = LightingLook.clockTime(now)
-		local step = (clock - prev) % 24
-		H.ok(step < 0.5, `clock jumps by {step} h at {now}s`)
-		prev = clock
-		local night, left = Config.dayPhase(now)
-		if not night then
-			H.ok(clock >= LightingLook.DAY_CLOCK[1] - 1e-6 and clock <= LightingLook.DAY_CLOCK[2] + 1e-6, `day clock {clock}`)
-		elseif Config.nightBlend(now) >= 0.999 then
-			-- Fully night: the sun is down (after 18:30, before 05:30).
-			H.ok(clock >= LightingLook.SUNSET - 1e-6 or clock <= LightingLook.SUNRISE - 24 + 1e-6, `full night at {clock} ({left}s left)`)
+H.test("lighting: the sun and the moon stand still: one fixed ClockTime per phase, day up high, night dark", function()
+	H.ok(LightingLook.DAY_CLOCK >= 10 and LightingLook.DAY_CLOCK <= 15, `the day sun is high ({LightingLook.DAY_CLOCK})`)
+	H.ok(LightingLook.NIGHT_CLOCK <= 2 or LightingLook.NIGHT_CLOCK >= 21, `the moon is up at night ({LightingLook.NIGHT_CLOCK})`)
+	for s = 0, cycle * 2, 0.5 do
+		local night = Config.dayPhase(s)
+		local want = if night then LightingLook.NIGHT_CLOCK else LightingLook.DAY_CLOCK
+		H.eq(LightingLook.clockTime(s), want, `clock at {s}s`)
+		LightingLook.apply(H.lighting, effects, s)
+		H.near(H.lighting.ClockTime, want, 1e-3, `Lighting.ClockTime at {s}s`)
+	end
+	-- the whole look is the phase's own, never a blend
+	LightingLook.apply(H.lighting, effects, Config.DAY_SECONDS - 0.01)
+	H.near(H.lighting.Brightness, LightingLook.LIGHTING.Brightness[1], 1e-3, "full day look right up to the flip")
+	LightingLook.apply(H.lighting, effects, Config.DAY_SECONDS + 0.01)
+	H.near(H.lighting.Brightness, LightingLook.LIGHTING.Brightness[2], 1e-3, "full night look right after it")
+	H.ok(LightingLook.findEffects(H.lighting).Atmosphere == effects.Atmosphere, "findEffects finds the effects under Lighting")
+end)
+
+H.test("lighting: each phase flip fades every screen to black for about a second, the switch inside the black", function()
+	local L = LightingLook
+	local total = L.FADE_OUT + L.BLACK + L.FADE_IN
+	H.ok(total >= 0.8 and total <= 1.5, `about a second ({total} s)`)
+	for _, flip in { Config.DAY_SECONDS, cycle, cycle + Config.DAY_SECONDS } do
+		H.eq(L.fadeAlpha(flip - 0.001), 1, `black just before the flip at {flip}`)
+		H.eq(L.fadeAlpha(flip + 0.001), 1, `black just after the flip at {flip}`)
+		H.eq(L.fadeAlpha(flip - L.BLACK / 2 - L.FADE_OUT - 0.01), 0, "clear before the fade out")
+		H.eq(L.fadeAlpha(flip + L.BLACK / 2 + L.FADE_IN + 0.01), 0, "clear after the fade in")
+		local mid = L.fadeAlpha(flip - L.BLACK / 2 - L.FADE_OUT / 2)
+		H.ok(mid > 0.3 and mid < 0.7, `half way through the fade out ({mid})`)
+		local last = -1
+		for t = flip - 2, flip, 0.01 do
+			local a = L.fadeAlpha(t)
+			H.ok(a >= last - 1e-9 and a >= 0 and a <= 1, "fades out smoothly")
+			last = a
 		end
 	end
+	for s = 5, Config.DAY_SECONDS - 5, 1 do
+		H.eq(L.fadeAlpha(s), 0, `no black mid-day ({s}s)`)
+	end
+	-- Client/DayNight draws it from the shared server clock and switches the local look on the flip
+	local src = fs.readFile("src/client/DayNight.client.luau")
+	H.ok(string.find(src, "LightingLook.fadeAlpha(now)", 1, true) and string.find(src, "workspace:GetServerTimeNow()", 1, true), "in sync from server time")
+	H.ok(string.find(src, "LightingLook.applyPhase(Lighting", 1, true), "switches the look locally")
+	H.ok(string.find(src, "IgnoreGuiInset = true", 1, true) and string.find(src, "DisplayOrder = 1000", 1, true), "covers the whole screen, HUD too")
+	local amb = fs.readFile("src/server/AmbientService.luau")
+	H.ok(not string.find(amb, "nightBlend", 1, true) and string.find(amb, "applyPhase", 1, true), "the server sets one fixed look per phase")
 end)
 
 return nil
