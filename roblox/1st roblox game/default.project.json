@@ -41,7 +41,7 @@
     "Lighting": {
       "$properties": {
         "Technology": "ShadowMap",
-        "ClockTime": 12,
+        "ClockTime": 14,
         "GeographicLatitude": 30,
         "Brightness": 2,
         "Ambient": [0.275, 0.282, 0.322],

@@ -30,7 +30,7 @@ local FONT = Enum.Font.FredokaOne
 
 local TOP = 70 -- design pixels from the top: just under the HUD's carry banner
 local STRIP_W, STRIP_H = 1100, 84
-local HOLD = 2 -- seconds on screen, between the fade in and the fade out
+local HOLD = 1 -- seconds on screen, between the fade in and the fade out
 local SETTLE = 0.2 -- a new zone must hold this long first, so standing on a border doesn't flicker
 
 local function new(className: string, props: { [string]: any }, children: { Instance }?): any

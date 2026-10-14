@@ -127,11 +127,11 @@ H.test("HUD: bright windows: the modal body takes the bar's colours, no dark sla
 	H.ok(not string.find(REWARDS, "Color3.fromRGB(44, 50, 66)", 1, true), "the Free Gift window is bright too")
 end)
 
-H.test("ZoneBanner.client: entering a zone flashes its name and a face for ~2 s (from Config.zoneAtX)", function()
+H.test("ZoneBanner.client: entering a zone flashes its name and a face for ~1 s (from Config.zoneAtX)", function()
 	H.ok(fs.isFile("src/client/ZoneBanner.client.luau"), "the script exists")
 	local BANNER = fs.readFile("src/client/ZoneBanner.client.luau")
 	H.ok(string.find(BANNER, "Config.zoneAtX(root.Position.X)", 1, true), "zone from Config.zoneAtX")
-	H.ok(string.find(BANNER, "local HOLD = 2", 1, true), "holds about two seconds")
+	H.ok(string.find(BANNER, "local HOLD = 1", 1, true), "holds about one second")
 	H.ok(string.find(BANNER, "CanvasGroup", 1, true) and string.find(BANNER, "{ GroupTransparency = 0 }", 1, true), "fades in as one")
 	H.ok(string.find(BANNER, "{ GroupTransparency = 1, Position", 1, true), "fades and slides out")
 	H.ok(string.find(BANNER, "NumberSequenceKeypoint.new(0, 1)", 1, true) and string.find(BANNER, "NumberSequenceKeypoint.new(1, 1)", 1, true),
