@@ -183,7 +183,14 @@ H.test("odds: packs roll with night luck and double Gold/Rainbow (8%, 2%), Celes
 		H.eq(SeedPacks.percent(odds.mutations[1].pct), "0.5%")
 	end
 	local space, spirit = SeedPacks.odds(packs()[1]), SeedPacks.odds(packs()[2])
-	H.ok(spirit.rarities[#Config.RARITIES] > space.rarities[#Config.RARITIES], "deeper zone, rarer seeds")
+	H.ok(spirit.rarities[4] > space.rarities[4], "deeper zone, more Epics")
+	-- Legendary is a fixed, rare chance in both packs (luck never tilts it)
+	H.eq(Config.PACK_LEGENDARY_CHANCE, 0.015)
+	for _, odds in { space, spirit } do
+		local legendary = odds.rarities[Config.LEGENDARY]
+		H.ok(legendary >= 1 and legendary <= 2, `pack Legendary {legendary}% should be 1-2%`)
+		H.near(legendary, Config.PACK_LEGENDARY_CHANCE * 100, 1e-9)
+	end
 end)
 
 H.test("odds: percent labels read well", function()

@@ -70,18 +70,21 @@ H.test("growth: per-plant variance is stable and within [0.8, 1.2)", function()
 	end
 end)
 
-H.test("rarity: 5 rarities, luck and deeper zones shift odds toward rare", function()
+H.test("rarity: 5 rarities, luck and deeper zones shift Common..Epic toward rare, Legendary gets rarer", function()
 	H.eq(#Config.RARITIES, 5)
-	local function legendaryShare(k, luck)
+	H.eq(Config.LEGENDARY, 5)
+	local function share(k, luck, i)
 		local w = Config.rarityWeights(k, luck)
 		local total = 0
 		for _, x in w do
 			total += x
 		end
-		return w[5] / total
+		return w[i] / total
 	end
-	H.ok(legendaryShare(7, 1) > legendaryShare(1, 1))
-	H.ok(legendaryShare(1, 2) > legendaryShare(1, 1))
+	H.ok(share(7, 1, 4) > share(1, 1, 4), "Epic: deeper is luckier")
+	H.ok(share(1, 2, 4) > share(1, 1, 4), "Epic: night is luckier")
+	H.ok(share(7, 1, 5) < share(1, 1, 5), "Legendary: deeper is rarer")
+	H.ok(share(1, 2, 5) > share(1, 1, 5), "Legendary: night still helps")
 	-- rollSeed respects the rng
 	local rarity = Config.rollSeed(1, 1, false, function()
 		return 0

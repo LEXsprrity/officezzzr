@@ -2015,6 +2015,13 @@ LootEvent.OnClientEvent:Connect(function(kind: string, data: any)
 	end
 end)
 
+-- Server-wide announcements (Net.announce), e.g. "Alex got a LEGENDARY Starpetal!"
+LootEvent.OnClientEvent:Connect(function(kind: string, data: any)
+	if kind == "Announce" and data then
+		toast(data.text, data.color, 6)
+	end
+end)
+
 ----------------------------------------------------------------------------------------------------
 -- Per-frame bits: zone banner, timers, bat cooldown
 ----------------------------------------------------------------------------------------------------

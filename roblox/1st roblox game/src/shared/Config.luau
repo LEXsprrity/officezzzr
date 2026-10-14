@@ -235,21 +235,55 @@ Config.RARITIES = {
 	{ id = "Common", color = Color3.fromRGB(200, 200, 200), income = 1, weight = 1, spawn = 60 },
 	{ id = "Uncommon", color = Color3.fromRGB(90, 220, 90), income = 1.6, weight = 1.5, spawn = 25 },
 	{ id = "Rare", color = Color3.fromRGB(70, 150, 255), income = 3, weight = 2.5, spawn = 10 },
-	{ id = "Epic", color = Color3.fromRGB(190, 80, 255), income = 6, weight = 4, spawn = 4 },
-	{ id = "Legendary", color = Color3.fromRGB(255, 190, 30), income = 15, weight = 8, spawn = 1 },
+	{ id = "Epic", color = Color3.fromRGB(190, 80, 255), income = 10, weight = 4, spawn = 4 },
+	-- the top rarity has no `spawn`: its chance is LEGENDARY_CHANCE, never tilted (see rarityWeights)
+	{ id = "Legendary", color = Color3.fromRGB(255, 190, 30), income = 15, weight = 8, spawn = 0 },
 } :: { Rarity }
+Config.LEGENDARY = #Config.RARITIES -- rarity index of Legendary
 
--- Deeper zones and luck (night) tilt the odds toward the rare end.
-Config.ZONE_RARITY_BONUS = 0.1
-Config.NIGHT_LUCK = 2 -- pods roll with this luck at night; premium packs always do (PACK_LUCK)
+-- Deeper zones and luck (night) tilt Common..Epic toward the rare end.
+Config.ZONE_RARITY_BONUS = 0.08
+Config.NIGHT_LUCK = 2 -- pods roll with this luck at night
 
-function Config.rarityWeights(k: number, luck: number): { number }
+-- Legendary is a trophy: a fixed chance per pod roll by zone (day), times the luck (x2 at night).
+-- Unlike the other rarities it gets RARER further down the corridor, and is extremely rare in the last
+-- two zones (Deep Space 1 in 2,000, Spirit Garden 1 in 2,500 by day). Premium packs use
+-- PACK_LEGENDARY_CHANCE instead.
+Config.LEGENDARY_CHANCE = { 0.01, 0.009, 0.008, 0.007, 0.006, 0.0005, 0.0004 }
+
+function Config.legendaryChance(k: number, luck: number): number
+	return Config.LEGENDARY_CHANCE[k] * luck
+end
+
+-- Rarity weights for zone k (they sum to 1). `legendary` overrides the Legendary chance (packs).
+function Config.rarityWeights(k: number, luck: number, legendary: number?): { number }
 	local tilt = luck * (1 + Config.ZONE_RARITY_BONUS * (k - 1))
 	local out = {}
-	for i, r in Config.RARITIES do
-		out[i] = r.spawn * tilt ^ (i - 1)
+	local total = 0
+	for i = 1, Config.LEGENDARY - 1 do
+		out[i] = Config.RARITIES[i].spawn * tilt ^ (i - 1)
+		total += out[i]
 	end
+	local top = legendary or Config.legendaryChance(k, luck)
+	for i = 1, Config.LEGENDARY - 1 do
+		out[i] = out[i] / total * (1 - top)
+	end
+	out[Config.LEGENDARY] = top
 	return out
+end
+
+-- A Legendary worth telling the whole server about: one from the last two zones, or from a premium
+-- pack. `fromPack` is true for pack seeds.
+Config.ANNOUNCE_LEGENDARY_FROM_ZONE = 6
+Config.PACK_ANNOUNCE_DELAY = 4 -- seconds: a pack Legendary is announced once the buyer's reveal reel has landed
+function Config.announcesLegendary(zone: number, rarity: number, fromPack: boolean): boolean
+	return rarity == Config.LEGENDARY and (fromPack or zone >= Config.ANNOUNCE_LEGENDARY_FROM_ZONE)
+end
+
+-- "Alex got a LEGENDARY Gold Starpetal!"
+function Config.legendaryAnnouncement(playerName: string, zone: number, mutation: string?): string
+	local prefix = if mutation then mutation .. " " else ""
+	return `🌟 {playerName} got a LEGENDARY {prefix}{Config.ZONES[zone].seed}!`
 end
 
 -- `exclusive` mutations never roll from pods (chance 0); only the premium seed packs can give them
@@ -490,7 +524,8 @@ Config.PASS_EXTRA_SLOTS = 10 -- the ExtraSlots pass adds this many slots, on top
 -- seed of its zone into the player's seed bag, which they plant from the Seeds menu at their pad.
 -- Rolls live in Shared/SeedPacks, purchase rules in Server/Shop.
 ----------------------------------------------------------------------------------------------------
-Config.PACK_LUCK = Config.NIGHT_LUCK -- packs roll rarities like a night pod in their zone...
+Config.PACK_LUCK = Config.NIGHT_LUCK -- packs roll Common..Epic like a night pod in their zone...
+Config.PACK_LEGENDARY_CHANCE = 0.015 -- ...but Legendary stays a rare event (1 in ~67)...
 Config.PACK_MUTATION_MULT = 2 -- ...with twice the Gold/Rainbow chances (Night never rolls from packs)...
 Config.PACK_EXCLUSIVE = "Celestial" -- ...plus the pack-only mutation, which pods never roll
 Config.PACK_EXCLUSIVE_CHANCE = 0.005
