@@ -35,14 +35,14 @@ H.test("map: map/World.rbxm loads, has every required piece and gives usable plo
 	H.eq(#plots, Config.MAX_PLAYERS)
 	H.eq(#nests, #Config.ZONES)
 	for i, plot in plots do
-		H.eq(#plot.slotCFrames, Config.SLOTS_MAX + Config.PASS_EXTRA_SLOTS, `plot {i} slots`)
-		for s, cf in plot.slotCFrames do
-			H.ok((cf.Position - plot.center).Magnitude < Config.PLOT_SIZE, `plot {i} slot {s} on its plot`)
+		H.ok(#plot.beds >= 2, `plot {i} has its dirt beds`)
+		for b, bed in plot.beds do
+			H.ok((bed.CFrame.Position - plot.center).Magnitude < Config.PLOT_SIZE, `plot {i} bed {b} on its plot`)
 		end
+		H.ok((plot.origin.Position - plot.center).Magnitude < Config.PLOT_SIZE, `plot {i} origin`)
 		local top = plot.belt.CFrame * CFrame.new(0, plot.belt.Size.Y / 2 + 3, 0)
 		H.ok(WorldBuilder.onBelt(plot.belt, top.Position), `plot {i}: standing on the belt counts`)
-		H.ok(not WorldBuilder.onBelt(plot.belt, top.Position + Vector3.new(0, 0, plot.belt.Size.Z)), `plot {i}: beside it doesn't`)
-		H.ok((plot.pad.CFrame.Position - plot.center).Magnitude < Config.PLOT_SIZE, `plot {i} pad`)
+		H.ok(not WorldBuilder.onBelt(plot.belt, (plot.belt.CFrame * CFrame.new(0, plot.belt.Size.Y / 2 + 3, plot.belt.Size.Z)).Position), `plot {i}: past its end doesn't`)
 		H.ok(plot.signLabel:IsA("TextLabel") and plot.treadmillLabel:IsA("TextLabel"), `plot {i} labels`)
 		H.ok(plot.upgradeLabels.level and plot.upgradeLabels.cash and plot.upgradeLabels.robux and plot.upgradeLabels.buttons, `plot {i} board labels`)
 		H.ok(plot.soil:IsA("Folder") and plot.plants:IsA("Folder"), `plot {i} folders`)
@@ -59,13 +59,13 @@ end)
 
 H.test("map: a hand-edited map is adopted as it is, and gameplay follows the moved pieces", function()
 	local world = MapTool.load(MapTool.PATH)
-	-- Move and turn plot 1's treadmill belt, move its pad, reparent its name sign, turn its floor (with the
-	-- slots and spawn on it), move a nest and add a decoration of the friend's own.
+	-- Move and turn plot 1's treadmill belt, move one of its dirt beds, reparent its name sign, turn its floor (with the
+	-- origin and spawn on it), move a nest and add a decoration of the friend's own.
 	local belt = withRole(world, "TreadmillBelt", "PlotIndex", 1)
 	local oldBelt = belt.CFrame
 	belt.CFrame = CFrame.new(oldBelt.Position + Vector3.new(-12, 0, 6)) * CFrame.Angles(0, math.rad(90), 0) * oldBelt.Rotation
-	local pad = withRole(world, "PlantPad", "PlotIndex", 1)
-	pad.CFrame += Vector3.new(5, 0, -3)
+	local bed = withRole(world, "PlantBed", "PlotIndex", 1)
+	bed.CFrame += Vector3.new(5, 0, -3)
 	local sign = withRole(world, "PlotSign", "PlotIndex", 1)
 	sign.Parent = world
 	local floor = withRole(world, "PlotFloor", "PlotIndex", 2)
@@ -83,11 +83,12 @@ H.test("map: a hand-edited map is adopted as it is, and gameplay follows the mov
 	local top = belt.CFrame * CFrame.new(0, 3, 0)
 	H.ok(WorldBuilder.onBelt(plots[1].belt, top.Position), "the belt check uses the belt's new place")
 	H.ok(not WorldBuilder.onBelt(plots[1].belt, (oldBelt * CFrame.new(0, 3, 10)).Position), "...not the old one")
-	H.ok((plots[1].pad.CFrame.Position - pad.CFrame.Position).Magnitude < 1e-4, "the pad's new place")
+	H.ok(table.find(plots[1].beds, bed) ~= nil, "the moved bed is still a bed of plot 1")
+	H.ok(H.shared("Planting").bedAt(plots[1].beds, bed.CFrame.Position) == bed, "planting checks use the bed's new place")
 	H.eq(plots[1].signLabel.Parent.Parent, sign, "the reparented sign is still found")
-	local slot1 = floor:FindFirstChild("Slot1")
-	H.ok((plots[2].slotCFrames[1].Position - attWorld(slot1).Position).Magnitude < 1e-3, "slots follow the turned floor")
-	H.ok(plots[2].slotCFrames[1].LookVector:Dot(attWorld(slot1).LookVector) > 0.999, "...and turn with it")
+	local origin = floor:FindFirstChild("Origin")
+	H.ok((plots[2].origin.Position - attWorld(origin).Position).Magnitude < 1e-3, "the plot origin (where plants are measured from) follows the turned floor")
+	H.ok(plots[2].origin.LookVector:Dot(attWorld(origin).LookVector) > 0.999, "...and turns with it")
 	H.ok((plots[2].spawnCFrame.Position - attWorld(floor:FindFirstChild("Spawn")).Position).Magnitude < 1e-3, "so does the spawn")
 	H.ok((nests[3].podCFrames[1].Position - attWorld(core:FindFirstChild("Pod1")).Position).Magnitude < 1e-3, "pods follow the moved nest")
 	H.ok((nests[3].guardHome - attWorld(core:FindFirstChild("GuardHome")).Position).Magnitude < 1e-3, "so does the guard's home")
@@ -101,20 +102,20 @@ end)
 
 H.test("map: a map missing a required piece is reported (plot and role) and the server regenerates it", function()
 	local world = MapTool.load(MapTool.PATH)
-	withRole(world, "PlantPad", "PlotIndex", 3):Destroy()
+	withRole(world, "PlantBed", "PlotIndex", 3):Destroy()
 	withRole(world, "Pod", "ZoneIndex", 5):SetAttribute("Role", nil)
 	local plots, _, problems = WorldBuilder.adopt(world)
 	H.eq(plots, nil, "not valid")
 	local text = table.concat(problems, "\n")
-	H.ok(string.find(text, "Plot 3: missing the planting pad", 1, true) and string.find(text, `Role = "PlantPad", PlotIndex`, 1, true), text)
+	H.ok(string.find(text, "Plot 3: missing dirt bed", 1, true) and string.find(text, `Role = "PlantBed", PlotIndex`, 1, true), text)
 	H.ok(string.find(text, "Zone 5: missing seed pod", 1, true) ~= nil, text)
 
 	local before = #H.warnings
 	local loaded = WorldBuilder.load()
-	H.ok(#H.warnings > before and string.find(H.warnings[#H.warnings], "Plot 3: missing the planting pad", 1, true) ~= nil, "warned which plot and role")
+	H.ok(#H.warnings > before and string.find(H.warnings[#H.warnings], "Plot 3: missing dirt bed", 1, true) ~= nil, "warned which plot and role")
 	H.ok(H.workspace:FindFirstChild("World") ~= world, "regenerated from code")
 	H.eq(#loaded, Config.MAX_PLAYERS)
-	H.ok(loaded[3].pad ~= nil, "plot 3 has a pad again")
+	H.ok(#loaded[3].beds == 2, "plot 3 has its beds again")
 end)
 
 H.test("map: tools/build_map.luau refuses to overwrite an existing map without --force", function()
@@ -189,7 +190,7 @@ H.test("map: map/World.rbxm has clean shared plot fences, no plot gates, no FAST
 	for i, plot in plots do
 		local top = plot.belt.CFrame * CFrame.new(0, plot.belt.Size.Y / 2 + 3, 0)
 		H.ok(WorldBuilder.onBelt(plot.belt, top.Position), `plot {i}: standing on the smaller belt counts`)
-		H.ok(not WorldBuilder.onBelt(plot.belt, top.Position + Vector3.new(plot.belt.Size.X, 0, 0)), `plot {i}: beside it doesn't`)
+		H.ok(not WorldBuilder.onBelt(plot.belt, (plot.belt.CFrame * CFrame.new(plot.belt.Size.X, plot.belt.Size.Y / 2 + 3, 0)).Position), `plot {i}: beside it doesn't`)
 	end
 end)
 

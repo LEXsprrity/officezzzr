@@ -169,11 +169,27 @@ local function watchPrompt(prompt: ProximityPrompt)
 	prompt:GetAttributeChangedSignal("OwnerUserId"):Connect(apply)
 end
 
+-- The Upgrade boards' painted buttons (PlotService): a ClickDetector on an invisible part over each, with
+-- its owner's OwnerUserId and its reach in "Reach". Only the owner can click or tap it (the server re-checks).
+local function watchClick(detector: ClickDetector)
+	local function apply()
+		local owner = detector:GetAttribute("OwnerUserId")
+		local reach = detector:GetAttribute("Reach")
+		if owner ~= nil and type(reach) == "number" then
+			detector.MaxActivationDistance = if owner == player.UserId then reach else 0
+		end
+	end
+	apply()
+	detector:GetAttributeChangedSignal("OwnerUserId"):Connect(apply)
+end
+
 local function consider(inst: Instance)
 	if inst:IsA("Texture") and inst.Name == "Stripes" then
 		stripes[inst] = true
 	elseif inst:IsA("ProximityPrompt") then
 		watchPrompt(inst)
+	elseif inst:IsA("ClickDetector") then
+		watchClick(inst)
 	elseif inst:IsA("BasePart") and inst:GetAttribute("Role") == "TreadmillBelt" then
 		belts[inst] = true
 	elseif inst:IsA("Model") and inst:GetAttribute("Role") == "Plot" then

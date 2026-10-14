@@ -1,12 +1,12 @@
--- Generates the whole map from primitives: base area with a fenced plot per player (each with a treadmill),
--- the walled corridor split into themed zones (ZoneThemes; no gates or zone signs, just floor and wall
--- colours), a mother-plant nest per zone with a small "recommended Speed" plank beside it; the Spirit
--- Garden's back wall ends it. Decoration is anchored and non-colliding (see Props). Clean cartoony look
--- only: flat bright plastic, studs and checkers (ZoneThemes header).
+-- Generates the whole map from primitives: base area with a fenced plot per player (two dirt beds and a
+-- grass path inside, a treadmill in front), the walled corridor split into themed zones (ZoneThemes; no
+-- gates or zone signs, just floor and wall colours), a mother-plant nest per zone with a small "recommended
+-- Speed" plank beside it; the Spirit Garden's back wall ends it. Decoration is anchored and non-colliding
+-- (see Props). Clean cartoony look only: flat bright plastic, studs and checkers (ZoneThemes header).
 --
 -- The map is hand-editable: map/World.rbxm (Rojo puts it at Workspace.World) is the source of truth, and
 -- WorldBuilder.load() ADOPTS it at server start instead of rebuilding. Every piece gameplay needs carries
--- a Role attribute (plus PlotIndex or ZoneIndex), and the plant slots, spawn points, pods and guard homes
+-- a Role attribute (plus PlotIndex or ZoneIndex), and the plot origins, spawn points, pods and guard homes
 -- are tagged Attachments, so adopt() finds them by attribute wherever they were moved or reparented.
 -- Only a map missing a required piece is regenerated from code (WorldBuilder.build()), with a warning.
 -- Zone boundaries for gameplay (zoneAtX, guards) always come from Config, not from the zone floors.
@@ -14,6 +14,7 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Config = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("Config"))
 local Format = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("Format"))
 local Icons = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("Icons"))
+local Planting = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("Planting"))
 local Props = require(script.Parent:WaitForChild("Props"))
 local ZoneThemes = require(script.Parent:WaitForChild("ZoneThemes"))
 local Assets = require(script.Parent:WaitForChild("Assets"))
@@ -25,9 +26,9 @@ export type PlotInfo = {
 	model: Model,
 	center: Vector3,
 	signLabel: TextLabel,
-	pad: BasePart,
+	origin: CFrame, -- the floor's top centre, looking into the plot (Shared/Planting keeps plants in its space)
+	beds: { BasePart }, -- the dirt beds players plant on (Role "PlantBed")
 	spawnCFrame: CFrame,
-	slotCFrames: { CFrame },
 	belt: BasePart,
 	treadmillLabel: TextLabel, -- the sign over the belt
 	soil: Folder,
@@ -116,8 +117,11 @@ local SAND = Color3.fromRGB(240, 222, 168)
 local WALL = Color3.fromRGB(196, 128, 80)
 local WALL_LIGHT = Color3.fromRGB(212, 144, 94)
 local WALL_TOP = Color3.fromRGB(90, 214, 64)
-local FENCE_POST = Color3.fromRGB(84, 64, 58)
-local FENCE_RAIL = Color3.fromRGB(198, 108, 56)
+local FENCE_POST = Color3.fromRGB(104, 70, 72) -- chunky studded wood, a muted plum brown (owner's reference)
+local FENCE_RAIL = Color3.fromRGB(122, 84, 82)
+local DIRT = Color3.fromRGB(190, 112, 102) -- the plots' pinkish-brown dirt beds
+local DIRT_LIGHT = Color3.fromRGB(206, 130, 118)
+local ENTRANCE = Color3.fromRGB(244, 176, 98) -- the orange-tan tile at a plot's opening
 local TILE = 14 -- lawn checker; a plot (84 studs) is 6 x 6 tiles
 local WALL_ROWS = 4 -- wall checker rows (WALL_HEIGHT 52 → 13-stud tiles)
 
@@ -277,7 +281,8 @@ local function buildBase(world: Folder)
 	studs(box(base, "Ground", Vector3.new(len, 4, BASE_HALF_Z * 2), CFrame.new(midX, GROUND - 2, 0), GRASS))
 	-- The lawn checker, minus the tiles under the plots and the walkway (a tile can straddle two plots
 	-- that touch, so it is hidden when its corners and middle are all covered).
-	local covered = { { -1e9, 1e9, -18, 18 } } -- the walkway (36 wide)
+	local walk = Config.WALKWAY_WIDTH / 2
+	local covered = { { -1e9, 1e9, -walk, walk } } -- the walkway
 	for spot = 1, Config.MAX_PLAYERS do
 		local c = spotCenter(spot)
 		local half = Config.PLOT_SIZE / 2
@@ -304,7 +309,7 @@ local function buildBase(world: Folder)
 		end
 		return true
 	end)
-	studs(flat(base, "Walkway", len, 36, Vector3.new(midX, GROUND, 0), SAND, nil, nil, 0.3))
+	studs(flat(base, "Walkway", len, Config.WALKWAY_WIDTH, Vector3.new(midX, GROUND, 0), SAND, nil, nil, 0.3))
 
 	-- Perimeter walls, leaving the corridor mouth open at +X.
 	plainWall(base, Vector3.new(BASE_MIN_X - 2, GROUND, 0), Vector3.zAxis, Vector3.xAxis, BASE_HALF_Z * 2 + 8)
@@ -319,19 +324,52 @@ end
 ----------------------------------------------------------------------------------------------------
 -- Plots
 ----------------------------------------------------------------------------------------------------
-local function slotLocal(i: number): (number, number)
-	local row = (i - 1) // Config.SLOT_COLUMNS
-	local col = (i - 1) % Config.SLOT_COLUMNS
-	local u = (col - (Config.SLOT_COLUMNS - 1) / 2) * Config.SLOT_SPACING
-	return u, 46 + row * Config.SLOT_SPACING
-end
-
 local PLOT_COLORS = {
 	Color3.fromRGB(255, 96, 96), Color3.fromRGB(80, 150, 255), Color3.fromRGB(255, 200, 50), Color3.fromRGB(160, 100, 255),
 	Color3.fromRGB(60, 215, 140), Color3.fromRGB(255, 120, 200), Color3.fromRGB(255, 145, 50), Color3.fromRGB(70, 210, 225),
 }
 
 local PLOT_OPENING = 16 -- the gap in the plot's front fence, around the 14-stud path
+local BED_TILES = Vector2.new(3, 8) -- light checker tiles across x along each dirt bed
+local OWNER_SIGN = Vector2.new(13, 4.2) -- the owner's sign on the front fence (studs)
+
+-- Where the treadmill stands: outside the plot, in front of it (between the front fence and the walkway),
+-- beside the entrance path, running across the plot's front. `u` is its middle across the plot, `w` how
+-- far out from the fence; its Upgrade board (TreadmillBoard) stands in line past its back end.
+local TREADMILL = { u = 15, w = 12, len = 9, wide = 4.5 } -- belt sized to a character (owner: the old 18 x 5.2 was too big)
+
+-- Chunky dark sign board on the fence, its front toward the walkway: "🏠 Name's Plot" (PlotService writes it).
+local function ownerSign(model: Model, cf: CFrame, index: number): BasePart
+	local board = tag(studs(deco(model, "OwnerSign", Vector3.new(OWNER_SIGN.X, OWNER_SIGN.Y, 0.8), cf, FENCE_POST),
+		{ "FrontSurface", "TopSurface" }), "PlotSign", "PlotIndex", index)
+	local inner = deco(model, "OwnerSignFace", Vector3.new(OWNER_SIGN.X - 1.2, OWNER_SIGN.Y - 1.2, 0.2), cf * CFrame.new(0, 0, -0.45),
+		Color3.fromRGB(70, 46, 48))
+	inner.CastShadow = false
+	local gui = Instance.new("SurfaceGui")
+	gui.Name = "OwnerSign"
+	gui.Face = Enum.NormalId.Front
+	gui.SizingMode = Enum.SurfaceGuiSizingMode.PixelsPerStud
+	gui.PixelsPerStud = 40
+	gui.LightInfluence = 0
+	gui.MaxDistance = 110
+	gui.Parent = board
+	local label = Instance.new("TextLabel")
+	label.Name = "Owner"
+	label.BackgroundTransparency = 1
+	label.AnchorPoint = Vector2.new(0.5, 0.5)
+	label.Position = UDim2.fromScale(0.5, 0.5)
+	label.Size = UDim2.fromScale(0.86, 0.6)
+	label.Font = Enum.Font.FredokaOne
+	label.TextScaled = true
+	label.TextColor3 = Color3.new(1, 1, 1)
+	label.Text = "🏠 Empty Plot"
+	local stroke = Instance.new("UIStroke")
+	stroke.Thickness = 4
+	stroke.Color = Color3.fromRGB(25, 15, 20)
+	stroke.Parent = label
+	label.Parent = gui
+	return board
+end
 
 local function buildPlot(world: Folder, index: number, posts: { [string]: boolean })
 	local center = spotCenter(index)
@@ -339,10 +377,12 @@ local function buildPlot(world: Folder, index: number, posts: { [string]: boolea
 	local half = Config.PLOT_SIZE / 2
 	local toWalk = -side -- the entrance faces the walkway at z = 0
 	local entrance = center + Vector3.new(0, 0, toWalk * half)
+	-- (u across the plot, w in from the front fence; negative w is outside, toward the walkway, y up)
 	local function at(u: number, w: number, y: number): Vector3
 		return entrance + Vector3.new(u, y, -toWalk * w)
 	end
 	local facingIn = Props.lookAt(Vector3.zero, Vector3.new(0, 0, -toWalk)) -- rotation looking into the plot
+	local outward = Vector3.new(0, 0, toWalk)
 
 	local model = tag(Instance.new("Model"), "Plot", "PlotIndex", index)
 	model.Name = "Plot" .. index
@@ -350,24 +390,50 @@ local function buildPlot(world: Folder, index: number, posts: { [string]: boolea
 	model.Parent = world
 	local color = PLOT_COLORS[index]
 
-	-- The same studded checker lawn as the base, one stud up, so the fence and the plants frame the plot.
-	-- The floor carries the plant slots and the spawn point (tagged Attachments), so they follow it when it
-	-- is moved.
+	-- Grass floor one stud up. It carries the plot's origin (Shared/Planting keeps plants in its space) and
+	-- the spawn point (tagged Attachments), so they follow it when it is moved.
 	local floor = tag(studs(box(model, "Floor", Vector3.new(Config.PLOT_SIZE, 1, Config.PLOT_SIZE), CFrame.new(center + Vector3.new(0, 0.5, 0)),
 		GRASS)), "PlotFloor", "PlotIndex", index)
 	model.PrimaryPart = floor
-	for i = 1, Config.SLOTS_MAX + Config.PASS_EXTRA_SLOTS do
-		local u, w = slotLocal(i)
-		marker(floor, "Slot" .. i, CFrame.new(at(u, w, 1)) * facingIn, "Slot", "PlotIndex", index):SetAttribute("SlotIndex", i)
-	end
-	marker(floor, "Spawn", CFrame.new(at(-24, 12, 4)) * facingIn, "Spawn", "PlotIndex", index)
-	checker(model, center.X - half, center.X + half, center.Z - half, center.Z + half, GROUND + 1)
+	local origin = CFrame.new(center + Vector3.new(0, 1, 0)) * facingIn
+	marker(floor, "Origin", origin, "PlotOrigin", "PlotIndex", index)
+	marker(floor, "Spawn", CFrame.new(at(0, 12, 4)) * facingIn, "Spawn", "PlotIndex", index)
 
-	-- Simple wooden fence all round (dark posts from the ground up, two warm rails), with one opening on
-	-- the walkway side and no gate. Neighbouring plots touch and share the fence between them: a plot
-	-- builds its +X side only when no plot stands there (the front column; the plot at +X is spot index - 2),
-	-- and a corner post a neighbour already built is not built twice (`posts` is shared by every plot).
-	local fenceH, spacing = 5.5, 12
+	-- The grass path down the middle (a lighter green checker), from the entrance to the back fence.
+	local pathW = Config.PLOT_PATH_WIDTH
+	studs(flat(model, "MiddlePath", pathW, Config.PLOT_SIZE, at(0, half, 1), GRASS, nil, nil, 0.05))
+	for j = 0, 7 do
+		for i = 0, 1 do
+			if (i + j) % 2 == 0 then
+				local tileW, tileD = pathW / 2, Config.PLOT_SIZE / 8
+				studs(flat(model, "PathTile", tileW, tileD, at((i - 0.5) * tileW, (j + 0.5) * tileD, 1.05), GRASS_LIGHT, nil, nil, 0.05))
+			end
+		end
+	end
+
+	-- Two pinkish-brown studded dirt beds, left and right of the path: players plant anywhere on their own
+	-- (Shared/Planting). Each bed is a gameplay piece (Role "PlantBed", BedIndex 1 and 2).
+	for b, bed in Planting.defaultBeds() do
+		local cf = origin * CFrame.new(bed.center)
+		local part = tag(studs(box(model, "DirtBed", bed.size, cf, DIRT)), "PlantBed", "PlotIndex", index)
+		part:SetAttribute("BedIndex", b)
+		local tw, td = bed.size.X / BED_TILES.X, bed.size.Z / BED_TILES.Y
+		for i = 0, BED_TILES.X - 1 do
+			for j = 0, BED_TILES.Y - 1 do
+				if (i + j) % 2 == 0 then
+					local p = cf * CFrame.new((i + 0.5) * tw - bed.size.X / 2, bed.size.Y / 2, (j + 0.5) * td - bed.size.Z / 2)
+					local tile = studs(flat(model, "BedTile", tw, td, p.Position, DIRT_LIGHT, nil, nil, 0.05))
+					tile.CFrame = CFrame.new(tile.CFrame.Position) * origin.Rotation
+				end
+			end
+		end
+	end
+
+	-- Chunky studded wooden fence all round (posts from the ground up, two rails), with one opening on the
+	-- walkway side and no gate. Neighbouring plots touch and share the fence between them: a plot builds its
+	-- +X side only when no plot stands there (the front column; the plot at +X is spot index - 2), and a
+	-- corner post a neighbour already built is not built twice (`posts` is shared by every plot).
+	local fenceH, spacing = 5.5, Config.PLOT_SIZE / 8
 	local function fence(u0: number, w0: number, u1: number, w1: number)
 		Props.fence(model, at(u0, w0, 0), at(u1, w1, 0), fenceH, spacing, FENCE_POST, FENCE_RAIL, posts)
 	end
@@ -380,31 +446,25 @@ local function buildPlot(world: Folder, index: number, posts: { [string]: boolea
 	end
 	fence(half, 0, PLOT_OPENING / 2, 0)
 
-	-- Sand path from the walkway to the opening, and on to the pad
-	local toWalkway = math.abs(entrance.Z) - 18
-	studs(flat(model, "Path", 14, toWalkway, Vector3.new(center.X, GROUND, entrance.Z + toWalk * toWalkway / 2), SAND, nil, nil, 0.3))
-	studs(flat(model, "Path", 10, 5, at(0, 2.5, 1), SAND, nil, nil, 0.15))
+	-- Sand path from the walkway to the opening, and an orange-tan tile across the opening.
+	local toWalkway = math.abs(entrance.Z) - Config.WALKWAY_WIDTH / 2 - 3
+	studs(flat(model, "Path", 14, toWalkway, Vector3.new(center.X, GROUND, entrance.Z + toWalk * (3 + toWalkway / 2)), SAND, nil, nil, 0.3))
+	studs(box(model, "EntranceTile", Vector3.new(PLOT_OPENING - 2, 1.1, 6), CFrame.new(at(0, 0, 0.55)) * facingIn, ENTRANCE))
 
-	-- House-icon sign floating over the opening (PlotService writes the owner's name on it)
-	local signPart = tag(box(model, "SignPost", Vector3.new(1, 1, 1), CFrame.new(entrance + Vector3.new(0, 9, 0)), color), "PlotSign", "PlotIndex", index)
-	signPart.Transparency = 1
-	signPart.CanCollide = false
-	-- Sized in studs (not pixels) so it shrinks with distance, and only shown up close: from the
-	-- walkway you read the nearby plots' names, not a wall of labels down the whole row.
-	billboard(signPart, "🏠 Empty Plot", UDim2.fromScale(16, 3.6), Vector3.zero, 75)
+	-- The owner's sign on the front fence, beside the opening, facing the walkway (PlotService writes the
+	-- owner's name on it).
+	local signPos = at(-(PLOT_OPENING / 2 + 1.2 + OWNER_SIGN.X / 2), -1.4, 1.2 + OWNER_SIGN.Y / 2)
+	ownerSign(model, Props.lookAt(signPos, signPos + outward), index)
 
-	-- Planting pad just inside the gate, on a rim in the plot's colour
-	tag(studs(box(model, "PlantPad", Vector3.new(10, 1, 10), CFrame.new(at(0, 10, 1.2)), Color3.fromRGB(150, 100, 64))), "PlantPad", "PlotIndex", index)
-	flat(model, "PadRim", 12, 12, at(0, 10, 1), color, Enum.Material.SmoothPlastic, nil, 0.3)
-
-	-- Treadmill: stand on it to gain Speed (AFK works). It doesn't move you: the client plays the run
-	-- animation in place and scrolls the belt texture. The belt is the gameplay piece; the frame around it
-	-- is the Treadmill asset slot. Sized to sit comfortably in the plot's front corner, clear of the fence
-	-- and the plant rows (a model in assets/ is fitted to the frame, and the belt then follows its belt).
-	local tmU, tmW0, tmLen, tmWide = 30, 12, 18, 5.2
-	local beltCenter = at(tmU, tmW0 + tmLen / 2, 1.5)
-	local belt = tag(box(model, "TreadmillBelt", Vector3.new(tmWide, 1, tmLen), CFrame.new(beltCenter) * facingIn,
-		Color3.fromRGB(40, 40, 45)), "TreadmillBelt", "PlotIndex", index)
+	-- Treadmill: stand on it to gain Speed (AFK works). It stands outside the plot, in front of it, beside the
+	-- entrance path, running across the plot's front (its front end, the console, toward the path). It doesn't
+	-- move you: the client plays the run animation in place and scrolls the belt texture. The belt is the
+	-- gameplay piece; the frame around it is the Treadmill asset slot (a model in assets/ is fitted to the
+	-- frame, and the belt then follows its belt).
+	local tm = TREADMILL
+	local front = -Vector3.xAxis * math.sign(tm.u) -- toward the entrance path
+	local beltCF = Props.lookAt(at(tm.u, -tm.w, 1.1), at(tm.u, -tm.w, 1.1) - front) -- local +Z is the front end
+	local belt = tag(box(model, "TreadmillBelt", Vector3.new(tm.wide, 1, tm.len), beltCF, Color3.fromRGB(40, 40, 45)), "TreadmillBelt", "PlotIndex", index)
 	local tex = Instance.new("Texture")
 	tex.Name = "Stripes"
 	tex.Texture = "rbxasset://textures/SurfaceTextures/DiamondPlate.png"
@@ -413,34 +473,35 @@ local function buildPlot(world: Folder, index: number, posts: { [string]: boolea
 	tex.StudsPerTileV = 4
 	tex.Transparency = 0.4
 	tex.Parent = belt
-	Assets.swap("Treadmill", model, Assets.facing(at(tmU, tmW0 + tmLen / 2, 1), Vector3.new(0, 0, toWalk)), function(into)
-		box(into, "TreadmillFrame", Vector3.new(tmWide + 2.6, 1, tmLen + 2.6), CFrame.new(beltCenter - Vector3.new(0, 0.6, 0)) * facingIn, Color3.fromRGB(230, 60, 60))
+	Assets.swap("Treadmill", model, Assets.facing(at(tm.u, -tm.w, 0), front), function(into)
+		local red = Color3.fromRGB(230, 60, 60)
+		box(into, "TreadmillFrame", Vector3.new(tm.wide + 2.6, 1, tm.len + 2.6), beltCF * CFrame.new(0, -0.6, 0), red)
 		for _, s in { -1, 1 } do
-			box(into, "TreadmillRail", Vector3.new(0.65, 2, tmLen), CFrame.new(beltCenter + Vector3.new(s * (tmWide / 2 + 0.35), 1, 0)) * facingIn, Color3.fromRGB(230, 60, 60))
+			box(into, "TreadmillRail", Vector3.new(0.65, 2, tm.len), beltCF * CFrame.new(s * (tm.wide / 2 + 0.35), 1, 0), red)
 		end
-		box(into, "TreadmillStop", Vector3.new(tmWide, 2.6, 0.65), CFrame.new(at(tmU, tmW0 - 0.35, 2.3)), Color3.fromRGB(230, 60, 60))
+		box(into, "TreadmillStop", Vector3.new(tm.wide, 2.6, 0.65), beltCF * CFrame.new(0, 0.8, tm.len / 2 + 0.35), red)
 	end, Vector3.new(1, 6, 1))
-	local tmSignPart = tag(box(model, "TreadmillSign", Vector3.new(1, 1, 1), CFrame.new(beltCenter + Vector3.new(0, 8, 0)), color), "TreadmillSign", "PlotIndex", index)
+	local tmSignPart = tag(box(model, "TreadmillSign", Vector3.new(1, 1, 1), beltCF + Vector3.new(0, 8, 0), color), "TreadmillSign", "PlotIndex", index)
 	tmSignPart.Transparency = 1
 	tmSignPart.CanCollide = false
-	-- PlotService writes the owner's live rate on it ("+X Speed/s").
+	-- The old sign; TreadmillBoard switches it off for its board and "+X/step" text.
 	billboard(tmSignPart, "🏃 TREADMILL", UDim2.fromScale(10, 3.6), Vector3.zero, 60)
 
-	-- "Upgrade" board just outside the gate, beside the path: a chunky dark navy sign on a short post, with
-	-- "Level X > Level Y" and two buttons, a red one with the money price and a purple one with the Robux
-	-- price. Sized in studs, so it reads only up close. PlotService writes it (WorldBuilder.setUpgradeBoard)
-	-- and owns its two prompts. The board (the panel with the text) is the gameplay piece; its studded
-	-- frame and post are the UpgradeSign slot.
-	local boardPos = at(-17, -4, BOARD_SIZE.Y / 2 + 2)
-	local boardCF = Props.lookAt(boardPos, boardPos + Vector3.new(0, 0, toWalk)) -- front face toward the walkway
-	Assets.swap("UpgradeSign", model, Assets.facing(Vector3.new(boardPos.X, GROUND, boardPos.Z), Vector3.new(0, 0, toWalk)), function(into)
+	-- "Upgrade" board just outside the fence, on the other side of the path from the treadmill: a chunky dark
+	-- navy sign on a short post, with "Level X > Level Y" and two buttons, a red one with the money price and
+	-- a purple one with the Robux price. Sized in studs, so it reads only up close. PlotService writes it
+	-- (WorldBuilder.setUpgradeBoard) and owns its two prompts. The board (the panel with the text) is the
+	-- gameplay piece; its studded frame and post are the UpgradeSign slot.
+	local boardPos = at(-30, -4, BOARD_SIZE.Y / 2 + 2)
+	local boardCF = Props.lookAt(boardPos, boardPos + outward) -- front face toward the walkway
+	Assets.swap("UpgradeSign", model, Assets.facing(Vector3.new(boardPos.X, GROUND, boardPos.Z), outward), function(into)
 		local w, h, rim = BOARD_SIZE.X, BOARD_SIZE.Y, BOARD_RIM
-		local front = CFrame.new(0, 0, -0.15) -- the frame stands a little proud of the panel
+		local frontOff = CFrame.new(0, 0, -0.15) -- the frame stands a little proud of the panel
 		for _, s in { -1, 1 } do
-			studs(deco(into, "UpgradeFrame", Vector3.new(w, rim, 1), boardCF * front * CFrame.new(0, s * (h - rim) / 2, 0), BOARD_NAVY), { "FrontSurface", "TopSurface" })
-			studs(deco(into, "UpgradeFrame", Vector3.new(rim, h - 2 * rim, 1), boardCF * front * CFrame.new(s * (w - rim) / 2, 0, 0), BOARD_NAVY), { "FrontSurface" })
+			studs(deco(into, "UpgradeFrame", Vector3.new(w, rim, 1), boardCF * frontOff * CFrame.new(0, s * (h - rim) / 2, 0), BOARD_NAVY), { "FrontSurface", "TopSurface" })
+			studs(deco(into, "UpgradeFrame", Vector3.new(rim, h - 2 * rim, 1), boardCF * frontOff * CFrame.new(s * (w - rim) / 2, 0, 0), BOARD_NAVY), { "FrontSurface" })
 			for _, t in { -1, 1 } do
-				studs(deco(into, "UpgradeCorner", Vector3.new(rim + 0.2, rim + 0.2, 1.15), boardCF * front * CFrame.new(s * (w - rim) / 2, t * (h - rim) / 2, 0), BOARD_CORNER), { "FrontSurface", "TopSurface" })
+				studs(deco(into, "UpgradeCorner", Vector3.new(rim + 0.2, rim + 0.2, 1.15), boardCF * frontOff * CFrame.new(s * (w - rim) / 2, t * (h - rim) / 2, 0), BOARD_CORNER), { "FrontSurface", "TopSurface" })
 			end
 		end
 		local postHeight = boardPos.Y - GROUND - h / 2 + 0.2
@@ -664,8 +725,8 @@ local function buildShops(world: Folder)
 	model.Name = "ShopPlaza"
 	model.Parent = world
 	-- The lawn runs on under the stalls; a sand apron in front of the counters and a path from the walkway.
-	local toWalkway = math.abs(front.Z) - 18
-	studs(flat(model, "PlazaPath", 14, toWalkway, Vector3.new(center.X, GROUND, side * (18 + toWalkway / 2)), SAND, nil, nil, 0.3))
+	local toWalkway = math.abs(front.Z) - Config.WALKWAY_WIDTH / 2
+	studs(flat(model, "PlazaPath", 14, toWalkway, Vector3.new(center.X, GROUND, side * (Config.WALKWAY_WIDTH / 2 + toWalkway / 2)), SAND, nil, nil, 0.3))
 	studs(flat(model, "Plaza", Config.PLOT_SIZE, 22, at(0, 11, 0), SAND, nil, nil, 0.3))
 
 	for i, stall in STALLS do
@@ -925,7 +986,7 @@ function WorldBuilder.adopt(world: Instance): ({ PlotInfo }?, { NestInfo }?, { s
 		end
 		local plot, zone = d:GetAttribute("PlotIndex"), d:GetAttribute("ZoneIndex")
 		local scope = if plot then `Plot {plot}` elseif zone then `Zone {zone}` else "World"
-		local key = `{scope}/{role}{d:GetAttribute("SlotIndex") or d:GetAttribute("PodIndex") or ""}`
+		local key = `{scope}/{role}{d:GetAttribute("BedIndex") or d:GetAttribute("PodIndex") or ""}`
 		if found[key] then
 			table.insert(notes, `{key}: found twice, using {found[key]:GetFullName()}`)
 		else
@@ -957,16 +1018,21 @@ function WorldBuilder.adopt(world: Instance): ({ PlotInfo }?, { NestInfo }?, { s
 		local scope = `Plot {i}`
 		local model = need(scope, "Plot", "Model", "the plot model")
 		local floor = need(scope, "PlotFloor", "BasePart", "the plot floor")
-		local pad = need(scope, "PlantPad", "BasePart", "the planting pad")
 		local belt = need(scope, "TreadmillBelt", "BasePart", "the treadmill belt")
-		local signPart = need(scope, "PlotSign", "BasePart", "the name sign over the gate")
+		local signPart = need(scope, "PlotSign", "BasePart", "the owner's sign by the entrance")
 		local tmSign = need(scope, "TreadmillSign", "BasePart", "the treadmill sign")
 		local board = need(scope, "UpgradeBoard", "BasePart", "the Upgrade Plot board")
 		local spawn = need(scope, "Spawn", "Attachment", "the spawn point")
-		local slots = {}
-		for s = 1, Config.SLOTS_MAX + Config.PASS_EXTRA_SLOTS do
-			local a = need(scope, "Slot", "Attachment", `plant slot {s}`, "SlotIndex", s)
-			slots[s] = if a then worldCFrame(a) else CFrame.identity
+		local originMark = need(scope, "PlotOrigin", "Attachment", "the plot's origin (where plants are measured from)")
+		-- The dirt beds: 1 and 2 are required, any more added by hand (BedIndex 3, 4, ...) are used too.
+		local beds: { BasePart } = {}
+		for b = 1, 2 do
+			beds[b] = need(scope, "PlantBed", "BasePart", `dirt bed {b}`, "BedIndex", b)
+		end
+		local extra = 3
+		while found[`{scope}/PlantBed{extra}`] and found[`{scope}/PlantBed{extra}`]:IsA("BasePart") do
+			table.insert(beds, found[`{scope}/PlantBed{extra}`] :: BasePart)
+			extra += 1
 		end
 		local signLabel = signPart and findLabel(signPart)
 		local tmLabel = tmSign and findLabel(tmSign)
@@ -985,7 +1051,7 @@ function WorldBuilder.adopt(world: Instance): ({ PlotInfo }?, { NestInfo }?, { s
 		end
 		local buttons = board and board:FindFirstChild("Buttons", true)
 		labels.buttons = if buttons and buttons:IsA("GuiObject") then buttons else nil
-		if not (model and floor and pad and belt and signLabel and tmLabel and board and spawn and labels.level and labels.cash and labels.robux) then
+		if not (model and floor and originMark and beds[1] and beds[2] and belt and signLabel and tmLabel and board and spawn and labels.level and labels.cash and labels.robux) then
 			continue
 		end
 		-- The plants and soil folders are rebuilt at runtime, so they are made if missing.
@@ -1004,9 +1070,9 @@ function WorldBuilder.adopt(world: Instance): ({ PlotInfo }?, { NestInfo }?, { s
 			model = model,
 			center = (floor.CFrame * CFrame.new(0, -floor.Size.Y / 2, 0)).Position,
 			signLabel = signLabel,
-			pad = pad,
+			origin = worldCFrame(originMark),
+			beds = beds,
 			spawnCFrame = worldCFrame(spawn),
-			slotCFrames = slots,
 			belt = belt,
 			treadmillLabel = tmLabel,
 			soil = folder("Soil"),

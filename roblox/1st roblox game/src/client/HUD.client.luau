@@ -473,10 +473,10 @@ local function renderSeeds()
 		Size = UDim2.new(1, -12, 1, -8), Position = UDim2.fromOffset(6, 4),
 	})
 
-	-- Seed bag (from seed packs): plant at your pad
+	-- Seed bag (from seed packs): Plant, then click or tap your dirt (Planting.client)
 	local bag = bagEntries()
 	local hint = card(1, COLORS.index, 40)
-	local hintText = if #bag == 0 then "🎁 Buy seed packs in the 🛒 Shop: their seeds land here!" else "🎒 Your bag: stand on your plot's pad, then Plant."
+	local hintText = if #bag == 0 then "🎁 Buy seed packs in the 🛒 Shop: their seeds land here!" else "🎒 Your bag: press Plant, then click or tap your plot's dirt."
 	Icons.set(text(hint, { Size = UDim2.new(1, -12, 1, -8), Position = UDim2.fromOffset(6, 4) }), { "Bag" }, hintText, ICON.medium)
 	for i, e in bag do
 		local rarity = Config.RARITIES[e.rarity]
@@ -511,7 +511,7 @@ local function renderPlants()
 	Icons.set(sideTitle, "Plants", `🪴 Plants {#plants}/{stats.slots} · {Format.money(stats.income)}/s`)
 	if #plants == 0 then
 		local f = card(0, COLORS.slow, 60)
-		text(f, { Text = "No plants yet. Steal a seed and plant it on your pad!", Size = UDim2.new(1, -12, 1, -8), Position = UDim2.fromOffset(6, 4) })
+		text(f, { Text = "No plants yet. Steal a seed and plant it on your dirt!", Size = UDim2.new(1, -12, 1, -8), Position = UDim2.fromOffset(6, 4) })
 	end
 	for i, p in plants do
 		local rarity = Config.RARITIES[p.rarity]
@@ -1147,7 +1147,7 @@ do
 		for i, entry in Config.products("Pack") do
 			packCard(row, i, entry.name, entry.product, bagFull)
 		end
-		note(`🎒 Seed bag {bagCount}/{Config.SEED_BAG_MAX}{if bagFull then " (full: plant some first!)" else ""} · plant bagged seeds from the 🌱 Seeds menu at your plot's pad`, nextOrder(), { "Bag", "Seeds" })
+		note(`🎒 Seed bag {bagCount}/{Config.SEED_BAG_MAX}{if bagFull then " (full: plant some first!)" else ""} · plant bagged seeds from the 🌱 Seeds menu on your plot's dirt`, nextOrder(), { "Bag", "Seeds" })
 
 		-- Plot upgrade: money or Robux (also on the board at your plot's gate). The R$ product is the one
 		-- for the plot's current price tier (looked up on every render, so it follows plotLevel); none at
@@ -1516,7 +1516,7 @@ do
 		end)
 		note(`💰 The stall pays {Config.SELL_STALL_SECONDS // 60} min of a plant's income (R on a plant only gives {Config.SELL_SECONDS} s).`, 1, "Money")
 		if #plants == 0 then
-			note("No plants yet: steal a seed and plant it on your pad!", 2)
+			note("No plants yet: steal a seed and plant it on your dirt!", 2)
 			return
 		end
 

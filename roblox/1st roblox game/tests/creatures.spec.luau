@@ -125,19 +125,23 @@ H.test("creatures: scale grows with weight and rarity, within the clamp", functi
 	H.ok(grown / sprout >= 1.7, `full-grown is visibly bigger ({grown / sprout}x)`)
 	H.ok(CreatureModels.scaleFor(1, 5, Config.sproutWeight(1, 5)) > sprout, "legendary sprout is bigger than common")
 end)
-
-H.test("creatures: the biggest creatures fit their slots and the plot", function()
-	local r = Config.CREATURE_FOOTPRINT * Config.CREATURE_MAX_SCALE / 2
-	H.ok(2 * r - Config.SLOT_SPACING <= 1, `max-size neighbours overlap by {2 * r - Config.SLOT_SPACING} studs`)
+H.test("creatures: the biggest creatures fit the planting spacing and the plot", function()
+	local Planting = H.shared("Planting")
+	-- Planting spaces plants by their full-grown reach: never smaller than the real biggest creature
+	for k = 1, #Config.ZONES do
+		for r = 1, #Config.RARITIES do
+			local biggest = CreatureModels.scaleFor(k, r, Config.sproutWeight(k, r) * Config.GROW_MAX_FACTOR * 1.2)
+			H.ok(Planting.radius(r) >= Config.CREATURE_FOOTPRINT * biggest / 2 - 1e-6, `zone {k} rarity {r} reach`)
+		end
+	end
+	local r = Planting.radius(#Config.RARITIES)
+	H.ok(math.abs(r - Config.CREATURE_FOOTPRINT * Config.CREATURE_MAX_SCALE / 2) < 0.2, "the biggest reach is about the max scale")
+	H.ok(Planting.minDistance(#Config.RARITIES, #Config.RARITIES) <= Config.SLOT_SPACING, "two max-size plants fit the default grid")
+	H.ok(2 * r - Planting.minDistance(#Config.RARITIES, #Config.RARITIES) <= 1 + 1e-6, "neighbours overlap by at most a stud")
+	-- every default spot keeps the biggest creature inside the plot's fence
 	local half = Config.PLOT_SIZE / 2
-	for i = 1, Config.SLOTS_MAX + Config.PASS_EXTRA_SLOTS do
-		-- mirrors WorldBuilder's slotLocal: u across the plot, w inward from the gate
-		local row = (i - 1) // Config.SLOT_COLUMNS
-		local col = (i - 1) % Config.SLOT_COLUMNS
-		local u = (col - (Config.SLOT_COLUMNS - 1) / 2) * Config.SLOT_SPACING
-		local w = 46 + row * Config.SLOT_SPACING
-		H.ok(math.abs(u) + r <= half - 0.5, `slot {i} fits across ({math.abs(u) + r})`)
-		H.ok(w + r <= Config.PLOT_SIZE - 0.5, `slot {i} fits before the back fence ({w + r})`)
+	for i, c in Planting.candidates() do
+		H.ok(math.abs(c[1]) + r <= half - 0.5 and math.abs(c[2]) + r <= half - 0.5, `spot {i} ({c[1]}, {c[2]}) fits inside the fence`)
 	end
 end)
 

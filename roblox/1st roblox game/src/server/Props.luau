@@ -260,7 +260,8 @@ function Props.lamp(parent: Instance, pos: Vector3, glow: Color3, height: number
 	end, Vector3.new(3, 1, 3))
 end
 
--- A wooden fence from a to b (on the ground at a.Y): posts every ~`spacing` studs and two rails between
+-- A chunky studded wooden fence from a to b (on the ground at a.Y): square posts every ~`spacing` studs, studded
+-- on every face, and two thick rails between
 -- each pair. Solid, like a real fence; used around plots, never inside the corridor. Each post is a
 -- FencePost slot and each stretch of rails between two posts a FenceSection slot. Runs that meet share a
 -- post: pass the same `posts` table to each, and a post already standing at a spot is not built twice.
@@ -282,14 +283,16 @@ function Props.fence(parent: Instance, a: Vector3, b: Vector3, height: number, s
 				posts[key] = true
 			end
 			Assets.swap("FencePost", parent, CFrame.new(p) * along, function(into)
-				Props.studs(Props.box(into, "FencePost", Vector3.new(1, height + 0.6, 1), CFrame.new(p + Vector3.new(0, (height + 0.6) / 2, 0)), postColor))
+				Props.studs(Props.box(into, "FencePost", Vector3.new(1.8, height + 0.8, 1.8), CFrame.new(p + Vector3.new(0, (height + 0.8) / 2, 0)), postColor),
+					{ "TopSurface", "FrontSurface", "BackSurface", "LeftSurface", "RightSurface" })
 			end, Vector3.new(2, 1, 2))
 		end
 		if i < n then
 			local mid = p + dir * (seg / 2)
 			Assets.swap("FenceSection", parent, CFrame.new(mid) * along, function(into)
 				for _, y in { height * 0.38, height * 0.82 } do
-					Props.studs(Props.box(into, "FenceRail", Vector3.new(0.5, 0.8, seg), CFrame.new(mid + Vector3.new(0, y, 0)) * rot, railColor))
+					Props.studs(Props.box(into, "FenceRail", Vector3.new(1, 1.1, seg), CFrame.new(mid + Vector3.new(0, y, 0)) * rot, railColor),
+						{ "TopSurface", "LeftSurface", "RightSurface" })
 				end
 			end, Vector3.new(1, 1.3, 0))
 		end

@@ -28,36 +28,62 @@ H.test("world: builds one plot per player slot and one nest per zone", function(
 	H.eq(#nests, #Config.ZONES)
 end)
 
-H.test("world: plot layout contract is unchanged (slots, pad, spawn, belt)", function()
+H.test("world: plot layout contract (two dirt beds, a grass path, origin, spawn, the treadmill in front)", function()
+	local Planting = H.shared("Planting")
 	for i, plot in plots do
 		local col = (i - 1) // 2
 		local side = if i % 2 == 1 then 1 else -1
 		local center = Vector3.new(Config.PLOT_FIRST_X - col * Config.PLOT_SPACING_X, Config.GROUND_Y, side * Config.PLOT_OFFSET_Z)
 		H.ok((plot.center - center).Magnitude < 1e-3, "plot center")
 		local toWalk = -side
-		local entrance = center + Vector3.new(0, 0, toWalk * Config.PLOT_SIZE / 2)
+		local half = Config.PLOT_SIZE / 2
+		local entrance = center + Vector3.new(0, 0, toWalk * half)
 		local function at(u: number, w: number, y: number)
 			return entrance + Vector3.new(u, y, -toWalk * w)
 		end
-		H.eq(#plot.slotCFrames, Config.SLOTS_MAX + Config.PASS_EXTRA_SLOTS, "slot count")
-		for s, cf in plot.slotCFrames do
-			local row = (s - 1) // Config.SLOT_COLUMNS
-			local c = (s - 1) % Config.SLOT_COLUMNS
-			local want = at((c - (Config.SLOT_COLUMNS - 1) / 2) * Config.SLOT_SPACING, 46 + row * Config.SLOT_SPACING, 1)
-			H.ok((cf.Position - want).Magnitude < 1e-3, `plot {i} slot {s} moved`)
-			H.ok(cf.LookVector:Dot(Vector3.new(0, 0, -toWalk)) > 0.999, `plot {i} slot {s} must look into the plot`)
+		-- the origin: the floor's top centre, looking into the plot
+		H.ok((plot.origin.Position - (center + Vector3.new(0, 1, 0))).Magnitude < 1e-3, `plot {i} origin`)
+		H.ok(plot.origin.LookVector:Dot(Vector3.new(0, 0, -toWalk)) > 0.999, `plot {i} origin looks into the plot`)
+		-- two dirt beds, one each side of the path, as Planting.defaultBeds says
+		H.eq(#plot.beds, 2, `plot {i} has two dirt beds`)
+		for b, want in Planting.defaultBeds() do
+			local bed = plot.beds[b]
+			H.eq(bed:GetAttribute("BedIndex"), b)
+			H.ok((bed.CFrame.Position - plot.origin:PointToWorldSpace(want.center)).Magnitude < 1e-3, `plot {i} bed {b} position`)
+			H.ok((bed.Size - want.size).Magnitude < 1e-3, `plot {i} bed {b} size`)
+			H.ok(bed.Material == Enum.Material.Plastic and bed.TopSurface == Enum.SurfaceType.Studs, `plot {i} bed {b} is studded dirt`)
+			local rel = plot.origin:PointToObjectSpace(bed.CFrame.Position)
+			H.ok(math.abs(rel.X) - bed.Size.X / 2 >= Config.PLOT_PATH_WIDTH / 2 - 1e-3, `plot {i} bed {b} leaves the middle path free`)
+			H.ok(math.abs(rel.X) + bed.Size.X / 2 <= half - 1, `plot {i} bed {b} inside the fence`)
 		end
-		H.ok((plot.pad.CFrame.Position - at(0, 10, 1.2)).Magnitude < 1e-3, `pad position {plot.pad.CFrame.Position} vs {at(0, 10, 1.2)}`)
-		H.ok((plot.spawnCFrame.Position - at(-24, 12, 4)).Magnitude < 1e-3, "spawn position")
-		-- With a Treadmill model in assets/, the belt takes the model's belt: its running surface and its
-		-- footprint, so it may shift a little along the treadmill.
-		local beltDelta = plot.belt.CFrame.Position - at(30, 21, 1.5)
-		H.ok(math.abs(beltDelta.X) < 0.5 and math.abs(beltDelta.Z) < 2 and beltDelta.Y > -1e-3 and beltDelta.Y < 6, `belt position ({beltDelta})`)
-		H.ok(plot.belt.Size.X <= 6 and plot.belt.Size.Z <= 18, `a plot-sized belt ({plot.belt.Size})`)
+		H.ok(plot.beds[1].CFrame.Position.X ~= plot.beds[2].CFrame.Position.X, "left and right")
+		-- the grass path down the middle, from the entrance to the back fence, and the tile at the opening
+		local path, tile
+		for _, d in plot.model:GetChildren() do
+			if d.Name == "MiddlePath" then
+				path = d
+			elseif d.Name == "EntranceTile" then
+				tile = d
+			end
+		end
+		H.ok(path ~= nil and math.abs(path.Size.X - Config.PLOT_PATH_WIDTH) < 1e-3 and math.abs(path.Size.Z - Config.PLOT_SIZE) < 1e-3, `plot {i} middle path`)
+		H.ok(math.abs(path.CFrame.Position.X - center.X) < 1e-3, `plot {i} path down the middle`)
+		H.ok(tile ~= nil and (Vector3.new(tile.CFrame.Position.X, 0, tile.CFrame.Position.Z) - Vector3.new(entrance.X, 0, entrance.Z)).Magnitude < 1e-3,
+			`plot {i} entrance tile at the opening`)
+		H.ok((plot.spawnCFrame.Position - at(0, 12, 4)).Magnitude < 1e-3, "spawn on the middle path")
+		H.ok(not Planting.bedAt(plot.beds, plot.spawnCFrame.Position - Vector3.new(0, 3, 0)), "nobody spawns on a bed")
+		-- The treadmill stands outside, in front of the plot. With a Treadmill model in assets/, the belt takes
+		-- the model's belt: its running surface and its footprint, so it may shift a little along it.
+		local beltDelta = plot.belt.CFrame.Position - at(15, -12, 1.1)
+		H.ok(math.abs(beltDelta.Z) < 0.5 and math.abs(beltDelta.X) < 2 and beltDelta.Y > -1 and beltDelta.Y < 6, `belt position ({beltDelta})`)
+		H.ok(math.min(plot.belt.Size.X, plot.belt.Size.Z) <= 5 and math.max(plot.belt.Size.X, plot.belt.Size.Z) <= 10,
+			`a character-sized belt ({plot.belt.Size})`)
+		H.eq(plot.belt:GetAttribute("Role"), "TreadmillBelt")
+		H.eq(plot.belt:GetAttribute("PlotIndex"), i)
 		H.eq(plot.model.PrimaryPart.Name, "Floor")
 		H.ok(plot.soil:IsA("Folder") and plot.plants:IsA("Folder"), "soil/plants folders")
 		H.ok(plot.signLabel:IsA("TextLabel"), "sign label")
-		H.ok(plot.treadmillLabel:IsA("TextLabel"), "treadmill sign label (PlotService writes the owner's Speed/s on it)")
+		H.ok(plot.treadmillLabel:IsA("TextLabel"), "treadmill sign label")
 	end
 end)
 
@@ -150,15 +176,19 @@ H.test("world: plots are compact and share one clean fence (no double fences, ga
 	-- Neighbouring plots touch, and the front plots sit near the corridor mouth.
 	H.eq(Config.PLOT_SPACING_X, Config.PLOT_SIZE)
 	H.ok(Config.CORRIDOR_START_X - (Config.PLOT_FIRST_X + half) <= 30, "the front plots are near the corridor mouth")
-	H.ok(Config.PLOT_OFFSET_Z - half <= 32, "the plots are near the walkway")
+	local front = Config.PLOT_OFFSET_Z - half - Config.WALKWAY_WIDTH / 2
+	H.ok(front >= 16 and front <= 30, `the plots are near the walkway, with room for the treadmill in front ({front})`)
 	Layout.check(world, plots, "built map")
 	Layout.plotsFullyFenced(world, plots, "built map")
-	for _, plot in plots do
-		local sign = plot.signLabel.Parent.Adornee
+	for i, plot in plots do
+		-- the owner's sign hangs on the front fence beside the opening, facing the walkway
+		local sign = plot.signLabel:FindFirstAncestorWhichIsA("BasePart")
 		local side = if plot.center.Z > 0 then 1 else -1
 		local entrance = plot.center - Vector3.new(0, 0, side * half)
 		local p = sign.CFrame.Position
-		H.ok(math.abs(p.X - entrance.X) < 1 and math.abs(p.Z - entrance.Z) < 1 and p.Y > 6, "the name sign floats over the opening")
+		H.ok(math.abs(p.Z - entrance.Z) < 2.5 and side * (entrance.Z - p.Z) > 0, `plot {i} sign on the fence, just outside it`)
+		H.ok(math.abs(p.X - entrance.X) > 8 and math.abs(p.X - entrance.X) < 25 and p.Y > 1.5 and p.Y < 6, `plot {i} sign beside the opening, fence high`)
+		H.ok(sign.CFrame.LookVector.Z * -side > 0.999, `plot {i} sign faces the walkway`)
 		H.eq(plot.signLabel.Text, "🏠 Empty Plot")
 	end
 end)
