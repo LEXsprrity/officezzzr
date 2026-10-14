@@ -227,6 +227,7 @@ function TreadmillBoard.build(model: Model, belt: BasePart, center: Vector3): Bo
 	gui.Name = "StepText"
 	gui.Size = UDim2.fromScale(4.4, 1.15) -- studs: small, it shrinks with distance
 	gui.LightInfluence = 0
+	gui.AlwaysOnTop = true -- never hidden behind the console; MaxDistance keeps it close-range
 	gui.MaxDistance = Treadmill.RATE_TEXT_DISTANCE
 	gui.Adornee = anchor
 	gui.Enabled = false
