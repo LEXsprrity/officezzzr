@@ -16,3 +16,4 @@ sourcemap.json
 *.lock
 !**/models/treadmills/*.rbxl
 !**/models/plants/*.rbxm
+!**/models/seeds/*.rbxm

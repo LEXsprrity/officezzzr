@@ -120,30 +120,45 @@ function SeedPacks.percent(pct: number): string
 end
 
 ----------------------------------------------------------------------------------------------------
--- Seed bag: { [key] = count } with key "zone:rarity" or "zone:rarity:Mutation"
+-- Seed bag: { [key] = count } with key "zone:rarity[:Mutation][#gene]". The gene (Config.rollGene, save
+-- v10) is the seed's hidden flower and size, so seeds with a gene rarely stack. A key without one (from
+-- before v10) is still a seed: PlotService gives it a gene when its Plant button is pressed (so its ghost
+-- matches too), or draws its flower when it is planted. The gene is never shown: labels come from
+-- seedName, and the Inventory lists seeds by label (labelKey).
 ----------------------------------------------------------------------------------------------------
-function SeedPacks.bagKey(zone: number, rarity: number, mutation: string?): string
-	return if mutation then `{zone}:{rarity}:{mutation}` else `{zone}:{rarity}`
+function SeedPacks.bagKey(zone: number, rarity: number, mutation: string?, gene: number?): string
+	local key = if mutation then `{zone}:{rarity}:{mutation}` else `{zone}:{rarity}`
+	return if gene then `{key}#{gene}` else key
 end
 
--- Validates a key from a client or a save. Returns nil for anything malformed.
-function SeedPacks.parseBagKey(key: any): (number?, number?, string?)
+-- Validates a key from a client or a save. Returns nil for anything malformed; the gene is nil for a key
+-- from before v10.
+function SeedPacks.parseBagKey(key: any): (number?, number?, string?, number?)
 	if type(key) ~= "string" or #key > 32 then
-		return nil, nil, nil
+		return nil, nil, nil, nil
 	end
-	local z, r, m = string.match(key, "^(%d+):(%d+):?(%a*)$")
+	local z, r, m, g = string.match(key, "^(%d+):(%d+):?(%a*)#?(%d*)$")
 	local zone, rarity = tonumber(z), tonumber(r)
 	if not zone or not rarity or not Config.ZONES[zone] or not Config.RARITIES[rarity] then
-		return nil, nil, nil
+		return nil, nil, nil, nil
 	end
 	local mutation: string? = if m == "" then nil else m
 	if mutation and not Config.mutationById(mutation) then
-		return nil, nil, nil
+		return nil, nil, nil, nil
 	end
-	if SeedPacks.bagKey(zone, rarity, mutation) ~= key then -- canonical form only ("01:1" is not a key)
-		return nil, nil, nil
+	local gene = if g == "" then nil else tonumber(g)
+	if gene and (gene < 1 or gene > Config.SEED_GENES) then
+		return nil, nil, nil, nil
 	end
-	return zone, rarity, mutation
+	if SeedPacks.bagKey(zone, rarity, mutation, gene) ~= key then -- canonical form only ("01:1", "1:1#07" are not keys)
+		return nil, nil, nil, nil
+	end
+	return zone, rarity, mutation, gene
+end
+
+-- The key without its gene, "zone:rarity[:Mutation]": seeds with the same label list as one.
+function SeedPacks.labelKey(key: string): string
+	return (string.gsub(key, "#%d*$", ""))
 end
 
 function SeedPacks.bagCount(bag: { [string]: number }): number
@@ -154,9 +169,11 @@ function SeedPacks.bagCount(bag: { [string]: number }): number
 	return n
 end
 
-function SeedPacks.addToBag(bag: { [string]: number }, zone: number, rarity: number, mutation: string?)
-	local key = SeedPacks.bagKey(zone, rarity, mutation)
+-- Returns the key it went under.
+function SeedPacks.addToBag(bag: { [string]: number }, zone: number, rarity: number, mutation: string?, gene: number?): string
+	local key = SeedPacks.bagKey(zone, rarity, mutation, gene)
 	bag[key] = (bag[key] or 0) + 1
+	return key
 end
 
 function SeedPacks.takeFromBag(bag: { [string]: number }, key: string): boolean
@@ -173,8 +190,8 @@ function SeedPacks.takeFromBag(bag: { [string]: number }, key: string): boolean
 end
 
 -- What a seed is called until it is planted: "Rare Seed", "Gold Epic Seed". Its flower is a surprise (owner
--- request): PlotService picks it at random when it is planted, and from then on the plant goes by the
--- flower's name. No zone seed name either ("Rare Starpetal" on every pod read repetitive). `zone` is kept
+-- request): its gene decides it, but no label says so until it is planted, and from then on the plant goes
+-- by the flower's name. No zone seed name either ("Rare Starpetal" on every pod read repetitive). `zone` is kept
 -- so every caller still says which seed it means.
 function SeedPacks.seedName(_zone: number, rarity: number, mutation: string?): string
 	local prefix = if mutation then mutation .. " " else ""

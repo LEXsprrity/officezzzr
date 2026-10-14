@@ -140,7 +140,7 @@ local function apply(p: Profile, name: string, product: Config.DevProduct, incom
 		grant.pack = pack
 		if SeedPacks.bagCount(p.seedBag) < Config.SEED_BAG_HARD_MAX then
 			local rarity, mutation = SeedPacks.roll(pack, rng)
-			SeedPacks.addToBag(p.seedBag, pack.zone, rarity, mutation)
+			SeedPacks.addToBag(p.seedBag, pack.zone, rarity, mutation, Config.rollGene(rng)) -- (its hidden flower and size)
 			grant.roll = { zone = pack.zone, rarity = rarity, mutation = mutation, name = SeedPacks.seedName(pack.zone, rarity, mutation) }
 		else
 			grant.compensation = Shop.fullBagCompensation(pack, income)

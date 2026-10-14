@@ -168,28 +168,28 @@ H.test("inventory: saved and loaded (v9); older saves start with an empty invent
 	H.eq(#ProfileStore.deserialize(many).inventory, Config.INVENTORY_MAX, "at most INVENTORY_MAX")
 end)
 
-H.test("inventory: a seed brought home to a full plot goes to the seed bag (pure rule)", function()
+H.test("inventory: a seed brought home always goes to the seed bag, free slots or not (pure rule)", function()
 	local profile = ProfileStore.defaultProfile()
+	H.eq(Inventory.carryHome(profile, false), "away", "still in the corridor")
+	H.eq(Inventory.carryHome(profile, true), "store", "an empty plot, at home: into the bag all the same")
 	for i = 1, 5 do
 		table.insert(profile.plants, plant(i, 1, 1, 60))
 	end
-	H.eq(Inventory.carryHome(profile, 5, false), "away", "still in the corridor")
-	H.eq(Inventory.carryHome(profile, 6, true), "room", "a free slot: plant it as usual")
-	H.eq(Inventory.carryHome(profile, 5, true), "store", "full plot, at home: into the bag")
+	H.eq(Inventory.carryHome(profile, true), "store", "full plot, at home: into the bag")
 	for i = 1, Config.SEED_BAG_MAX do
 		SeedPacks.addToBag(profile.seedBag, 1, 1 + i % 3, nil)
 	end
-	H.eq(Inventory.carryHome(profile, 5, true), "bagFull", "the bag is full too: it stays carried")
+	H.eq(Inventory.carryHome(profile, true), "bagFull", "the bag is full: it stays carried")
 	H.ok(Inventory.isHome(Vector3.new(Config.CORRIDOR_START_X - 1, 3, 0)) and not Inventory.isHome(Vector3.new(Config.CORRIDOR_START_X + 1, 3, 0)),
 		"home is the base, out of the corridor")
 end)
 
-H.test("inventory: SeedService.storeCarried puts a carried seed in the bag at home with a full plot, and clears the carry", function()
+H.test("inventory: SeedService.storeCarried puts a carried seed in the bag as soon as it is home, and clears the carry", function()
 	H.stubServer("Net", { StatsUpdate = { FireClient = function() end }, LootEvent = { FireClient = function() end }, toast = function() end })
 	local Sessions = H.server("Sessions")
 	local SeedService = H.server("SeedService")
 	local function setup(plants: number, x: number): (any, any)
-		local root = { Position = Vector3.new(x, 3, 0) }
+		local root = { Position = Vector3.new(x, 3, 0), CFrame = roblox.CFrame.new(x, 3, 0) }
 		local char = {
 			FindFirstChild = function(_, name: string)
 				return if name == "HumanoidRootPart" then root else nil
@@ -201,31 +201,38 @@ H.test("inventory: SeedService.storeCarried puts a carried seed in the bag at ho
 		for i = 1, plants do
 			table.insert(profile.plants, plant(i, 1, 1, 60))
 		end
-		s.carry = { zone = 3, rarity = 2, mutation = "Gold", pod = 1, model = nil }
+		s.carry = { zone = 3, rarity = 2, mutation = "Gold", gene = 4242, pod = 1, model = nil }
 		return player, s
 	end
-	-- full plot, at home: in the bag, carry cleared
+	-- full plot, at home: in the bag, gene and all, carry cleared
 	local player, s = setup(Config.SLOTS_START, Config.CORRIDOR_START_X - 20)
 	H.eq(Sessions.maxSlots(s), Config.SLOTS_START)
 	H.ok(SeedService.storeCarried(player), "stored")
 	H.eq(s.carry, nil, "no longer carried")
-	H.eq(s.profile.seedBag[SeedPacks.bagKey(3, 2, "Gold")], 1, "in the bag, mutation and all")
+	H.eq(s.profile.seedBag[SeedPacks.bagKey(3, 2, "Gold", 4242)], 1, "in the bag, mutation and gene and all")
 	H.ok(not SeedService.storeCarried(player), "nothing more to store")
 	Sessions.remove(player)
-	-- a free slot: it stays carried for the normal planting
-	player, s = setup(Config.SLOTS_START - 1, Config.CORRIDOR_START_X - 20)
-	H.ok(not SeedService.storeCarried(player))
-	H.ok(s.carry ~= nil, "still carried: plant it")
-	H.eq(SeedPacks.bagCount(s.profile.seedBag), 0)
+	-- free slots: into the bag all the same (owner: it always leaves your back in the base)
+	player, s = setup(0, Config.CORRIDOR_START_X - 0.5)
+	H.ok(SeedService.storeCarried(player), "stored with an empty plot")
+	H.eq(s.carry, nil)
+	H.eq(SeedPacks.bagCount(s.profile.seedBag), 1)
 	Sessions.remove(player)
 	-- still in the corridor
-	player, s = setup(Config.SLOTS_START, Config.CORRIDOR_START_X + 50)
+	player, s = setup(Config.SLOTS_START, Config.CORRIDOR_START_X + 0.5)
 	H.ok(not SeedService.storeCarried(player))
 	H.ok(s.carry ~= nil, "not home yet")
 	Sessions.remove(player)
-	-- the payout loop checks it for every plot owner
+	-- the bag full: it stays on your back
+	player, s = setup(0, Config.CORRIDOR_START_X - 20)
+	s.profile.seedBag["1:1"] = Config.SEED_BAG_MAX
+	H.ok(not SeedService.storeCarried(player))
+	H.ok(s.carry ~= nil, "carried while the bag is full")
+	Sessions.remove(player)
+	-- a quick homecoming loop checks every plot owner who carries a seed
 	local plot = fs.readFile("src/server/PlotService.luau")
-	H.ok(string.find(plot, "pcall(SeedService.storeCarried, owner :: Player)", 1, true) ~= nil, "wired in the payout loop")
+	H.ok(string.find(plot, "pcall(SeedService.storeCarried, owner :: Player)", 1, true) ~= nil, "wired in the homecoming loop")
+	H.ok(string.find(plot, "PlotService.HOMECOMING_INTERVAL = 0.2 ", 1, true) ~= nil, "checked several times a second")
 end)
 
 H.test("inventory: the server wiring (Remove, plant from the inventory, sell ids) and the HUD's Plants / Inventory tabs", function()
@@ -234,7 +241,7 @@ H.test("inventory: the server wiring (Remove, plant from the inventory, sell ids
 		"Inventory.take(s.profile, slot, now)", -- Remove: into the inventory
 		"local invId = inventoryId(bagKey)", -- PlantSeed with "inv:<id>"
 		"Inventory.remove(s.profile, invId)",
-		"plantSeed(player, s, state, x, z, zone, rarity, mutation, entry)", -- planted again as it was
+		"plantSeed(player, s, state, x, z, zone, rarity, mutation, entry, gene)", -- planted again as it was (a seed: as its gene says)
 		"Selling.sell(s.profile, slots, distance, now, Sessions.moneyMult(s), ids)",
 		"inventory = inventory, slots = Sessions.maxSlots(s)", -- the view
 	} do
@@ -249,48 +256,8 @@ H.test("inventory: the server wiring (Remove, plant from the inventory, sell ids
 	H.ok(string.find(hud, "for _, name in { \"Plants\", \"Inventory\" } do", 1, true) ~= nil, "Plants / Inventory tabs")
 	H.ok(string.find(hud, "RequestUseItem:FireServer(\"Seed:\" .. key)", 1, true) ~= nil, "a Plant button per seed and inventory plant")
 	H.ok(string.find(hud, "SellPlants:FireServer(slots, ids)", 1, true) ~= nil, "the Sell window sells inventory plants too")
-	H.ok(string.find(hud, "\"Plot and seed bag full: plant or sell to make room for your seed!\"", 1, true) ~= nil, "a full bag is said in the panel")
+	H.ok(string.find(hud, "\"Seed bag full: plant or sell to make room for your seed!\"", 1, true) ~= nil, "a full bag is said in the panel")
 	H.ok(string.find(hud, "UiFx.relief(label, 3, 3)", 1, true) ~= nil, "in relief text")
-end)
-
-H.test("planting ghosts: one silhouette per zone x rarity at full-grown size, plain parts only", function()
-	local PlantGhosts = H.server("PlantGhosts")
-	local CreatureModels = H.server("CreatureModels")
-	local folder = roblox.Instance.new("Folder")
-	local applyScale = CreatureModels.applyScale
-	CreatureModels.applyScale = function(model: any, scale: number) -- (Lune has no Model:ScaleTo: just record it)
-		model:SetAttribute("Scale", scale)
-	end
-	PlantGhosts.publish(folder)
-	CreatureModels.applyScale = applyScale
-
-	local ghosts = folder:FindFirstChild(PlantGhosts.FOLDER)
-	H.ok(ghosts ~= nil, "the folder")
-	local parts = 0
-	for zone in Config.ZONES do
-		for rarity in Config.RARITIES do
-			local ghost = ghosts:FindFirstChild(PlantGhosts.name(zone, rarity))
-			H.ok(ghost and ghost:IsA("Model"), `{zone}x{rarity}: a ghost`)
-			H.near(ghost:GetAttribute("Scale"), PlantGhosts.fullScale(zone, rarity), 1e-6, `{zone}x{rarity}: full-grown`)
-			H.ok(PlantGhosts.fullScale(zone, rarity) >= CreatureModels.scaleFor(zone, rarity, Config.sproutWeight(zone, rarity)), "bigger than a sprout")
-			for _, d in ghost:GetDescendants() do
-				if d:IsA("BasePart") then
-					parts += 1
-					H.ok(d.Anchored and not d.CanCollide and not d.CanQuery and not d.CanTouch and not d.CastShadow, `{d:GetFullName()}: inert`)
-				else
-					H.ok(d:IsA("Model") or d:IsA("SpecialMesh") or d:IsA("Attachment") or d:IsA("WeldConstraint") or d:IsA("Weld")
-						or d:IsA("Motor6D") or d:IsA("Bone"), `{d:GetFullName()}: no {d.ClassName} on a ghost`)
-				end
-			end
-		end
-	end
-	print(`        planting ghosts: {#ghosts:GetChildren()} models, {parts} parts`)
-	H.ok(parts < 1500, "cheap to replicate")
-	local client = fs.readFile("src/client/Planting.client.luau")
-	H.ok(string.find(client, "ReplicatedStorage:FindFirstChild(\"PlantGhosts\")", 1, true) ~= nil, "the client clones them")
-	H.ok(not string.find(client, "\"Disc\"", 1, true), "no flat disc")
-	local main = fs.readFile("src/server/Main.server.luau")
-	H.ok(string.find(main, "task.spawn(PlantGhosts.publish)", 1, true) ~= nil, "published at start")
 end)
 
 return nil

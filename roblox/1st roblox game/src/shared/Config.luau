@@ -397,6 +397,32 @@ function Config.varianceOf(plant: { plantedAt: number, slot: number, variance: n
 	return plant.variance or Config.plantVariance(plant.plantedAt, plant.slot)
 end
 
+-- A seed's gene (owner request: the planting ghost shows exactly what will grow): a whole number drawn when
+-- the seed is (a pod's roll, a pack, a seed stored in the bag), carried with it and kept in its bag key. It
+-- decides the plant the seed grows into, though no label ever says so until it is planted: its flower
+-- (gene-th of the zone's plant models of its rarity, wrapping round: SEED_GENES is a multiple of every count
+-- up to 16, so each flower is as likely) and its weight variance (geneVariance).
+Config.SEED_GENES = 720720
+function Config.rollGene(rng: () -> number): number
+	return math.clamp(math.floor(rng() * Config.SEED_GENES) + 1, 1, Config.SEED_GENES)
+end
+
+-- The weight variance a seed with this gene grows with, in plantVariance's range.
+function Config.geneVariance(gene: number): number
+	return Config.plantVariance(gene, 0)
+end
+
+-- Which of its zone's `count` seed designs (assets/Seed_<ZoneId>) a seed with this gene looks like: drawn
+-- from the gene apart from its flower, and whatever its rarity, so a pod, the seed carried from it and the
+-- same seed in the bag all look alike. 1 when the gene is unknown (a bag seed from before genes).
+function Config.geneDesign(gene: number?, count: number): number
+	if not gene or count <= 1 then
+		return 1
+	end
+	local x = math.sin(gene * 39.3467 + 11.135) * 15731.743
+	return math.clamp(math.floor((x - math.floor(x)) * count) + 1, 1, count)
+end
+
 function Config.sproutWeight(k: number, rarity: number): number
 	return Config.ZONES[k].baseWeight * Config.RARITIES[rarity].weight
 end

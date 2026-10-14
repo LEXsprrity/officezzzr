@@ -180,6 +180,23 @@ Botão direito na pasta **Arvores** → **Save to File...** → `assets/Arvores.
 
 As zonas não têm arcos, portões nem placas com o nome: uma zona passa para a outra pela cor do chão e das paredes. Ao lado de cada ninho há uma plaquinha de madeira num poste ("👟 700K recommended"); ela é do jogo e não tem modelo (dá para mover ou apagar à mão no mapa).
 
+#### As sementes (`Seed_<Zona>`)
+
+As sementes (as 4 do ninho e a que vai nas costas de quem rouba) são as **sementes compradas pelo dono** (`models/seeds/PlantsByLoxsy.rbxm`), 2 modelos por zona escolhidos pelas cores da zona, e **nenhum modelo é usado por duas zonas**. Cada arquivo `Seed_<Zona>` é uma **pasta com os modelos da zona** (`Design1`, `Design2`; nunca o nome da fruta). Cada semente sorteia um dos modelos da sua zona, **qualquer que seja a raridade** (uma Common e uma Legendary podem ter o mesmo modelo); a raridade aparece só no nome flutuante ("Rare Seed"). A semente nas costas e a da mochila (o slot 2 da barra) têm o mesmo modelo da semente do ninho de onde vieram.
+
+- Gerados com `lune run tools/export_seeds.luau` (a lista de quais sementes vão para cada zona está no começo desse arquivo). O script tira o `Handle` invisível, scripts, luzes, partículas e peças Neon (o dono não quer brilho em volta da semente); ficam as peças e a arte do pacotinho.
+- O modelo é encaixado numa caixa de **3 × 3 × 3** studs no ninho e **2,4** nas costas (base no chão). Sem o arquivo da zona, a semente é uma bola lisa (SmoothPlastic, sem Neon nem luz) na cor da semente da zona (ou da mutação). O nome flutuante e o prompt "Steal Seed" continuam do jogo.
+
+| Nome | O que é | Onde aparece | Altura | Largura máx. |
+|---|---|---|---|---|
+| `Seed_Meadow` | as sementes da 🌼 Meadow (dente-de-leão, pacotinho verde) | ninho e costas | 3 (2,4 nas costas) | 3 (2,4 nas costas) |
+| `Seed_Desert` | as sementes do 🦂 Desert (pacotinhos areia e amarelo) | ninho e costas | 3 (2,4 nas costas) | 3 (2,4 nas costas) |
+| `Seed_Jungle` | as sementes da 🦖 Jungle (arvorezinha marrom e verde, broto verde) | ninho e costas | 3 (2,4 nas costas) | 3 (2,4 nas costas) |
+| `Seed_Lava` | as sementes de 🌋 Lava Fields (laranja e marrom-escuro) | ninho e costas | 3 (2,4 nas costas) | 3 (2,4 nas costas) |
+| `Seed_Snow` | as sementes de ❄️ Snow Peaks (bétula cinza-clara, cogumelo de pintas claras) | ninho e costas | 3 (2,4 nas costas) | 3 (2,4 nas costas) |
+| `Seed_Space` | as sementes de 👽 Deep Space (roxo-escuro, magenta) | ninho e costas | 3 (2,4 nas costas) | 3 (2,4 nas costas) |
+| `Seed_Spirit` | as sementes do ⛩️ Spirit Garden (rosa, vermelho e branco) | ninho e costas | 3 (2,4 nas costas) | 3 (2,4 nas costas) |
+
 O **ninho** fica bem no canto ESQUERDO do corredor (quem vem da base), encostado na parede: o guardião dorme ali, com o flanco junto da parede, e as 4 sementes ficam soltas no chão à direita dele (para o meio do corredor), um pouco à frente. Não tem planta-mãe nem mancha, anel ou pedrinhas debaixo das sementes, e por isso o ninho **não tem modelo**: é só a peça invisível `NestCore` com os pontos. Os enfeites das paredes (árvores, cactos, pedras...) deixam esse canto livre sozinhos.
 
 ### Base, lotes e lojas

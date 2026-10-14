@@ -1,5 +1,11 @@
 -- Nests, seed pods and carrying. Stealing is a server ProximityPrompt; the carried seed is a
 -- server-made part welded to the thief's back. One seed at a time.
+-- Each seed has a gene from the moment it exists (a pod's roll; Config.rollGene): it decides the flower it
+-- grows into and its size, so the planting ghost shows exactly that plant. It travels with the seed (the
+-- carry, the seed bag's key) and no label ever says the flower: that is revealed when it is planted.
+-- A seed looks like one of its zone's 2 seed designs (assets/Seed_<ZoneId>, the owner's bought seeds; the
+-- gene picks which, never the rarity: rarity shows only in the name tag), or a plain ball in its seed
+-- colour without that file. No Neon, no light (owner request; seedLook).
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Shared = ReplicatedStorage:WaitForChild("Shared")
 local Config = require(Shared:WaitForChild("Config"))
@@ -8,7 +14,8 @@ local Net = require(script.Parent:WaitForChild("Net"))
 local Sessions = require(script.Parent:WaitForChild("Sessions"))
 local WorldBuilder = require(script.Parent:WaitForChild("WorldBuilder"))
 local Inventory = require(script.Parent:WaitForChild("Inventory"))
-
+local Assets = require(script.Parent:WaitForChild("Assets"))
+local PlantGhosts = require(script.Parent:WaitForChild("PlantGhosts"))
 
 local SeedService = {}
 
@@ -17,15 +24,21 @@ type Pod = {
 	part: BasePart,
 	prompt: ProximityPrompt,
 	label: TextLabel,
+	gui: BillboardGui,
 	available: boolean,
 	rarity: number,
 	mutation: string?,
+	gene: number,
 	regrowToken: number,
 }
 type Nest = { info: WorldBuilder.NestInfo, pods: { Pod } }
 
 local nests: { Nest } = {}
 local rng = Random.new()
+
+SeedService.POD_SIZE = 3 -- studs: the pod's ball (and the box an assets/Seed model is fitted in)
+SeedService.CARRY_SIZE = 2.4
+SeedService.LABEL_HEIGHTS = { 3, 4.1, 3.55, 4.65 } -- studs over a pod, by pod number, so neighbours' labels don't overlap
 
 -- Set by Main: GuardService.alert
 SeedService.onStolen = nil :: ((zone: number, player: Player) -> ())?
@@ -39,47 +52,161 @@ local function isNight(): boolean
 	return (Config.dayPhase(os.time()))
 end
 
-local function applyLook(part: BasePart, zone: number, rarity: number, mutation: string?)
-	local mut = Config.mutationById(mutation)
-	part.Color = if mut then mut.color else Config.ZONES[zone].seedColor
-	part.Material = Enum.Material.Neon
-	local light = part:FindFirstChildOfClass("PointLight")
-	if light then
-		light.Color = Config.RARITIES[rarity].color
-		light.Range = 6 + rarity * 3
-		light.Brightness = if rarity >= 3 or mut then 3 else 1
+local function roll(): number
+	return rng:NextNumber()
+end
+
+----------------------------------------------------------------------------------------------------
+-- Looks
+----------------------------------------------------------------------------------------------------
+-- How many seed designs zone `zone` has (assets/Seed_<ZoneId>; 0 without the file), and which one a seed
+-- with this gene looks like (Config.geneDesign; whatever its rarity).
+function SeedService.designCount(zone: number): number
+	return #Assets.variantNames(Assets.seedSlot(zone))
+end
+function SeedService.designOf(zone: number, gene: number?): number
+	return Config.geneDesign(gene, SeedService.designCount(zone))
+end
+
+-- Dresses `host` (a pod's ball or the carried seed) as a seed of (zone, rarity, mutation) with this gene:
+-- its zone's seed design the gene picks (assets/Seed_<ZoneId>, the owner's bought seeds), fitted in the ball,
+-- which turns invisible; without the file, a plain ball in the seed colour (the mutation's, if any). Never
+-- Neon or lit (owner). Its rarity shows only in its name tag. Returns the model, or nil for the ball.
+function SeedService.seedLook(host: BasePart, zone: number, rarity: number, mutation: string?, gene: number?): Model?
+	local old = host:FindFirstChild("SeedModel")
+	if old then
+		old:Destroy()
 	end
-	part:SetAttribute("Mutation", mutation)
-	part:SetAttribute("Rarity", rarity)
+	local mut = Config.mutationById(mutation)
+	host.Color = if mut then mut.color else Config.ZONES[zone].seedColor
+	host.Material = Enum.Material.SmoothPlastic
+	for _, d in host:GetChildren() do
+		if d:IsA("Light") then
+			d:Destroy()
+		end
+	end
+	host:SetAttribute("Mutation", mutation)
+	host:SetAttribute("Rarity", rarity)
+	host:SetAttribute("Design", nil)
+	local size = host.Size.Y
+	local slot = Assets.seedSlot(zone)
+	local design = SeedService.designOf(zone, gene)
+	local model = Assets.get(slot) and Assets.place(slot, nil, host.CFrame * CFrame.new(0, -size / 2, 0), Vector3.one * size, nil, design)
+	if model then
+		model.Name = "SeedModel"
+		host:SetAttribute("Design", design)
+		for _, d in model:GetDescendants() do -- (the exported designs have none; a hand-made one might)
+			if d:IsA("Light") or d:IsA("ParticleEmitter") or d:IsA("LuaSourceContainer") then
+				d:Destroy()
+			elseif d:IsA("BasePart") and d.Material == Enum.Material.Neon then
+				d.Material = Enum.Material.SmoothPlastic
+			end
+		end
+		for _, d in model:GetDescendants() do
+			if d:IsA("BasePart") then
+				d.CanCollide = false
+				d.CanQuery = false
+				d.CanTouch = false
+				d.Massless = true
+				if not host.Anchored then -- (the carried seed: welded to the ball on the thief's back)
+					d.Anchored = false
+					local weld = Instance.new("WeldConstraint")
+					weld.Part0 = host
+					weld.Part1 = d
+					weld.Parent = d
+				end
+			end
+		end
+		model.Parent = host
+	end
+	host.Transparency = if model then 1 else 0
+	return model
 end
 
-local function showPod(pod: Pod, zone: number)
-	pod.available = true
-	pod.part.Transparency = 0
-	pod.prompt.Enabled = true
-	pod.prompt.ObjectText = SeedService.seedName(zone, pod.rarity, pod.mutation)
-	pod.label.Text = SeedService.seedName(zone, pod.rarity, pod.mutation)
-	pod.label.TextColor3 = Config.RARITIES[pod.rarity].color
-	local gui = pod.label.Parent :: BillboardGui
-	gui.Enabled = true
-	applyLook(pod.part, zone, pod.rarity, pod.mutation)
+-- Relief text on a world label (owner: no flat text): a thick round outline, a bevel and a dark copy
+-- dropped behind it. setLabel keeps the copy's text in step.
+local SHADOW = Color3.fromRGB(20, 20, 30)
+local function relief(label: TextLabel)
+	local stroke = label:FindFirstChildWhichIsA("UIStroke") or Instance.new("UIStroke")
+	stroke.Thickness = 3
+	stroke.LineJoinMode = Enum.LineJoinMode.Round
+	stroke.Color = SHADOW
+	stroke.Parent = label
+	local shadow = label:Clone()
+	shadow.Name = "Shadow"
+	shadow.TextColor3 = SHADOW
+	shadow.Position = label.Position + UDim2.fromOffset(1, 3)
+	shadow.ZIndex = label.ZIndex
+	shadow.Parent = label.Parent
+	label.ZIndex += 1
+	local bevel = Instance.new("UIGradient")
+	bevel.Rotation = 90
+	bevel.Color = ColorSequence.new({
+		ColorSequenceKeypoint.new(0, Color3.new(1, 1, 1)),
+		ColorSequenceKeypoint.new(0.45, Color3.new(1, 1, 1)),
+		ColorSequenceKeypoint.new(1, Color3.fromRGB(170, 170, 185)),
+	})
+	bevel.Parent = label
 end
 
-local function hidePod(pod: Pod)
-	pod.available = false
-	pod.part.Transparency = 1
-	pod.prompt.Enabled = false
-	local gui = pod.label.Parent :: BillboardGui
-	gui.Enabled = false
+local function setLabel(label: TextLabel, text: string, color: Color3)
+	label.Text = text
+	label.TextColor3 = color
+	local shadow = label.Parent and label.Parent:FindFirstChild("Shadow")
+	if shadow and shadow:IsA("TextLabel") then
+		shadow.Text = text
+	end
+end
+
+-- A seed's name tag: relief text that is never hidden behind the boss, a wall or another pod (AlwaysOnTop:
+-- a depth-tested tag behind geometry is how a pod showed without its name).
+local function nameTag(host: BasePart, height: number, size: UDim2, maxDistance: number): (TextLabel, BillboardGui)
+	local label = WorldBuilder.billboard(host, "", size, Vector3.new(0, height, 0), maxDistance)
+	local gui = label.Parent :: BillboardGui
+	gui.Name = "SeedLabel"
+	gui.AlwaysOnTop = true
+	relief(label)
+	return label, gui
+end
+
+----------------------------------------------------------------------------------------------------
+-- Pods
+----------------------------------------------------------------------------------------------------
+-- The one place a pod is shown or hidden: shown, it has its seed's look, an enabled prompt and an enabled
+-- name tag with the seed's name; hidden, none of them.
+local function setPod(pod: Pod, zone: number, shown: boolean)
+	pod.available = shown
+	pod.prompt.Enabled = shown
+	pod.gui.Enabled = shown
+	if shown then
+		local name = SeedService.seedName(zone, pod.rarity, pod.mutation)
+		pod.prompt.ObjectText = name
+		setLabel(pod.label, name, Config.RARITIES[pod.rarity].color)
+		SeedService.seedLook(pod.part, zone, pod.rarity, pod.mutation, pod.gene)
+	else
+		local model = pod.part:FindFirstChild("SeedModel")
+		if model then
+			model:Destroy()
+		end
+		pod.part.Transparency = 1
+	end
 end
 
 local function regrow(pod: Pod, zone: number)
-	pod.rarity, pod.mutation = Config.rollSeed(zone, if isNight() then Config.NIGHT_LUCK else 1, isNight(), function()
-		return rng:NextNumber()
-	end)
-	showPod(pod, zone)
+	pod.rarity, pod.mutation = Config.rollSeed(zone, if isNight() then Config.NIGHT_LUCK else 1, isNight(), roll)
+	pod.gene = Config.rollGene(roll)
+	setPod(pod, zone, true)
 end
 
+-- Zone `zone`'s pods (tests read them; nothing outside changes them).
+function SeedService.pods(zone: number): { Pod }
+	local nest = nests[zone]
+	return if nest then nest.pods else {}
+end
+
+----------------------------------------------------------------------------------------------------
+-- Carrying
+----------------------------------------------------------------------------------------------------
 local function makeCarryModel(char: Model, carry: Sessions.Carry): Model?
 	local torso = (char:FindFirstChild("UpperTorso") or char:FindFirstChild("Torso")) :: any
 	if not torso then
@@ -90,26 +217,31 @@ local function makeCarryModel(char: Model, carry: Sessions.Carry): Model?
 	local seed = Instance.new("Part")
 	seed.Name = "Seed"
 	seed.Shape = Enum.PartType.Ball
-	seed.Size = Vector3.one * 2.4
+	seed.Size = Vector3.one * SeedService.CARRY_SIZE
 	seed.CanCollide = false
 	seed.CanQuery = false
 	seed.CanTouch = false
 	seed.Massless = true
-	local light = Instance.new("PointLight")
-	light.Parent = seed
-	applyLook(seed, carry.zone, carry.rarity, carry.mutation)
 	seed.CFrame = torso.CFrame * CFrame.new(0, 0.3, torso.Size.Z / 2 + 1.1)
+	SeedService.seedLook(seed, carry.zone, carry.rarity, carry.mutation, carry.gene) -- (the same design as its pod)
 	local weld = Instance.new("WeldConstraint")
 	weld.Part0 = torso
 	weld.Part1 = seed
 	weld.Parent = seed
 	seed.Parent = model
-	local label = WorldBuilder.billboard(seed, SeedService.seedName(carry.zone, carry.rarity, carry.mutation),
-		UDim2.fromOffset(220, 30), Vector3.new(0, 3.5, 0), 60)
-	label.TextColor3 = Config.RARITIES[carry.rarity].color
+	local label = nameTag(seed, 3.5, UDim2.fromOffset(220, 30), 60)
+	setLabel(label, SeedService.seedName(carry.zone, carry.rarity, carry.mutation), Config.RARITIES[carry.rarity].color)
 	model.PrimaryPart = seed
 	model.Parent = char
 	return model
+end
+
+-- The carry for a pod's seed, with what its planting ghost shows (the ghost is built now, so it reaches
+-- the thief's client before the carry does).
+function SeedService.newCarry(zone: number, podIndex: number, rarity: number, mutation: string?, gene: number): Sessions.Carry
+	local ghost, scale = PlantGhosts.seedLook(zone, rarity, gene)
+	PlantGhosts.ensure(zone, rarity, ghost)
+	return { zone = zone, rarity = rarity, mutation = mutation, gene = gene, ghost = ghost, scale = scale, pod = podIndex, model = nil }
 end
 
 local function steal(player: Player, zone: number, podIndex: number)
@@ -129,13 +261,13 @@ local function steal(player: Player, zone: number, podIndex: number)
 	if not char or not root or not hum or hum.Health <= 0 then
 		return
 	end
-	if (root.Position - pod.part.Position).Magnitude > Config.PICKUP_DISTANCE then
+	if (root.CFrame.Position - pod.part.CFrame.Position).Magnitude > Config.PICKUP_DISTANCE then
 		return
 	end
 
 	local rarity, mutation = pod.rarity, pod.mutation
-	hidePod(pod)
-	local carry: Sessions.Carry = { zone = zone, rarity = rarity, mutation = mutation, pod = podIndex, model = nil }
+	setPod(pod, zone, false)
+	local carry = SeedService.newCarry(zone, podIndex, rarity, mutation, pod.gene)
 	carry.model = makeCarryModel(char, carry)
 	s.carry = carry
 	Sessions.pushCarry(s)
@@ -144,8 +276,37 @@ local function steal(player: Player, zone: number, podIndex: number)
 		SeedService.onStolen(zone, player)
 	end
 end
+SeedService.steal = steal
 
-function SeedService.init(nestInfos: { WorldBuilder.NestInfo })
+-- The seed designs for the client's hotbar seed slot (Planting.client shows the seed it would plant):
+-- ReplicatedStorage.SeedLooks.<zone>.<design>, each fitted in a 3-stud box at the origin. Returns the folder.
+SeedService.LOOKS = "SeedLooks"
+function SeedService.publishLooks(parent: Instance?): Folder
+	local into = parent or ReplicatedStorage
+	local old = into:FindFirstChild(SeedService.LOOKS)
+	if old then
+		old:Destroy()
+	end
+	local folder = Instance.new("Folder")
+	folder.Name = SeedService.LOOKS
+	for k in Config.ZONES do
+		local zoneFolder = Instance.new("Folder")
+		zoneFolder.Name = tostring(k)
+		for design = 1, SeedService.designCount(k) do
+			local model = Assets.place(Assets.seedSlot(k), nil, CFrame.identity, Vector3.one * SeedService.POD_SIZE, nil, design)
+			if model then
+				model.Name = tostring(design)
+				model.Parent = zoneFolder
+			end
+		end
+		zoneFolder.Parent = folder
+	end
+	folder.Parent = into
+	return folder
+end
+
+-- Builds every nest's pods (each rolls its first seed). init also wires their prompts.
+function SeedService.buildPods(nestInfos: { WorldBuilder.NestInfo })
 	for k, info in nestInfos do
 		local nest: Nest = { info = info, pods = {} }
 		nests[k] = nest
@@ -153,12 +314,10 @@ function SeedService.init(nestInfos: { WorldBuilder.NestInfo })
 			local part = Instance.new("Part")
 			part.Name = "SeedPod" .. i
 			part.Shape = Enum.PartType.Ball
-			part.Size = Vector3.one * 3
+			part.Size = Vector3.one * SeedService.POD_SIZE
 			part.CFrame = cf
 			part.Anchored = true
 			part.CanCollide = false
-			local light = Instance.new("PointLight")
-			light.Parent = part
 			local prompt = Instance.new("ProximityPrompt")
 			prompt.ActionText = "Steal Seed"
 			prompt.HoldDuration = 0.3
@@ -166,19 +325,29 @@ function SeedService.init(nestInfos: { WorldBuilder.NestInfo })
 			prompt.RequiresLineOfSight = false
 			prompt.KeyboardKeyCode = Enum.KeyCode.E
 			prompt.Parent = part
-			local label = WorldBuilder.billboard(part, "", UDim2.fromOffset(200, 28), Vector3.new(0, 3, 0), 45)
+			local heights = SeedService.LABEL_HEIGHTS
+			local label, gui = nameTag(part, heights[(i - 1) % #heights + 1], UDim2.fromOffset(190, 28), 45)
 			part.Parent = info.model
 			local pod: Pod = {
-				cframe = cf, part = part, prompt = prompt, label = label,
-				available = false, rarity = 1, mutation = nil, regrowToken = 0,
+				cframe = cf, part = part, prompt = prompt, label = label, gui = gui,
+				available = false, rarity = 1, mutation = nil, gene = 1, regrowToken = 0,
 			}
 			nest.pods[i] = pod
 			regrow(pod, k)
-			prompt.Triggered:Connect(function(player: Player)
+		end
+	end
+end
+
+function SeedService.init(nestInfos: { WorldBuilder.NestInfo })
+	SeedService.buildPods(nestInfos)
+	for k, nest in nests do
+		for i, pod in nest.pods do
+			pod.prompt.Triggered:Connect(function(player: Player)
 				steal(player, k, i)
 			end)
 		end
 	end
+	SeedService.publishLooks()
 end
 
 local function clearCarry(s: Sessions.Session): Sessions.Carry?
@@ -196,7 +365,7 @@ local function clearCarry(s: Sessions.Session): Sessions.Carry?
 	return carry
 end
 
--- Caught, died or left: the seed goes back to its pod, unchanged.
+-- Caught, died or left: the seed goes back to its pod, unchanged (its gene too).
 function SeedService.returnCarry(player: Player)
 	local s = Sessions.get(player)
 	local carry = s and clearCarry(s)
@@ -205,15 +374,16 @@ function SeedService.returnCarry(player: Player)
 	end
 	local pod = nests[carry.zone].pods[carry.pod]
 	pod.regrowToken += 1
-	pod.rarity, pod.mutation = carry.rarity, carry.mutation
-	showPod(pod, carry.zone)
+	pod.rarity, pod.mutation, pod.gene = carry.rarity, carry.mutation, carry.gene or Config.rollGene(roll)
+	setPod(pod, carry.zone, true)
 end
 
--- A stolen seed brought home (into the base) while the plot is full goes into the seed bag by itself
--- (Inventory.carryHome; owner request): the pod regrows as if it was planted, and a Legendary from the
--- last zones is announced now (planting from the bag never announces). With the bag full too it stays
--- carried (the Inventory says so). PlotService's payout loop checks every plot owner. Returns whether it
--- stored the seed.
+-- A stolen seed goes into the seed bag by itself as soon as its thief crosses from the corridor into the
+-- base (Inventory.carryHome; owner request): off their back, gene and all, and the pod regrows as if it was
+-- planted. They plant it from the hotbar's seed slot or the Inventory. A Legendary from the last zones is
+-- announced now (planting from the bag never announces). With the bag full it stays carried (the Inventory
+-- and the planting hint say so). PlotService's homecoming loop checks every plot owner several times a
+-- second. Returns whether it stored the seed.
 function SeedService.storeCarried(player: Player): boolean
 	local s = Sessions.get(player)
 	local char = player.Character
@@ -221,14 +391,14 @@ function SeedService.storeCarried(player: Player): boolean
 	if not s or not s.carry or not root then
 		return false
 	end
-	if Inventory.carryHome(s.profile, Sessions.maxSlots(s), Inventory.isHome(root.Position)) ~= "store" then
+	if Inventory.carryHome(s.profile, Inventory.isHome(root.CFrame.Position)) ~= "store" then
 		return false
 	end
 	local carry = SeedService.consumeCarry(player)
 	if not carry then
 		return false
 	end
-	SeedPacks.addToBag(s.profile.seedBag, carry.zone, carry.rarity, carry.mutation)
+	SeedPacks.addToBag(s.profile.seedBag, carry.zone, carry.rarity, carry.mutation, carry.gene)
 	Sessions.pushFull(s)
 	Net.LootEvent:FireClient(player, "Stored", { zone = carry.zone, rarity = carry.rarity, mutation = carry.mutation })
 	if Config.announcesLegendary(carry.zone, carry.rarity, false) then
@@ -237,7 +407,7 @@ function SeedService.storeCarried(player: Player): boolean
 	return true
 end
 
--- Planted: the pod regrows later with a fresh roll.
+-- Planted (or stored): the pod regrows later with a fresh roll.
 function SeedService.consumeCarry(player: Player): Sessions.Carry?
 	local s = Sessions.get(player)
 	local carry = s and clearCarry(s)
@@ -256,7 +426,6 @@ function SeedService.consumeCarry(player: Player): Sessions.Carry?
 		end)
 	end
 	return carry
-
 end
 
 return SeedService

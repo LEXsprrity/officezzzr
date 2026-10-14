@@ -14,6 +14,9 @@ export type Carry = {
 	zone: number,
 	rarity: number,
 	mutation: string?,
+	gene: number?, -- the seed's hidden flower and size (Config.rollGene)
+	ghost: number?, -- what its planting ghost shows (PlantGhosts.seedLook): the flower's n...
+	scale: number?, -- ...at the size it has when planted
 	pod: number,
 	model: Model?,
 }
@@ -116,7 +119,7 @@ local function carryView(s: Session): any
 	if not c then
 		return false
 	end
-	return { zone = c.zone, rarity = c.rarity, mutation = c.mutation }
+	return { zone = c.zone, rarity = c.rarity, mutation = c.mutation, ghost = c.ghost, scale = c.scale } -- (never the flower's name)
 end
 
 -- Money/speed/income change often; send just those (and mirror them to leaderstats).

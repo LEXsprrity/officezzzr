@@ -109,8 +109,20 @@ local taskMock = {
 	defer = function(fn, ...)
 		fn(...)
 	end,
-	delay = function(_n, _fn) end,
+	delay = function(n: number, fn, ...) -- never runs by itself: a test may run Harness.delayed's entries
+		table.insert(Harness.delayed, { seconds = n, fn = fn, args = table.pack(...) })
+	end,
 }
+Harness.delayed = {} :: { { seconds: number, fn: (...any) -> (), args: any } }
+
+-- Runs (and clears) every task.delay callback queued so far.
+function Harness.runDelayed()
+	local queued = Harness.delayed
+	Harness.delayed = {}
+	for _, d in queued do
+		d.fn(table.unpack(d.args, 1, d.args.n))
+	end
+end
 
 -- Roblox's Random isn't in Lune: a small seeded stand-in (same API shape, different sequence).
 local RandomMock = {}

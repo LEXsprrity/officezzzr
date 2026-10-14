@@ -35,7 +35,11 @@ ProfileStore.__index = ProfileStore
 -- v9 added the plant inventory (`inventory`: plants taken off the plot, as they were) and a plant's own
 -- `variance` (a plant planted again from the inventory keeps its weight). Older saves load with an empty
 -- inventory and their plants keep the variance from their planting time and id (Config.varianceOf).
-ProfileStore.VERSION = 9
+-- v10 gives every seed a gene (Config.rollGene: its hidden flower and size, so the planting ghost shows
+-- exactly what grows) and keeps it in the seed bag's key, "zone:rarity[:Mutation]#gene". Older keys load
+-- as they are (SeedPacks.parseBagKey takes both): such a seed gets its gene when its Plant button is
+-- pressed (PlantGhosts.bagPreview), or draws its flower when it is planted, as before.
+ProfileStore.VERSION = 10
 
 -- The zones' recommended Speed before v7 (Config.ZONES order), for migrateSpeed.
 ProfileStore.LEGACY_ZONE_REQ = { 0, 10e3, 500e3, 5e6, 50e6, 500e6, 5e9 }
@@ -100,7 +104,7 @@ export type Profile = {
 	inventory: { InvPlant }, -- v9: at most Config.INVENTORY_MAX
 	index: { [string]: boolean }, -- "zone:rarity" and "zone:Mutation" keys
 	items: { [string]: number },
-	seedBag: { [string]: number }, -- seeds from packs, "zone:rarity[:Mutation]" -> count
+	seedBag: { [string]: number }, -- seeds from packs and stolen seeds brought home, "zone:rarity[:Mutation][#gene]" -> count
 	receipts: { string }, -- last Config.RECEIPT_HISTORY processed Robux PurchaseIds
 	reachedEnd: boolean, -- legacy (the old "End of the Line" finish, now gone): kept so saves round-trip
 	lastSeen: number,
