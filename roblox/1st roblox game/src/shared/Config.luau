@@ -243,6 +243,15 @@ function Config.guardChaseSpeed(k: number): number
 	return Config.walkSpeedFor(Config.ZONES[k].req) * Config.GUARD_SPEED_FACTOR
 end
 
+-- The "👟 700M recommended" plank by each nest (WorldBuilder) reads GREEN when your Speed reaches the
+-- zone's recommended Speed and RED below it; Client/SpeedPlanks recolours it for each player.
+Config.PLANK_GREEN = Color3.fromRGB(90, 240, 60)
+Config.PLANK_RED = Color3.fromRGB(255, 48, 48)
+
+function Config.speedPlankColor(speed: number, k: number): Color3
+	return if speed >= Config.ZONES[k].req then Config.PLANK_GREEN else Config.PLANK_RED
+end
+
 ----------------------------------------------------------------------------------------------------
 -- Seeds, rarities, mutations
 ----------------------------------------------------------------------------------------------------
@@ -812,20 +821,6 @@ end
 function Config.averageTimeMult(k: number): number
 	local day, night = Config.DAY_SECONDS, Config.NIGHT_SECONDS
 	return (day * Config.timeMult(k, false) + night * Config.timeMult(k, true)) / (day + night)
-end
-
--- How "night" the lighting is, 0..1: eases in over the first NIGHT_FADE_SECONDS of the night and back
--- out over its last ones, so dusk and dawn are gradual. AmbientService blends day/night looks by it.
-Config.NIGHT_FADE_SECONDS = 20
-
-function Config.nightBlend(now: number): number
-	local night, left = Config.dayPhase(now)
-	if not night then
-		return 0
-	end
-	local elapsed = Config.NIGHT_SECONDS - left
-	local t = math.clamp(math.min(elapsed, left) / Config.NIGHT_FADE_SECONDS, 0, 1)
-	return t * t * (3 - 2 * t)
 end
 
 ----------------------------------------------------------------------------------------------------

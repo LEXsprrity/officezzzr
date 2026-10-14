@@ -522,14 +522,18 @@ end
 ----------------------------------------------------------------------------------------------------
 -- Corridor & zones
 ----------------------------------------------------------------------------------------------------
--- Beside each nest, on the left of a runner coming from the base, a small chunky wooden plank on a post
--- facing them: "👟 700K / recommended", the zone's recommended Speed (the Meadow's says "Start here"). The
--- zones have no gates, arches or name signs (owner playtest); this little plank is the only zone sign.
+-- Beside each nest, on the left of a runner coming from the base, a small chunky studded orange plank on a
+-- short thick post facing them, about chest height (owner's reference): "👟 700M" over "recommended", the
+-- zone's recommended Speed (the Meadow's says "Start here"), bold italic with a dark outline. The text is
+-- GREEN once your Speed reaches it and RED below (Config.speedPlankColor; Client/SpeedPlanks recolours
+-- the plank tagged Role = "SpeedPlank" + ZoneIndex for each player). The zones have no gates, arches or
+-- name signs (owner playtest); this little plank is the only zone sign.
 local PLANK = Color3.fromRGB(226, 130, 50)
-local PLANK_POST = Color3.fromRGB(196, 104, 44)
-local PLANK_TEXT = Color3.fromRGB(110, 255, 80)
-local PLANK_SIZE = Vector3.new(10, 5, 1.4) -- the board: chunky, about a player's height off the ground
-local PLANK_PPS = 40 -- SurfaceGui pixels per stud
+local PLANK_POST = Color3.fromRGB(204, 112, 44)
+WorldBuilder.PLANK_SIZE = Vector3.new(6, 3.5, 1) -- the board
+WorldBuilder.PLANK_POST_SIZE = Vector3.new(1.6, 1.8, 1.4) -- a short thick post: the board's bottom at 1.8
+local PLANK_PPS = 50 -- SurfaceGui pixels per stud
+local PLANK_FONT = Font.new("rbxasset://fonts/families/Montserrat.json", Enum.FontWeight.Heavy, Enum.FontStyle.Italic)
 WorldBuilder.SPEED_SIGN_OFFSET = Vector3.new(-10, 0, -26) -- ground point under the post, from the nest centre
 
 function WorldBuilder.speedSignText(k: number): (string, string)
@@ -545,12 +549,12 @@ local function buildSpeedSign(folder: Instance, k: number)
 	local model = Instance.new("Model")
 	model.Name = "SpeedSign"
 	model.Parent = folder
-	local postH = 4
-	studs(deco(model, "PlankPost", Vector3.new(1.4, postH, 1.6), CFrame.new(base + Vector3.new(0, postH / 2, 0)), PLANK_POST),
+	local postSize, plankSize = WorldBuilder.PLANK_POST_SIZE, WorldBuilder.PLANK_SIZE
+	studs(deco(model, "PlankPost", postSize, CFrame.new(base + Vector3.new(0, postSize.Y / 2, 0)), PLANK_POST),
 		{ "FrontSurface", "BackSurface", "LeftSurface", "RightSurface" })
-	local center = base + Vector3.new(0, postH + PLANK_SIZE.Y / 2, 0)
-	local plank = studs(deco(model, "Plank", PLANK_SIZE, Props.lookAt(center, center - Vector3.xAxis), PLANK),
-		{ "TopSurface", "FrontSurface", "BackSurface" })
+	local center = base + Vector3.new(0, postSize.Y + plankSize.Y / 2, 0)
+	local plank = tag(studs(deco(model, "Plank", plankSize, Props.lookAt(center, center - Vector3.xAxis), PLANK),
+		{ "TopSurface", "FrontSurface", "BackSurface" }), "SpeedPlank", "ZoneIndex", k)
 	model.PrimaryPart = plank
 
 	local gui = Instance.new("SurfaceGui")
@@ -558,22 +562,24 @@ local function buildSpeedSign(folder: Instance, k: number)
 	gui.SizingMode = Enum.SurfaceGuiSizingMode.PixelsPerStud
 	gui.PixelsPerStud = PLANK_PPS
 	gui.LightInfluence = 0
-	gui.MaxDistance = 400
+	gui.MaxDistance = 300
 	gui.Parent = plank
 	local top, bottom = WorldBuilder.speedSignText(k)
-	for _, line in { { name = "Speed", text = top, y = 0.08, h = 0.5 }, { name = "Recommended", text = bottom, y = 0.58, h = 0.32 } } do
+	local color = Config.speedPlankColor(0, k) -- a new player's colour; the client keeps it up to date
+	for _, line in { { name = "Speed", text = top, y = 0.1, h = 0.46 }, { name = "Recommended", text = bottom, y = 0.55, h = 0.33 } } do
 		local label = Instance.new("TextLabel")
 		label.Name = line.name
 		label.BackgroundTransparency = 1
-		label.Position = UDim2.fromScale(0.05, line.y)
-		label.Size = UDim2.fromScale(0.9, line.h)
-		label.Font = Enum.Font.FredokaOne
+		label.Position = UDim2.fromScale(0.06, line.y)
+		label.Size = UDim2.fromScale(0.88, line.h)
+		label.FontFace = PLANK_FONT
 		label.TextScaled = true
 		label.Text = line.text
-		label.TextColor3 = PLANK_TEXT
+		label.TextColor3 = color
 		local stroke = Instance.new("UIStroke")
 		stroke.Thickness = 4
-		stroke.Color = Color3.fromRGB(40, 24, 16)
+		stroke.Color = Color3.fromRGB(24, 12, 8)
+		stroke.LineJoinMode = Enum.LineJoinMode.Round
 		stroke.Parent = label
 		label.Parent = gui
 	end

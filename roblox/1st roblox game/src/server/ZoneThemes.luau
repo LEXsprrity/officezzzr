@@ -147,12 +147,63 @@ end
 -- irregular shape (rows of cells, narrower toward the ends), round lily pads with a wedge cut out (the
 -- first one has a pink and yellow flower) and a clump of tall green reeds at one end. `d` is its width
 -- along X; it is about 3/4 as deep along Z. No rim, no glass, no glow.
+-- The pond is SUNKEN (owner playtest: raised slabs showed their sides): the floor and its checker are cut
+-- around each row of water (cutFloor), a solid bed fills the dip under it, and the water sits POND_SINK
+-- below the floor, so the grass bank shows a small step down all round. Lily pads float on the water.
 local WATER = rgb(64, 156, 222)
 local WATER_LIGHT = rgb(100, 186, 238)
 local LILY = rgb(74, 172, 72)
 local REED = rgb(66, 168, 58)
 local POND_CELL = 5 -- the checker's cell, about
+ZoneThemes.POND_SINK = 0.4 -- the water's surface, this far below the floor
+local POND_WATER = 0.3 -- water slab thickness (its checker tiles stand 0.05 prouder)
+local CUT = { Floor = true, FloorTile = true, ZoneEdge = true } -- what a pond cuts its hole into
+
+-- Cuts the rectangle (x0..x1, z0..z1) out of every floor part in F (the floor, its checker and the zone
+-- edge): each part it overlaps is resized to the biggest piece left and cloned for the rest, so the zone's
+-- first "Floor" stays a full-width strip. `parts` is the running list of cuttable parts.
+local function cutFloor(parts: { BasePart }, x0: number, x1: number, z0: number, z1: number)
+	local eps = 1e-3
+	for i = 1, #parts do
+		local part = parts[i]
+		local pos, size = part.CFrame.Position, part.Size
+		local px0, px1, pz0, pz1 = pos.X - size.X / 2, pos.X + size.X / 2, pos.Z - size.Z / 2, pos.Z + size.Z / 2
+		if part.Parent and x0 < px1 - eps and x1 > px0 + eps and z0 < pz1 - eps and z1 > pz0 + eps then
+			local mx0, mx1 = math.max(px0, x0), math.min(px1, x1)
+			local pieces = {}
+			for _, r in { { px0, x0, pz0, pz1 }, { x1, px1, pz0, pz1 }, { mx0, mx1, pz0, z0 }, { mx0, mx1, z1, pz1 } } do
+				if r[2] - r[1] > eps and r[4] - r[3] > eps then
+					table.insert(pieces, r)
+				end
+			end
+			table.sort(pieces, function(a, b)
+				return (a[2] - a[1]) * (a[4] - a[3]) > (b[2] - b[1]) * (b[4] - b[3])
+			end)
+			for j, r in pieces do
+				local piece = if j == 1 then part else part:Clone()
+				piece.Size = Vector3.new(r[2] - r[1], size.Y, r[4] - r[3])
+				piece.CFrame = CFrame.new((r[1] + r[2]) / 2, pos.Y, (r[3] + r[4]) / 2)
+				if j > 1 then
+					piece.Parent = part.Parent
+					table.insert(parts, piece)
+				end
+			end
+			if #pieces == 0 then -- wholly inside the hole
+				part.Parent = nil
+			end
+		end
+	end
+end
+
 local function pond(F: Instance, p: Vector3, d: number, pads: number?)
+	local floorParts = {}
+	for _, child in F:GetChildren() do
+		if child:IsA("BasePart") and CUT[child.Name] then
+			table.insert(floorParts, child)
+		end
+	end
+	local bedTop = p.Y - ZoneThemes.POND_SINK - POND_WATER
+	local surface = p.Y - ZoneThemes.POND_SINK + 0.05 -- the water's top (its light tiles)
 	local n = math.max(3, math.round(d / POND_CELL)) -- cells across X
 	local cell = d / n
 	local rows = math.max(3, math.round(n * 0.75))
@@ -164,18 +215,22 @@ local function pond(F: Instance, p: Vector3, d: number, pads: number?)
 		local b = math.clamp(math.round(n / 2 + half) - 1 + shift, a, n - 1)
 		local z = p.Z + (r - (rows - 1) / 2) * cell
 		local x0, x1 = p.X + (a - n / 2) * cell, p.X + (b + 1 - n / 2) * cell
-		studs(flat(F, "Pond", x1 - x0, cell, Vector3.new((x0 + x1) / 2, p.Y, z), WATER, nil, nil, 0.3))
+		cutFloor(floorParts, x0, x1, z - cell / 2, z + cell / 2)
+		studs(flat(F, "Pond", x1 - x0, cell, Vector3.new((x0 + x1) / 2, bedTop, z), WATER, nil, nil, POND_WATER))
 		for col = a, b do
 			if (col + r) % 2 == 0 then
-				studs(flat(F, "PondTile", cell, cell, Vector3.new(p.X + (col + 0.5 - n / 2) * cell, p.Y, z), WATER_LIGHT, nil, nil, 0.35))
+				studs(flat(F, "PondTile", cell, cell, Vector3.new(p.X + (col + 0.5 - n / 2) * cell, bedTop, z), WATER_LIGHT, nil, nil, POND_WATER + 0.05))
 			end
 		end
 	end
 	local depth = rows * cell
+	-- the solid bed under the water (the dip's floor), so nobody falls through the hole
+	studs(box(F, "Floor", Vector3.new(d, bedTop - (GROUND - 4), depth), CFrame.new(p.X, (bedTop + GROUND - 4) / 2, p.Z),
+		if floorParts[1] then floorParts[1].Color else WATER))
 	for i = 1, pads or 0 do
 		local a = i * 2.4
 		local size = if i == 1 then math.min(7, d * 0.24) else math.min(4.5, d * 0.16)
-		local center = p + Vector3.new(math.cos(a) * d * 0.22, 0.4, math.sin(a) * depth * 0.2)
+		local center = Vector3.new(p.X + math.cos(a) * d * 0.22, surface + 0.02, p.Z + math.sin(a) * depth * 0.2) -- floating on the water
 		studs(disc(F, "LilyPad", size, center, LILY, M.Plastic, 0.2))
 		-- the wedge cut: a water-coloured diamond with one corner at the pad's centre (a 90-degree notch)
 		local cut = size * 0.38

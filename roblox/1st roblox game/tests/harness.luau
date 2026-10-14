@@ -153,6 +153,7 @@ local function envFor(node: Node)
 		Vector2 = roblox.Vector2,
 		UDim = roblox.UDim,
 		UDim2 = roblox.UDim2,
+		Font = roblox.Font,
 		ColorSequence = roblox.ColorSequence,
 		ColorSequenceKeypoint = roblox.ColorSequenceKeypoint,
 		NumberSequence = roblox.NumberSequence,
