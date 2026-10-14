@@ -27,6 +27,7 @@ local StatsUpdate = remotes:WaitForChild("StatsUpdate") :: RemoteEvent
 -- Income popups
 ----------------------------------------------------------------------------------------------------
 local MAX_POPUPS = 40
+local POPUP_RANGE = 70 -- studs from the camera: plants pay every second, so only the ones near you pop
 local livePopups = 0
 
 IncomePopup.OnClientEvent:Connect(function(amount: number, position: Vector3)
@@ -34,7 +35,7 @@ IncomePopup.OnClientEvent:Connect(function(amount: number, position: Vector3)
 		return
 	end
 	local camera = workspace.CurrentCamera
-	if camera and (camera.CFrame.Position - position).Magnitude > 150 then
+	if camera and (camera.CFrame.Position - position).Magnitude > POPUP_RANGE then
 		return
 	end
 	livePopups += 1

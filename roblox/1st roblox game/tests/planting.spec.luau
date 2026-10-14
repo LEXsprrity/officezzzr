@@ -243,7 +243,7 @@ H.test("planting: selling and removing still go by plant id, and keep the other 
 	end
 	-- the freed id is reused by the next plant
 	H.eq(Planting.newId(profile.plants :: any), 3)
-	-- PlotService removes a plant's creature and its dug-soil patch by id (remove prompt and SELL stall)
+	-- PlotService removes a plant's creature by id (remove prompt and SELL stall)
 	local source = fs.readFile("src/server/PlotService.luau")
 	H.ok(string.find(source, "local function removePlantModel(state: PlotState, slot: number)", 1, true) ~= nil, "one helper")
 	local _, uses = string.gsub(source, "removePlantModel%(state, slot%)", "")
