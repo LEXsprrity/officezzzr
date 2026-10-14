@@ -162,7 +162,7 @@ end)
 ----------------------------------------------------------------------------------------------------
 -- The owner's playtest: plants removed from the Plants panel, roomier left column, plain-text windows
 ----------------------------------------------------------------------------------------------------
-H.test("HUD Plants panel: a card per plant (flower name, rarity, Kg, $/s, day/night bonus) with a Remove that asks once", function()
+H.test("HUD Plants panel: a card per plant (flower name, rarity, $/s, day/night bonus, no Kg) with a Remove that asks once", function()
 	local a = string.find(HUD, "-- Plants panel (right side)", 1, true)
 	local b = string.find(HUD, "-- Trail Shop strip scrolling", 1, true)
 	local block = a and b and string.sub(HUD, a, b) or ""
@@ -171,7 +171,7 @@ H.test("HUD Plants panel: a card per plant (flower name, rarity, Kg, $/s, day/ni
 	H.ok(string.find(block, "local SURE_SECONDS = 2", 1, true) and string.find(block, "\"Sure?\"", 1, true), "\"Sure?\" for 2 s first")
 	H.ok(string.find(block, "remove = chunky(f, \"Remove\"", 1, true), "a chunky (Shop-style) button on every card")
 	H.ok(string.find(block, "p.name or SeedPacks.seedName", 1, true), "the plant's flower name")
-	H.ok(string.find(block, "Config.bonusLabel(", 1, true) and string.find(block, "Format.weight(now.weight)", 1, true), "Kg and the day/night bonus")
+	H.ok(string.find(block, "Config.bonusLabel(", 1, true) and not string.find(block, "Format.weight(", 1, true), "the day/night bonus, and no Kg")
 	H.ok(string.find(block, "accent = if mut then mut.color else rarity.color", 1, true), "a rarity (or mutation) accent")
 	H.ok(string.find(block, "`🪴 Plants {#plants}/{stats.slots} · {Format.money(stats.income)}/s`", 1, true), "\"Plants 1/5 · $5/s\"")
 	H.ok(string.find(block, "if not full and signature == shown then", 1, true), "a payout updates the cards in place (no rebuild under the cursor)")
