@@ -78,4 +78,14 @@ function Format.countdown(seconds: number): string
 	return string.format("%ds", seconds)
 end
 
+-- The two lines of a zone's Speed plank for its recommended Speed `req`: "👟 2M" / "recommended", or
+-- "🌱 Start here" / "grab a seed!" for the start zone. WorldBuilder writes them when it builds the map and
+-- Client/SpeedPlanks rewrites them from Config at runtime, so a map built with older numbers reads right.
+function Format.speedPlank(req: number): (string, string)
+	if req <= 0 then
+		return "🌱 Start here", "grab a seed!"
+	end
+	return `👟 {Format.short(req)}`, "recommended"
+end
+
 return Format

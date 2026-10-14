@@ -537,11 +537,7 @@ local PLANK_FONT = Font.new("rbxasset://fonts/families/Montserrat.json", Enum.Fo
 WorldBuilder.SPEED_SIGN_OFFSET = Vector3.new(-10, 0, -26) -- ground point under the post, from the nest centre
 
 function WorldBuilder.speedSignText(k: number): (string, string)
-	local req = Config.ZONES[k].req
-	if req <= 0 then
-		return "🌱 Start here", "grab a seed!"
-	end
-	return `👟 {Format.short(req)}`, "recommended"
+	return Format.speedPlank(Config.ZONES[k].req) -- Client/SpeedPlanks rewrites it from the same function
 end
 
 local function buildSpeedSign(folder: Instance, k: number)

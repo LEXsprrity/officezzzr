@@ -194,4 +194,39 @@ H.test("map: map/World.rbxm has clean shared plot fences, no plot gates, no FAST
 	end
 end)
 
+H.test("map: every Speed plank in map/World.rbxm says its zone's recommended Speed (Format.short(zone.req))", function()
+	-- The text is baked in at build time; Client/SpeedPlanks rewrites it from Config at runtime too, but the
+	-- committed map has to match so edit mode and the first frame read right. Regenerate the map when a req changes.
+	local Format = H.shared("Format")
+	local world = MapTool.load(MapTool.PATH)
+	local found = {}
+	for _, d in world:GetDescendants() do
+		if d:GetAttribute("Role") == "SpeedPlank" then
+			local k = d:GetAttribute("ZoneIndex")
+			local zone = Config.ZONES[k]
+			H.ok(zone ~= nil, `a plank with a real ZoneIndex ({k})`)
+			H.ok(not found[k], `one plank for zone {k}`)
+			found[k] = true
+			local top, bottom = Format.speedPlank(zone.req)
+			local speedLabel, recLabel
+			for _, l in d:GetDescendants() do
+				if l:IsA("TextLabel") and l.Name == "Speed" then
+					speedLabel = l
+				elseif l:IsA("TextLabel") and l.Name == "Recommended" then
+					recLabel = l
+				end
+			end
+			H.ok(speedLabel and recLabel, `{zone.id}: the plank has its Speed and Recommended labels`)
+			H.eq(speedLabel.Text, top, `{zone.id}: the plank's Speed`)
+			H.eq(recLabel.Text, bottom, zone.id)
+			if zone.req > 0 then
+				H.eq(top, "👟 " .. Format.short(zone.req), zone.id)
+			end
+		end
+	end
+	for k, zone in Config.ZONES do
+		H.ok(found[k], `{zone.id} has a Speed plank`)
+	end
+end)
+
 return nil

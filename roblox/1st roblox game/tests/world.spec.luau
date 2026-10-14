@@ -326,6 +326,18 @@ H.test("world: the Speed plank reads GREEN from the recommended Speed up and RED
 	local src = fs.readFile("src/client/SpeedPlanks.client.luau")
 	H.ok(string.find(src, "\"SpeedPlank\"", 1, true) and string.find(src, "GetAttribute(\"ZoneIndex\")", 1, true), "finds the planks by attribute")
 	H.ok(string.find(src, "Config.speedPlankColor(speed, k)", 1, true) and string.find(src, "StatsUpdate.OnClientEvent", 1, true), "recolours from the player's Speed")
+	-- the text is rewritten from Config at runtime too (a map built with older reqs still reads right), with
+	-- the same function WorldBuilder bakes into the map
+	H.ok(string.find(src, "Format.speedPlank(Config.ZONES[k].req)", 1, true) and string.find(src, "d.Text = top", 1, true)
+		and string.find(src, "d.Text = bottom", 1, true), "the client writes the plank's text from the zone's req")
+	local Format = H.shared("Format")
+	for k, zone in Config.ZONES do
+		local a, b = WorldBuilder.speedSignText(k)
+		local c, d = Format.speedPlank(zone.req)
+		H.ok(a == c and b == d, `{zone.id}: WorldBuilder and the client agree`)
+	end
+	H.eq((Format.speedPlank(7.5e6)), "👟 7.5M")
+	H.eq((Format.speedPlank(0)), "🌱 Start here")
 end)
 
 H.test("world: every zone has particle ambience", function()
