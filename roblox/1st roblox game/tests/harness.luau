@@ -192,6 +192,25 @@ end
 
 Harness.Vector3 = roblox.Vector3
 
+-- Runs `fn` with the assets whose names start with `prefix` set aside (e.g. "Creature_": the built-in
+-- creatures instead of the plant models), then puts them back, even if `fn` fails.
+function Harness.withoutAssets(prefix: string, fn: () -> ())
+	local aside = {}
+	for _, child in Harness.assets:GetChildren() do
+		if string.sub(child.Name, 1, #prefix) == prefix then
+			child.Parent = nil
+			table.insert(aside, child)
+		end
+	end
+	local ok, err = pcall(fn)
+	for _, child in aside do
+		child.Parent = Harness.assets
+	end
+	if not ok then
+		error(err, 0)
+	end
+end
+
 ----------------------------------------------------------------------------------------------------
 -- Tiny test runner
 ----------------------------------------------------------------------------------------------------

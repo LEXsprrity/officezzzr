@@ -28,7 +28,13 @@ Planting.MESSAGES = {
 -- CreatureModels.scaleFor at full weight): the spacing between plants is budgeted on this.
 function Planting.radius(rarity: number): number
 	local grown = (Config.GROW_MAX_FACTOR * 1.2) ^ Config.CREATURE_GROWTH_EXPONENT * (1 + Config.CREATURE_RARITY_SCALE * (rarity - 1))
-	return Config.CREATURE_FOOTPRINT * math.clamp(grown, Config.CREATURE_MIN_SCALE, Config.CREATURE_MAX_SCALE) / 2
+	return Config.creatureFootprint(rarity) * math.clamp(grown, Config.CREATURE_MIN_SCALE, Config.CREATURE_MAX_SCALE) / 2
+end
+
+-- How far inside its bed a plant of `rarity` must stand: PLANT_BED_MARGIN, or more for the big ones
+-- (Epic, Legendary), so a full-grown one reaches at most PLANT_FENCE_OVERHANG past the bed's fence gap.
+function Planting.bedMargin(rarity: number): number
+	return math.max(Config.PLANT_BED_MARGIN, Planting.radius(rarity) - Config.BED_FENCE_GAP - Config.PLANT_FENCE_OVERHANG)
 end
 
 -- The closest two plants may stand (centre to centre): their full-grown reaches, overlapping a little.
@@ -46,14 +52,14 @@ function Planting.toWorld(origin: CFrame, x: number, z: number): Vector3
 	return origin:PointToWorldSpace(Vector3.new(x, 0, z))
 end
 
--- The bed (a part, or anything with CFrame and Size) that `pos` is on, with at least PLANT_BED_MARGIN of
--- dirt around it, or nil. `pos` may be on the bed's top or a little above or below it.
-function Planting.bedAt(beds: { any }, pos: Vector3): any?
-	local margin = Config.PLANT_BED_MARGIN
+-- The bed (a part, or anything with CFrame and Size) that `pos` is on, with at least `margin` (default
+-- PLANT_BED_MARGIN) of dirt around it, or nil. `pos` may be on the bed's top or a little above or below it.
+function Planting.bedAt(beds: { any }, pos: Vector3, margin: number?): any?
+	local m = margin or Config.PLANT_BED_MARGIN
 	for _, bed in beds do
 		local cf: CFrame, size: Vector3 = bed.CFrame, bed.Size
 		local rel = cf:PointToObjectSpace(pos)
-		if math.abs(rel.X) <= size.X / 2 - margin and math.abs(rel.Z) <= size.Z / 2 - margin and math.abs(rel.Y) <= size.Y / 2 + 4 then
+		if math.abs(rel.X) <= size.X / 2 - m and math.abs(rel.Z) <= size.Z / 2 - m and math.abs(rel.Y) <= size.Y / 2 + 4 then
 			return bed
 		end
 	end
@@ -84,7 +90,7 @@ function Planting.check(q: Query): (boolean, Reason?)
 	if q.limit and #q.plants >= q.limit then
 		return false, "full"
 	end
-	if not Planting.bedAt(q.beds, q.pos) then
+	if not Planting.bedAt(q.beds, q.pos, Planting.bedMargin(q.rarity)) then
 		return false, "bed"
 	end
 	local x, z = Planting.toLocal(q.origin, q.pos)

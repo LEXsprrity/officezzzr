@@ -228,15 +228,19 @@ Cada lote mostra a esteira do nível **atual** do dono; quando ele compra o pró
 
 Em pé, frente = -Z. O jogo cresce a criatura conforme o peso da planta, até ~2,6× o tamanho da tabela.
 
+**As plantas do jogo já são o pacote de flores do dono** (`models/plants/FlowersByLoxxsy.rbxm`; veja `models/plants/LEIA-ME.md`). Cada arquivo `Creature_...` é uma **pasta com uma subpasta por raridade** (`Common`, `Uncommon`, `Rare`, `Epic`, `Legendary`), cada uma com um ou mais modelos. Cada planta plantada usa um modelo da sua raridade (sempre o mesmo para a mesma planta). Um arquivo com modelos soltos, sem subpastas, vale para todas as raridades; uma raridade sem subpasta (quando as outras têm) usa a criatura do jogo.
+
+A largura máxima depende da raridade: **3,4** (Common, Uncommon, Rare), **4,4** (Epic), **5** (Legendary). A altura máxima também: ~5 / 5,5 / 6 / 7 / 10, mais 0,3 por zona depois da Meadow. Os modelos do pacote já vêm nesse tamanho (`KeepScale`); um modelo seu sem `KeepScale` é encaixado nesses limites.
+
 | Nome | Criatura | Zona | Altura (recém-nascida) | Largura máx. |
 |---|---|---|---|---|
-| `Creature_Sproutling` | Sproutling | 🌼 Meadow | ~5 | 3,4 |
-| `Creature_Cactopod` | Cactopod | 🦂 Desert | ~5,5 | 3,4 |
-| `Creature_Fernosaur` | Fernosaur | 🦖 Jungle | ~6 | 3,4 |
-| `Creature_Magmabloom` | Magmabloom | 🌋 Lava Fields | ~6,5 | 3,4 |
-| `Creature_Frostbulb` | Frostbulb | ❄️ Snow Peaks | ~7 | 3,4 |
-| `Creature_Starpetal` | Starpetal | 👽 Deep Space | ~7,5 | 3,4 |
-| `Creature_LotusWyrm` | Lotus Wyrm | ⛩️ Spirit Garden | ~8 | 3,4 |
+| `Creature_Sproutling` | Sproutling | 🌼 Meadow | ~5 (Legendary ~10) | 3,4 a 5 |
+| `Creature_Cactopod` | Cactopod | 🦂 Desert | ~5,3 (Legendary ~10,3) | 3,4 a 5 |
+| `Creature_Fernosaur` | Fernosaur | 🦖 Jungle | ~5,6 (Legendary ~10,6) | 3,4 a 5 |
+| `Creature_Magmabloom` | Magmabloom | 🌋 Lava Fields | ~5,9 (Legendary ~10,9) | 3,4 a 5 |
+| `Creature_Frostbulb` | Frostbulb | ❄️ Snow Peaks | ~6,2 (Legendary ~11,2) | 3,4 a 5 |
+| `Creature_Starpetal` | Starpetal | 👽 Deep Space | ~6,5 (Legendary ~11,5) | 3,4 a 5 |
+| `Creature_LotusWyrm` | Lotus Wyrm | ⛩️ Spirit Garden | ~6,8 (Legendary ~11,8) | 3,4 a 5 |
 
 ### Guardiões (dormem ao lado do ninho e perseguem quem rouba)
 

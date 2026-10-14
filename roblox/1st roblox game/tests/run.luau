@@ -23,6 +23,7 @@ require("./sell.spec")
 require("./rewards.spec")
 require("./treadmill.spec")
 require("./planting.spec")
+require("./plants.spec")
 require("./compile.spec")
 
 print("Steal a Seed: mocked server tests\n")
