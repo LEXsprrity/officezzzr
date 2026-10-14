@@ -21,7 +21,7 @@ O mapa fica salvo no arquivo `roblox/1st roblox game/map/World.rbxm`. No Studio,
 2. No **modo de edição** (sem apertar Play), mexa em qualquer coisa dentro de **Workspace → World**:
    - mover, girar ou redimensionar peças;
    - apagar decoração (árvores, flores, pedras, placas, cercas...);
-   - arrastar seus próprios modelos para dentro do `World` (por exemplo, para dentro de `World → Base → Props`).
+   - arrastar seus próprios modelos para dentro do `World` (por exemplo, para dentro de `World → Base`).
 3. Clique com o botão direito em **World** → **Save to File...** → salve **por cima** de `roblox/1st roblox game/map/World.rbxm`.
 4. Avise o dono. Ele confere, faz o commit e recria o jogo. Seu trabalho continua lá, porque o mapa agora vem do `map/World.rbxm`.
 
@@ -138,14 +138,14 @@ Botão direito na pasta **Arvores** → **Save to File...** → `assets/Arvores.
 
 | Nome | O que é | Onde aparece | Altura | Largura máx. |
 |---|---|---|---|---|
-| `Tree` | árvore redonda (tronco + copa) | base, lotes | 18 a 25 | ~16 a 27 |
-| `BlossomTree` | árvore florida (rosa) | praça do spawn | ~21 | ~20 |
-| `Bush` | arbusto | base, lotes, Meadow | 3,5 a 6 | 7 a 15 |
-| `Rock` | pedra | base, Meadow, lagos do Spirit Garden | 1,3 a 3 | 4 a 9 |
-| `Flower` | flor (cabo + flor) | base, lotes, Jungle (e Meadow se não houver `Meadow_Flower`) | 2 a 4 | ~3 |
-| `Lamp` | poste de luz | base, praça das lojas | ~10,5 | ~5 |
-| `FencePost` | um poste da cerca | em volta dos lotes | ~5,6 | ~2 |
-| `FenceSection` | as tábuas da cerca **entre dois postes** (sem os postes), comprimento ao longo do X | em volta dos lotes | ~6 | 7 a 8 de comprimento |
+| `Tree` | árvore redonda (tronco + copa) | 🌼 Meadow (a base agora fica sem árvores) | 18 a 25 | ~16 a 27 |
+| `BlossomTree` | árvore florida (rosa) | não aparece agora (a base ficou limpa); fica para uso futuro | ~21 | ~20 |
+| `Bush` | arbusto | 🌼 Meadow | 3,5 a 6 | 7 a 15 |
+| `Rock` | pedra | Meadow, lagos do Spirit Garden | 1,3 a 3 | 4 a 9 |
+| `Flower` | flor (cabo + flor) | Jungle (e Meadow se não houver `Meadow_Flower`) | 2 a 4 | ~3 |
+| `Lamp` | poste de luz | não aparece agora (a base ficou limpa); fica para uso futuro | ~10,5 | ~5 |
+| `FencePost` | um poste da cerca | em volta dos lotes | ~5 | ~2 |
+| `FenceSection` | as tábuas da cerca **entre dois postes** (sem os postes), comprimento ao longo do X | em volta dos lotes | ~4 | 10 a 12 de comprimento |
 
 ### Zonas do corredor
 
