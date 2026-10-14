@@ -434,7 +434,7 @@ local function checkBoards(plots: { any }, label: string): { any }
 		end
 		-- nor in the beds, the owner's sign or the plot's own Upgrade board
 		for b, bed in plot.beds do
-			local dlo, dhi = Assets.bounds(bed)
+			local dlo, dhi = Assets.bounds(bed, nil, true) -- (the bed block is invisible under its tiles)
 			H.ok(not overlaps(lo, hi, Vector3.new(dlo.X, -1e9, dlo.Z), Vector3.new(dhi.X, 1e9, dhi.Z), 0), `{label}: plot {i} board clear of bed {b}`)
 		end
 		local ulo, uhi = Assets.bounds(plot.upgradeBoard)
