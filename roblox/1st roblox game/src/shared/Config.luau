@@ -695,20 +695,20 @@ Config.BAT_RANGE = 14
 Config.BAT_STUN = 2
 Config.BAT_COOLDOWN = 4
 
--- Gamepasses: create each on the Creator Dashboard and paste its id here; id = 0 = not set up yet (the
--- Shop says "coming soon"). Ownership is only ever decided on the server (ShopService: UserOwnsGamePassAsync
+-- Gamepasses: their ids come from monetization/ids.json (Config.applyMonetizationIds, below the developer
+-- products); id = 0 = not set up yet (the Shop says "coming soon"). Ownership is only ever decided on the server (ShopService: UserOwnsGamePassAsync
 -- at join, and again when PromptGamePassPurchaseFinished reports a purchase) into Sessions.passes; the
 -- client only shows it.
 -- `robux` is the placeholder price shown until the real one (Dashboard) is read with GetProductInfo;
 -- `about` is the Shop card's benefit line; `icon` its Icons key (nil: a gold "VIP" badge); `order` its place.
 export type Gamepass = { id: number, label: string, robux: number, about: string, icon: string?, order: number }
 Config.GAMEPASSES = {
-	DoubleMoney = { id = 0, label = "2x Money", robux = 0, about = "Doubles all plant income", icon = "DoubleMoney", order = 1 },
-	DoubleSpeed = { id = 0, label = "2x Speed", robux = 299, about = "Walk + treadmill Speed x2", icon = "Speed", order = 2 },
-	DoubleLuck = { id = 0, label = "2x Luck", robux = 249, about = "Rarer seeds when you steal", icon = "Star", order = 3 },
-	VIP = { id = 0, label = "VIP", robux = 399, about = "Gold tag, x1.25 cash + Speed", icon = nil, order = 4 },
-	FastGrow = { id = 0, label = "Fast Grow", robux = 149, about = "Your plants grow 2x faster", icon = "Seeds", order = 5 },
-	ExtraSlots = { id = 0, label = "+10 Plant Slots", robux = 0, about = "On top of your plot level's slots", icon = "ExtraSlots", order = 6 },
+	DoubleMoney = { label = "2x Money", robux = 0, about = "Doubles all plant income", icon = "DoubleMoney", order = 1 },
+	DoubleSpeed = { label = "2x Speed", robux = 299, about = "Walk + treadmill Speed x2", icon = "Speed", order = 2 },
+	DoubleLuck = { label = "2x Luck", robux = 249, about = "Rarer seeds when you steal", icon = "Star", order = 3 },
+	VIP = { label = "VIP", robux = 399, about = "Gold tag, x1.25 cash + Speed", icon = nil, order = 4 },
+	FastGrow = { label = "Fast Grow", robux = 149, about = "Your plants grow 2x faster", icon = "Seeds", order = 5 },
+	ExtraSlots = { label = "+10 Plant Slots", robux = 0, about = "On top of your plot level's slots", icon = "ExtraSlots", order = 6 },
 } :: { [string]: Gamepass }
 Config.PASS_EXTRA_SLOTS = 10 -- the ExtraSlots pass adds this many slots, on top of the plot level's
 Config.PASS_SPEED_MULT = 2 -- 2x Speed: every Speed gain (walking and treadmill)
@@ -771,8 +771,9 @@ Config.PACK_FULL_BAG_INCOME_SECONDS = 300
 Config.RECEIPT_HISTORY = 100 -- processed Robux PurchaseIds kept per profile, so a grant never repeats
 
 ----------------------------------------------------------------------------------------------------
--- Developer products: everything sold for Robux except the gamepasses. Create each one on the Creator
--- Dashboard and paste its id here; id = 0 means "not set up yet" (the Shop says "coming soon"). `robux`
+-- Developer products: everything sold for Robux except the gamepasses. Their ids come from
+-- monetization/ids.json (Config.applyMonetizationIds); id = 0 means "not set up yet" (the Shop says
+-- "coming soon"). `robux`
 -- is only the placeholder shown while the real price can't be fetched: the real price is set on the
 -- Dashboard and read with MarketplaceService:GetProductInfo. `kind` says what a receipt grants:
 --   Pack      one seed of `zone` into the seed bag
@@ -797,50 +798,72 @@ export type DevProduct = {
 	trail: string?,
 }
 Config.DEVELOPER_PRODUCTS = {
-	PackSpace = { id = 0, kind = "Pack", label = "Starpetal Pack", robux = 2000, zone = 6 },
-	PackSpirit = { id = 0, kind = "Pack", label = "Lotus Wyrm Pack", robux = 3000, zone = 7 },
+	PackSpace = { kind = "Pack", label = "Starpetal Pack", robux = 2000, zone = 6 },
+	PackSpirit = { kind = "Pack", label = "Lotus Wyrm Pack", robux = 3000, zone = 7 },
 
 	-- Speed packs: the Shop's blue SPEED cards. Sized against the zones' recommended Speed (v7 scale):
 	-- +25K is the Desert, +750K a bit past the Jungle, +3M past the Lava Fields, +10M past the Snow
 	-- Peaks, +25M the Deep Space and +50M two thirds of the way to the Spirit Garden (README "Progression").
-	Speed25K = { id = 0, kind = "Speed", label = "+25K Speed", robux = 9, amount = 25e3 },
-	Speed150K = { id = 0, kind = "Speed", label = "+150K Speed", robux = 36, amount = 150e3 },
-	Speed250K = { id = 0, kind = "Speed", label = "+250K Speed", robux = 64, amount = 250e3 },
-	Speed750K = { id = 0, kind = "Speed", label = "+750K Speed", robux = 76, amount = 750e3 },
-	Speed3M = { id = 0, kind = "Speed", label = "+3M Speed", robux = 560, amount = 3e6 },
-	Speed10M = { id = 0, kind = "Speed", label = "+10M Speed", robux = 1200, amount = 10e6 },
-	Speed25M = { id = 0, kind = "Speed", label = "+25M Speed", robux = 1600, amount = 25e6 },
-	Speed50M = { id = 0, kind = "Speed", label = "+50M Speed", robux = 2400, amount = 50e6 },
+	Speed25K = { kind = "Speed", label = "+25K Speed", robux = 9, amount = 25e3 },
+	Speed150K = { kind = "Speed", label = "+150K Speed", robux = 36, amount = 150e3 },
+	Speed250K = { kind = "Speed", label = "+250K Speed", robux = 64, amount = 250e3 },
+	Speed750K = { kind = "Speed", label = "+750K Speed", robux = 76, amount = 750e3 },
+	Speed3M = { kind = "Speed", label = "+3M Speed", robux = 560, amount = 3e6 },
+	Speed10M = { kind = "Speed", label = "+10M Speed", robux = 1200, amount = 10e6 },
+	Speed25M = { kind = "Speed", label = "+25M Speed", robux = 1600, amount = 25e6 },
+	Speed50M = { kind = "Speed", label = "+50M Speed", robux = 2400, amount = 50e6 },
 
-	Money24K = { id = 0, kind = "Money", label = "Pocket Cash", robux = 40, amount = 24e3, minutes = 10 },
-	Money200K = { id = 0, kind = "Money", label = "Cash Bag", robux = 80, amount = 200e3, minutes = 30 },
-	Money800K = { id = 0, kind = "Money", label = "Cash Stack", robux = 200, amount = 800e3, minutes = 60 },
-	Money4M = { id = 0, kind = "Money", label = "Cash Crate", robux = 400, amount = 4e6, minutes = 180 },
-	Money8M = { id = 0, kind = "Money", label = "Cash Vault", robux = 640, amount = 8e6, minutes = 360 },
+	Money24K = { kind = "Money", label = "Pocket Cash", robux = 40, amount = 24e3, minutes = 10 },
+	Money200K = { kind = "Money", label = "Cash Bag", robux = 80, amount = 200e3, minutes = 30 },
+	Money800K = { kind = "Money", label = "Cash Stack", robux = 200, amount = 800e3, minutes = 60 },
+	Money4M = { kind = "Money", label = "Cash Crate", robux = 400, amount = 4e6, minutes = 180 },
+	Money8M = { kind = "Money", label = "Cash Vault", robux = 640, amount = 8e6, minutes = 360 },
 
 	-- One treadmill tier each: the treadmill's F prompt and the Shop's R$ button. A product's price is
 	-- fixed, so the 9 upgrades are split into tiers that cost more as the treadmill grows
 	-- (Config.treadmillUpgradeProduct).
-	TreadmillT1 = { id = 0, kind = "TreadmillUpgrade", label = "Treadmill Upgrade (Lv 2-4)", robux = 19, tier = 1 },
-	TreadmillT2 = { id = 0, kind = "TreadmillUpgrade", label = "Treadmill Upgrade (Lv 5-7)", robux = 39, tier = 2 },
-	TreadmillT3 = { id = 0, kind = "TreadmillUpgrade", label = "Treadmill Upgrade (Lv 8-10)", robux = 79, tier = 3 },
+	TreadmillT1 = { kind = "TreadmillUpgrade", label = "Treadmill Upgrade (Lv 2-4)", robux = 19, tier = 1 },
+	TreadmillT2 = { kind = "TreadmillUpgrade", label = "Treadmill Upgrade (Lv 5-7)", robux = 39, tier = 2 },
+	TreadmillT3 = { kind = "TreadmillUpgrade", label = "Treadmill Upgrade (Lv 8-10)", robux = 79, tier = 3 },
 
-	TrailGreen = { id = 0, kind = "Trail", label = "Green Trail", robux = 16, trail = "Green" },
-	TrailBlue = { id = 0, kind = "Trail", label = "Blue Trail", robux = 24, trail = "Blue" },
-	TrailPurple = { id = 0, kind = "Trail", label = "Purple Trail", robux = 40, trail = "Purple" },
-	TrailGolden = { id = 0, kind = "Trail", label = "Golden Trail", robux = 64, trail = "Golden" },
-	TrailRed = { id = 0, kind = "Trail", label = "Red Trail", robux = 100, trail = "Red" },
-	TrailRainbow = { id = 0, kind = "Trail", label = "Rainbow Trail", robux = 180, trail = "Rainbow" },
+	TrailGreen = { kind = "Trail", label = "Green Trail", robux = 16, trail = "Green" },
+	TrailBlue = { kind = "Trail", label = "Blue Trail", robux = 24, trail = "Blue" },
+	TrailPurple = { kind = "Trail", label = "Purple Trail", robux = 40, trail = "Purple" },
+	TrailGolden = { kind = "Trail", label = "Golden Trail", robux = 64, trail = "Golden" },
+	TrailRed = { kind = "Trail", label = "Red Trail", robux = 100, trail = "Red" },
+	TrailRainbow = { kind = "Trail", label = "Rainbow Trail", robux = 180, trail = "Rainbow" },
 
 	-- One plot level each: the Upgrade board's purple button. A product's price is fixed, so the 25
 	-- upgrades are split into tiers that cost more as the plot grows (Config.plotUpgradeProduct).
-	PlotUpgradeT1 = { id = 0, kind = "PlotUpgrade", label = "Plot Upgrade (Lv 2-5)", robux = 25, tier = 1 },
-	PlotUpgradeT2 = { id = 0, kind = "PlotUpgrade", label = "Plot Upgrade (Lv 6-9)", robux = 49, tier = 2 },
-	PlotUpgradeT3 = { id = 0, kind = "PlotUpgrade", label = "Plot Upgrade (Lv 10-13)", robux = 99, tier = 3 },
-	PlotUpgradeT4 = { id = 0, kind = "PlotUpgrade", label = "Plot Upgrade (Lv 14-17)", robux = 199, tier = 4 },
-	PlotUpgradeT5 = { id = 0, kind = "PlotUpgrade", label = "Plot Upgrade (Lv 18-21)", robux = 399, tier = 5 },
-	PlotUpgradeT6 = { id = 0, kind = "PlotUpgrade", label = "Plot Upgrade (Lv 22-26)", robux = 799, tier = 6 },
+	PlotUpgradeT1 = { kind = "PlotUpgrade", label = "Plot Upgrade (Lv 2-5)", robux = 25, tier = 1 },
+	PlotUpgradeT2 = { kind = "PlotUpgrade", label = "Plot Upgrade (Lv 6-9)", robux = 49, tier = 2 },
+	PlotUpgradeT3 = { kind = "PlotUpgrade", label = "Plot Upgrade (Lv 10-13)", robux = 99, tier = 3 },
+	PlotUpgradeT4 = { kind = "PlotUpgrade", label = "Plot Upgrade (Lv 14-17)", robux = 199, tier = 4 },
+	PlotUpgradeT5 = { kind = "PlotUpgrade", label = "Plot Upgrade (Lv 18-21)", robux = 399, tier = 5 },
+	PlotUpgradeT6 = { kind = "PlotUpgrade", label = "Plot Upgrade (Lv 22-26)", robux = 799, tier = 6 },
 } :: { [string]: DevProduct }
+
+-- The gamepass and developer product ids: monetization/ids.json ({ passes = { [key]: id }, products =
+-- { [key]: id } }), which Rojo puts next to this module as the MonetizationIds ModuleScript. A key that is
+-- missing, or not a whole positive number, is 0. tools/create_monetization.mjs creates the items on Roblox
+-- and fills the file (monetization/LEIA-ME.md); never put ids here.
+function Config.applyMonetizationIds(ids: any)
+	local function section(name: string): { [string]: any }
+		local t = if type(ids) == "table" then ids[name] else nil
+		return if type(t) == "table" then t else {}
+	end
+	local function valid(id: any): number
+		return if type(id) == "number" and id > 0 and id == math.floor(id) then id else 0
+	end
+	local passes, products = section("passes"), section("products")
+	for name, pass in Config.GAMEPASSES do
+		pass.id = valid(passes[name])
+	end
+	for name, product in Config.DEVELOPER_PRODUCTS do
+		product.id = valid(products[name])
+	end
+end
+Config.applyMonetizationIds(require(script.Parent:WaitForChild("MonetizationIds")))
 
 -- Plot upgrades for Robux: the next level of a plot is sold by the product of its tier. Each tier covers
 -- PLOT_UPGRADE_TIER_LEVELS upgrades and the last one takes the rest (levels 22-26).

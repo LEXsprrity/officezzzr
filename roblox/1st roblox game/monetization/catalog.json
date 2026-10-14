@@ -1,0 +1,290 @@
+[
+  {
+    "key": "DoubleMoney",
+    "kind": "pass",
+    "name": "2x Money",
+    "description": "Doubles the money all your plants make. Works offline and when you sell, too.",
+    "price": 349,
+    "image": "icons/DoubleMoney.png"
+  },
+  {
+    "key": "DoubleSpeed",
+    "kind": "pass",
+    "name": "2x Speed",
+    "description": "Doubles all the Speed you get from walking and from the treadmill.",
+    "price": 299,
+    "image": "icons/Speed.png"
+  },
+  {
+    "key": "DoubleLuck",
+    "kind": "pass",
+    "name": "2x Luck",
+    "description": "The seeds you steal roll with double luck, so rare ones show up a lot more often.",
+    "price": 249,
+    "image": "icons/Star.png"
+  },
+  {
+    "key": "VIP",
+    "kind": "pass",
+    "name": "VIP",
+    "description": "A gold VIP tag over your head and in chat, plus 1.25x money and 1.25x Speed.",
+    "price": 399,
+    "image": "icons/Star.png"
+  },
+  {
+    "key": "FastGrow",
+    "kind": "pass",
+    "name": "Fast Grow",
+    "description": "Your plants grow twice as fast, even while you're offline.",
+    "price": 149,
+    "image": "icons/Seeds.png"
+  },
+  {
+    "key": "ExtraSlots",
+    "kind": "pass",
+    "name": "+10 Plant Slots",
+    "description": "10 more plant slots on your plot, on top of the ones your plot level gives you.",
+    "price": 199,
+    "image": "icons/ExtraSlots.png"
+  },
+  {
+    "key": "PackSpace",
+    "kind": "product",
+    "name": "Starpetal Pack",
+    "description": "One Deep Space seed for your seed bag, rolled with double luck. It has a small chance of the pack-only Celestial mutation.",
+    "price": 2000,
+    "image": "icons/SeedPack.png"
+  },
+  {
+    "key": "PackSpirit",
+    "kind": "product",
+    "name": "Lotus Wyrm Pack",
+    "description": "One Spirit Garden seed for your seed bag, rolled with double luck. It has a small chance of the pack-only Celestial mutation.",
+    "price": 3000,
+    "image": "icons/SeedPack.png"
+  },
+  {
+    "key": "Speed25K",
+    "kind": "product",
+    "name": "+25K Speed",
+    "description": "Adds 25,000 Speed right away, so you can reach farther zones.",
+    "price": 9,
+    "image": "icons/Speed.png"
+  },
+  {
+    "key": "Speed150K",
+    "kind": "product",
+    "name": "+150K Speed",
+    "description": "Adds 150,000 Speed right away, so you can reach farther zones.",
+    "price": 36,
+    "image": "icons/Speed.png"
+  },
+  {
+    "key": "Speed250K",
+    "kind": "product",
+    "name": "+250K Speed",
+    "description": "Adds 250,000 Speed right away, so you can reach farther zones.",
+    "price": 64,
+    "image": "icons/Speed.png"
+  },
+  {
+    "key": "Speed750K",
+    "kind": "product",
+    "name": "+750K Speed",
+    "description": "Adds 750,000 Speed right away, so you can reach farther zones.",
+    "price": 76,
+    "image": "icons/Speed.png"
+  },
+  {
+    "key": "Speed3M",
+    "kind": "product",
+    "name": "+3M Speed",
+    "description": "Adds 3,000,000 Speed right away, so you can reach farther zones.",
+    "price": 560,
+    "image": "icons/Speed.png"
+  },
+  {
+    "key": "Speed10M",
+    "kind": "product",
+    "name": "+10M Speed",
+    "description": "Adds 10,000,000 Speed right away, so you can reach farther zones.",
+    "price": 1200,
+    "image": "icons/Speed.png"
+  },
+  {
+    "key": "Speed25M",
+    "kind": "product",
+    "name": "+25M Speed",
+    "description": "Adds 25,000,000 Speed right away, so you can reach farther zones.",
+    "price": 1600,
+    "image": "icons/Speed.png"
+  },
+  {
+    "key": "Speed50M",
+    "kind": "product",
+    "name": "+50M Speed",
+    "description": "Adds 50,000,000 Speed right away, so you can reach farther zones.",
+    "price": 2400,
+    "image": "icons/Speed.png"
+  },
+  {
+    "key": "Money24K",
+    "kind": "product",
+    "name": "Pocket Cash",
+    "description": "Gives you $24K, or 10 minutes of your current income if that's more.",
+    "price": 40,
+    "image": "icons/Money.png"
+  },
+  {
+    "key": "Money200K",
+    "kind": "product",
+    "name": "Cash Bag",
+    "description": "Gives you $200K, or 30 minutes of your current income if that's more.",
+    "price": 80,
+    "image": "icons/Money.png"
+  },
+  {
+    "key": "Money800K",
+    "kind": "product",
+    "name": "Cash Stack",
+    "description": "Gives you $800K, or 1 hour of your current income if that's more.",
+    "price": 200,
+    "image": "icons/Money.png"
+  },
+  {
+    "key": "Money4M",
+    "kind": "product",
+    "name": "Cash Crate",
+    "description": "Gives you $4M, or 3 hours of your current income if that's more.",
+    "price": 400,
+    "image": "icons/Money.png"
+  },
+  {
+    "key": "Money8M",
+    "kind": "product",
+    "name": "Cash Vault",
+    "description": "Gives you $8M, or 6 hours of your current income if that's more.",
+    "price": 640,
+    "image": "icons/Money.png"
+  },
+  {
+    "key": "TreadmillT1",
+    "kind": "product",
+    "name": "Treadmill Upgrade (Lv 2-4)",
+    "description": "Upgrades your treadmill by one level. This one covers levels 2 to 4.",
+    "price": 19,
+    "image": "icons/Treadmill.png"
+  },
+  {
+    "key": "TreadmillT2",
+    "kind": "product",
+    "name": "Treadmill Upgrade (Lv 5-7)",
+    "description": "Upgrades your treadmill by one level. This one covers levels 5 to 7.",
+    "price": 39,
+    "image": "icons/Treadmill.png"
+  },
+  {
+    "key": "TreadmillT3",
+    "kind": "product",
+    "name": "Treadmill Upgrade (Lv 8-10)",
+    "description": "Upgrades your treadmill by one level. This one covers levels 8 to 10.",
+    "price": 79,
+    "image": "icons/Treadmill.png"
+  },
+  {
+    "key": "TrailGreen",
+    "kind": "product",
+    "name": "Green Trail",
+    "description": "Unlocks and equips the Green Trail. While it's on, walking and the treadmill give you 1.25x Speed.",
+    "price": 16,
+    "image": "icons/TrailShop.png"
+  },
+  {
+    "key": "TrailBlue",
+    "kind": "product",
+    "name": "Blue Trail",
+    "description": "Unlocks and equips the Blue Trail. While it's on, walking and the treadmill give you 1.5x Speed.",
+    "price": 24,
+    "image": "icons/TrailShop.png"
+  },
+  {
+    "key": "TrailPurple",
+    "kind": "product",
+    "name": "Purple Trail",
+    "description": "Unlocks and equips the Purple Trail. While it's on, walking and the treadmill give you 1.75x Speed.",
+    "price": 40,
+    "image": "icons/TrailShop.png"
+  },
+  {
+    "key": "TrailGolden",
+    "kind": "product",
+    "name": "Golden Trail",
+    "description": "Unlocks and equips the Golden Trail. While it's on, walking and the treadmill give you 2x Speed.",
+    "price": 64,
+    "image": "icons/TrailShop.png"
+  },
+  {
+    "key": "TrailRed",
+    "kind": "product",
+    "name": "Red Trail",
+    "description": "Unlocks and equips the Red Trail. While it's on, walking and the treadmill give you 2.5x Speed.",
+    "price": 100,
+    "image": "icons/TrailShop.png"
+  },
+  {
+    "key": "TrailRainbow",
+    "kind": "product",
+    "name": "Rainbow Trail",
+    "description": "Unlocks and equips the Rainbow Trail. While it's on, walking and the treadmill give you 3x Speed.",
+    "price": 180,
+    "image": "icons/TrailShop.png"
+  },
+  {
+    "key": "PlotUpgradeT1",
+    "kind": "product",
+    "name": "Plot Upgrade (Lv 2-5)",
+    "description": "Upgrades your plot by one level. This one covers levels 2 to 5.",
+    "price": 25,
+    "image": "icons/PlotUpgrade.png"
+  },
+  {
+    "key": "PlotUpgradeT2",
+    "kind": "product",
+    "name": "Plot Upgrade (Lv 6-9)",
+    "description": "Upgrades your plot by one level. This one covers levels 6 to 9.",
+    "price": 49,
+    "image": "icons/PlotUpgrade.png"
+  },
+  {
+    "key": "PlotUpgradeT3",
+    "kind": "product",
+    "name": "Plot Upgrade (Lv 10-13)",
+    "description": "Upgrades your plot by one level. This one covers levels 10 to 13.",
+    "price": 99,
+    "image": "icons/PlotUpgrade.png"
+  },
+  {
+    "key": "PlotUpgradeT4",
+    "kind": "product",
+    "name": "Plot Upgrade (Lv 14-17)",
+    "description": "Upgrades your plot by one level. This one covers levels 14 to 17.",
+    "price": 199,
+    "image": "icons/PlotUpgrade.png"
+  },
+  {
+    "key": "PlotUpgradeT5",
+    "kind": "product",
+    "name": "Plot Upgrade (Lv 18-21)",
+    "description": "Upgrades your plot by one level. This one covers levels 18 to 21.",
+    "price": 399,
+    "image": "icons/PlotUpgrade.png"
+  },
+  {
+    "key": "PlotUpgradeT6",
+    "kind": "product",
+    "name": "Plot Upgrade (Lv 22-26)",
+    "description": "Upgrades your plot by one level. This one covers levels 22 to 26.",
+    "price": 799,
+    "image": "icons/PlotUpgrade.png"
+  }
+]

@@ -46,6 +46,8 @@ end
 local sharedNode = folder("Shared", "src/shared", nil)
 -- Like default.project.json: icons/ids.json is the JSON ModuleScript Shared.IconIds (Config.ICONS).
 sharedNode.__children.IconIds = makeNode("IconIds", sharedNode, "icons/ids.json")
+-- ...and monetization/ids.json is Shared.MonetizationIds (the gamepass / developer product ids).
+sharedNode.__children.MonetizationIds = makeNode("MonetizationIds", sharedNode, "monetization/ids.json")
 local serverNode = folder("Server", "src/server", nil)
 
 local services = {
