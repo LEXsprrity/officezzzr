@@ -106,7 +106,7 @@ end
 -- Where the "+X/s" text floats, in the belt's own space: over the front end, a little in from it.
 function Treadmill.stepTextOffset(beltSize: Vector3): Vector3
 	local alongZ, halfAlong = axes(beltSize)
-	local inFrom = Treadmill.FRONT * math.max(0, halfAlong - 2)
+	local inFrom = Treadmill.FRONT * (halfAlong + 0.5) -- over the head (console end) of the treadmill
 	local up = beltSize.Y / 2 + 6.5
 	return if alongZ then Vector3.new(0, up, inFrom) else Vector3.new(inFrom, up, 0)
 end
