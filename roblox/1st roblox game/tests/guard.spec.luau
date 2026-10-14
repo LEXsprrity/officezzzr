@@ -114,7 +114,7 @@ H.test("guard: chase speed is walkSpeedFor(req) * 1.0 for every zone", function(
 end)
 
 H.test("guard: every zone has its own wake-up delay, and the guard uses it", function()
-	local want = { Meadow = 0.5, Desert = 0, Jungle = 0, Lava = 0.1, Snow = 0.1, Space = 0.1, Spirit = 0.1 }
+	local want = { Meadow = 0.5, Desert = 0, Jungle = 0.1, Lava = 0.1, Snow = 0.1, Space = 0.1, Spirit = 0.1 }
 	for k, zone in Config.ZONES do
 		H.eq(zone.wakeDelay, want[zone.id], zone.id)
 		H.eq(GuardBrain.new(k, Vector3.new(0, 0, 0)).wakeDelay, zone.wakeDelay, zone.id)

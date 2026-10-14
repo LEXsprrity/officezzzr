@@ -22,7 +22,18 @@ ProfileStore.__index = ProfileStore
 -- v6 replaced the fixed plant slots with free planting: each plant saves where it stands on the plot (x, z in
 -- the plot's space, Shared/Planting) and keeps its slot number as its id. An older save's plant gets its old
 -- slot's spot moved onto the new dirt beds (Planting.legacySpot), so the plot keeps its arrangement.
-ProfileStore.VERSION = 6
+-- v7 removed the Speed levels and made the Speed per step flat (BASE_SPEED_PER_STUD x trail, no longer
+-- growing with Speed), which shrank the whole Speed scale: the zones' recommended Speed went from
+-- 10K..5B to 25K..75M, and the trails from x1.5..x5 to x1..x3. An older save's Speed is moved onto the
+-- new scale by where it stood between the old zones (migrateSpeed), so everyone keeps every zone they had
+-- reached and the same share of the way to the next one. Money, trails and tiers stay as they were.
+ProfileStore.VERSION = 7
+
+-- The zones' recommended Speed before v7 (Config.ZONES order), for migrateSpeed.
+ProfileStore.LEGACY_ZONE_REQ = { 0, 10e3, 500e3, 5e6, 50e6, 500e6, 5e9 }
+
+-- The trails' multipliers before v7 (v3-v6), for the v1/v2 Speed Gain migration (migrateSpeedMult).
+ProfileStore.LEGACY_TRAIL_MULT = { Grey = 1.5, Green = 2, Blue = 2.5, Purple = 3, Golden = 3.5, Red = 4, Rainbow = 5 } :: { [string]: number }
 
 -- The multipliers of the v1-v4 treadmill tiers (`treadmillTier` 1..3).
 ProfileStore.LEGACY_TREADMILL_MULT = { 2, 3, 5 }
@@ -108,24 +119,54 @@ end
 
 -- v1/v2 -> v3: an old Speed Gain tier becomes the trail with the nearest multiplier at or below it
 -- (x1 -> Grey x1.5, x2 -> Green x2, x3 -> Purple x3, x5 -> Rainbow x5), owned and equipped, so nobody's
--- multiplier drops. x10 and x25 are above the best trail (Rainbow x5): those players get Rainbow and the
--- money they paid for the tiers above x5 back. Returns (trail id, refund).
+-- multiplier dropped. x10 and x25 are above the best trail (Rainbow x5): those players get Rainbow and the
+-- money they paid for the tiers above x5 back. Returns (trail id, refund). Compared with the trails'
+-- multipliers of the time (LEGACY_TRAIL_MULT): v7 shrank them all, and every trail with them.
 function ProfileStore.migrateSpeedMult(tier: number): (string, number)
 	local old = ProfileStore.LEGACY_SPEED_MULT[tier] or ProfileStore.LEGACY_SPEED_MULT[1]
-	local best = Config.trailById(Config.DEFAULT_TRAIL) :: Config.Trail
+	local legacy = ProfileStore.LEGACY_TRAIL_MULT
+	local best = Config.DEFAULT_TRAIL
 	for _, t in Config.TRAILS do
-		if t.mult <= old.mult and t.mult > best.mult then
-			best = t
+		local mult = legacy[t.id]
+		if mult and mult <= old.mult and mult > legacy[best] then
+			best = t.id
 		end
 	end
 	local refund = 0
 	for i = 1, tier do
 		local paid = ProfileStore.LEGACY_SPEED_MULT[i]
-		if paid and paid.mult > best.mult then
+		if paid and paid.mult > legacy[best] then
 			refund += paid.price
 		end
 	end
-	return best.id, refund
+	return best, refund
+end
+
+-- v1-v6 -> v7: an old Speed (pre-flat-gain scale) onto today's scale. Between two zones' old recommended
+-- Speeds (LEGACY_ZONE_REQ) it lands the same share of the way between their new ones, measured on a log
+-- scale (the old Speeds grew about x10 a zone): 10K -> 25K (the Desert), 50M -> 7.5M (the Snow Peaks),
+-- 5B -> the Spirit Garden's. Below the Desert it scales linearly; past the Spirit Garden it keeps the
+-- last stretch's slope (5B -> 75M, 50B -> ~225M). Monotonic, so nobody overtakes anybody.
+function ProfileStore.migrateSpeed(old: number): number
+	if old ~= old or old <= 0 then
+		return 0
+	end
+	local from = ProfileStore.LEGACY_ZONE_REQ
+	local n = math.min(#from, #Config.ZONES)
+	local function to(k: number): number
+		return Config.ZONES[k].req
+	end
+	if old < from[2] then
+		return old * to(2) / from[2]
+	end
+	for k = 2, n - 1 do
+		if old < from[k + 1] then
+			local share = math.log(old / from[k]) / math.log(from[k + 1] / from[k])
+			return to(k) * (to(k + 1) / to(k)) ^ share
+		end
+	end
+	local slope = math.log(to(n) / to(n - 1)) / math.log(from[n] / from[n - 1])
+	return math.min(to(n) * (old / from[n]) ^ slope, 1e300)
 end
 
 -- v1/v2 -> v3: bought slots become the plot level that has them (5 slots = level 1), so everyone keeps
@@ -197,6 +238,9 @@ function ProfileStore.deserialize(data: any): Profile
 	local maxSlots = Config.SLOTS_MAX + Config.PASS_EXTRA_SLOTS
 	p.money = num(data.money, 0, 0, math.huge)
 	p.speed = num(data.speed, 0, 0, math.huge)
+	if not (type(data.v) == "number" and data.v >= 7) then
+		p.speed = ProfileStore.migrateSpeed(p.speed) -- v1-v6: the old Speed scale
+	end
 	if type(data.v) == "number" and data.v >= 5 then
 		p.treadmillTier = int(data.treadmillTier, 1, 1, Config.TREADMILL_MAX)
 	else

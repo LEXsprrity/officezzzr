@@ -35,96 +35,31 @@ Config.PLANT_REACH = 28 -- you plant within this many studs (flat) of where you 
 ----------------------------------------------------------------------------------------------------
 Config.BASE_WALKSPEED = 16
 Config.MAX_WALKSPEED = 180
-Config.WALKSPEED_LOG_SCALE = 16 -- "a" in 16 + a*log10(1 + Speed)
+-- WalkSpeed = 16 + a * log10(1 + Speed / pivot), clamped to [16, 180]. Moving faster as Speed grows is
+-- the only thing Speed itself does for you: more studs per second, so more steps. Tuned so every zone's
+-- recommended Speed runs about as fast as it did before the flat-gain rework (Desert ~80 up to the
+-- Spirit Garden ~170), which the guards' head starts are balanced for (tests/guard.spec).
+Config.WALKSPEED_LOG_SCALE = 27 -- "a"
+Config.WALKSPEED_PIVOT = 100 -- the Speed where the log curve takes off
 Config.SLOW_MODE_WALKSPEED = 16
 
 function Config.walkSpeedFor(speed: number): number
-	local w = Config.BASE_WALKSPEED + Config.WALKSPEED_LOG_SCALE * math.log10(1 + math.max(0, speed))
+	local s = if speed == speed then math.max(0, speed) else 0
+	local w = Config.BASE_WALKSPEED + Config.WALKSPEED_LOG_SCALE * math.log10(1 + s / Config.WALKSPEED_PIVOT)
 	return math.clamp(w, Config.BASE_WALKSPEED, Config.MAX_WALKSPEED)
 end
 
--- Speed from moving
--- Speed per stud ("per step") compounds with progress: zone reqs grow exponentially (10K -> 5B) while
--- the studs anyone can walk grow linearly, so a flat rate would make the late zones take hundreds of
--- hours. gainPerStud(Speed) = GAIN_PER_STUD * (1 + Speed / GAIN_PIVOT) ^ GAIN_EXPONENT, before the
--- trail and treadmill multipliers. The HUD and the treadmill sign show it. Tuned with the free-player
--- simulation in tests/progression.spec (README "Progression"), which buys treadmill tiers too: the curve
--- was lowered (0.32 / 0.61 before) when the money tiers came, so the targets didn't move.
-Config.GAIN_PER_STUD = 0.28 -- Speed per stud at 0 Speed
-Config.GAIN_PIVOT = 100e3
-Config.GAIN_EXPONENT = 0.555
-
-function Config.gainPerStud(speed: number): number
-	return Config.GAIN_PER_STUD * (1 + math.max(0, speed) / Config.GAIN_PIVOT) ^ Config.GAIN_EXPONENT
-end
+-- Speed from moving: a flat BASE_SPEED_PER_STUD per stud walked ("per step"), times the equipped trail's
+-- small multiplier (Config.speedPerStud), and on a treadmill times its tier too. Nothing grows with the
+-- Speed you already have and there are no levels: a player progresses by running faster (WalkSpeed
+-- above), better trails and treadmill tiers. Tuned with the free-player simulation in tests/progression_sim
+-- (README "Progression").
+Config.BASE_SPEED_PER_STUD = 1
 
 Config.GAIN_CAP_STUDS_PER_TICK = Config.MAX_WALKSPEED * Config.TICK -- most studs one tick can pay for
 Config.MOVE_SLACK = 1.5 -- per-tick distance allowed = WalkSpeed * dt * slack + epsilon
 Config.MOVE_EPSILON = 2
 Config.MOVE_BUCKET_SECONDS = 1 -- sustained over-speed beyond this much budget -> rubber-band
-
--- Speed levels: milestones of the Speed stat, shown on the HUD's level bar with a "LEVEL N!" pop-up.
--- Purely visual progress, no bonus. SPEED_LEVELS[n] is the Speed level n starts at. Every zone's
--- recommended Speed is a level; the steps shrink from x2.5 early to x1.25-x1.5 late because each
--- decade of Speed takes longer (README "Progression"), so a free player still levels up every few
--- minutes early on and about every 15-60 minutes before the Spirit Garden (level 30 at 5B, tests/hud.spec). Past the table the
--- levels go on as 10B, 20B, 50B, 100B, ...
-Config.SPEED_LEVELS = {
-	0, 1e3, 2.5e3, 5e3, 10e3, -- 5: Desert
-	25e3, 50e3, 100e3, 250e3, 500e3, -- 10: Jungle
-	1e6, 2.5e6, 5e6, -- 13: Lava Fields
-	10e6, 15e6, 25e6, 50e6, -- 17: Snow Peaks
-	75e6, 100e6, 150e6, 250e6, 400e6, 500e6, -- 23: Deep Space
-	750e6, 1e9, 1.5e9, 2e9, 3e9, 4e9, 5e9, -- 30: Spirit Garden
-}
-local LEVEL_STEPS = { 1, 2, 5 } -- mantissas of the levels past the table
-
--- The Speed level `level` starts at (level 1 at 0).
-function Config.speedLevelThreshold(level: number): number
-	local n = #Config.SPEED_LEVELS
-	if level <= n then
-		return Config.SPEED_LEVELS[math.max(1, level)]
-	end
-	local j = level - n - 1 -- 0 = the first level past the table
-	local decade = math.floor(math.log10(Config.SPEED_LEVELS[n])) + 1 + j // #LEVEL_STEPS
-	return LEVEL_STEPS[j % #LEVEL_STEPS + 1] * 10 ^ decade
-end
-
--- (level, the Speed it started at, the Speed of the next level) for `speed`.
-function Config.speedLevel(speed: number): (number, number, number)
-	speed = if speed == speed then math.clamp(speed, 0, 1e300) else 0 -- NaN/inf/negative-safe
-	local n = #Config.SPEED_LEVELS
-	local level = 1
-	if speed >= Config.SPEED_LEVELS[n] then
-		-- past the table: jump close by log10, then settle exactly
-		local past = math.max(0, math.floor((math.log10(speed) - math.log10(Config.SPEED_LEVELS[n])) * #LEVEL_STEPS) - 2)
-		level = n + past
-		while Config.speedLevelThreshold(level + 1) <= speed do
-			level += 1
-		end
-		while level > n and Config.speedLevelThreshold(level) > speed do
-			level -= 1
-		end
-	else
-		while Config.SPEED_LEVELS[level + 1] <= speed do
-			level += 1
-		end
-	end
-	return level, Config.speedLevelThreshold(level), Config.speedLevelThreshold(level + 1)
-end
-
--- The HUD's "LEVEL N!" trigger. `best` is the highest level seen this session (nil before the first
--- stats arrive). Returns the new best and the level to announce, if any: nothing on the first stats
--- (joining at level 12 isn't a level-up), nothing for the same or a lower level, and only the highest
--- level when a Speed pack jumps several at once.
-function Config.levelUp(best: number?, level: number): (number, number?)
-	if best == nil then
-		return level, nil
-	elseif level > best then
-		return level, level
-	end
-	return best, nil
-end
 
 ----------------------------------------------------------------------------------------------------
 -- Zones. The corridor is the concatenation of zone lengths (2,300 studs). The first zone is the shortest so
@@ -163,27 +98,27 @@ Config.ZONES = {
 		floor = Color3.fromRGB(106, 196, 50), wall = Color3.fromRGB(196, 128, 80), ui = Color3.fromRGB(70, 180, 70),
 		guard = "Giant Mole", guardColor = Color3.fromRGB(110, 80, 60),
 		seed = "Sproutling", seedColor = Color3.fromRGB(120, 230, 90), baseWeight = 12 },
-	{ id = "Desert", name = "Desert", req = 10e3, length = Config.zoneLength(2), icon = "🦂", active = "day", wakeDelay = 0,
+	{ id = "Desert", name = "Desert", req = 25e3, length = Config.zoneLength(2), icon = "🦂", active = "day", wakeDelay = 0,
 		floor = Color3.fromRGB(240, 210, 140), wall = Color3.fromRGB(226, 178, 92), ui = Color3.fromRGB(225, 145, 55),
 		guard = "Giant Scorpion", guardColor = Color3.fromRGB(190, 90, 40),
 		seed = "Cactopod", seedColor = Color3.fromRGB(60, 170, 90), baseWeight = 340 },
-	{ id = "Jungle", name = "Jungle", req = 500e3, length = Config.zoneLength(3), icon = "🦖", active = "night", wakeDelay = 0,
+	{ id = "Jungle", name = "Jungle", req = 500e3, length = Config.zoneLength(3), icon = "🦖", active = "night", wakeDelay = 0.1,
 		floor = Color3.fromRGB(58, 168, 72), wall = Color3.fromRGB(72, 140, 74), ui = Color3.fromRGB(35, 140, 75),
 		guard = "Giant Dino", guardColor = Color3.fromRGB(70, 150, 70),
 		seed = "Fernosaur", seedColor = Color3.fromRGB(40, 200, 120), baseWeight = 9_500 },
-	{ id = "Lava", name = "Lava Fields", req = 5e6, length = Config.zoneLength(4), icon = "🌋", active = "day", wakeDelay = 0.1,
+	{ id = "Lava", name = "Lava Fields", req = 2e6, length = Config.zoneLength(4), icon = "🌋", active = "day", wakeDelay = 0.1,
 		floor = Color3.fromRGB(92, 58, 66), wall = Color3.fromRGB(74, 48, 56), ui = Color3.fromRGB(225, 85, 30),
 		guard = "Lava Golem", guardColor = Color3.fromRGB(240, 100, 30),
 		seed = "Magmabloom", seedColor = Color3.fromRGB(255, 120, 40), baseWeight = 180_000 },
-	{ id = "Snow", name = "Snow Peaks", req = 50e6, length = Config.zoneLength(5), icon = "❄️", active = "night", wakeDelay = 0.1,
+	{ id = "Snow", name = "Snow Peaks", req = 7.5e6, length = Config.zoneLength(5), icon = "❄️", active = "night", wakeDelay = 0.1,
 		floor = Color3.fromRGB(232, 242, 255), wall = Color3.fromRGB(160, 208, 246), ui = Color3.fromRGB(65, 150, 225),
 		guard = "Giant Yeti", guardColor = Color3.fromRGB(220, 230, 245),
 		seed = "Frostbulb", seedColor = Color3.fromRGB(120, 200, 255), baseWeight = 2_000_000 },
-	{ id = "Space", name = "Deep Space", req = 500e6, length = Config.zoneLength(6), icon = "👽", active = "night", wakeDelay = 0.1,
+	{ id = "Space", name = "Deep Space", req = 25e6, length = Config.zoneLength(6), icon = "👽", active = "night", wakeDelay = 0.1,
 		floor = Color3.fromRGB(64, 48, 134), wall = Color3.fromRGB(48, 38, 104), ui = Color3.fromRGB(115, 75, 225),
 		guard = "Big Alien", guardColor = Color3.fromRGB(120, 255, 120),
 		seed = "Starpetal", seedColor = Color3.fromRGB(200, 120, 255), baseWeight = 45_000_000 },
-	{ id = "Spirit", name = "Spirit Garden", req = 5e9, length = Config.zoneLength(7), icon = "⛩️", active = "day", wakeDelay = 0.1,
+	{ id = "Spirit", name = "Spirit Garden", req = 75e6, length = Config.zoneLength(7), icon = "⛩️", active = "day", wakeDelay = 0.1,
 		floor = Color3.fromRGB(112, 200, 98), wall = Color3.fromRGB(140, 140, 210), ui = Color3.fromRGB(225, 75, 130),
 		guard = "Spirit Dragon", guardColor = Color3.fromRGB(230, 50, 60),
 		seed = "Lotus Wyrm", seedColor = Color3.fromRGB(255, 150, 200), baseWeight = 900_000_000 },
@@ -361,21 +296,23 @@ end
 ----------------------------------------------------------------------------------------------------
 -- Economy (formulas)
 ----------------------------------------------------------------------------------------------------
--- In-game money buys only two things: trails (Speed gain, see Shop below) and plot upgrades. Speed is
--- earned by moving, or bought with Robux. Plant income is anchored to the zones' recommended Speed: a
--- full plot (ECONOMY_SLOTS) of zone-k Commons earns zone k+1's recommended Speed, in dollars, in
--- PAYBACK_SECONDS. That keeps the money scale of older saves unchanged.
+-- In-game money buys only three things: trails, plot upgrades and treadmill tiers (see Shop below).
+-- Speed is earned by moving, or bought with Robux. Plant income is anchored to a money scale per zone,
+-- ZONE_CASH: a full plot (ECONOMY_SLOTS) of zone-k Commons earns zone k+1's ZONE_CASH, in dollars, in
+-- PAYBACK_SECONDS. ZONE_CASH is the zones' recommended Speed from before the flat-gain rework (v7), kept
+-- as plain numbers when the Speed scale shrank, so the money scale (saved money, every money price)
+-- didn't move.
 Config.SLOTS_START = 5 -- plant slots at plot level 1
 Config.SLOTS_MAX = 30 -- plant slots at the last plot level (the ExtraSlots gamepass adds on top)
 Config.ECONOMY_SLOTS = 10 -- the plot size income is balanced for; independent of SLOTS_START
 Config.PAYBACK_SECONDS = 300
 Config.PAYOUT_INTERVAL = 3
+Config.ZONE_CASH = { 0, 10e3, 500e3, 5e6, 50e6, 500e6, 5e9 } -- per zone, in Config.ZONES order
 
 -- Common, sprout-weight income per plant for zone k ($/s)
 function Config.seedIncome(k: number): number
-	local nextZone = Config.ZONES[k + 1]
-	local nextReq = if nextZone then nextZone.req else Config.ZONES[k].req * 10
-	return nextReq / (Config.ECONOMY_SLOTS * Config.PAYBACK_SECONDS)
+	local nextCash = Config.ZONE_CASH[k + 1] or Config.ZONE_CASH[k] * 10
+	return nextCash / (Config.ECONOMY_SLOTS * Config.PAYBACK_SECONDS)
 end
 
 -- Growth (P2): closed form from plantedAt, never simulated per tick.
@@ -443,13 +380,13 @@ export type Trail = {
 	rainbow: boolean?, -- drawn (and shown on its card) as a rainbow gradient
 }
 Config.TRAILS = {
-	{ id = "Grey", name = "Grey Trail", rarity = "Common", mult = 1.5, price = 0, color = Color3.fromRGB(175, 178, 190) },
-	{ id = "Green", name = "Green Trail", rarity = "Uncommon", mult = 2, price = 5e3, product = "TrailGreen", color = Color3.fromRGB(70, 215, 90) },
-	{ id = "Blue", name = "Blue Trail", rarity = "Rare", mult = 2.5, price = 75e3, product = "TrailBlue", color = Color3.fromRGB(55, 145, 255) },
-	{ id = "Purple", name = "Purple Trail", rarity = "Epic", mult = 3, price = 1.5e6, product = "TrailPurple", color = Color3.fromRGB(165, 75, 255) },
-	{ id = "Golden", name = "Golden Trail", rarity = "Legendary", mult = 3.5, price = 30e6, product = "TrailGolden", color = Color3.fromRGB(255, 195, 35) },
-	{ id = "Red", name = "Red Trail", rarity = "Mythic", mult = 4, price = 20e9, product = "TrailRed", color = Color3.fromRGB(235, 45, 55) },
-	{ id = "Rainbow", name = "Rainbow Trail", rarity = "Secret", mult = 5, price = 1e12, product = "TrailRainbow", color = Color3.fromRGB(255, 90, 200), rainbow = true },
+	{ id = "Grey", name = "Grey Trail", rarity = "Common", mult = 1, price = 0, color = Color3.fromRGB(175, 178, 190) },
+	{ id = "Green", name = "Green Trail", rarity = "Uncommon", mult = 1.25, price = 5e3, product = "TrailGreen", color = Color3.fromRGB(70, 215, 90) },
+	{ id = "Blue", name = "Blue Trail", rarity = "Rare", mult = 1.5, price = 75e3, product = "TrailBlue", color = Color3.fromRGB(55, 145, 255) },
+	{ id = "Purple", name = "Purple Trail", rarity = "Epic", mult = 1.75, price = 1.5e6, product = "TrailPurple", color = Color3.fromRGB(165, 75, 255) },
+	{ id = "Golden", name = "Golden Trail", rarity = "Legendary", mult = 2, price = 30e6, product = "TrailGolden", color = Color3.fromRGB(255, 195, 35) },
+	{ id = "Red", name = "Red Trail", rarity = "Mythic", mult = 2.5, price = 20e9, product = "TrailRed", color = Color3.fromRGB(235, 45, 55) },
+	{ id = "Rainbow", name = "Rainbow Trail", rarity = "Secret", mult = 3, price = 1e12, product = "TrailRainbow", color = Color3.fromRGB(255, 90, 200), rainbow = true },
 } :: { Trail }
 Config.DEFAULT_TRAIL = "Grey"
 
@@ -468,10 +405,10 @@ function Config.trailMult(id: string?): number
 	return t.mult
 end
 
--- Speed gained per stud walked (or per stud of treadmill belt) at `speed` with trail `trailId`: the
--- progression curve times the trail. The HUD shows it as "+X Speed/step"; the treadmill multiplies it.
-function Config.speedPerStud(speed: number, trailId: string?): number
-	return Config.gainPerStud(speed) * Config.trailMult(trailId)
+-- Speed gained per stud walked (or per stud of treadmill belt) with trail `trailId`: the flat base times
+-- the trail, whatever your Speed. The HUD shows it as "+X/step"; the treadmill multiplies it by its tier.
+function Config.speedPerStud(trailId: string?): number
+	return Config.BASE_SPEED_PER_STUD * Config.trailMult(trailId)
 end
 
 -- The colours a trail draws with: its colour fading to white, or a rainbow.
@@ -624,15 +561,17 @@ Config.DEVELOPER_PRODUCTS = {
 	PackSpace = { id = 0, kind = "Pack", label = "Starpetal Pack", robux = 2000, zone = 6 },
 	PackSpirit = { id = 0, kind = "Pack", label = "Lotus Wyrm Pack", robux = 3000, zone = 7 },
 
-	-- Speed packs: the Shop's blue SPEED cards
-	Speed10K = { id = 0, kind = "Speed", label = "+10K Speed", robux = 9, amount = 10e3 },
-	Speed100K = { id = 0, kind = "Speed", label = "+100K Speed", robux = 36, amount = 100e3 },
-	Speed150K = { id = 0, kind = "Speed", label = "+150K Speed", robux = 64, amount = 150e3 },
-	Speed1M = { id = 0, kind = "Speed", label = "+1M Speed", robux = 76, amount = 1e6 },
-	Speed10M = { id = 0, kind = "Speed", label = "+10M Speed", robux = 560, amount = 10e6 },
-	Speed50M = { id = 0, kind = "Speed", label = "+50M Speed", robux = 1200, amount = 50e6 },
-	Speed500M = { id = 0, kind = "Speed", label = "+500M Speed", robux = 1600, amount = 500e6 },
-	Speed1B = { id = 0, kind = "Speed", label = "+1B Speed", robux = 2400, amount = 1e9 },
+	-- Speed packs: the Shop's blue SPEED cards. Sized against the zones' recommended Speed (v7 scale):
+	-- +25K is the Desert, +750K a bit past the Jungle, +3M past the Lava Fields, +10M past the Snow
+	-- Peaks, +25M the Deep Space and +50M two thirds of the way to the Spirit Garden (README "Progression").
+	Speed25K = { id = 0, kind = "Speed", label = "+25K Speed", robux = 9, amount = 25e3 },
+	Speed150K = { id = 0, kind = "Speed", label = "+150K Speed", robux = 36, amount = 150e3 },
+	Speed250K = { id = 0, kind = "Speed", label = "+250K Speed", robux = 64, amount = 250e3 },
+	Speed750K = { id = 0, kind = "Speed", label = "+750K Speed", robux = 76, amount = 750e3 },
+	Speed3M = { id = 0, kind = "Speed", label = "+3M Speed", robux = 560, amount = 3e6 },
+	Speed10M = { id = 0, kind = "Speed", label = "+10M Speed", robux = 1200, amount = 10e6 },
+	Speed25M = { id = 0, kind = "Speed", label = "+25M Speed", robux = 1600, amount = 25e6 },
+	Speed50M = { id = 0, kind = "Speed", label = "+50M Speed", robux = 2400, amount = 50e6 },
 
 	Money24K = { id = 0, kind = "Money", label = "Pocket Cash", robux = 40, amount = 24e3, minutes = 10 },
 	Money200K = { id = 0, kind = "Money", label = "Cash Bag", robux = 80, amount = 200e3, minutes = 30 },
@@ -839,7 +778,7 @@ end
 -- community's URL: roblox.com/communities/<id>/...).
 Config.COMMUNITY_GROUP_ID = 0
 Config.COMMUNITY_NAME = "Steal a Seed Community" -- what the window tells players to search for
-Config.FREE_GIFT_SPEED = 10_000
+Config.FREE_GIFT_SPEED = 25_000 -- the Desert's recommended Speed
 Config.FREE_GIFT_AUTO_OPEN = 20 -- seconds after joining: the window opens by itself, once per account
 
 -- The free chest in the base: money worth FREE_CHEST_MINUTES of the player's income ($/s with every
@@ -887,7 +826,6 @@ Config.SOUNDS = {
 	Bat = "rbxasset://sounds/swordslash.wav",
 	Buy = "rbxasset://sounds/electronicpingshort.wav",
 	Click = "rbxasset://sounds/button.wav",
-	LevelUp = "rbxasset://sounds/electronicpingshort.wav",
 }
 
 return Config

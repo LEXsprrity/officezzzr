@@ -17,8 +17,8 @@ export type Verdict = "ok" | "reset" | "ignored" | "rubberband"
 export type Opts = {
 	walkSpeed: number, -- the server's WalkSpeed for this player (highest of this and last tick)
 	onTreadmill: boolean,
-	mult: number, -- Speed per stud: Config.speedPerStud (progression curve x equipped trail)
-	treadmillMult: number, -- 2 / 3 / 5
+	mult: number, -- Speed per stud: Config.speedPerStud (the flat base x the equipped trail)
+	treadmillMult: number, -- Config.treadmillMult of its tier
 }
 
 function SpeedLogic.newState(): State

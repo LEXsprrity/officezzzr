@@ -602,7 +602,7 @@ end)
 -- Saves
 ----------------------------------------------------------------------------------------------------
 H.test("treadmill saves: v1-v4 tiers keep their multiplier (x2, Robux x3, Robux x5); v5+ keeps the tier", function()
-	H.eq(ProfileStore.VERSION, 6)
+	H.ok(ProfileStore.VERSION >= 6)
 	for old, mult in { 2, 3, 5 } do
 		for _, v in { 1, 2, 3, 4 } do
 			local data = { v = v, money = 1, speed = 2, treadmillTier = old, plotLevel = 1, slots = 5, trails = { "Grey" }, trail = "Grey" }

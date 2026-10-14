@@ -20,9 +20,11 @@ local function tracker(pos: Vector3, walkSpeed: number?)
 	return s
 end
 
-H.test("speed: WalkSpeed = clamp(16 + a*log10(1+Speed), 16, 180)", function()
+H.test("speed: WalkSpeed = clamp(16 + a*log10(1 + Speed/pivot), 16, 180)", function()
 	H.eq(Config.walkSpeedFor(0), 16)
-	H.near(Config.walkSpeedFor(9), 16 + Config.WALKSPEED_LOG_SCALE, 1e-9)
+	H.near(Config.walkSpeedFor(9 * Config.WALKSPEED_PIVOT), 16 + Config.WALKSPEED_LOG_SCALE, 1e-9)
+	H.eq(Config.walkSpeedFor(-5), 16)
+	H.eq(Config.walkSpeedFor(0 / 0), 16, "NaN-safe")
 	H.eq(Config.walkSpeedFor(1e30), Config.MAX_WALKSPEED)
 	local last = 0
 	for e = 0, 12 do

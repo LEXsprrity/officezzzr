@@ -78,7 +78,7 @@ H.test("data: a new player gets defaults (plot level 1 = 5 slots, Grey trail, no
 	H.eq(Config.plotSlots(p.plotLevel), 5)
 	H.ok(p.trails.Grey, "everyone owns the Grey trail")
 	H.eq(p.equippedTrail, "Grey")
-	H.eq(Config.trailMult(p.equippedTrail), 1.5)
+	H.eq(Config.trailMult(p.equippedTrail), 1)
 	H.eq(next(p.items), nil, "the inventory starts empty")
 	H.eq(Config.TREADMILL_TIERS[p.treadmillTier].mult, 2)
 	H.eq(p.money, 0)
