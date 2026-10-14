@@ -29,7 +29,10 @@ ProfileStore.__index = ProfileStore
 -- reached and the same share of the way to the next one. Money, trails and tiers stay as they were.
 -- Later the treadmill tiers changed from a multiplier to a fixed Speed per second each; a tier keeps its
 -- number, so `treadmillTier` saves unchanged (no new version).
-ProfileStore.VERSION = 7
+-- v8 keeps each plant's flower (`variant`, its plant model's name), drawn at random when it is planted (the seed
+-- is a surprise until then). Older plants have none and keep the flower their id picks
+-- (CreatureModels.pickOf), so nobody's plot changes.
+ProfileStore.VERSION = 8
 
 -- The zones' recommended Speed before v7 (Config.ZONES order), for migrateSpeed.
 ProfileStore.LEGACY_ZONE_REQ = { 0, 10e3, 500e3, 5e6, 50e6, 500e6, 5e9 }
@@ -67,6 +70,7 @@ export type Plant = {
 	plantedAt: number, -- unix seconds; weight is derived from this, never stored
 	x: number, -- where it stands, in the plot's space (Shared/Planting): across
 	z: number, -- ...and along (+z toward the entrance)
+	variant: string?, -- v8: its flower (plant model name), drawn at planting; nil = the id-based pick (older saves)
 }
 
 export type Profile = {
@@ -199,7 +203,7 @@ end
 function ProfileStore.serialize(p: Profile): { [string]: any }
 	local plants = {}
 	for _, pl in p.plants do
-		table.insert(plants, { s = pl.slot, z = pl.zone, r = pl.rarity, m = pl.mutation, t = pl.plantedAt, px = pl.x, pz = pl.z })
+		table.insert(plants, { s = pl.slot, z = pl.zone, r = pl.rarity, m = pl.mutation, t = pl.plantedAt, px = pl.x, pz = pl.z, vr = pl.variant })
 	end
 	local index = {}
 	for key, v in p.index do
@@ -298,7 +302,9 @@ function ProfileStore.deserialize(data: any): Profile
 					if modern and type(raw.px) == "number" and type(raw.pz) == "number" and math.abs(raw.px) <= half and math.abs(raw.pz) <= half then
 						x, z = raw.px, raw.pz
 					end
-					table.insert(p.plants, { slot = slot, zone = zone, rarity = rarity, mutation = mutation, plantedAt = raw.t, x = x, z = z })
+					-- v8: its flower, a plant model's name (one that is no longer a model falls back to the id pick)
+					local variant = if type(raw.vr) == "string" and #raw.vr > 0 and #raw.vr <= 40 and not string.find(raw.vr, "[^%w _%-]") then raw.vr else nil
+					table.insert(p.plants, { slot = slot, zone = zone, rarity = rarity, mutation = mutation, plantedAt = raw.t, x = x, z = z, variant = variant })
 				end
 			end
 		end

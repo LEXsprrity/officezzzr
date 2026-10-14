@@ -35,9 +35,6 @@ Assets.SLOTS = {
 	"FreeChest", "MoneyBoard",
 } :: { string }
 for _, zone in Config.ZONES do
-	table.insert(Assets.SLOTS, "Nest_" .. zone.id)
-end
-for _, zone in Config.ZONES do
 	table.insert(Assets.SLOTS, "Creature_" .. compact(zone.seed))
 end
 for _, zone in Config.ZONES do

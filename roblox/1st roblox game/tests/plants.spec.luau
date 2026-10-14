@@ -121,6 +121,64 @@ H.test("plants: the server names plants by flower everywhere and fills the Index
 	H.ok(string.find(plot, "Sessions.push(s.player, { catalog = catalog() })", 1, true) ~= nil, "the client gets the flower catalog")
 end)
 
+H.test("plants: a seed's flower is drawn when it is planted and kept in `variant` (old plants keep the id pick)", function()
+	for k = 1, #Config.ZONES do
+		for r = 1, #Config.RARITIES do
+			local names = CreatureModels.variants(k, r)
+			local label = `{Config.ZONES[k].id} {Config.RARITIES[r].id}`
+			-- every flower can come up, from the whole roll range, never out of the list
+			local seen = {}
+			for i = 0, 99 do
+				local v = CreatureModels.randomVariant(k, r, function()
+					return i / 100
+				end)
+				H.ok(v ~= nil and table.find(names, v) ~= nil, `{label}: draws one of its models`)
+				seen[v :: string] = true
+			end
+			H.ok(CreatureModels.randomVariant(k, r, function()
+				return 0.999999
+			end) == names[#names], `{label}: the top of the roll`)
+			for i, name in names do
+				H.ok(seen[name], `{label}: {name} can be drawn`)
+				-- the plant grows into its saved flower, whatever its id
+				H.eq(CreatureModels.pickOf(k, r, name, 7), i, `{label}: {name} is built`)
+				H.eq(CreatureModels.flowerOf(k, r, name, 7), name, `{label}: and named`)
+			end
+			-- a plant from before v8 (no variant), or one whose model is gone: the old id-based pick
+			H.eq(CreatureModels.pickOf(k, r, nil, 5), 5, `{label}: no variant`)
+			H.eq(CreatureModels.pickOf(k, r, "NoSuchFlower", 5), 5, `{label}: an unknown variant`)
+			H.eq(CreatureModels.flowerOf(k, r, nil, 5), CreatureModels.variantOf(k, r, 5), `{label}: the same flower as before`)
+		end
+	end
+	local fs = require("@lune/fs")
+	local plot = fs.readFile("src/server/PlotService.luau")
+	H.ok(string.find(plot, "variant = CreatureModels.randomVariant(zone, rarity, function()", 1, true) ~= nil, "planting draws the flower")
+	H.ok(string.find(plot, "CreatureModels.build(plant.zone, plant.rarity, plant.mutation, CreatureModels.pickOf(plant.zone, plant.rarity, plant.variant, plant.slot))", 1, true) ~= nil,
+		"the model is the saved flower")
+	H.ok(string.find(plot, "CreatureModels.flowerOf(plant.zone, plant.rarity, plant.variant, plant.slot)", 1, true) ~= nil, "named and indexed by it")
+	H.ok(string.find(plot, "pos = top,", 1, true) ~= nil, "the client gets where to reveal its name")
+	local client = fs.readFile("src/client/Planting.client.luau")
+	H.ok(string.find(client, "reveal(data.name, data.pos,", 1, true) ~= nil and string.find(client, "UiFx.relief(text", 1, true) ~= nil,
+		"the name pops up over the new plant, in relief")
+end)
+
+H.test("plants: until it is planted a seed only says its rarity (\"Rare Seed\"), never its flower or zone seed", function()
+	local SeedPacks = H.shared("SeedPacks")
+	local SeedService = H.server("SeedService")
+	for k, zone in Config.ZONES do
+		for r, rarity in Config.RARITIES do
+			local name = SeedPacks.seedName(k, r, nil)
+			H.eq(name, `{rarity.id} Seed`)
+			H.eq(SeedService.seedName(k, r, nil), name, "pods and carried seeds")
+			H.ok(not string.find(name, zone.seed, 1, true), `{zone.id}: no zone seed name`)
+			for _, flower in CreatureModels.variants(k, r) do
+				H.ok(not string.find(name, flower, 1, true), `{zone.id}: no flower name`)
+			end
+		end
+	end
+	H.eq(SeedPacks.seedName(6, 3, "Gold"), "Gold Rare Seed")
+end)
+
 H.test("plants: the swords (katanas) are Legendary and only in the Spirit Garden", function()
 	local swords = {}
 	for k = 1, #Config.ZONES do

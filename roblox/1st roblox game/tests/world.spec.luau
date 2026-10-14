@@ -99,13 +99,13 @@ H.test("world: plot layout contract (two dirt beds, a grass path, origin, spawn,
 	end
 end)
 
-H.test("world: nests on the left side, pods scattered beside the boss, no mother plant (centre, pods, guard home)", function()
+H.test("world: nests against the left wall, pods on the floor at the boss's right, nothing under them (centre, pods, guard home)", function()
 	local halfW = Config.CORRIDOR_WIDTH / 2
 	for k, nest in nests do
 		local center = Config.nestCenter(k)
 		H.ok((nest.center - center).Magnitude < 1e-3, "nest centre")
-		-- the runner's left (-Z, walking +X from the base), off the middle, inside the zone, clear of the wall
-		H.ok(center.Z <= -20 and center.Z >= -(halfW - 40), `zone {k}: nest on the left side ({center.Z})`)
+		-- all the way on the runner's left (-Z, walking +X from the base), the boss's flank by the wall
+		H.ok(center.Z <= -(halfW - 20) and center.Z >= -(halfW - 15.5), `zone {k}: nest against the left wall ({center.Z})`)
 		H.eq(Config.zoneAtX(center.X), k, `zone {k}: nest inside its zone`)
 		H.eq(Config.zoneAtX(nest.guardHome.X), k, `zone {k}: the boss sleeps inside its zone`)
 		H.eq(#nest.podCFrames, Config.PODS_PER_NEST)
@@ -113,9 +113,11 @@ H.test("world: nests on the left side, pods scattered beside the boss, no mother
 		for i, cf in nest.podCFrames do
 			local want = center + Config.podOffset(k, i)
 			H.ok((cf.Position - want).Magnitude < 1e-3, "pod position")
-			local rel = cf.Position - center
-			H.ok(rel.X < 0 and rel.X > -16 and math.abs(rel.Z) < 13, `zone {k} pod {i}: beside the boss, on the base side ({rel})`)
-			H.ok(math.abs(cf.Position.Z) < halfW - 40, `zone {k} pod {i}: clear of the wall's props`)
+			local rel = cf.Position - nest.guardHome
+			-- at the boss's right (toward the middle, clear of its ~14-stud flank), a head start ahead of it
+			H.ok(rel.Z >= 14 and rel.Z <= 32, `zone {k} pod {i}: at the boss's right ({rel})`)
+			H.ok(rel.X <= -Config.GUARD_HOME_OFFSET + 2 and rel.X >= -Config.GUARD_HOME_OFFSET - 16, `zone {k} pod {i}: a head start ahead of the boss ({rel})`)
+			H.near(cf.Position.Y - Config.GROUND_Y, 1.5, 1e-6, `zone {k} pod {i}: the 3-stud pod rests on the floor`)
 			for j, other in nest.podCFrames do
 				if j ~= i then
 					H.ok((other.Position - cf.Position).Magnitude > 4, `zone {k}: pods {i} and {j} apart`)
@@ -133,11 +135,47 @@ H.test("world: nests on the left side, pods scattered beside the boss, no mother
 			nz += 1
 		end
 		H.ok(nx == Config.PODS_PER_NEST and nz == Config.PODS_PER_NEST, `zone {k}: pods scattered, not in a grid`)
+		-- no mother plant, and nothing visible at all: no patch, ring or pebbles under the pods (owner requests)
 		for _, d in nest.model:GetDescendants() do
 			H.ok(not (d.Name == "MotherBulb" or d.Name == "Mound" or d.Name == "Stem" or d.Name == "Leaf"), `zone {k}: no mother plant ({d:GetFullName()})`)
+			H.ok(not d:IsA("BasePart") or d.Transparency >= 1, `zone {k}: nothing drawn under the pods ({d:GetFullName()})`)
+			H.ok(not d:IsA("Decal") and not d:IsA("ParticleEmitter"), `zone {k}: no ring decal or sparkles ({d:GetFullName()})`)
 		end
 		H.ok((nest.guardHome - (center + Vector3.new(Config.GUARD_HOME_OFFSET, 0, 0))).Magnitude < 1e-3, "guard home")
 		H.eq(nest.model.PrimaryPart:GetAttribute("Role"), "NestCore")
+	end
+end)
+
+H.test("world: the wall props make room for each nest (nothing stands in the boss or among the pods)", function()
+	local ZoneThemes = H.server("ZoneThemes")
+	local Assets = H.server("Assets")
+	for k, zone in Config.ZONES do
+		local x0, x1, z0, z1 = ZoneThemes.nestKeepOut(k)
+		local home = Config.nestCenter(k) + Vector3.new(Config.GUARD_HOME_OFFSET, 0, 0)
+		H.ok(x0 < home.X - 24 and x1 >= home.X + 24 and z0 <= -Config.CORRIDOR_WIDTH / 2, `{zone.id}: the corner holds the boss`)
+		for i = 1, Config.PODS_PER_NEST do
+			local p = Config.nestCenter(k) + Config.podOffset(k, i)
+			H.ok(p.X - 2 > x0 and p.X + 2 < x1 and p.Z + 2 < z1, `{zone.id}: the corner holds pod {i}`)
+		end
+		local folder = world.Corridor:FindFirstChild(string.format("%d_%s", k, zone.id))
+		for _, child in folder:GetChildren() do
+			if child.Name == "Nest_" .. zone.id or child.Name == "SpeedSign" then
+				continue
+			end
+			local lo, hi = Assets.bounds(child)
+			if not lo or not hi or lo.Y > Config.GROUND_Y + Config.WALL_HEIGHT then
+				continue -- invisible, or up in the sky
+			end
+			local inside = lo.X < x1 and hi.X > x0 and lo.Z < z1 and hi.Z > z0
+			local alongWall = hi.Z <= -(Config.CORRIDOR_WIDTH / 2) + 0.1 -- the wall, its checker, cap and vines
+			local structure = child.Name == "Floor" or child.Name == "FloorTile" or child.Name == "ZoneEdge" or child.Name == "Ambience"
+				or child.Name == "RiverBank" or child.Name == "LavaRiver" or string.find(child.Name, "^Wall") or string.find(child.Name, "^Roof")
+				or child.Name == "Icicle" or string.find(child.Name, "^Vine")
+			H.ok(not inside or alongWall or structure, `{zone.id}: {child.Name} stands in the nest's corner ({lo} .. {hi})`)
+			if child.Name == "Pond" or child.Name == "PondTile" then
+				H.ok(not inside, `{zone.id}: a pond in the nest's corner`)
+			end
+		end
 	end
 end)
 
