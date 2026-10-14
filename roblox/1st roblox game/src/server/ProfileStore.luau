@@ -32,7 +32,10 @@ ProfileStore.__index = ProfileStore
 -- v8 keeps each plant's flower (`variant`, its plant model's name), drawn at random when it is planted (the seed
 -- is a surprise until then). Older plants have none and keep the flower their id picks
 -- (CreatureModels.pickOf), so nobody's plot changes.
-ProfileStore.VERSION = 8
+-- v9 added the plant inventory (`inventory`: plants taken off the plot, as they were) and a plant's own
+-- `variance` (a plant planted again from the inventory keeps its weight). Older saves load with an empty
+-- inventory and their plants keep the variance from their planting time and id (Config.varianceOf).
+ProfileStore.VERSION = 9
 
 -- The zones' recommended Speed before v7 (Config.ZONES order), for migrateSpeed.
 ProfileStore.LEGACY_ZONE_REQ = { 0, 10e3, 500e3, 5e6, 50e6, 500e6, 5e9 }
@@ -71,6 +74,19 @@ export type Plant = {
 	x: number, -- where it stands, in the plot's space (Shared/Planting): across
 	z: number, -- ...and along (+z toward the entrance)
 	variant: string?, -- v8: its flower (plant model name), drawn at planting; nil = the id-based pick (older saves)
+	variance: number?, -- v9: its weight variance, kept from before it went to the inventory; nil = Config.plantVariance
+}
+
+-- A plant in the inventory (v9): taken off the plot as it was, its growth stopped. Planted again it keeps
+-- its flower, mutation and weight (plantedAt = now - age, the same variance).
+export type InvPlant = {
+	id: number, -- unique in the inventory (the client names it by this)
+	zone: number,
+	rarity: number,
+	mutation: string?,
+	variant: string?,
+	age: number, -- seconds it had grown (0..Config.GROW_TIME)
+	variance: number,
 }
 
 export type Profile = {
@@ -81,6 +97,7 @@ export type Profile = {
 	treadmillTier: number,
 	plotLevel: number, -- 1..Config.PLOT_LEVEL_MAX; slots = Config.plotSlots(plotLevel)
 	plants: { Plant },
+	inventory: { InvPlant }, -- v9: at most Config.INVENTORY_MAX
 	index: { [string]: boolean }, -- "zone:rarity" and "zone:Mutation" keys
 	items: { [string]: number },
 	seedBag: { [string]: number }, -- seeds from packs, "zone:rarity[:Mutation]" -> count
@@ -105,6 +122,7 @@ function ProfileStore.defaultProfile(): Profile
 		treadmillTier = 1,
 		plotLevel = 1,
 		plants = {},
+		inventory = {},
 		index = {},
 		items = items,
 		seedBag = {},
@@ -127,6 +145,17 @@ end
 local function int(v: any, default: number, lo: number, hi: number): number
 	return math.floor(num(v, default, lo, hi))
 end
+
+-- A saved flower (v8): a plant model's name, or nil (junk is never trusted as a name).
+local function variantOf(v: any): string?
+	return if type(v) == "string" and #v > 0 and #v <= 40 and not string.find(v, "[^%w _%-]") then v else nil
+end
+
+-- A saved weight variance (v9): Config.plantVariance's range, or nil.
+local function varianceOf(v: any): number?
+	return if type(v) == "number" and v == v and v >= 0.8 and v <= 1.2 then v else nil
+end
+
 
 -- v1/v2 -> v3: an old Speed Gain tier becomes the trail with the nearest multiplier at or below it
 -- (x1 -> Grey x1.5, x2 -> Green x2, x3 -> Purple x3, x5 -> Rainbow x5), owned and equipped, so nobody's
@@ -203,7 +232,11 @@ end
 function ProfileStore.serialize(p: Profile): { [string]: any }
 	local plants = {}
 	for _, pl in p.plants do
-		table.insert(plants, { s = pl.slot, z = pl.zone, r = pl.rarity, m = pl.mutation, t = pl.plantedAt, px = pl.x, pz = pl.z, vr = pl.variant })
+		table.insert(plants, { s = pl.slot, z = pl.zone, r = pl.rarity, m = pl.mutation, t = pl.plantedAt, px = pl.x, pz = pl.z, vr = pl.variant, va = pl.variance })
+	end
+	local inventory = {}
+	for _, it in p.inventory do
+		table.insert(inventory, { i = it.id, z = it.zone, r = it.rarity, m = it.mutation, vr = it.variant, a = it.age, va = it.variance })
 	end
 	local index = {}
 	for key, v in p.index do
@@ -228,6 +261,7 @@ function ProfileStore.serialize(p: Profile): { [string]: any }
 		treadmillTier = p.treadmillTier,
 		plotLevel = p.plotLevel,
 		plants = plants,
+		inv = inventory,
 		index = index,
 		items = table.clone(p.items),
 		bag = table.clone(p.seedBag),
@@ -303,12 +337,38 @@ function ProfileStore.deserialize(data: any): Profile
 						x, z = raw.px, raw.pz
 					end
 					-- v8: its flower, a plant model's name (one that is no longer a model falls back to the id pick)
-					local variant = if type(raw.vr) == "string" and #raw.vr > 0 and #raw.vr <= 40 and not string.find(raw.vr, "[^%w _%-]") then raw.vr else nil
-					table.insert(p.plants, { slot = slot, zone = zone, rarity = rarity, mutation = mutation, plantedAt = raw.t, x = x, z = z, variant = variant })
+					table.insert(p.plants, {
+						slot = slot, zone = zone, rarity = rarity, mutation = mutation, plantedAt = raw.t, x = x, z = z,
+						variant = variantOf(raw.vr), variance = varianceOf(raw.va),
+					})
 				end
 			end
 		end
 	end
+	-- v9: the inventory (absent before: empty). Each entry is checked like a plant; ids stay unique.
+	if type(data.inv) == "table" then
+		local ids = {}
+		for _, raw in data.inv do
+			if #p.inventory >= Config.INVENTORY_MAX then
+				break
+			end
+			if type(raw) == "table" then
+				local zone = int(raw.z, 0, 0, #Config.ZONES)
+				local rarity = int(raw.r, 0, 0, #Config.RARITIES)
+				local id = int(raw.i, 0, 0, 1e9)
+				local variance = varianceOf(raw.va)
+				if zone >= 1 and rarity >= 1 and id >= 1 and not ids[id] and variance then
+					ids[id] = true
+					table.insert(p.inventory, {
+						id = id, zone = zone, rarity = rarity,
+						mutation = if type(raw.m) == "string" and Config.mutationById(raw.m) then raw.m else nil,
+						variant = variantOf(raw.vr), age = num(raw.a, 0, 0, Config.GROW_TIME), variance = variance,
+					})
+				end
+			end
+		end
+	end
+
 	if type(data.index) == "table" then
 		for _, key in data.index do
 			if type(key) == "string" and #key < 40 then

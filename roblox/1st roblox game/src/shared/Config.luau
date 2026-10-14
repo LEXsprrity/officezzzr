@@ -361,6 +361,12 @@ function Config.plantVariance(plantedAt: number, slot: number): number
 	return 0.8 + 0.4 * (x - math.floor(x))
 end
 
+-- A plant's variance: the one it kept from before (a plant moved to the inventory and planted again keeps
+-- its weight), else the stable one from its planting time and id.
+function Config.varianceOf(plant: { plantedAt: number, slot: number, variance: number? }): number
+	return plant.variance or Config.plantVariance(plant.plantedAt, plant.slot)
+end
+
 function Config.sproutWeight(k: number, rarity: number): number
 	return Config.ZONES[k].baseWeight * Config.RARITIES[rarity].weight
 end
@@ -406,10 +412,11 @@ Config.CREATURE_MAX_SCALE = 2.6
 Config.CREATURE_ASSETS = {} :: { [number]: number }
 
 Config.OFFLINE_CAP_SECONDS = 3600
-Config.SELL_SECONDS = 30 -- removing a plant refunds this many seconds of its income
--- The SELL stall in the shop plaza pays more than the R-key refund, so walking there is worth it: 120 s
--- of the plant's base income (no day/night, like the refund) x the plot level / 2x Money multiplier. A
--- plant keeps earning forever, so even 4x the refund is only ~2 min of what it would make by staying.
+-- The SELL stall in the shop plaza is the only place plants are sold (the Plants panel's Remove puts a
+-- plant in the inventory, for no money): 120 s of the plant's base income (no day/night) x the plot level
+-- / 2x Money multiplier. A plant keeps earning forever, so that is only ~2 min of what it would make by
+-- staying.
+
 Config.SELL_STALL_SECONDS = 120
 Config.SELL_STALL_DISTANCE = 20 -- studs from the stall's prompt part the player must stand within
 
@@ -595,6 +602,10 @@ Config.PACK_EXCLUSIVE = "Celestial" -- ...plus the pack-only mutation, which pod
 Config.PACK_EXCLUSIVE_CHANCE = 0.005
 Config.SEED_BAG_MAX = 50 -- soft cap: the Shop won't *prompt* a pack purchase once the bag holds this many
 Config.SEED_BAG_HARD_MAX = 250 -- paid grants may go past SEED_BAG_MAX up to here; saves are clamped here
+-- The plant inventory: a plant taken off the plot (the Plants panel's Remove) waits here, as it was
+-- (flower, mutation, growth), to be planted again or sold at the SELL stall. A seed brought home while
+-- the plot is full goes to the seed bag instead (up to SEED_BAG_MAX).
+Config.INVENTORY_MAX = 50
 -- A paid pack whose seed can't fit (bag at SEED_BAG_HARD_MAX) pays this many seconds of the player's
 -- income instead (at least this many seconds of a Common plant from the pack's zone), so a paid
 -- purchase is never lost.

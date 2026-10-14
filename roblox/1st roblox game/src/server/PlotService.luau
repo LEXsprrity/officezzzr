@@ -49,7 +49,7 @@ local sellStalls: { BasePart } = {} -- the SELL stalls' prompt parts (WorldBuild
 -- Pure-ish helpers (also used for offline income)
 ----------------------------------------------------------------------------------------------------
 function PlotService.plantStats(plant: ProfileStore.Plant, now: number): (number, number)
-	local variance = Config.plantVariance(plant.plantedAt, plant.slot)
+	local variance = Config.varianceOf(plant)
 	local weight = Config.plantWeight(plant.zone, plant.rarity, now - plant.plantedAt, variance)
 	return weight, Config.plantIncome(plant.zone, plant.rarity, weight, plant.mutation)
 end
