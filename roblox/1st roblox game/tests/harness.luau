@@ -202,6 +202,31 @@ end
 
 Harness.Vector3 = roblox.Vector3
 
+-- Runs a client script (src/client/*.client.luau) with the mocked modules, and `overrides` on top of the
+-- globals (e.g. a workspace stand-in); `services` adds or replaces services for game:GetService.
+function Harness.runClient(file: string, overrides: { [string]: any }, extraServices: { [string]: any }?)
+	local node = makeNode(string.match(file, "([^/]+)%.luau$") or file, nil, nil)
+	local env = envFor(node)
+	env.game = {
+		GetService = function(_, name: string)
+			local s = (extraServices or {})[name] or services[name]
+			if not s then
+				error("mock game:GetService: " .. name .. " is not mocked")
+			end
+			return s
+		end,
+	}
+	for k, v in overrides do
+		env[k] = v
+	end
+	for k, v in { print = print, os = os, math = math, string = string, table = table, tostring = tostring, tonumber = tonumber, type = type, pairs = pairs, ipairs = ipairs, select = select, error = error, pcall = pcall, setmetatable = setmetatable, coroutine = coroutine } do
+		if env[k] == nil then
+			env[k] = v
+		end
+	end
+	luau.load(fs.readFile(file), { debugName = file, environment = env })()
+end
+
 -- Runs `fn` with the assets whose names start with `prefix` set aside (e.g. "Creature_": the built-in
 -- creatures instead of the plant models), then puts them back, even if `fn` fails.
 function Harness.withoutAssets(prefix: string, fn: () -> ())

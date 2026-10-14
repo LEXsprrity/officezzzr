@@ -85,7 +85,7 @@ local function finite(cf: any): boolean
 	return true
 end
 
-H.test("bosses: each zone's guard slot holds its own rigged pet, with no scripts or animation leftovers", function()
+H.test("bosses: each zone's guard slot holds its own rigged pet, its meshes joined to the bones by Motor6Ds, no scripts or animation leftovers", function()
 	local pets = {}
 	for _, zone in Config.ZONES do
 		local key = BossRigs.BY_ZONE[zone.id]
@@ -102,12 +102,25 @@ H.test("bosses: each zone's guard slot holds its own rigged pet, with no scripts
 		H.ok(template.PrimaryPart and template.PrimaryPart.Name == "RootPart", "the bone host is its PrimaryPart")
 		local meshes, bones = 0, 0
 		for _, d in template:GetDescendants() do
-			for _, banned in { "LuaSourceContainer", "AnimationController", "Animator", "KeyframeSequence", "Animation", "JointInstance", "Constraint", "WeldConstraint", "ValueBase" } do
+			for _, banned in { "LuaSourceContainer", "AnimationController", "Animator", "KeyframeSequence", "Animation", "Constraint", "WeldConstraint", "ValueBase" } do
 				H.ok(not d:IsA(banned), `{slotOf(zone)}: {d:GetFullName()} ({d.ClassName}) left in`)
+			end
+			if d:IsA("JointInstance") then
+				-- only the skinning joints: RootPart (the Bones' part) -> each MeshPart
+				H.ok(d:IsA("Motor6D") and d.Part0 == template.PrimaryPart and d.Part1 == d.Parent, `{slotOf(zone)}: {d:GetFullName()} ({d.ClassName}) joins RootPart to its MeshPart`)
 			end
 			if d:IsA("MeshPart") then
 				meshes += 1
 				H.ok(d.HasSkinnedMesh, `{d.Name} is skinned`)
+				local joints = 0
+				for _, j in d:GetChildren() do
+					if j:IsA("Motor6D") then
+						joints += 1
+						local gap = ((template.PrimaryPart.CFrame * j.C0).Position - (d.CFrame * j.C1).Position).Magnitude
+						H.ok(gap < 1e-3, `{d.Name}: its Motor6D keeps it in place ({gap} off)`)
+					end
+				end
+				H.eq(joints, 1, `{slotOf(zone)}: {d.Name} hangs off the RootPart by one Motor6D (without it the Bones don't deform it in Studio)`)
 				H.ok(d.Anchored and not d.CanCollide and not d.CanQuery and not d.CanTouch, `{d.Name}: anchored decoration`)
 			elseif d:IsA("Bone") then
 				bones += 1
@@ -280,6 +293,173 @@ H.test("bosses: the client animator poses only nearby bosses, from BossRigs; the
 	H.ok(string.find(animator, "BossRigs.solve(", 1, true) ~= nil and string.find(animator, "joint.bone.Transform = cf", 1, true) ~= nil, "poses Bone.Transform")
 	H.ok(not fs.isFile("src/shared/GiantMole.luau"), "GiantMole.luau removed")
 	H.ok(string.find(fs.readFile("src/server/GuardService.luau"), "GiantMole", 1, true) == nil, "GuardService no longer builds the mole")
+end)
+
+-- The posed bone positions (game studs, model space) for `state` at stride phase `phase` and clock `t`.
+local function posedAt(rig: any, profile: any, state: string, phase: number, t: number): any
+	local moving = state == "Chasing" or state == "Returning"
+	local _, world = BossRigs.solve(rig, BossRigs.pose(profile, { state = state, t = t, age = 2, phase = phase, move = if moving then 1 else 0 }))
+	return world
+end
+
+-- How far a bone wanders over a whole stride (game studs): the widest gap between two of its positions.
+local function travel(rig: any, profile: any, name: string, axis: string?): number
+	local seen = {}
+	for i = 0, 15 do
+		local w = posedAt(rig, profile, "Chasing", i / 16 * 2 * math.pi, i * 0.0625)
+		table.insert(seen, w[rig.byName[name]].Position)
+	end
+	local most = 0
+	for _, a in seen do
+		for _, b in seen do
+			most = math.max(most, if axis then math.abs((a :: any)[axis] - (b :: any)[axis]) else (a - b).Magnitude)
+		end
+	end
+	return most
+end
+
+H.test("bosses: chasing, the legs really run (knees and feet travel studs through a stride), tails slither and sweep, wings flap", function()
+	for _, zone in Config.ZONES do
+		local rig, profile = rigOf(zone)
+		for _, l in profile.legs or {} do
+			local hip, knee = rig.byName[l.hip], rig.byName[l.knee or l.hip]
+			local length = (hip.rest.Position - (rig.byName[l.foot or l.knee or l.hip]).rest.Position).Magnitude
+			for _, name in { l.knee, l.foot } do
+				if name then
+					local d = travel(rig, profile, name)
+					H.ok(d > math.max(1.5, 0.3 * length), `{zone.id}: {name} travels {d} studs through a stride (leg {length} long)`)
+				end
+			end
+			-- the foot comes off the ground on its way forward
+			if l.foot and rig.byName[l.foot].plant then
+				local d = travel(rig, profile, l.foot, "Y")
+				H.ok(d > 0.4, `{zone.id}: {l.foot} lifts {d} studs`)
+			end
+			H.ok(knee ~= nil, `{zone.id}: {l.hip}'s knee`)
+		end
+		if profile.kind == "snake" or profile.kind == "shark" then
+			local tip = profile.tail[#profile.tail]
+			local d = travel(rig, profile, tip, "X")
+			H.ok(d > 3, `{zone.id}: the tail tip {tip} sweeps {d} studs side to side`)
+		end
+		if profile.kind == "snake" then
+			local d = travel(rig, profile, profile.spine[#profile.spine], "X")
+			H.ok(d > 1, `{zone.id}: the body slithers {d} studs side to side`)
+		end
+		for _, w in profile.wings or {} do
+			local tip = w.bones[#w.bones]
+			local deepest = nil
+			for _, j in rig.joints do -- the wing's farthest bone
+				local x = j
+				while x and x.name ~= tip do
+					x = x.parent
+				end
+				if x and (not deepest or math.abs(j.rest.Position.X) > math.abs(deepest.rest.Position.X)) then
+					deepest = j
+				end
+			end
+			local seen = {}
+			for i = 0, 11 do
+				local world = posedAt(rig, profile, "Chasing", 0, i * 0.05)
+				table.insert(seen, world[deepest].Position.Y)
+			end
+			local d = math.max(table.unpack(seen)) - math.min(table.unpack(seen))
+			H.ok(d > 2, `{zone.id}: wing {deepest.name} flaps {d} studs up and down`)
+		end
+	end
+end)
+
+H.test("bosses: asleep they lie down: the body sinks by its lie.drop (or tips over), the head comes down near the ground, it breathes", function()
+	for _, zone in Config.ZONES do
+		local rig, profile = rigOf(zone)
+		local body, head = rig.byName[profile.body], rig.byName[profile.head]
+		local asleep = posedAt(rig, profile, "Sleeping", 0, 1)
+		local awake = posedAt(rig, profile, "Waking", 0, 1)
+		local sank = body.rest.Position.Y - asleep[body].Position.Y
+		H.ok(sank >= (profile.lie.drop - 0.03) * rig.scale, `{zone.id}: the body sinks {sank} studs`)
+		if profile.lie.tilt then
+			local up = asleep[body].UpVector
+			H.ok(up.Y < 0.4, `{zone.id}: the body lies on its front (up {up})`)
+		end
+		local h, h0 = asleep[head].Position.Y, head.rest.Position.Y
+		H.ok(h < awake[head].Position.Y - 0.5, `{zone.id}: the head comes down asleep ({h} vs {awake[head].Position.Y} awake)`)
+		if profile.kind ~= "shark" and profile.pet ~= "RedMole" then
+			-- (the shark rests on its belly with its head up; the mole's long snout is on the ground already)
+			H.ok(h < 0.6 * h0, `{zone.id}: the head rests low ({h}, {h0} standing)`)
+		end
+		-- slow breathing: the body rises and falls a little over a few seconds
+		local ys = {}
+		for i = 0, 15 do
+			table.insert(ys, posedAt(rig, profile, "Sleeping", 0, i * 0.25)[body].Position.Y)
+		end
+		local breath = math.max(table.unpack(ys)) - math.min(table.unpack(ys))
+		H.ok(breath > 0.02 * rig.scale and breath < 0.2 * rig.scale, `{zone.id}: breathes ({breath} studs)`)
+		-- folded legs: every knee comes closer to the ground than standing (or stays down)
+		for _, l in profile.legs or {} do
+			if l.knee and not (profile.kind == "ape" and l.front) then -- (the gorilla's arms reach forward instead)
+				local k = rig.byName[l.knee or l.hip]
+				H.ok(asleep[k].Position.Y <= k.rest.Position.Y + 0.3, `{zone.id}: {k.name} folds down ({asleep[k].Position.Y} vs {k.rest.Position.Y})`)
+			end
+		end
+	end
+end)
+
+-- What tools/skin_report.luau read from the Studio cache (models/bosses/skinning.json), if it is there.
+local SKIN = if fs.isFile("models/bosses/skinning.json") then require("@lune/serde").decode("json", fs.readFile("models/bosses/skinning.json")) else nil
+
+H.test("bosses: every bone a profile moves deforms vertices of the pet's skinned meshes (it or a bone under it carries skin weights)", function()
+	if not SKIN then
+		return
+	end
+	for _, zone in Config.ZONES do
+		local rig, profile = rigOf(zone)
+		local skin = SKIN[profile.pet]
+		H.ok(skin and skin.meshes > 0, `{profile.pet}: skin weights in models/bosses/skinning.json`)
+		if skin then
+			local drives = {}
+			for _, j in rig.joints do
+				local n = skin.bones[j.name] or 0
+				local x = j
+				while x do
+					drives[x.name] = (drives[x.name] or 0) + n
+					x = x.parent
+				end
+			end
+			for _, name in bonesOf(profile) do
+				H.ok((drives[name] or 0) > 0, `{profile.pet}: {name} moves no skinned vertex`)
+			end
+			-- the eyes follow the head
+			for _, eye in profile.eyes do
+				local w = skin.parts[eye]
+				for bone in w or {} do
+					local x = rig.byName[bone]
+					while x and x.name ~= profile.head do
+						x = x.parent
+					end
+					H.ok(x ~= nil, `{profile.pet}: eye {eye} is weighted to {bone}, not to the head`)
+				end
+			end
+		end
+	end
+end)
+
+H.test("bosses: the eyes the animator shuts asleep are the pet's own small MeshParts at the head", function()
+	for _, zone in Config.ZONES do
+		local template = Assets.get(slotOf(zone))
+		local profile = BossRigs.PROFILES[template:GetAttribute("BossRig")]
+		local rig = BossRigs.rig(template.PrimaryPart, profile, profile.scale)
+		local head = rig.byName[profile.head].rest.Position
+		H.ok(#profile.eyes >= 1, `{zone.id}: has eyes to shut`)
+		for _, name in profile.eyes do
+			local eye = template:FindFirstChild(name)
+			H.ok(eye and eye:IsA("MeshPart"), `{zone.id}: eye {name}`)
+			if eye then
+				local at = template.PrimaryPart.CFrame:PointToObjectSpace(eye.CFrame.Position)
+				H.ok(eye.Size.Magnitude < 0.3 * (template.PrimaryPart.CFrame.Position - head).Magnitude + 8, `{zone.id}: {name} is small`)
+				H.ok((at - head).Magnitude < 9 * profile.scale / 2, `{zone.id}: {name} sits at the head ({(at - head).Magnitude} studs away)`)
+			end
+		end
+	end
 end)
 
 return nil
