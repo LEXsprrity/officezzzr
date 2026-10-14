@@ -152,7 +152,9 @@ H.test("plants: a seed's flower is drawn when it is planted and kept in `variant
 	end
 	local fs = require("@lune/fs")
 	local plot = fs.readFile("src/server/PlotService.luau")
-	H.ok(string.find(plot, "variant = CreatureModels.randomVariant(zone, rarity, function()", 1, true) ~= nil, "planting draws the flower")
+	H.ok(string.find(plot, "else PlantGhosts.seedPlant(zone, rarity, mutation, gene, slot, now, x, z, flowerRoll)", 1, true) ~= nil, "planting makes the seed's plant")
+	local ghosts = fs.readFile("src/server/PlantGhosts.luau")
+	H.ok(string.find(ghosts, "else CreatureModels.randomVariant(zone, rarity, roll)", 1, true) ~= nil, "a seed without a gene draws its flower then")
 	H.ok(string.find(plot, "CreatureModels.build(plant.zone, plant.rarity, plant.mutation, CreatureModels.pickOf(plant.zone, plant.rarity, plant.variant, plant.slot))", 1, true) ~= nil,
 		"the model is the saved flower")
 	H.ok(string.find(plot, "CreatureModels.flowerOf(plant.zone, plant.rarity, plant.variant, plant.slot)", 1, true) ~= nil, "named and indexed by it")

@@ -1,30 +1,89 @@
--- The planting preview's 3D ghosts (Planting.client): the plant models live in ServerStorage, which clients
--- can't read, so at start the server puts one light silhouette per zone x rarity into
--- ReplicatedStorage.PlantGhosts ("Ghost_<zone>_<rarity>"). A seed's flower is a surprise until it is
--- planted, so each ghost is the zone's first model of that rarity (pick 1), at its full-grown size (the
--- average variance), plain parts only: no lights, particles, labels, decals or textures, nothing that
--- collides or casts a shadow. The client tints it (green where the seed may go, red where not).
+-- The planting preview's 3D ghosts (Planting.client), and what a seed grows into. The plant models live in
+-- ServerStorage, which clients can't read, so the server puts light silhouettes into
+-- ReplicatedStorage.PlantGhosts: one per flower ("Ghost_<zone>_<rarity>_<n>", the n-th of the zone's plant
+-- models of that rarity, CreatureModels.variants; 1 for the built-in creature), each at plant scale 1, plain
+-- parts only: no lights, particles, labels, decals or textures, nothing that collides or casts a shadow.
+-- They are built the first time a seed or plant needs one (ensure), so only the flowers in play replicate.
+-- The client tints it (green where the seed may go, red where not) and scales it to the size the server
+-- says.
+-- A seed's gene (Config.rollGene) decides its flower and its weight variance, so the ghost shows exactly
+-- the plant it grows into, at the size it has right when planted (seedLook), while every label still says
+-- only "Common Seed" (owner: the silhouette may show, the name is revealed when it is planted).
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Config = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("Config"))
+local SeedPacks = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("SeedPacks"))
 local CreatureModels = require(script.Parent:WaitForChild("CreatureModels"))
 
 local PlantGhosts = {}
 
 PlantGhosts.FOLDER = "PlantGhosts"
 
-function PlantGhosts.name(zone: number, rarity: number): string
-	return `Ghost_{zone}_{rarity}`
+function PlantGhosts.name(zone: number, rarity: number, index: number): string
+	return `Ghost_{zone}_{rarity}_{index}`
 end
 
--- How big a full-grown plant of (zone, rarity) is, in CreatureModels.applyScale units.
-function PlantGhosts.fullScale(zone: number, rarity: number): number
-	return CreatureModels.scaleFor(zone, rarity, Config.plantWeight(zone, rarity, Config.GROW_TIME, 1))
+-- How many flowers a seed of (zone, rarity) may grow into (1: the built-in creature).
+function PlantGhosts.count(zone: number, rarity: number): number
+	return math.max(#CreatureModels.variants(zone, rarity), 1)
 end
 
--- One ghost: the plant's parts and meshes only, pivoted on the soil at the origin.
-function PlantGhosts.build(zone: number, rarity: number): Model
-	local model = CreatureModels.build(zone, rarity, nil, 1)
-	CreatureModels.applyScale(model, PlantGhosts.fullScale(zone, rarity))
+-- Which of them a seed with this gene grows into (its ghost's n).
+function PlantGhosts.indexOf(zone: number, rarity: number, gene: number): number
+	return (math.floor(gene) - 1) % PlantGhosts.count(zone, rarity) + 1
+end
+
+-- How big a plant of (zone, rarity) with this weight variance is right when it is planted (its sprout
+-- weight), in CreatureModels.applyScale units.
+function PlantGhosts.sproutScale(zone: number, rarity: number, variance: number): number
+	return CreatureModels.scaleFor(zone, rarity, Config.plantWeight(zone, rarity, 0, variance))
+end
+
+-- What the planting preview shows for a seed with this gene: (ghost n, scale).
+function PlantGhosts.seedLook(zone: number, rarity: number, gene: number): (number, number)
+	return PlantGhosts.indexOf(zone, rarity, gene), PlantGhosts.sproutScale(zone, rarity, Config.geneVariance(gene))
+end
+
+-- ...and for a plant (an inventory plant planted again): its own flower at its own size at `now`.
+function PlantGhosts.plantLook(plant: any, now: number): (number, number)
+	local flower = CreatureModels.flowerOf(plant.zone, plant.rarity, plant.variant, plant.slot)
+	local index = if flower then table.find(CreatureModels.variants(plant.zone, plant.rarity), flower) else nil
+	local weight = Config.plantWeight(plant.zone, plant.rarity, now - plant.plantedAt, Config.varianceOf(plant))
+	return index or 1, CreatureModels.scaleFor(plant.zone, plant.rarity, weight)
+end
+
+-- The planting preview for the seed under `key` in `bag` (untrusted key): (the key it is under now, zone,
+-- rarity, mutation, ghost n, scale), or nil when there is no such seed. A seed from before genes gets one
+-- here (moved to its new key), so what the ghost shows is what it grows into.
+function PlantGhosts.bagPreview(bag: { [string]: number }, key: any, roll: () -> number): (string?, number?, number?, string?, number?, number?)
+	local zone, rarity, mutation, gene = SeedPacks.parseBagKey(key)
+	if not zone or not rarity or (bag[key] or 0) <= 0 then
+		return nil, nil, nil, nil, nil, nil
+	end
+	if not gene then
+		gene = Config.rollGene(roll)
+		SeedPacks.takeFromBag(bag, key)
+		key = SeedPacks.addToBag(bag, zone, rarity, mutation, gene)
+	end
+	local ghost, scale = PlantGhosts.seedLook(zone, rarity, gene :: number)
+	return key, zone, rarity, mutation, ghost, scale
+end
+
+-- The plant a seed grows into, planted at (x, z) under id `slot` at `now`: with a gene, the flower and
+-- variance it decides (what its ghost showed); without one (a seed from before genes) a flower drawn now
+-- with `roll` and the variance from its planting time and id.
+function PlantGhosts.seedPlant(zone: number, rarity: number, mutation: string?, gene: number?, slot: number, now: number,
+	x: number, z: number, roll: () -> number): any
+	return {
+		slot = slot, zone = zone, rarity = rarity, mutation = mutation, plantedAt = now, x = x, z = z,
+		variant = if gene then CreatureModels.variantOf(zone, rarity, gene) else CreatureModels.randomVariant(zone, rarity, roll),
+		variance = if gene then Config.geneVariance(gene) else nil,
+	}
+end
+
+-- One ghost: the flower's parts and meshes only, at plant scale 1, pivoted on the soil at the origin.
+function PlantGhosts.build(zone: number, rarity: number, index: number): Model
+	local model = CreatureModels.build(zone, rarity, nil, index)
+	CreatureModels.applyScale(model, 1)
 	for _, d in model:GetDescendants() do
 		if d:IsA("BasePart") then
 			d.Anchored = true
@@ -49,31 +108,42 @@ function PlantGhosts.build(zone: number, rarity: number): Model
 	end
 	model:SetAttribute("Zone", zone)
 	model:SetAttribute("Rarity", rarity)
-	model.Name = PlantGhosts.name(zone, rarity)
+	model.Name = PlantGhosts.name(zone, rarity, index)
 	return model
 end
 
--- Builds every ghost into ReplicatedStorage.PlantGhosts (once, at start). Returns the folder.
+local folder: Folder? = nil
+
+-- Puts an empty ReplicatedStorage.PlantGhosts in place (once, at start). Returns the folder.
 function PlantGhosts.publish(parent: Instance?): Folder
 	local into = parent or ReplicatedStorage
 	local old = into:FindFirstChild(PlantGhosts.FOLDER)
 	if old then
 		old:Destroy()
 	end
-	local folder = Instance.new("Folder")
-	folder.Name = PlantGhosts.FOLDER
-	for zone in Config.ZONES do
-		for rarity in Config.RARITIES do
-			local ok, ghost = pcall(PlantGhosts.build, zone, rarity)
-			if ok then
-				ghost.Parent = folder
-			else
-				warn("[PlantGhosts]", zone, rarity, ghost)
-			end
-		end
+	local f = Instance.new("Folder")
+	f.Name = PlantGhosts.FOLDER
+	f.Parent = into
+	folder = f
+	return f
+end
+
+-- The ghost of flower `index` of (zone, rarity), built into the folder the first time it is needed (before
+-- the server tells a client about the seed, so it replicates first). nil if it can't be built (warned).
+function PlantGhosts.ensure(zone: number, rarity: number, index: number): Model?
+	local f = if folder and folder.Parent then folder else PlantGhosts.publish()
+	local name = PlantGhosts.name(zone, rarity, index)
+	local have = f:FindFirstChild(name)
+	if have then
+		return have :: Model
 	end
-	folder.Parent = into
-	return folder
+	local ok, ghost = pcall(PlantGhosts.build, zone, rarity, index)
+	if not ok then
+		warn("[PlantGhosts]", zone, rarity, index, ghost)
+		return nil
+	end
+	ghost.Parent = f
+	return ghost
 end
 
 return PlantGhosts

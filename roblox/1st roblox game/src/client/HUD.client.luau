@@ -332,12 +332,13 @@ local function fitLeftColumn()
 end
 
 ----------------------------------------------------------------------------------------------------
--- Hotbar (bottom centre): Bat
+-- Hotbar (bottom centre): Bat (1); Planting.client adds the seed slot (2) to it
 ----------------------------------------------------------------------------------------------------
 local hotbar = new("Frame", {
-	BackgroundTransparency = 1, AnchorPoint = Vector2.new(0.5, 1), Position = UDim2.new(0.5, 0, 1, -14),
+	Name = "Hotbar", BackgroundTransparency = 1, AnchorPoint = Vector2.new(0.5, 1), Position = UDim2.new(0.5, 0, 1, -14),
 	Size = UDim2.fromOffset(200, 84), Parent = gui,
-}, { new("UIListLayout", { FillDirection = Enum.FillDirection.Horizontal, HorizontalAlignment = Enum.HorizontalAlignment.Center, Padding = UDim.new(0, 10) }) })
+}, { new("UIListLayout", { FillDirection = Enum.FillDirection.Horizontal, HorizontalAlignment = Enum.HorizontalAlignment.Center,
+	SortOrder = Enum.SortOrder.LayoutOrder, Padding = UDim.new(0, 10) }) })
 local batCooldownUntil = 0
 local function useBat()
 	if os.clock() >= batCooldownUntil then
@@ -345,6 +346,7 @@ local function useBat()
 	end
 end
 local batSlot = button(hotbar, "🏏\nBat", Color3.fromRGB(200, 140, 80), UDim2.fromOffset(84, 84), useBat, "Bat")
+batSlot.LayoutOrder = 1
 text(batSlot, { Text = "1", Size = UDim2.fromOffset(18, 18), Position = UDim2.fromOffset(4, 2), TextColor3 = COLORS.gold })
 local batShade = new("Frame", {
 	BackgroundColor3 = Color3.new(0, 0, 0), BackgroundTransparency = 0.45, Size = UDim2.fromScale(1, 0),
@@ -395,13 +397,22 @@ local function clearSide()
 	end
 end
 
+-- The bag's seeds by label ("Rare Seed" from the Desert): seeds differ by their hidden gene (SeedPacks
+-- bagKey) but list as one, so the list never hints at their flowers. `key`: the seed its Plant button plants.
 type BagEntry = { key: string, count: number, zone: number, rarity: number, mutation: string? }
 local function bagEntries(): { BagEntry }
 	local list: { BagEntry } = {}
+	local byLabel: { [string]: BagEntry } = {}
 	for key, count in stats.seedBag or {} do
 		local z, r, m = SeedPacks.parseBagKey(key)
-		if z and r then
-			table.insert(list, { key = key, count = count, zone = z, rarity = r, mutation = m })
+		local entry = byLabel[SeedPacks.labelKey(key)]
+		if entry then
+			entry.count += count
+			entry.key = if key < entry.key then key else entry.key
+		elseif z and r then
+			entry = { key = key, count = count, zone = z, rarity = r, mutation = m }
+			byLabel[SeedPacks.labelKey(key)] = entry
+			table.insert(list, entry)
 		end
 	end
 	table.sort(list, function(a, b)
@@ -755,7 +766,7 @@ do
 		local bagCount = SeedPacks.bagCount(stats.seedBag or {})
 		Icons.set(sideTitle, "Plants", `🪴 Inventory {#inventory}/{Config.INVENTORY_MAX} · Seeds {bagCount}/{Config.SEED_BAG_MAX}`)
 		local c = stats.carrying
-		local stuck = c ~= nil and #(stats.plants or {}) >= (stats.slots or 0) and bagCount >= Config.SEED_BAG_MAX
+		local stuck = c ~= nil and bagCount >= Config.SEED_BAG_MAX
 		local keys = { tostring(stuck) }
 		for _, e in bag do
 			table.insert(keys, `{e.key}x{e.count}`)
@@ -775,8 +786,8 @@ do
 			order += 1
 			return order
 		end
-		if stuck then -- a seed brought home goes to the bag by itself, unless the bag is full too
-			reliefLine(nextOrder(), "Plot and seed bag full: plant or sell to make room for your seed!", COLORS.red)
+		if stuck then -- a seed brought home goes to the bag by itself, unless the bag is full
+			reliefLine(nextOrder(), "Seed bag full: plant or sell to make room for your seed!", COLORS.red)
 		end
 		if #inventory >= Config.INVENTORY_MAX then
 			reliefLine(nextOrder(), "Inventory full: plant or sell some plants.", COLORS.red)

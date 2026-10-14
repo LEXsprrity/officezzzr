@@ -361,9 +361,11 @@ H.test("grant: a pack can give Celestial, and the bag/save keep it", function()
 	end, yes)
 	H.eq(grant.roll.mutation, "Celestial")
 	H.eq(grant.roll.name, "Celestial Common Seed", "the reveal never names the flower (a surprise until planted)")
-	local key = SeedPacks.bagKey(SPIRIT, 1, "Celestial")
+	local key = next(p.seedBag) :: string
+	H.eq(SeedPacks.labelKey(key), SeedPacks.bagKey(SPIRIT, 1, "Celestial"), "a Celestial Common seed (with its hidden gene)")
 	H.eq(p.seedBag[key], 1)
 	H.eq(select(3, SeedPacks.parseBagKey(key)), "Celestial", "a Celestial bag key is valid (plantable)")
+	H.ok(select(4, SeedPacks.parseBagKey(key)) ~= nil, "the pack's seed has a gene")
 end)
 
 ----------------------------------------------------------------------------------------------------

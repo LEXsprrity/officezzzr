@@ -37,6 +37,14 @@ Assets.SLOTS = {
 for _, zone in Config.ZONES do
 	table.insert(Assets.SLOTS, "Creature_" .. compact(zone.seed))
 end
+-- A zone's seed designs (the pods and the carried seed, SeedService.seedLook): a folder of Models, one per
+-- design; a seed's gene picks one (Config.geneDesign), whatever its rarity. "Seed_Desert".
+function Assets.seedSlot(zone: number): string
+	return "Seed_" .. Config.ZONES[zone].id
+end
+for k in Config.ZONES do
+	table.insert(Assets.SLOTS, Assets.seedSlot(k))
+end
 for _, zone in Config.ZONES do
 	table.insert(Assets.SLOTS, "Guard_" .. compact(zone.guard))
 end
