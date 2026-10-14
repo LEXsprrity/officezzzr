@@ -50,7 +50,6 @@ local COLORS = {
 	gold = Color3.fromRGB(255, 205, 50),
 	disabled = Color3.fromRGB(170, 170, 170),
 	buy = Color3.fromRGB(60, 200, 80), -- green: money and R$ buy buttons
-	robux = Color3.fromRGB(150, 80, 230), -- purple: R$ on trail cards, the gift button
 	equip = Color3.fromRGB(60, 160, 255),
 }
 
@@ -122,17 +121,40 @@ local function rescale()
 end
 
 ----------------------------------------------------------------------------------------------------
--- Toasts (top centre)
+-- Toasts (top centre, just under Roblox's top bar; while a zone banner shows they move down under it).
+-- Only what the player must know: errors, getting caught, offline earnings, day/night, announcements.
 ----------------------------------------------------------------------------------------------------
+local TOAST_TOP, TOAST_UNDER_BANNER = 8, 160 -- design pixels; ZoneBanner.client's strip spans 70..154
 local toastHolder = new("Frame", {
-	BackgroundTransparency = 1, AnchorPoint = Vector2.new(0.5, 0), Position = UDim2.new(0.5, 0, 0, 120),
+	BackgroundTransparency = 1, AnchorPoint = Vector2.new(0.5, 0), Position = UDim2.new(0.5, 0, 0, TOAST_TOP),
 	Size = UDim2.fromOffset(560, 300), ZIndex = 12, Parent = gui, -- above the shop windows
 }, { new("UIListLayout", { HorizontalAlignment = Enum.HorizontalAlignment.Center, Padding = UDim.new(0, 6) }) })
+task.spawn(function()
+	local banner = player:WaitForChild("PlayerGui"):WaitForChild("ZoneBanner", 60)
+	local strip = banner and banner:WaitForChild("Strip", 10)
+	if strip then
+		strip:GetPropertyChangedSignal("Visible"):Connect(function()
+			TweenService:Create(toastHolder, TweenInfo.new(0.2, Enum.EasingStyle.Quad), {
+				Position = UDim2.new(0.5, 0, 0, if strip.Visible then TOAST_UNDER_BANNER else TOAST_TOP),
+			}):Play()
+		end)
+	end
+end)
 
 local TOAST_COLORS = { red = COLORS.red, gold = COLORS.gold, green = COLORS.money, blue = COLORS.speed }
 local function toast(message: string, color: string?, seconds: number?)
+	-- Words only: server texts (Net.toast, announcements) may still carry emoji. The lock stays.
+	local ok, plain = pcall(string.gsub, message, utf8.charpattern, function(ch: string)
+		local c = utf8.codepoint(ch)
+		local emoji = (c >= 0x2300 and c <= 0x23FF) or (c >= 0x2600 and c <= 0x27BF) or (c >= 0x2B00 and c <= 0x2BFF)
+			or (c >= 0x1F000 and c <= 0x1FAFF) or c == 0xFE0F or c == 0x200D
+		return if emoji and ch ~= "🔒" then "" else nil
+	end)
+	if ok then
+		message = string.match(string.gsub(plain, "%s+", " "), "^%s*(.-)%s*$") or message
+	end
 	local frame = new("Frame", {
-		Size = UDim2.fromOffset(520, 40), BackgroundColor3 = TOAST_COLORS[color or ""] or Color3.fromRGB(60, 60, 80),
+		Size = UDim2.fromOffset(500, 36), BackgroundColor3 = TOAST_COLORS[color or ""] or Color3.fromRGB(60, 60, 80),
 		Parent = toastHolder,
 	}, deco(10))
 	local label = text(frame, { Text = message, Size = UDim2.new(1, -16, 1, -8), Position = UDim2.fromOffset(8, 4) })
@@ -155,15 +177,6 @@ local function toast(message: string, color: string?, seconds: number?)
 end
 
 ----------------------------------------------------------------------------------------------------
--- Top: carry banner (entering a zone flashes its name below it: ZoneBanner.client)
-----------------------------------------------------------------------------------------------------
-local carryBanner = new("Frame", {
-	AnchorPoint = Vector2.new(0.5, 0), Position = UDim2.new(0.5, 0, 0, 8), Size = UDim2.fromOffset(460, 50),
-	BackgroundColor3 = COLORS.gold, Visible = false, Parent = gui,
-}, deco(12))
-local carryLabel = text(carryBanner, { Size = UDim2.new(1, -16, 1, -8), Position = UDim2.fromOffset(8, 4), TextColor3 = WHITE })
-
-----------------------------------------------------------------------------------------------------
 -- Left side, kept minimal, with no panels behind the numbers:
 --   * bottom-left: Speed (with a "+" that opens the Shop's Speed section) in pink, money in green;
 --   * middle of the left edge: the Shop / Index buttons and the Slow Mode switch. (Trails opens from
@@ -173,7 +186,8 @@ local carryLabel = text(carryBanner, { Size = UDim2.new(1, -16, 1, -8), Position
 ----------------------------------------------------------------------------------------------------
 local SPEED_PINK = Color3.fromRGB(255, 70, 150)
 local MONEY_GREEN = Color3.fromRGB(85, 240, 70)
-local STATS_H, LEFT_H = 100, 194 -- LEFT_H: 2 side buttons + Slow Mode
+local LEFT_GAP = 18 -- between Shop, Index and Slow Mode
+local STATS_H, LEFT_H = 100, 74 * 2 + 30 + 2 * LEFT_GAP -- LEFT_H: 2 side buttons + Slow Mode
 local STATS_BOTTOM = 10
 
 local openModal: (name: string) -> ()
@@ -234,7 +248,7 @@ local leftColumn = new("Frame", {
 	Name = "LeftColumn", BackgroundTransparency = 1, AnchorPoint = Vector2.new(0, 0.5), Position = UDim2.new(0, 14, 0.5, 0),
 	Size = UDim2.fromOffset(180, LEFT_H), Parent = gui,
 }, {
-	new("UIListLayout", { Padding = UDim.new(0, 8), SortOrder = Enum.SortOrder.LayoutOrder, VerticalAlignment = Enum.VerticalAlignment.Center }),
+	new("UIListLayout", { Padding = UDim.new(0, LEFT_GAP), SortOrder = Enum.SortOrder.LayoutOrder, VerticalAlignment = Enum.VerticalAlignment.Center }),
 })
 local leftScale = new("UIScale", { Parent = leftColumn })
 
@@ -401,75 +415,63 @@ local function bagEntries(): { BagEntry }
 end
 
 local function renderSeeds()
-	Icons.set(sideTitle, { "Seeds", "Bag" }, `🌱 Seeds · 🎒 {SeedPacks.bagCount(stats.seedBag or {})}/{Config.SEED_BAG_MAX}`)
+	Icons.set(sideTitle, "Seeds", `🌱 Seeds · Bag {SeedPacks.bagCount(stats.seedBag or {})}/{Config.SEED_BAG_MAX}`)
+	-- One slim line: what you carry (in its rarity colour), and how the bag fills or empties
 	local c = stats.carrying
-	local top = card(0, if c then COLORS.gold else COLORS.slow, 44)
-	text(top, {
-		Text = if c then `Carrying: {Config.RARITIES[c.rarity].id} {Config.ZONES[c.zone].seed}` else "Not carrying a seed",
-		Size = UDim2.new(1, -12, 1, -8), Position = UDim2.fromOffset(6, 4),
+	local status = text(sideList, {
+		Text = if c then `Carrying: {SeedPacks.seedName(c.zone, c.rarity, c.mutation)}` else "Not carrying a seed",
+		Size = UDim2.new(1, -8, 0, 24), TextColor3 = if c then Config.RARITIES[c.rarity].color:Lerp(INK, 0.35) else Color3.fromRGB(120, 120, 135),
+		TextXAlignment = Enum.TextXAlignment.Left, LayoutOrder = 0,
 	})
+	status:FindFirstChildOfClass("UIStroke"):Destroy()
 
 	-- Seed bag (from seed packs): Plant, then click or tap your dirt (Planting.client)
 	local bag = bagEntries()
-	local hint = card(1, COLORS.index, 40)
-	local hintText = if #bag == 0 then "🎁 Buy seed packs in the 🛒 Shop: their seeds land here!" else "🎒 Your bag: press Plant, then click or tap your plot's dirt."
-	Icons.set(text(hint, { Size = UDim2.new(1, -12, 1, -8), Position = UDim2.fromOffset(6, 4) }), { "Bag" }, hintText, ICON.medium)
+	local hint = text(sideList, {
+		Text = if #bag == 0 then "Buy seed packs in the Shop: their seeds land here." else "Press Plant, then click or tap your plot's dirt.",
+		Size = UDim2.new(1, -8, 0, 18), TextColor3 = Color3.fromRGB(110, 110, 125), TextXAlignment = Enum.TextXAlignment.Left, LayoutOrder = 1,
+	})
+	hint:FindFirstChildOfClass("UIStroke"):Destroy()
 	for i, e in bag do
 		local rarity = Config.RARITIES[e.rarity]
 		local mut = Config.mutationById(e.mutation)
 		local f = card(1 + i, (if mut then mut.color else rarity.color):Lerp(Color3.new(0, 0, 0), 0.3), 54)
 		text(f, {
-			Text = `{Config.ZONES[e.zone].icon} {SeedPacks.seedName(e.zone, e.rarity, e.mutation)} x{e.count}`,
+			Text = `{SeedPacks.seedName(e.zone, e.rarity, e.mutation)} x{e.count}`,
 			Size = UDim2.new(1, -98, 1, -10), Position = UDim2.fromOffset(6, 5), TextXAlignment = Enum.TextXAlignment.Left,
 		})
-		button(f, "🌱 Plant", COLORS.money, UDim2.fromOffset(84, 40), function()
+		button(f, "Plant", COLORS.money, UDim2.fromOffset(84, 40), function()
 			RequestUseItem:FireServer("Seed:" .. e.key)
-		end, "Seeds").Position = UDim2.new(1, -90, 0, 7)
+		end).Position = UDim2.new(1, -90, 0, 7)
 	end
 
+	-- The zones' seeds: unlocked in green words, locked with the lock
 	for k, zone in Config.ZONES do
 		local ok = stats.speed >= zone.req
 		local f = card(100 + k, if ok then zone.ui else COLORS.disabled, 58)
-		text(f, { Text = `{zone.icon} {zone.seed} · {zone.name} {Config.ACTIVE_ICONS[zone.active]}`, Size = UDim2.new(1, -12, 0.5, -2), Position = UDim2.fromOffset(6, 3), TextXAlignment = Enum.TextXAlignment.Left })
+		text(f, {
+			Text = `{zone.seed} · {zone.name} · {if zone.active == "night" then "Night" else "Day"}`,
+			Size = UDim2.new(1, -12, 0.5, -2), Position = UDim2.fromOffset(6, 3), TextXAlignment = Enum.TextXAlignment.Left,
+		})
 		local reqLabel = text(f, {
 			Size = UDim2.new(1, -12, 0.45, -2), Position = UDim2.new(0, 6, 0.5, 0), TextXAlignment = Enum.TextXAlignment.Left,
-			TextColor3 = if ok then Color3.fromRGB(230, 255, 230) else Color3.fromRGB(255, 235, 235),
+			TextColor3 = if ok then Color3.fromRGB(160, 255, 120) else Color3.fromRGB(255, 235, 235),
 		})
-		Icons.set(reqLabel, { "Lock" }, `{if ok then "✅" else "🔒"} Rec. Speed {Format.short(zone.req)} · {Format.money(Config.seedIncome(k))}/s base`)
+		local income = `{Format.money(Config.seedIncome(k))}/s base`
+		Icons.set(reqLabel, { "Lock" }, if ok then `Unlocked · {income}` else `🔒 Rec. Speed {Format.short(zone.req)} · {income}`)
 	end
 end
 
-local function renderPlants()
-	local plants = table.clone(stats.plants or {})
-	table.sort(plants, function(a, b)
-		return a.income > b.income
-	end)
-	Icons.set(sideTitle, "Plants", `🪴 Plants {#plants}/{stats.slots} · {Format.money(stats.income)}/s`)
-	if #plants == 0 then
-		local f = card(0, COLORS.slow, 60)
-		text(f, { Text = "No plants yet. Steal a seed and plant it on your dirt!", Size = UDim2.new(1, -12, 1, -8), Position = UDim2.fromOffset(6, 4) })
-	end
-	for i, p in plants do
-		local rarity = Config.RARITIES[p.rarity]
-		local mut = Config.mutationById(p.mutation)
-		local f = card(i, (if mut then mut.color else rarity.color):Lerp(Color3.new(0, 0, 0), 0.2), 54)
-		text(f, {
-			Text = `{if p.mutation then p.mutation .. " " else ""}{rarity.id} {Config.ZONES[p.zone].seed}`,
-			Size = UDim2.new(1, -12, 0.5, -2), Position = UDim2.fromOffset(6, 3), TextXAlignment = Enum.TextXAlignment.Left,
-		})
-		text(f, {
-			Text = `{Format.weight(p.weight)} · {Format.money(p.income)}/s`,
-			Size = UDim2.new(1, -12, 0.45, -2), Position = UDim2.new(0, 6, 0.5, 0), TextXAlignment = Enum.TextXAlignment.Left,
-		})
-	end
-end
+-- The Plants list (its block comes after the window kit, whose chunky buttons it uses). `full` rebuilds it;
+-- otherwise it only rebuilds when the plants themselves changed, and updates the numbers in place.
+local renderPlants: (full: boolean?) -> ()
 
 renderSide = function()
 	clearSide()
 	if sideTab == "Seeds" then
 		renderSeeds()
 	elseif sideTab == "Plants" then
-		renderPlants()
+		renderPlants(true)
 	end
 end
 
@@ -660,6 +662,127 @@ local function fitModal()
 end
 
 ----------------------------------------------------------------------------------------------------
+-- Plants panel (right side): "Plants 1/5 · $5/s", then one bright card per plant, best first: an accent
+-- strip in its rarity (or mutation) colour, the plant's name (the flower it grew into), rarity, mutation
+-- and weight, its $/s (with the day/night bonus while it's on) and a Remove button that asks once more
+-- ("Sure?" for 2 s). The server re-checks it (remote RemovePlant: one of your own plants).
+----------------------------------------------------------------------------------------------------
+do
+	local RemovePlant = remotes:WaitForChild("RemovePlant") :: RemoteEvent
+	local CARD_H = 66
+	local SURE_SECONDS = 2
+	local GREEN_INK, GOLD_INK = Color3.fromRGB(30, 160, 55), Color3.fromRGB(215, 140, 0)
+	local shown = "" -- which plants the list shows, in order
+	local updaters: { () -> () } = {}
+	local sure: { [number]: number } = {} -- slot -> when its Remove was first clicked
+
+	local function plantIn(slot: number): any
+		for _, p in stats.plants or {} do
+			if p.slot == slot then
+				return p
+			end
+		end
+		return nil
+	end
+
+	-- Dark text with no outline, for the white cards
+	local function ink(parent: Instance, props: { [string]: any }): TextLabel
+		local label = text(parent, props)
+		label:FindFirstChildOfClass("UIStroke"):Destroy()
+		label.TextColor3 = props.TextColor3 or INK
+		label.TextXAlignment = Enum.TextXAlignment.Left
+		return label
+	end
+
+	local function plantCard(order: number, p: any)
+		local rarity = Config.RARITIES[p.rarity]
+		local mut = Config.mutationById(p.mutation)
+		local accent = if mut then mut.color else rarity.color
+		local f = new("Frame", { Name = "Plant_" .. p.slot, Size = UDim2.new(1, -8, 0, CARD_H), BackgroundColor3 = WHITE, LayoutOrder = order, Parent = sideList }, {
+			new("UICorner", { CornerRadius = UDim.new(0, 12) }),
+			new("UIStroke", { Thickness = 2, Color = accent:Lerp(INK, 0.3), ApplyStrokeMode = Enum.ApplyStrokeMode.Border }),
+			new("UIGradient", { Rotation = 90, Color = ColorSequence.new(WHITE, accent:Lerp(WHITE, 0.8)) }),
+		})
+		new("Frame", { Size = UDim2.new(0, 8, 1, -14), Position = UDim2.fromOffset(7, 7), BackgroundColor3 = accent, BorderSizePixel = 0, Parent = f },
+			{ new("UICorner", { CornerRadius = UDim.new(1, 0) }) })
+		ink(f, { Text = p.name or SeedPacks.seedName(p.zone, p.rarity, p.mutation), Size = UDim2.new(1, -118, 0, 24), Position = UDim2.fromOffset(22, 5) })
+		local info = ink(f, { RichText = true, Size = UDim2.new(1, -118, 0, 16), Position = UDim2.fromOffset(22, 29), TextColor3 = rarity.color:Lerp(INK, 0.45) })
+		local income = ink(f, { RichText = true, Size = UDim2.new(1, -118, 0, 16), Position = UDim2.fromOffset(22, 46), TextColor3 = GREEN_INK })
+
+		local slot = p.slot
+		local remove: TextButton
+		local function look()
+			local pending = sure[slot] ~= nil and os.clock() - sure[slot] < SURE_SECONDS
+			if not pending then
+				sure[slot] = nil
+			end
+			local label = remove:FindFirstChild("Label") :: TextLabel
+			label.Text = if pending then "Sure?" else "Remove"
+			remove.BackgroundColor3 = if pending then COLORS.gold else COLORS.red
+		end
+		remove = chunky(f, "Remove", COLORS.red, UDim2.fromOffset(88, 42), function()
+			if sure[slot] and os.clock() - sure[slot] < SURE_SECONDS then
+				sure[slot] = nil
+				RemovePlant:FireServer(slot) -- the list rebuilds when the server's plants view comes back without it
+			else
+				sure[slot] = os.clock()
+				task.delay(SURE_SECONDS, function()
+					if remove.Parent then
+						look()
+					end
+				end)
+			end
+			look()
+		end)
+		remove.Name = "Remove"
+		remove.AnchorPoint = Vector2.new(1, 0.5)
+		remove.Position = UDim2.new(1, -8, 0.5, 0)
+		look()
+
+		local function update()
+			local now = plantIn(slot) or p
+			info.Text = `{rarity.id}{if mut then ` · <font color="#{mut.color:ToHex()}">{mut.id}</font>` else ""} · {Format.weight(now.weight)}`
+			local bonus = Config.bonusLabel(now.zone, (Config.dayPhase(workspace:GetServerTimeNow())))
+			income.Text = `{Format.money(now.income)}/s{if bonus then ` · <font color="#{GOLD_INK:ToHex()}">{bonus}</font>` else ""}`
+		end
+		update()
+		table.insert(updaters, update)
+	end
+
+	renderPlants = function(full: boolean?)
+		local plants = table.clone(stats.plants or {})
+		table.sort(plants, function(a, b)
+			if a.income ~= b.income then
+				return a.income > b.income
+			end
+			return a.slot < b.slot
+		end)
+		Icons.set(sideTitle, "Plants", `🪴 Plants {#plants}/{stats.slots} · {Format.money(stats.income)}/s`)
+		local keys = {}
+		for _, p in plants do
+			table.insert(keys, `{p.slot}:{p.zone}:{p.rarity}:{p.mutation or ""}:{p.name or ""}`)
+		end
+		local signature = table.concat(keys, ",")
+		if not full and signature == shown then
+			for _, update in updaters do
+				update()
+			end
+			return
+		end
+		shown = signature
+		clearSide()
+		table.clear(updaters)
+		if #plants == 0 then
+			local f = card(0, WHITE, 60)
+			ink(f, { Text = "No plants yet. Steal a seed and plant it on your dirt!", Size = UDim2.new(1, -16, 1, -12), Position = UDim2.fromOffset(8, 6), TextWrapped = true })
+		end
+		for i, p in plants do
+			plantCard(i, p)
+		end
+	end
+end
+
+----------------------------------------------------------------------------------------------------
 -- Trail Shop strip scrolling: the scrollbar, drag and touch are the ScrollingFrame's own; the mouse wheel
 -- and the side arrows move it a card at a time.
 ----------------------------------------------------------------------------------------------------
@@ -786,13 +909,9 @@ local function note(label: string, order: number, icon: (string | { string })?)
 	end
 end
 
--- "-- SPEED --": a big outlined section title in gold or green (the icon goes in front once uploaded)
-local function section(label: string, order: number, color: Color3, icon: string?): TextLabel
-	local h = bold(modalBody, 4, { Text = `-- {label} --`, Size = UDim2.new(1, -12, 0, 48), TextColor3 = color, LayoutOrder = order })
-	if icon then
-		Icons.set(h, icon, h.Text, ICON.big, 38)
-	end
-	return h
+-- "-- SPEED --": a big outlined section title in gold or green (words only: the cards carry the icons)
+local function section(label: string, order: number, color: Color3): TextLabel
+	return bold(modalBody, 4, { Text = `-- {label} --`, Size = UDim2.new(1, -12, 0, 48), TextColor3 = color, LayoutOrder = order })
 end
 
 -- Your money in the title bar (Shop, Trail Shop)
@@ -875,7 +994,7 @@ end
 local function giftButton(parent: Instance, size: UDim2): TextButton
 	-- Gifting needs extra work (choosing a player, granting to them): shown, but not live yet.
 	return chunky(parent, "🎁", GIFT_PINK, size, function()
-		toast("🎁 Gifting is coming soon!", "blue")
+		toast("Gifting is coming soon!", "blue")
 	end, "Gift", ICON.big)
 end
 
@@ -944,8 +1063,7 @@ do
 	local function mutationLine(pack: SeedPacks.Pack): string
 		local parts = {}
 		for _, m in SeedPacks.odds(pack).mutations do
-			local icon = if m.id == pack.exclusive then "🌟" else "✨"
-			table.insert(parts, `{icon} {m.id} {SeedPacks.percent(m.pct)}`) -- each emoji becomes the Star icon once uploaded
+			table.insert(parts, `{m.id} {SeedPacks.percent(m.pct)}`)
 		end
 		return table.concat(parts, "  ·  ")
 	end
@@ -968,28 +1086,26 @@ do
 			}) }),
 		}))
 		local band = new("Frame", { Size = UDim2.new(1, 0, 0, 28), BackgroundColor3 = COLORS.gold, BorderSizePixel = 0, Parent = c })
-		Icons.set(text(band, { Size = UDim2.new(1, -12, 1, -6), Position = UDim2.fromOffset(6, 3) }), "SeedPack", "💎 PREMIUM · LATE-GAME SEED")
-		text(c, { Text = zone.icon, Size = UDim2.fromOffset(60, 60), Position = UDim2.fromOffset(12, 36) })
-		bold(c, 4, { Text = pack.name, Size = UDim2.new(1, -94, 0, 34), Position = UDim2.fromOffset(82, 38), TextXAlignment = Enum.TextXAlignment.Left })
+		text(band, { Text = "PREMIUM · LATE-GAME SEED", Size = UDim2.new(1, -12, 1, -6), Position = UDim2.fromOffset(6, 3) })
+		bold(c, 4, { Text = pack.name, Size = UDim2.new(1, -24, 0, 34), Position = UDim2.fromOffset(14, 38), TextXAlignment = Enum.TextXAlignment.Left })
 		text(c, {
-			Text = `{zone.name} seed · no Speed needed`, Size = UDim2.new(1, -94, 0, 22), Position = UDim2.fromOffset(82, 74),
+			Text = `{zone.name} seed · no Speed needed`, Size = UDim2.new(1, -24, 0, 22), Position = UDim2.fromOffset(14, 74),
 			TextXAlignment = Enum.TextXAlignment.Left, TextColor3 = Color3.fromRGB(255, 245, 210),
 		})
 		lootTable(c, pack, UDim2.fromOffset(12, 106), UDim2.new(1, -24, 0, 140))
-		Icons.set(text(c, { Size = UDim2.new(1, -24, 0, 22), Position = UDim2.fromOffset(12, 252), TextColor3 = Color3.fromRGB(255, 240, 180) }),
-			{ "Star" }, mutationLine(pack), ICON.small)
+		text(c, { Text = mutationLine(pack), Size = UDim2.new(1, -24, 0, 22), Position = UDim2.fromOffset(12, 252), TextColor3 = Color3.fromRGB(255, 240, 180) })
 		local exclusive = Config.mutationById(pack.exclusive)
-		local perks = text(c, {
+		text(c, {
+			Text = `{Format.money(Config.seedIncome(pack.zone))}/s per Common sprout`
+				.. (if exclusive then ` · {exclusive.id} x{exclusive.income} income, only from packs` else ""),
 			Size = UDim2.new(1, -24, 0, 40), Position = UDim2.fromOffset(12, 280), TextWrapped = true, TextColor3 = Color3.fromRGB(255, 255, 230),
 		})
-		Icons.set(perks, { "Money", "Star" }, `💰 {Format.money(Config.seedIncome(pack.zone))}/s per Common sprout`
-			.. (if exclusive then ` · 🌟 {exclusive.id} x{exclusive.income} income, only from packs` else ""), ICON.small)
 		-- Robux only. With id = 0 the server answers "coming soon"; with a full bag it won't prompt.
 		local price = Format.robux(robuxPrice(product))
-		chunky(c, if bagFull then `🎒 Bag full · {price}` else price, if bagFull then COLORS.disabled else robuxColor(product.id, ROBUX_GREEN),
+		chunky(c, if bagFull then `Bag full · {price}` else price, if bagFull then COLORS.disabled else robuxColor(product.id, ROBUX_GREEN),
 			UDim2.new(1, -96, 0, 58), function()
 				RequestBuy:FireServer("Product:" .. productName)
-			end, { "Robux", "Bag" }, ICON.small).Position = UDim2.new(0, 84, 1, -70)
+			end, { "Robux" }, ICON.small).Position = UDim2.new(0, 84, 1, -70)
 		giftButton(c, UDim2.fromOffset(62, 58)).Position = UDim2.new(0, 12, 1, -70)
 	end
 
@@ -1075,7 +1191,7 @@ do
 		end
 
 		-- Seed packs (Robux)
-		section("SEED PACKS", nextOrder(), HEADING_GOLD, "SeedPack")
+		section("SEED PACKS", nextOrder(), HEADING_GOLD)
 		local bagCount = SeedPacks.bagCount(stats.seedBag or {})
 		local bagFull = bagCount >= Config.SEED_BAG_MAX
 		local row = new("Frame", { BackgroundTransparency = 1, Size = UDim2.new(1, -8, 0, 400), LayoutOrder = nextOrder(), Parent = modalBody },
@@ -1083,12 +1199,12 @@ do
 		for i, entry in Config.products("Pack") do
 			packCard(row, i, entry.name, entry.product, bagFull)
 		end
-		note(`🎒 Seed bag {bagCount}/{Config.SEED_BAG_MAX}{if bagFull then " (full: plant some first!)" else ""} · plant bagged seeds from the 🌱 Seeds menu on your plot's dirt`, nextOrder(), { "Bag", "Seeds" })
+		note(`Seed bag {bagCount}/{Config.SEED_BAG_MAX}{if bagFull then " (full: plant some first!)" else ""} · plant bagged seeds from the Seeds menu on your plot's dirt`, nextOrder())
 
 		-- Plot upgrade: money or Robux (also on the board at your plot's gate). The R$ product is the one
 		-- for the plot's current price tier (looked up on every render, so it follows plotLevel); none at
 		-- the last level.
-		section("PLOT UPGRADE", nextOrder(), HEADING_GREEN, "PlotUpgrade")
+		section("PLOT UPGRADE", nextOrder(), HEADING_GREEN)
 		local level = stats.plotLevel or 1
 		local price = Config.priceOf("PlotUpgrade", stats :: any)
 		local plotCard = shopCard(cardGrid(nextOrder()), 1, CARD_COLORS.PlotUpgrade, if price then `LEVEL {level + 1}` else "MAX LEVEL",
@@ -1098,7 +1214,7 @@ do
 
 		-- Speed (Robux), blue; the HUD's "+" on the Speed icon opens the Shop here
 		local shopSections: { [string]: GuiObject } = {}
-		shopSections.Speed = section("SPEED", nextOrder(), HEADING_GOLD, "Speed")
+		shopSections.Speed = section("SPEED", nextOrder(), HEADING_GOLD)
 		local grid = cardGrid(nextOrder())
 		for i, entry in Config.products("Speed") do
 			local amount, rest = string.match(string.upper(entry.product.label), "^(%S+)%s+(.+)$")
@@ -1107,7 +1223,7 @@ do
 		end
 
 		-- Money (Robux), green: the card shows what you'd get right now (fixed, or minutes of your income)
-		section("MONEY", nextOrder(), HEADING_GREEN, "Money")
+		section("MONEY", nextOrder(), HEADING_GREEN)
 		grid = cardGrid(nextOrder())
 		for i, entry in Config.products("Money") do
 			local _, amountLabel = productCard(grid, i, entry.name, entry.product, CARD_COLORS.Money, "", "Money")
@@ -1117,7 +1233,7 @@ do
 		end
 
 		-- Treadmill: the next tier for money or Robux (also on the prompts at your treadmill), like the plot card
-		section("TREADMILL", nextOrder(), HEADING_GOLD, "Treadmill")
+		section("TREADMILL", nextOrder(), HEADING_GOLD)
 		local tier = stats.treadmillTier or 1
 		local treadPrice = Config.priceOf("TreadmillUpgrade", stats :: any)
 		local treadCard = shopCard(cardGrid(nextOrder()), 1, CARD_COLORS.Treadmill,
@@ -1152,7 +1268,7 @@ end
 ----------------------------------------------------------------------------------------------------
 -- Trail Shop: one row of tall cards in the trail's colour, scrolling sideways. Name and rarity, the
 -- Trail Shop icon tinted over a ribbon of the trail's colours, an "x2 Speed" pill, then a green $ button
--- and a purple R$ button, or Equip / Equipped once owned.
+-- and a bright green R$ button (like the Shop's), or Equip / Equipped once owned.
 ----------------------------------------------------------------------------------------------------
 -- "+1", "+1.25", "+3": the Speed one step (stud) pays with the equipped trail (Config.speedPerStud)
 local renderTrails: () -> ()
@@ -1236,7 +1352,7 @@ do
 			moneyButton.BackgroundColor3 = if stats.money >= t.price then COLORS.buy else COLORS.disabled
 		end)
 		if product then
-			chunky(c, Format.robux(robuxPrice(product)), robuxColor(product.id, COLORS.robux), UDim2.fromOffset(TRAIL_W - 24 - moneyW - 8, 54), function()
+			chunky(c, Format.robux(robuxPrice(product)), robuxColor(product.id, ROBUX_GREEN), UDim2.fromOffset(TRAIL_W - 24 - moneyW - 8, 54), function()
 				RequestBuy:FireServer("Product:" .. (t.product :: string))
 			end, { "Robux" }, ICON.small).Position = UDim2.fromOffset(12 + moneyW + 8, y)
 		end
@@ -1256,15 +1372,30 @@ do
 end
 
 ----------------------------------------------------------------------------------------------------
--- Index: one row per zone in the zone's colour, a cell per rarity (lit once discovered)
+-- Index: one row per zone in the zone's colour (its name, the mutations found there), then a column per
+-- rarity listing that rarity's flowers: lit with the flower's name once you've grown it, "???" until then.
+-- The flowers come from the server (stats.catalog[zone][rarity], the plant models' names); a zone or
+-- rarity without plant models shows one cell for the rarity itself.
 ----------------------------------------------------------------------------------------------------
 local function renderIndex()
+	local catalog = stats.catalog or {}
+	-- Each cell: { key = the Index key that lights it, name = what it says once lit }
+	local function cellsOf(k: number, r: number): { { key: string, name: string } }
+		local out = {}
+		for _, model in (catalog[k] and catalog[k][r]) or {} do
+			table.insert(out, { key = `{k}:{r}:{model}`, name = Format.plantName(model) })
+		end
+		if #out == 0 then
+			table.insert(out, { key = `{k}:{r}`, name = Config.RARITIES[r].id })
+		end
+		return out
+	end
 	local total, found = 0, 0
 	for k = 1, #Config.ZONES do
 		for r = 1, #Config.RARITIES do
-			total += 1
-			if stats.index[`{k}:{r}`] then
-				found += 1
+			for _, c in cellsOf(k, r) do
+				total += 1
+				found += if stats.index[c.key] then 1 else 0
 			end
 		end
 	end
@@ -1272,35 +1403,46 @@ local function renderIndex()
 	Icons.set(modalSubtitle, "Star", `✨ {found}/{total} discovered`, ICON.big, 30)
 	clearModal(10)
 	local rarities = #Config.RARITIES
+	local CELL_H, CELL_GAP = 30, 5
 	for k, zone in Config.ZONES do
-		local row = new("Frame", { Size = UDim2.new(1, -12, 0, 112), LayoutOrder = k, Parent = modalBody }, {
+		local tallest = 1
+		for r = 1, rarities do
+			tallest = math.max(tallest, #cellsOf(k, r))
+		end
+		local row = new("Frame", { Size = UDim2.new(1, -12, 0, 76 + tallest * (CELL_H + CELL_GAP)), LayoutOrder = k, Parent = modalBody }, {
 			new("UICorner", { CornerRadius = UDim.new(0, 14) }),
 			new("UIStroke", { Thickness = 4, Color = FRAME_INK, ApplyStrokeMode = Enum.ApplyStrokeMode.Border }),
 		})
 		shade(row, zone.ui, 0.25, 0.3)
 		shine(row, 14)
-		local mutText = ""
+		-- The zone's name, then the mutations found there in their colours
+		local title = zone.name
 		for _, m in Config.MUTATIONS do
 			if stats.index[`{k}:{m.id}`] then
-				mutText ..= " " .. m.id
+				title ..= `  <font color="#{m.color:ToHex()}">{m.id}</font>`
 			end
 		end
-		local rowTitle = bold(row, 3, { Size = UDim2.new(1, -20, 0, 34), Position = UDim2.fromOffset(12, 6), TextXAlignment = Enum.TextXAlignment.Left })
-		Icons.set(rowTitle, { "Star" }, `{zone.icon} {zone.seed}{if mutText ~= "" then " ✨" .. mutText else ""}`)
-		local cells = new("Frame", { BackgroundTransparency = 1, Position = UDim2.fromOffset(12, 46), Size = UDim2.new(1, -24, 0, 56), Parent = row },
+		bold(row, 3, { Text = title, RichText = true, Size = UDim2.new(1, -20, 0, 32), Position = UDim2.fromOffset(12, 6), TextXAlignment = Enum.TextXAlignment.Left })
+		local columns = new("Frame", { BackgroundTransparency = 1, Position = UDim2.fromOffset(12, 42), Size = UDim2.new(1, -24, 1, -50), Parent = row },
 			{ new("UIListLayout", { FillDirection = Enum.FillDirection.Horizontal, Padding = UDim.new(0, 8), SortOrder = Enum.SortOrder.LayoutOrder }) })
 		for r, rarity in Config.RARITIES do
-			local got = stats.index[`{k}:{r}`] == true
-			local cell = new("Frame", {
-				Size = UDim2.new(1 / rarities, -8 * (rarities - 1) / rarities, 1, 0), BackgroundColor3 = zone.ui:Lerp(WHITE, 0.5), LayoutOrder = r, Parent = cells,
-			}, deco(10, 3))
-			if got then
-				shade(cell, rarity.color, 0.3, 0.2)
+			local column = new("Frame", {
+				BackgroundTransparency = 1, Size = UDim2.new(1 / rarities, -8 * (rarities - 1) / rarities, 1, 0), LayoutOrder = r, Parent = columns,
+			}, { new("UIListLayout", { Padding = UDim.new(0, CELL_GAP), SortOrder = Enum.SortOrder.LayoutOrder }) })
+			bold(column, 2, { Text = rarity.id, Size = UDim2.new(1, 0, 0, 20), TextColor3 = rarity.color:Lerp(WHITE, 0.35), LayoutOrder = 0 })
+			for i, c in cellsOf(k, r) do
+				local got = stats.index[c.key] == true
+				local cell = new("Frame", {
+					Size = UDim2.new(1, 0, 0, CELL_H), BackgroundColor3 = zone.ui:Lerp(WHITE, 0.5), LayoutOrder = i, Parent = column,
+				}, deco(8, 2))
+				if got then
+					shade(cell, rarity.color, 0.3, 0.2)
+				end
+				bold(cell, 2, {
+					Text = if got then c.name else "???", Size = UDim2.new(1, -8, 1, -8), Position = UDim2.fromOffset(4, 4),
+					TextColor3 = WHITE, TextTransparency = if got then 0 else 0.15,
+				})
 			end
-			bold(cell, if got then 3 else 2, {
-				Text = if got then rarity.id else "???", Size = UDim2.new(1, -10, 1, -12), Position = UDim2.fromOffset(5, 6),
-				TextColor3 = WHITE, TextTransparency = if got then 0 else 0.15,
-			})
 		end
 	end
 end
@@ -1308,8 +1450,8 @@ end
 ----------------------------------------------------------------------------------------------------
 -- SELL window (TODO 9; the SELL stall in the shop plaza opens it). Everything for it is in this block;
 -- renderModal and refresh call renderSell / sellChanged. One card per planted plant, cheapest first: the
--- creature in its rarity colour, the mutation, weight, $/s with its ☀️/🌙 tag, the sell price and a Sell
--- button. Above them "Sell all Common" / "Sell all below Rare" (they keep mutated plants). Every sale asks
+-- plant's name in its rarity colour, its mutation (only on a mutated plant), weight, $/s (with the day/night
+-- bonus while it's on), the sell price and a Sell button. Above them "Sell all Common" / "Sell all below Rare" (they keep mutated plants). Every sale asks
 -- once more inside the window: the card's button turns into "Sure?", a quick sell shows a confirm bar.
 -- The server re-checks it all (remote SellPlants: your plants, the slots, standing at the stall).
 -- Scoped in a do-block (the HUD's main chunk is near Luau's 200-locals limit); only these two leave it.
@@ -1385,35 +1527,28 @@ do
 		renderModal()
 	end
 
-	-- "☀️ $1.2K/s 1.5x!" in gold while the plant's phase is on, like its billboard.
+	-- "$1.2K/s · Day x1.5" in gold while the plant's phase is on, like its billboard.
 	local function sellIncomeText(p: any): (string, Color3)
-		local zone = Config.ZONES[p.zone]
-		local active = Config.isActiveTime(p.zone, (Config.dayPhase(workspace:GetServerTimeNow())))
-		return `{Config.ACTIVE_ICONS[zone.active]} {Format.money(p.income)}/s{if active then string.format(" %gx!", Config.ACTIVE_TIME_MULT) else ""}`,
-			if active then HEADING_GOLD else MONEY_GREEN
+		local bonus = Config.bonusLabel(p.zone, (Config.dayPhase(workspace:GetServerTimeNow())))
+		return `{Format.money(p.income)}/s{if bonus then " · " .. bonus else ""}`, if bonus then HEADING_GOLD else MONEY_GREEN
 	end
 
 	local function sellCard(grid: Instance, order: number, p: any)
 		local rarity = Config.RARITIES[p.rarity]
 		local mut = Config.mutationById(p.mutation)
-		local zone = Config.ZONES[p.zone]
 		local c = new("Frame", { BackgroundColor3 = SELL_CARD, LayoutOrder = order, Parent = grid }, {
 			new("UICorner", { CornerRadius = UDim.new(0, 14) }),
 			new("UIStroke", { Thickness = 4, Color = if mut then mut.color else FRAME_INK, ApplyStrokeMode = Enum.ApplyStrokeMode.Border }),
 		})
-		-- The rarity band: creature and rarity
+		-- The rarity band: the plant's name and rarity
 		local band = new("Frame", { Size = UDim2.new(1, 0, 0, 70), BorderSizePixel = 0, Parent = c }, { new("UICorner", { CornerRadius = UDim.new(0, 14) }) })
 		shade(band, rarity.color, 0.25, 0.25)
 		shine(band, 14)
-		bold(band, 3, { Text = `{zone.icon} {zone.seed}`, Size = UDim2.new(1, -14, 0, 32), Position = UDim2.fromOffset(7, 6) })
+		bold(band, 3, { Text = p.name or SeedPacks.seedName(p.zone, p.rarity, p.mutation), Size = UDim2.new(1, -14, 0, 32), Position = UDim2.fromOffset(7, 6) })
 		bold(band, 3, { Text = rarity.id, Size = UDim2.new(1, -14, 0, 24), Position = UDim2.fromOffset(7, 40) })
-		-- Mutation, weight, $/s
-		local mutLabel = bold(c, 2, {
-			Text = if mut then "✨ " .. mut.id else "no mutation", Size = UDim2.new(1, -14, 0, 24), Position = UDim2.fromOffset(7, 78),
-			TextColor3 = if mut then mut.color else NOTE_COLOR, TextTransparency = if mut then 0 else 0.35,
-		})
+		-- Mutation (a plant without one shows nothing there), weight, $/s
 		if mut then
-			Icons.set(mutLabel, "Star", mutLabel.Text, ICON.small)
+			bold(c, 2, { Text = mut.id, Size = UDim2.new(1, -14, 0, 24), Position = UDim2.fromOffset(7, 78), TextColor3 = mut.color })
 		end
 		local weightLabel = text(c, { Text = Format.weight(p.weight), Size = UDim2.new(1, -14, 0, 22), Position = UDim2.fromOffset(7, 106) })
 		local incomeLabel = bold(c, 2, { Size = UDim2.new(1, -14, 0, 22), Position = UDim2.fromOffset(7, 132) })
@@ -1432,7 +1567,7 @@ do
 			local now = plantInSlot(p.slot) or p
 			weightLabel.Text = Format.weight(now.weight)
 			incomeLabel.Text, incomeLabel.TextColor3 = sellIncomeText(now)
-			Icons.set(priceLabel, "Money", `💰 {Format.money(now.sell or 0)}`, ICON.small)
+			priceLabel.Text = Format.money(now.sell or 0)
 		end
 		update()
 		table.insert(sellUpdaters, update)
@@ -1450,7 +1585,7 @@ do
 			end
 			return a.slot < b.slot
 		end)
-		note(`💰 The stall pays {Config.SELL_STALL_SECONDS // 60} min of a plant's income (R on a plant only gives {Config.SELL_SECONDS} s).`, 1, "Money")
+		note(`The stall pays {Config.SELL_STALL_SECONDS // 60} min of a plant's income (Remove in the Plants list: {Config.SELL_SECONDS} s).`, 1)
 		if #plants == 0 then
 			note("No plants yet: steal a seed and plant it on your dirt!", 2)
 			return
@@ -1469,7 +1604,7 @@ do
 				end
 			end)
 		end
-		note("Quick sells keep your mutated plants.", 3, "Star")
+		note("Quick sells skip mutated plants.", 3)
 
 		-- The quick sell's confirm bar
 		local pending = sellPending
@@ -1536,11 +1671,6 @@ do
 		end
 	end)
 
-	LootEvent.OnClientEvent:Connect(function(kind: string, data: any)
-		if kind == "SoldPlants" and type(data) == "table" then
-			toast(`💰 +{Format.money(data.amount or 0)} for {data.count} plant{if data.count == 1 then "" else "s"}`, "gold")
-		end
-	end)
 end
 ------------------------------------------------------------------------------------------ end of SELL
 
@@ -1619,10 +1749,9 @@ do
 		local mut = Config.mutationById(mutation)
 		local f = new("Frame", { Size = size, BackgroundColor3 = Color3.new(1, 1, 1), Parent = parent }, deco(12, 3))
 		new("UIGradient", { Rotation = 45, Color = ColorSequence.new(r.color, if mut then mut.color else r.color:Lerp(Color3.new(0, 0, 0), 0.35)), Parent = f })
-		text(f, { Text = Config.ZONES[zone].icon, Size = UDim2.fromScale(1, 0.46), Position = UDim2.fromScale(0, 0.08) })
-		text(f, { Text = r.id, Size = UDim2.new(1, -8, 0.2, 0), Position = UDim2.new(0, 4, 0.56, 0) })
+		text(f, { Text = r.id, Size = UDim2.new(1, -12, 0.3, 0), Position = UDim2.new(0, 6, 0.3, 0) })
 		if mut then
-			Icons.set(text(f, { Size = UDim2.new(1, -8, 0.18, 0), Position = UDim2.new(0, 4, 0.78, 0) }), "Star", "✨" .. mut.id)
+			text(f, { Text = mut.id, Size = UDim2.new(1, -12, 0.18, 0), Position = UDim2.new(0, 6, 0.66, 0) })
 		end
 		return f
 	end
@@ -1660,7 +1789,7 @@ do
 			return
 		end
 
-		revealTitle.Text = `🎁 Opening {data.name}...`
+		revealTitle.Text = `Opening {data.name}...`
 		resultLabel.Visible, resultSub.Visible, continueHint.Visible, closeButton.Visible = false, false, false, false
 		burst:ClearAllChildren()
 		strip:ClearAllChildren()
@@ -1722,7 +1851,7 @@ do
 		resultScale.Scale = 0.4
 		TweenService:Create(resultScale, TweenInfo.new(0.45, Enum.EasingStyle.Back, Enum.EasingDirection.Out), { Scale = 1 }):Play()
 		local exclusive = best.mutation ~= nil and best.mutation == pack.exclusive
-		Icons.set(resultSub, { "Star" }, `{if exclusive then "🌟 PACK EXCLUSIVE! " else ""}{Config.ZONES[best.zone].icon} {SeedPacks.seedName(best.zone, best.rarity, best.mutation)} → your 🌱 Seeds bag`)
+		resultSub.Text = `{if exclusive then "PACK EXCLUSIVE! " else ""}{SeedPacks.seedName(best.zone, best.rarity, best.mutation)} → your Seeds bag`
 		resultSub.Visible = true
 
 		continueHint.Visible = true
@@ -1772,13 +1901,7 @@ local function refresh(changed: { [string]: any })
 	speedValue.Text = Format.short(stats.speed)
 	moneyValue.Text = Format.money(stats.money)
 
-	local c = stats.carrying
-	carryBanner.Visible = c ~= false and c ~= nil
-	if c then
-		Icons.set(carryLabel, "Seeds", `🌱 {if c.mutation then c.mutation .. " " else ""}{Config.RARITIES[c.rarity].id} {Config.ZONES[c.zone].seed} — run home & plant it!`, ICON.medium)
-		carryBanner.BackgroundColor3 = Config.RARITIES[c.rarity].color:Lerp(Color3.new(0, 0, 0), 0.15)
-	end
-
+	-- (No banner while carrying a seed: the seed in hand and the planting hint, Planting.client, say it.)
 	if not slowMode and changed.walkSpeed then
 		applySlow()
 	end
@@ -1791,7 +1914,9 @@ local function refresh(changed: { [string]: any })
 	end
 	local unlockChanged = unlocked ~= lastUnlocked
 	lastUnlocked = unlocked
-	if sidePanel.Visible and (changed.plants or changed.carrying or changed.items or changed.seedBag or sideTab == "Seeds" and unlockChanged) then
+	if sidePanel.Visible and sideTab == "Plants" and (changed.plants or changed.slots or changed.income) then
+		renderPlants() -- rebuilt only when the plants changed (a payout just updates the numbers)
+	elseif sidePanel.Visible and sideTab == "Seeds" and (changed.carrying or changed.items or changed.seedBag or unlockChanged) then
 		renderSide()
 	end
 	-- The open window is rebuilt when what it lists changes; money, income and Speed only update it in place.
@@ -1815,46 +1940,24 @@ StatsUpdate.OnClientEvent:Connect(function(partial: { [string]: any })
 end)
 
 ----------------------------------------------------------------------------------------------------
--- Loot events -> toasts
+-- Loot events -> toasts. Only what the player needs told: the server's messages (mostly why something
+-- was refused), getting caught, offline earnings and day/night. Stealing, planting, selling, buying, the
+-- bat and the guards waking are seen in the world and heard (Effects.client), not toasted.
 ----------------------------------------------------------------------------------------------------
 LootEvent.OnClientEvent:Connect(function(kind: string, data: any)
 	data = data or {}
 	if kind == "Toast" then
 		toast(data.text, data.color)
-	elseif kind == "Pickup" then
-		toast(`You stole a {data.name}! RUN!`, "gold")
-	elseif kind == "GuardWake" then
-		toast(`😡 The {data.guard} woke up!`, "red")
 	elseif kind == "Caught" then
-		toast(`💥 The {data.guard} caught you! The seed went back to its nest.`, "red", 4)
-	elseif kind == "Escaped" then
-		toast(`😅 You escaped the {data.guard}!`, "green")
-	elseif kind == "Planted" then
-		toast(`🌱 Planted {data.name} · {Format.weight(data.weight)}`, "green")
-		for _, key in data.newIndex or {} do
-			-- keys are "zone:rarityIndex" or "zone:MutationId"
-			local z, what = string.match(key, "^(%d+):(.+)$")
-			local zone = z and Config.ZONES[tonumber(z) :: number]
-			if zone then
-				local rarity = Config.RARITIES[tonumber(what) or 0]
-				toast(`📖 New Index entry: {if rarity then rarity.id else what} {zone.seed}!`, "blue")
-			end
-		end
-	elseif kind == "Sold" then
-		toast(`Removed plant: +{Format.money(data.amount)}`, "gold")
-	elseif kind == "Bought" then
-		toast(`Bought {data.label}!`, "green", 2)
+		toast(`The {data.guard} caught you! The seed went back to its nest.`, "red", 4)
 	elseif kind == "Bat" then
 		batCooldownUntil = os.clock() + (data.cooldown or Config.BAT_COOLDOWN)
-		if data.hit then
-			toast("💫 WHACK! Guard stunned!", "gold", 2)
-		end
 	elseif kind == "Offline" then
 		toast(`While you were away ({Format.clock(data.seconds)}): +{Format.money(data.amount)}`, "gold", 6)
 	elseif kind == "PackRoll" then
 		queueReveal(data)
 	elseif kind == "DayNight" then
-		toast(if data.night then "🌙 Night falls: rarer seeds and Night mutations!" else "☀️ The sun is up.", "blue", 4)
+		toast(if data.night then "Night falls: rarer seeds and Night mutations!" else "The sun is up.", "blue", 4)
 	end
 end)
 

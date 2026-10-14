@@ -242,9 +242,8 @@ end
 
 -- 1. Like: can't be checked or prompted in game, so it just shows where the button is.
 local like = step(1, "Like the game!")
-bold(like, 2, { Text = "👍", Size = UDim2.fromOffset(52, 52), Position = UDim2.fromOffset(10, 18), ZIndex = 4 })
 bold(like, 2, {
-	Text = "Tap 👍 on the game page", Size = UDim2.new(1, -74, 0, 52), Position = UDim2.fromOffset(66, 18), TextWrapped = true, ZIndex = 4, TextColor3 = NOTE_COLOR,
+	Text = "Tap Like on the game page", Size = UDim2.new(1, -20, 0, 52), Position = UDim2.fromOffset(10, 18), TextWrapped = true, ZIndex = 4, TextColor3 = NOTE_COLOR,
 })
 
 -- 2. Favorite: Roblox's own favourite prompt (the place is an asset). If it can't open, say where it is.
@@ -253,14 +252,14 @@ local function promptFavorite()
 	clickSound:Play()
 	local ok = pcall(AvatarEditorService.PromptSetFavorite, AvatarEditorService, game.PlaceId, Enum.AvatarItemType.Asset, true)
 	if not ok or game.PlaceId == 0 then
-		setHint("Tap ☆ Favorite on the game page!")
+		setHint("Tap Favorite on the game page!")
 	end
 end
-chunky(favorite, "⭐ Favorite", Color3.fromRGB(120, 70, 220), UDim2.new(1, -20, 0, 50), UDim2.fromOffset(10, 18), promptFavorite)
+chunky(favorite, "Favorite", Color3.fromRGB(120, 70, 220), UDim2.new(1, -20, 0, 50), UDim2.fromOffset(10, 18), promptFavorite)
 pcall(function()
 	AvatarEditorService.PromptSetFavoriteCompleted:Connect(function(result: Enum.AvatarPromptResult)
 		if result == Enum.AvatarPromptResult.Success then
-			setHint("⭐ Thanks for the favorite!")
+			setHint("Thanks for the favorite!")
 		end
 	end)
 end)
@@ -366,7 +365,7 @@ LootEvent.OnClientEvent:Connect(function(kind: string, data: any)
 		update()
 		if data.result == "granted" then
 			rewardSound:Play()
-			setHint("🎉 Enjoy your Speed!")
+			setHint("Enjoy your Speed!")
 		elseif data.result == "notMember" then
 			setHint(joinHelp)
 		elseif data.result == "error" then

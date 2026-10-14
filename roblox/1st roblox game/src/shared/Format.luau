@@ -88,4 +88,9 @@ function Format.speedPlank(req: number): (string, string)
 	return `👟 {Format.short(req)}`, "recommended"
 end
 
+-- A plant model's name as players read it: "DesertWildFlower" -> "Desert Wild Flower", "LaVaca" -> "La Vaca".
+function Format.plantName(model: string): string
+	return (string.gsub(string.gsub(model, "(%l)(%u)", "%1 %2"), "(%u)(%u%l)", "%1 %2"))
+end
+
 return Format

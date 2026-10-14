@@ -193,7 +193,7 @@ local function updateHint(nearPlot: boolean)
 	end
 	label.TextColor3 = Color3.new(1, 1, 1)
 	local what = if bag then bag.name else "your seed"
-	label.Text = `🌱 {inputWord()} your brown dirt to plant {what}`
+	label.Text = `{inputWord()} your brown dirt to plant {what}`
 end
 
 local function stopBag()

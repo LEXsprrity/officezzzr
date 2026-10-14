@@ -87,4 +87,23 @@ function Selling.sell(profile: ProfileStore.Profile, slots: any, distance: numbe
 	return { slots = ok, total = total }
 end
 
+-- The Plants panel's Remove button (remote RemovePlant, from anywhere): `slot` (untrusted) must be a whole
+-- number naming one of the player's own plants. Removes it from the profile and refunds SELL_SECONDS of
+-- its base income x `moneyMult` (less than the stall pays). Returns the refund, or nil and why: "bad"
+-- (not a slot number) or "none" (no plant of theirs there); nothing changes then.
+function Selling.remove(profile: ProfileStore.Profile, slot: any, now: number, moneyMult: number): (number?, string?)
+	if type(slot) ~= "number" or slot ~= math.floor(slot) or math.abs(slot) > 1e6 then
+		return nil, "bad"
+	end
+	for i, plant in profile.plants do
+		if plant.slot == slot then
+			local refund = Selling.price(plant, now, moneyMult) / Config.SELL_STALL_SECONDS * Config.SELL_SECONDS
+			table.remove(profile.plants, i)
+			profile.money += refund
+			return refund
+		end
+	end
+	return nil, "none"
+end
+
 return Selling
