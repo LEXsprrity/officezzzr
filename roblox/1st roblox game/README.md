@@ -153,9 +153,17 @@ Every developer product ships as an `id = 0` stub with a placeholder price: clic
 | trails | `TrailGreen` … `TrailRainbow` | owns and equips the trail (owned trails aren't prompted) |
 | the Upgrade board's purple button | `PlotUpgradeT1` 25 R$, `T2` 49, `T3` 99, `T4` 199, `T5` 399, `T6` 799 | one plot level (only your level's tier is prompted; a maxed plot gets $310T instead; see Plot upgrades) |
 | -- SEED PACKS -- | `PackSpace`, `PackSpirit` | see Seed packs |
-| -- PASSES -- | gamepasses `DoubleMoney`, `ExtraSlots` | unchanged |
+| -- PASSES -- | gamepasses `DoubleMoney`, `DoubleSpeed`, `DoubleLuck`, `VIP`, `FastGrow`, `ExtraSlots` | owned for good; see Gamepasses below |
 
 Each Robux card also has a purple 🎁 gift button. Gifting isn't built yet: it shows a "coming soon" toast.
+
+### Gamepasses
+Six passes (`Config.GAMEPASSES`, ids `0` until created; prices in the setup checklist below). The Shop's **-- PASSES --** section has one bright card per pass in its own colour (`Shared/PassCards`): icon (VIP: a gold relief "VIP" badge), name, one benefit line and a green R$ button with the price (`GetProductInfo(id, GamePass)`, cached; the placeholder until then), or a grey **Owned**. Ownership is decided only on the server: `UserOwnsGamePassAsync` at join (`ShopService.checkPasses`) and `PromptGamePassPurchaseFinished` after a purchase, into `Sessions.passes`; `Pass:<name>` from the client only opens the prompt (or says "coming soon" while the id is `0`; never for a pass you own). Everything multiplies (`Config.passSpeedMult` / `passMoneyMult`): 2x Speed + VIP = x2.5 Speed, 2x Money + VIP = x2.5 money, on top of the trail and the plot level.
+- **2x Speed** (`DoubleSpeed`): every Speed gain x2, walking (`Config.speedPerStud`) and treadmill (`Config.treadmillPerSecond`), applied in `SpeedService` through `Sessions.speedMult` / `speedPerStud`. The belt's `+X/s`, the runner's popups, the treadmill board, the Shop's treadmill card and `+X/step` all show the owner's doubled number.
+- **2x Luck** (`DoubleLuck`): pods are shared, so the luck applies when the owner **steals**. The pod keeps the seed it showed everyone; for the owner its rarity is re-drawn by `Config.luckUpgrade`, a quantile coupling: the pod's rarity is a slice of the world-luck odds, a point drawn in that slice is read on the double-luck odds. It can only move up, and over many steals the owner's rarities follow the double-luck odds exactly (Common..Epic tilted with luck x2, Legendary chance x2), with no extra re-roll on top. The draw is fixed by the seed's gene and the thief (`SeedService.luckRoll`), and a seed that goes back to its pod (caught) goes back as the pod showed it, so getting caught and stealing again never re-rolls it.
+- **VIP**: a gold relief **VIP** tag over the head (`Server/VipService`, put back on every respawn), a gold **[VIP]** chat tag (`VipChat.client`, `TextChatService.OnIncomingMessage`, from the player's server-set `VIP` attribute), x1.25 money and x1.25 Speed.
+- **Fast Grow** (`FastGrow`): the owner's plants age 2x as fast (`Config.plantAge`, read from `plantedAt`), so they are full-grown in 10 minutes, and the time offline counts the same (offline pay uses the plants as they grew). Remove keeps the growth they had; planted again they go on at 2x.
+- **2x Money** and **+10 Plant Slots**: as before.
 
 ### 💰 Selling plants: the SELL stall
 The shop plaza's 4th stall (like `docs/references/09-sell-stall-reference.png`) is an open wooden stall with a red-and-white striped awning, a soft green glowing circle on the floor in front of it and a big red outlined **SELL** floating above. Its prompt (`OpensShop = "Sell"`, **E**) opens the **Sell** window: one card per plant, cheapest first, with the plant's name in its rarity colour, its mutation (only on a mutated plant), weight, $/s (with a muted grey "Night x0.8" / "Day x0.8" while it is out of its phase), the sell price and a red **Sell** button. A second click ("Sure? Sell") sells it. **Sell all Common** and **Sell all below Rare** sell those rarities in one go but keep mutated plants; they ask first in a confirm bar inside the window (no system dialogs). The window scrolls, scales down on phones, and updates the prices in place on each payout instead of rebuilding.
@@ -267,9 +275,9 @@ luau-lsp analyze --definitions=globalTypes.d.luau --sourcemap=sourcemap.json src
 **Studio settings the place file can't carry:**
 - Game Settings → Security → **Enable Studio Access to API Services**. Without it saving is off, and the game tells you so in a toast.
 - Game Settings → Places → **Max Players = 5**, one plot each. A 6th player is kicked with a "server full" message.
-- Gamepasses are stubs. Put real ids in `Config.GAMEPASSES` to turn them on.
+- Gamepasses are stubs. Create the 6 below (your experience → Monetization → Passes) and put their ids in `Config.GAMEPASSES` to turn them on; while an id is `0` the Shop card says "coming soon".
 - **The Free Gift needs the community's id.** Create the game's Roblox community (group), then set `Config.COMMUNITY_GROUP_ID` to the number in its URL (`roblox.com/communities/<id>/...`) and `Config.COMMUNITY_NAME` to its name. Link the community on the experience page so players can join it from there. While the id is `0`, the Free Gift says "coming soon".
-- Everything sold for Robux except the 2 gamepasses is a developer-product stub. Create the **29 developer products** below on the Creator Dashboard (your experience → Monetization → Developer Products) and paste each id into its `Config.DEVELOPER_PRODUCTS` key. The price comes from the Dashboard (the placeholders are only shown until then). The place must be published for `PromptProductPurchase`/`GetProductInfo` to work.
+- Everything sold for Robux except the 6 gamepasses is a developer-product stub. Create the **29 developer products** below on the Creator Dashboard (your experience → Monetization → Developer Products) and paste each id into its `Config.DEVELOPER_PRODUCTS` key. The price comes from the Dashboard (the placeholders are only shown until then). The place must be published for `PromptProductPurchase`/`GetProductInfo` to work.
 
   | ✅ | `Config.DEVELOPER_PRODUCTS` key | Dashboard name | Price (placeholder) | Grants |
   |---|---|---|---|---|
@@ -304,7 +312,16 @@ luau-lsp analyze --definitions=globalTypes.d.luau --sourcemap=sourcemap.json src
   | ☐ | `PlotUpgradeT5` | Plot Upgrade (Lv 18-21) | 399 R$ | +1 plot level (levels 17-20) |
   | ☐ | `PlotUpgradeT6` | Plot Upgrade (Lv 22-26) | 799 R$ | +1 plot level (levels 21-25) |
 
-  Gamepasses (`Config.GAMEPASSES`): ☐ `DoubleMoney` (2x Money), ☐ `ExtraSlots` (+10 Plant Slots).
+  Gamepasses (`Config.GAMEPASSES`; the price is the Dashboard's, the one here is only the placeholder the Shop shows until it can read it):
+
+  | ✅ | `Config.GAMEPASSES` key | Dashboard name | Price (placeholder) | Does |
+  |---|---|---|---|---|
+  | ☐ | `DoubleMoney` | 2x Money | (none set; the card says "Buy") | x2 plant income (payout, offline, Sell) |
+  | ☐ | `DoubleSpeed` | 2x Speed | 299 R$ | x2 every Speed gain, walking and treadmill; the treadmill's "+X/s", popups, board and Shop card show the doubled number |
+  | ☐ | `DoubleLuck` | 2x Luck | 249 R$ | the seeds you steal roll with double luck (Legendary chance x2 too), never below the pod's rarity |
+  | ☐ | `VIP` | VIP | 399 R$ | gold relief VIP tag over your head, gold [VIP] in chat, x1.25 money and x1.25 Speed |
+  | ☐ | `FastGrow` | Fast Grow | 149 R$ | your plants grow 2x faster, offline too |
+  | ☐ | `ExtraSlots` | +10 Plant Slots | (none set; the card says "Buy") | +10 plant slots on top of the plot level's |
 
 ### The map: hand-editable, adopted at server start
 `map/World.rbxm` is the **source of truth** for the map. Rojo places it at `Workspace.World`, so the whole map shows in Studio edit mode, and at server start `WorldBuilder.load()` **adopts** it as it is instead of rebuilding it. Edits made in Studio and saved back to the file (right-click **World** → Save to File → overwrite `map/World.rbxm`) stay forever: moved, rotated, deleted or added pieces, other people's models.

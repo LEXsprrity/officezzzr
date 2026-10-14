@@ -167,7 +167,7 @@ H.test("remove (RemovePlant, the Plants panel): only one of your own plants, by 
 	H.ok(string.find(net, "RemovePlant = remote(\"RemovePlant\")", 1, true) ~= nil, "Net.RemovePlant")
 	H.ok(string.find(plot, "Net.RemovePlant.OnServerEvent:Connect(PlotService.removePlant)", 1, true) ~= nil, "PlotService handles it")
 	H.ok(string.find(plot, "not Sessions.allowRequest(s, REMOVES_PER_SECOND)", 1, true) ~= nil, "rate-limited")
-	H.ok(string.find(plot, "Inventory.take(s.profile, slot, now)", 1, true) ~= nil, "checked against your own profile")
+	H.ok(string.find(plot, "Inventory.take(s.profile, slot, now, Sessions.growMult(s))", 1, true) ~= nil, "checked against your own profile")
 
 	local a = string.find(plot, "local function buildPlantModel", 1, true)
 	local b = string.find(plot, "local function removePlantModel", 1, true)

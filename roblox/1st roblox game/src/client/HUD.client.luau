@@ -1030,21 +1030,23 @@ end
 
 -- Robux prices. Developer products' real prices are set on the Creator Dashboard, so each is fetched
 -- once per id with GetProductInfo (pcall'd, cached). Until then, or with no id yet, the placeholder
--- from Config is shown.
-local robuxPrices: { [number]: number } = {}
-local priceFetching: { [number]: boolean } = {}
+-- from Config is shown. Gamepasses (`infoType` GamePass) the same way.
+local robuxPrices: { [string]: number } = {}
+local priceFetching: { [string]: boolean } = {}
 local priceRerender = false
-local function robuxPrice(product: Config.DevProduct): number
-	local cached = robuxPrices[product.id]
+local function robuxPrice(product: { id: number, robux: number }, infoType: Enum.InfoType?): number
+	local kind = infoType or Enum.InfoType.Product
+	local key = kind.Name .. product.id
+	local cached = robuxPrices[key]
 	if cached then
 		return cached
 	end
-	if product.id ~= 0 and not priceFetching[product.id] then
-		priceFetching[product.id] = true
+	if product.id ~= 0 and not priceFetching[key] then
+		priceFetching[key] = true
 		task.spawn(function()
-			local ok, info = pcall(MarketplaceService.GetProductInfo, MarketplaceService, product.id, Enum.InfoType.Product)
+			local ok, info = pcall(MarketplaceService.GetProductInfo, MarketplaceService, product.id, kind)
 			if ok and type(info) == "table" and type(info.PriceInRobux) == "number" then
-				robuxPrices[product.id] = info.PriceInRobux
+				robuxPrices[key] = info.PriceInRobux
 				if not priceRerender then -- one re-render for a burst of answers
 					priceRerender = true
 					task.delay(0.3, function()
@@ -1056,7 +1058,7 @@ local function robuxPrice(product: Config.DevProduct): number
 				end
 			else
 				task.delay(30, function() -- let a later render try again
-					priceFetching[product.id] = nil
+					priceFetching[key] = nil
 				end)
 			end
 		end)
@@ -1086,13 +1088,13 @@ end
 local packShines: { Frame } = {} -- swept across the premium cards every frame while they're shown
 local renderShop: () -> boolean
 do
+	local PassCards = require(Shared:WaitForChild("PassCards"))
 	local SHOP_CARD_W, SHOP_CARD_H = 252, 236 -- three cards a row
 	local CARD_COLORS = {
 		Speed = Color3.fromRGB(30, 165, 255),
 		Money = Color3.fromRGB(70, 205, 30),
 		PlotUpgrade = Color3.fromRGB(255, 150, 20),
 		Treadmill = Color3.fromRGB(255, 60, 95),
-		Pass = Color3.fromRGB(165, 70, 255),
 	}
 
 	-- A sunburst behind a card's icon: soft white rays turning around (cx, cy) (scale of the card) over a
@@ -1315,9 +1317,9 @@ do
 		section("TREADMILL", nextOrder(), HEADING_GOLD)
 		local tier = stats.treadmillTier or 1
 		local treadPrice = Config.priceOf("TreadmillUpgrade", stats :: any)
-		-- "+60/s": a second on it at that tier with your equipped trail (the "+X/s" over the treadmill)
+		-- "+60/s": a second on it at that tier with your equipped trail and Speed passes (the "+X/s" over the treadmill)
 		local function treadRate(t: number): string
-			return Treadmill.rateText(Treadmill.perSecond(t, stats.equippedTrail))
+			return Treadmill.rateText(Treadmill.perSecond(t, stats.equippedTrail, Config.passSpeedMult(stats.passes)))
 		end
 		local treadCard = shopCard(cardGrid(nextOrder()), 1, CARD_COLORS.Treadmill,
 			if treadPrice then `LEVEL {tier + 1} TREADMILL` else "MAX TREADMILL",
@@ -1325,18 +1327,35 @@ do
 				else `{treadRate(tier)} · stand on it to gain Speed`, "Treadmill")
 		upgradeButtons(treadCard, treadPrice, "TreadmillUpgrade", Config.treadmillUpgradeProduct(tier))
 
-		-- Gamepasses (Robux), purple
+		-- Gamepasses (Robux): a card per pass in its own colour (Shared/PassCards decides what's on them),
+		-- "Owned" once the server says so
 		section("PASSES", nextOrder(), HEADING_GREEN)
-		grid = cardGrid(nextOrder())
-		for i, name in { "DoubleMoney", "ExtraSlots" } do
-			local pass = Config.GAMEPASSES[name]
-			local owned = stats.passes[name] == true
-			local c = shopCard(grid, i, CARD_COLORS.Pass, string.upper(pass.label),
-				if name == "DoubleMoney" then "Doubles all plant income" else "On top of your plot level's slots", name)
-			buyRow(c, if owned then "Owned" else "Buy · R$", if owned then COLORS.disabled else robuxColor(pass.id, ROBUX_GREEN), function()
+		PassCards.render(cardGrid(nextOrder()), stats.passes, {
+			card = function(g: Instance, i: number, view: PassCards.Card): Frame
+				local c = shopCard(g, i, view.color, view.title, view.about, view.icon or "")
+				if not view.icon then -- VIP: a gold relief badge where the icon goes
+					UiFx.relief(bold(c, 5, {
+						Text = "VIP", TextColor3 = Color3.fromRGB(255, 206, 40), AnchorPoint = Vector2.new(0.5, 0),
+						Position = UDim2.new(0.5, 0, 0, 22), Size = UDim2.fromOffset(170, 74), ZIndex = 3,
+					}), 4, 5)
+				end
+				if view.owned then
+					(c:FindFirstChildOfClass("UIStroke") :: UIStroke).Color = COLORS.gold
+				end
+				return c
+			end,
+			button = function(c: Frame, view: PassCards.Card, onClick: () -> ()): GuiObject
+				local pass = Config.GAMEPASSES[view.name]
+				return buyRow(c, view.caption, if view.owned then COLORS.disabled else robuxColor(pass.id, ROBUX_GREEN), onClick,
+					if view.owned then nil else { "Robux" }, false)
+			end,
+			price = function(pass: Config.Gamepass): number
+				return robuxPrice(pass, Enum.InfoType.GamePass)
+			end,
+			buy = function(name: string)
 				RequestBuy:FireServer("Pass:" .. name)
-			end, { "Robux" }, true)
-		end
+			end,
+		})
 
 		local focus = shopFocus and shopSections[shopFocus]
 		shopFocus = nil
@@ -1357,7 +1376,7 @@ end
 local renderTrails: () -> ()
 do
 	local function perStepText(): string
-		local x = Config.speedPerStud(stats.equippedTrail)
+		local x = Config.speedPerStud(stats.equippedTrail, Config.passSpeedMult(stats.passes))
 		return "+" .. (if x < 100 then (string.gsub(string.format("%.2f", x), "%.?0+$", "")) else Format.short(x))
 	end
 

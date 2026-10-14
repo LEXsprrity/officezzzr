@@ -13,10 +13,11 @@ Selling.MAX_SLOTS = Config.SLOTS_MAX + Config.PASS_EXTRA_SLOTS
 
 -- What the stall pays for `plant` right now: SELL_STALL_SECONDS of its base income (the same formula as
 -- PlotService.plantStats, no day/night) x `moneyMult` (plot level, 2x Money). A plant in the inventory sells
--- for the same as it would on the plot (Inventory.asPlant: its growth stopped where it left).
-function Selling.price(plant: ProfileStore.Plant, now: number, moneyMult: number): number
+-- for the same as it would on the plot (Inventory.asPlant: its growth stopped where it left). `growMult`: the
+-- owner's Fast Grow for a planted plant (1 when nil; never for an inventory plant, whose age is stored).
+function Selling.price(plant: ProfileStore.Plant, now: number, moneyMult: number, growMult: number?): number
 	local variance = Config.varianceOf(plant)
-	local weight = Config.plantWeight(plant.zone, plant.rarity, now - plant.plantedAt, variance)
+	local weight = Config.plantWeight(plant.zone, plant.rarity, Config.plantAge(plant.plantedAt, now, growMult), variance)
 	return Config.plantIncome(plant.zone, plant.rarity, weight, plant.mutation) * Config.SELL_STALL_SECONDS * moneyMult
 end
 
@@ -87,8 +88,10 @@ end
 export type Sale = { slots: { number }, ids: { number }, total: number }
 
 -- Checks the request (Selling.check) and sells: removes those plants from the plot and the inventory and
--- pays their price. Returns what was sold, or nil and why (nothing changes then).
-function Selling.sell(profile: ProfileStore.Profile, slots: any, distance: number?, now: number, moneyMult: number, ids: any?): (Sale?, string?)
+-- pays their price (`growMult`: the owner's Fast Grow, for the planted ones). Returns what was sold, or nil and
+-- why (nothing changes then).
+function Selling.sell(profile: ProfileStore.Profile, slots: any, distance: number?, now: number, moneyMult: number, ids: any?,
+	growMult: number?): (Sale?, string?)
 	local ok, okIds, why = Selling.check(profile, slots, distance, ids)
 	if not ok or not okIds then
 		return nil, why
@@ -101,7 +104,7 @@ function Selling.sell(profile: ProfileStore.Profile, slots: any, distance: numbe
 	local kept: { ProfileStore.Plant } = {}
 	for _, plant in profile.plants do
 		if selling[plant.slot] then
-			total += Selling.price(plant, now, moneyMult)
+			total += Selling.price(plant, now, moneyMult, growMult)
 			selling[plant.slot] = nil -- a (corrupt) profile with two plants in one slot only sells the first
 		else
 			table.insert(kept, plant)

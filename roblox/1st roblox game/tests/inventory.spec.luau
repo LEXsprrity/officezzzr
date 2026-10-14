@@ -238,11 +238,11 @@ end)
 H.test("inventory: the server wiring (Remove, plant from the inventory, sell ids) and the HUD's Plants / Inventory tabs", function()
 	local plot = fs.readFile("src/server/PlotService.luau")
 	for _, needle in {
-		"Inventory.take(s.profile, slot, now)", -- Remove: into the inventory
+		"Inventory.take(s.profile, slot, now, Sessions.growMult(s))", -- Remove: into the inventory
 		"local invId = inventoryId(bagKey)", -- PlantSeed with "inv:<id>"
 		"Inventory.remove(s.profile, invId)",
 		"plantSeed(player, s, state, x, z, zone, rarity, mutation, entry, gene)", -- planted again as it was (a seed: as its gene says)
-		"Selling.sell(s.profile, slots, distance, now, Sessions.moneyMult(s), ids)",
+		"Selling.sell(s.profile, slots, distance, now, Sessions.moneyMult(s), ids, Sessions.growMult(s))",
 		"inventory = inventory, slots = Sessions.maxSlots(s)", -- the view
 	} do
 		H.ok(string.find(plot, needle, 1, true) ~= nil, needle)
