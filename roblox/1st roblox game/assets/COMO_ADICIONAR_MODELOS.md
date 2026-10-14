@@ -180,7 +180,7 @@ Botão direito na pasta **Arvores** → **Save to File...** → `assets/Arvores.
 
 As zonas não têm arcos, portões nem placas com o nome: uma zona passa para a outra pela cor do chão e das paredes. Ao lado de cada ninho há uma plaquinha de madeira num poste ("👟 700K recommended"); ela é do jogo e não tem modelo (dá para mover ou apagar à mão no mapa).
 
-O **ninho** é a planta-mãe com o monte de terra, as pedras e a flor brilhante. As 4 sementes ficam num meio-círculo de 8 studs em volta do centro, a 2,5 de altura: deixe esse espaço livre. O texto "Mother Plant", a luz e as partículas continuam. Altura até ~40, largura ~28.
+O **ninho** fica do lado ESQUERDO do corredor (quem vem da base): uma mancha redonda na cor das sementes, com algumas pedrinhas em volta. Não tem mais planta-mãe. As 4 sementes ficam espalhadas sobre a mancha, até ~15 studs do centro do ninho, do lado da base, a 2,5 de altura: deixe esse espaço livre. As partículas da mancha continuam. Altura até ~40, largura ~28.
 
 | Ninho | Zona |
 |---|---|

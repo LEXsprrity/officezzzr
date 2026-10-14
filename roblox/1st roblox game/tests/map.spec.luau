@@ -50,7 +50,7 @@ H.test("map: map/World.rbxm loads, has every required piece and gives usable plo
 	for k, nest in nests do
 		H.eq(#nest.podCFrames, Config.PODS_PER_NEST, `zone {k} pods`)
 		for _, cf in nest.podCFrames do
-			H.ok((cf.Position - nest.center).Magnitude < 15, `zone {k} pod near its nest`)
+			H.ok((cf.Position - nest.center).Magnitude < 18, `zone {k} pod near its nest`) -- (scattered beside it)
 		end
 		H.ok(math.abs(nest.guardHome.X - nest.center.X) < 60, `zone {k} guard home near its nest`)
 		H.ok(nest.center.X > Config.zoneStartX(k) and nest.center.X < Config.zoneStartX(k) + Config.ZONES[k].length, `zone {k} nest inside its zone`)
