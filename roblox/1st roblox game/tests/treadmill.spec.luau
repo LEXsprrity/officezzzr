@@ -613,7 +613,7 @@ H.test("treadmill sign: the '+X/s' over the treadmill is exactly what a second o
 				local tm = Config.treadmillMult(tier)
 				local paid = 0
 				for _ = 1, ticks do
-					paid += SpeedLogic.treadmillGain(walk, Config.TICK, Config.speedPerStud(speed, trail), tm)
+					paid += SpeedLogic.treadmillGain(walk, Config.TICK, Config.speedPerStud(trail), tm)
 				end
 				-- the sign (PlotService) and the popups (Effects.client) both use Treadmill.perSecond with these stats
 				local shown = Treadmill.perSecond(walk, speed, trail, tm)
@@ -635,7 +635,7 @@ H.test("treadmill sign: the '+X/s' over the treadmill is exactly what a second o
 	local sessions = fs.readFile("src/server/Sessions.luau")
 	H.ok(string.find(sessions, "walkSpeed = s.walkSpeed", 1, true) ~= nil, "the client gets the same WalkSpeed")
 	H.ok(string.find(fs.readFile("src/server/SpeedService.luau"), "mult = Sessions.speedPerStud(s)", 1, true) ~= nil
-		and string.find(sessions, "Config.speedPerStud(s.profile.speed, s.profile.equippedTrail)", 1, true) ~= nil, "the server pays Speed per stud from the same stats")
+		and string.find(sessions, "Config.speedPerStud(s.profile.equippedTrail)", 1, true) ~= nil, "the server pays Speed per stud from the same stats (the trail; flat at any Speed)")
 end)
 
 -- The treadmill's model (assets/Treadmill.rbxm) or the built-in frame, the belt, the lock and the board all
