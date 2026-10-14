@@ -42,8 +42,8 @@ H.test("world: plot layout contract (two dirt beds, a grass path, origin, spawn,
 		local function at(u: number, w: number, y: number)
 			return entrance + Vector3.new(u, y, -toWalk * w)
 		end
-		-- the origin: the floor's top centre, looking into the plot
-		H.ok((plot.origin.Position - (center + Vector3.new(0, 1, 0))).Magnitude < 1e-3, `plot {i} origin`)
+		-- the origin: the middle of its ground (level with the lawn), looking into the plot
+		H.ok((plot.origin.Position - center).Magnitude < 1e-3, `plot {i} origin`)
 		H.ok(plot.origin.LookVector:Dot(Vector3.new(0, 0, -toWalk)) > 0.999, `plot {i} origin looks into the plot`)
 		-- two dirt beds, one each side of the path, as Planting.defaultBeds says
 		H.eq(#plot.beds, 2, `plot {i} has two dirt beds`)
@@ -59,16 +59,23 @@ H.test("world: plot layout contract (two dirt beds, a grass path, origin, spawn,
 		end
 		H.ok(plot.beds[1].CFrame.Position.X ~= plot.beds[2].CFrame.Position.X, "left and right")
 		-- the grass path down the middle, from the entrance to the back fence, and the tile at the opening
-		local path, tile
+		-- (a checker of PathTiles, level with the ground, cut round the entrance tile where they meet)
+		local tile, pathArea, x0, x1, z0, z1 = nil, 0, math.huge, -math.huge, math.huge, -math.huge
 		for _, d in plot.model:GetChildren() do
-			if d.Name == "MiddlePath" then
-				path = d
+			if d.Name == "PathTile" then
+				local p, s = d.CFrame.Position, d.Size
+				pathArea += s.X * s.Z
+				x0, x1 = math.min(x0, p.X - s.X / 2), math.max(x1, p.X + s.X / 2)
+				z0, z1 = math.min(z0, p.Z - s.Z / 2), math.max(z1, p.Z + s.Z / 2)
+				H.ok(math.abs(p.Y + s.Y / 2 - Config.GROUND_Y) < 1e-3, `plot {i} path tile level with the ground`)
 			elseif d.Name == "EntranceTile" then
 				tile = d
 			end
 		end
-		H.ok(path ~= nil and math.abs(path.Size.X - Config.PLOT_PATH_WIDTH) < 1e-3 and math.abs(path.Size.Z - Config.PLOT_SIZE) < 1e-3, `plot {i} middle path`)
-		H.ok(math.abs(path.CFrame.Position.X - center.X) < 1e-3, `plot {i} path down the middle`)
+		H.ok(math.abs(x1 - x0 - Config.PLOT_PATH_WIDTH) < 1e-3 and math.abs(z1 - z0 - Config.PLOT_SIZE) < 1e-3, `plot {i} middle path`)
+		H.ok(math.abs((x0 + x1) / 2 - center.X) < 1e-3, `plot {i} path down the middle`)
+		H.ok(tile ~= nil and math.abs(pathArea + (tile.Size.X * tile.Size.Z) / 2 - Config.PLOT_PATH_WIDTH * Config.PLOT_SIZE) < 1e-2,
+			`plot {i}: the path's tiles and the entrance tile's inner half cover the path exactly ({pathArea})`)
 		H.ok(tile ~= nil and (Vector3.new(tile.CFrame.Position.X, 0, tile.CFrame.Position.Z) - Vector3.new(entrance.X, 0, entrance.Z)).Magnitude < 1e-3,
 			`plot {i} entrance tile at the opening`)
 		H.ok((plot.spawnCFrame.Position - at(0, 12, 4)).Magnitude < 1e-3, "spawn on the middle path")
@@ -88,19 +95,46 @@ H.test("world: plot layout contract (two dirt beds, a grass path, origin, spawn,
 		H.eq(plot.model.PrimaryPart.Name, "Floor")
 		H.ok(plot.soil:IsA("Folder") and plot.plants:IsA("Folder"), "soil/plants folders")
 		H.ok(plot.signLabel:IsA("TextLabel"), "sign label")
-		H.ok(plot.treadmillLabel:IsA("TextLabel"), "treadmill sign label")
+		H.ok(plot.model:FindFirstChild("TreadmillSign", true) == nil, "no \"TREADMILL\" sign over the treadmill")
 	end
 end)
 
-H.test("world: nest contract is unchanged (centre, pods, guard home)", function()
+H.test("world: nests on the left side, pods scattered beside the boss, no mother plant (centre, pods, guard home)", function()
+	local halfW = Config.CORRIDOR_WIDTH / 2
 	for k, nest in nests do
-		local center = Vector3.new(Config.nestX(k), Config.GROUND_Y, 0)
+		local center = Config.nestCenter(k)
 		H.ok((nest.center - center).Magnitude < 1e-3, "nest centre")
+		-- the runner's left (-Z, walking +X from the base), off the middle, inside the zone, clear of the wall
+		H.ok(center.Z <= -20 and center.Z >= -(halfW - 40), `zone {k}: nest on the left side ({center.Z})`)
+		H.eq(Config.zoneAtX(center.X), k, `zone {k}: nest inside its zone`)
+		H.eq(Config.zoneAtX(nest.guardHome.X), k, `zone {k}: the boss sleeps inside its zone`)
 		H.eq(#nest.podCFrames, Config.PODS_PER_NEST)
+		local xs, zs = {}, {}
 		for i, cf in nest.podCFrames do
-			local a = math.pi / 2 + (i - 0.5) * math.pi / Config.PODS_PER_NEST
-			local want = center + Vector3.new(math.cos(a) * 8, 2.5, math.sin(a) * 8)
+			local want = center + Config.podOffset(k, i)
 			H.ok((cf.Position - want).Magnitude < 1e-3, "pod position")
+			local rel = cf.Position - center
+			H.ok(rel.X < 0 and rel.X > -16 and math.abs(rel.Z) < 13, `zone {k} pod {i}: beside the boss, on the base side ({rel})`)
+			H.ok(math.abs(cf.Position.Z) < halfW - 40, `zone {k} pod {i}: clear of the wall's props`)
+			for j, other in nest.podCFrames do
+				if j ~= i then
+					H.ok((other.Position - cf.Position).Magnitude > 4, `zone {k}: pods {i} and {j} apart`)
+				end
+			end
+			xs[rel.X] = true
+			zs[rel.Z] = true
+		end
+		-- a loose scatter: no two pods share a row or a column (not a grid, not a line)
+		local nx, nz = 0, 0
+		for _ in xs do
+			nx += 1
+		end
+		for _ in zs do
+			nz += 1
+		end
+		H.ok(nx == Config.PODS_PER_NEST and nz == Config.PODS_PER_NEST, `zone {k}: pods scattered, not in a grid`)
+		for _, d in nest.model:GetDescendants() do
+			H.ok(not (d.Name == "MotherBulb" or d.Name == "Mound" or d.Name == "Stem" or d.Name == "Leaf"), `zone {k}: no mother plant ({d:GetFullName()})`)
 		end
 		H.ok((nest.guardHome - (center + Vector3.new(Config.GUARD_HOME_OFFSET, 0, 0))).Magnitude < 1e-3, "guard home")
 		H.eq(nest.model.PrimaryPart:GetAttribute("Role"), "NestCore")
@@ -118,7 +152,7 @@ end)
 -- Inside the corridor only the floor and walls (the Spirit Garden's back wall too) may collide, so props
 -- never block runners or the guards' MoveTo line.
 H.test("world: corridor props never collide (only floor/walls)", function()
-	local allowed = { Floor = true, Wall = true }
+	local allowed = { Floor = true, FloorTile = true, ZoneEdge = true, Wall = true } -- (the floor's level tiles are solid)
 	local corridor = world:FindFirstChild("Corridor")
 	for _, p in parts(corridor) do
 		if p.CanCollide and not allowed[p.Name] then
@@ -225,13 +259,15 @@ H.test("world: no server script builds the old FASTEST HERE board", function()
 	end
 end)
 
-H.test("world: base part budget (plots, plaza, lawn and walls < 1250)", function()
+-- (1600 since the ground is level: every checker is both colours as tiles side by side, not light tiles
+-- laid over a floor, ~300 more simple anchored blocks)
+H.test("world: base part budget (plots, plaza, lawn and walls < 1600)", function()
 	local n = 0
 	for _, root in baseArea() do
 		n += #parts(root)
 	end
 	print(`        base area parts: {n}`)
-	H.ok(n < 1250, `the base area has {n} parts`)
+	H.ok(n < 1600, `the base area has {n} parts`)
 end)
 
 H.test("world: no zone gates, arches, threshold lines, zone name signs or STEAL A SEED sign anywhere", function()
@@ -282,7 +318,7 @@ H.test("world: beside each nest a small wooden plank on a post says the zone's r
 		H.eq(plank.FrontSurface, Enum.SurfaceType.Studs, `{zone.id}: studded`)
 		H.ok(post.CFrame.Position.Y + post.Size.Y / 2 <= plank.CFrame.Position.Y - plank.Size.Y / 2 + 0.01, "the post holds the plank up")
 		-- next to the nest, toward the base, facing the players coming from it
-		local nest = Vector3.new(Config.nestX(k), Config.GROUND_Y, 0)
+		local nest = Config.nestCenter(k)
 		local flat = Vector3.new(plank.CFrame.Position.X, Config.GROUND_Y, plank.CFrame.Position.Z)
 		H.ok((flat - nest).Magnitude < 40, `{zone.id}: next to the nest ({(flat - nest).Magnitude} studs)`)
 		H.ok(flat.X < nest.X and math.abs(flat.Z) > 16 and math.abs(flat.Z) < Config.CORRIDOR_WIDTH / 2 - 10, `{zone.id}: in front of the nest, beside the run`)
@@ -488,7 +524,7 @@ H.test("world: each zone starts with a soft border strip a shade lighter than it
 		local f, c = zone.floor, edge.Color
 		local diff = (c.R - f.R) + (c.G - f.G) + (c.B - f.B)
 		H.ok(diff > 0 and diff < 0.6, `{zone.id}: a little lighter than the floor ({diff})`)
-		H.ok(edge.Size.Y > 0.1 and edge.Size.Y < 0.3 and not edge.CanCollide, `{zone.id}: a flat overlay`)
+		H.ok(math.abs(edge.CFrame.Position.Y + edge.Size.Y / 2 - Config.GROUND_Y) < 1e-3, `{zone.id}: level with the floor (not laid over it)`)
 	end
 end)
 
@@ -581,10 +617,12 @@ H.test("world: ponds are sunken: the water sits below the floor in a hole cut th
 		end
 	end
 	H.ok(rows >= 5, `sunken pond rows {rows}`)
-	-- the zone's first Floor is still the full-width ground (the cut keeps it whole across Z)
+	-- the zone's first Floor is still the full-width slab under the ground's tiles (the cut keeps it whole
+	-- across Z)
+	local Props = H.server("Props")
 	for k, zone in Config.ZONES do
 		local floor = world.Corridor:FindFirstChild(string.format("%d_%s", k, zone.id)):FindFirstChild("Floor")
-		H.ok(math.abs(top(floor) - ground) < 1e-3, `{zone.id}: the first Floor is the ground`)
+		H.ok(math.abs(top(floor) - (ground - Props.TILE_THICKNESS)) < 1e-3, `{zone.id}: the first Floor is the slab under the ground`)
 	end
 end)
 

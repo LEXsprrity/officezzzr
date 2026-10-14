@@ -43,14 +43,14 @@ H.test("map: map/World.rbxm loads, has every required piece and gives usable plo
 		local top = plot.belt.CFrame * CFrame.new(0, plot.belt.Size.Y / 2 + 3, 0)
 		H.ok(WorldBuilder.onBelt(plot.belt, top.Position), `plot {i}: standing on the belt counts`)
 		H.ok(not WorldBuilder.onBelt(plot.belt, (plot.belt.CFrame * CFrame.new(0, plot.belt.Size.Y / 2 + 3, plot.belt.Size.Z)).Position), `plot {i}: past its end doesn't`)
-		H.ok(plot.signLabel:IsA("TextLabel") and plot.treadmillLabel:IsA("TextLabel"), `plot {i} labels`)
+		H.ok(plot.signLabel:IsA("TextLabel"), `plot {i} labels`)
 		H.ok(plot.upgradeLabels.level and plot.upgradeLabels.cash and plot.upgradeLabels.robux and plot.upgradeLabels.buttons, `plot {i} board labels`)
 		H.ok(plot.soil:IsA("Folder") and plot.plants:IsA("Folder"), `plot {i} folders`)
 	end
 	for k, nest in nests do
 		H.eq(#nest.podCFrames, Config.PODS_PER_NEST, `zone {k} pods`)
 		for _, cf in nest.podCFrames do
-			H.ok((cf.Position - nest.center).Magnitude < 15, `zone {k} pod near its nest`)
+			H.ok((cf.Position - nest.center).Magnitude < 18, `zone {k} pod near its nest`) -- (scattered beside it)
 		end
 		H.ok(math.abs(nest.guardHome.X - nest.center.X) < 60, `zone {k} guard home near its nest`)
 		H.ok(nest.center.X > Config.zoneStartX(k) and nest.center.X < Config.zoneStartX(k) + Config.ZONES[k].length, `zone {k} nest inside its zone`)

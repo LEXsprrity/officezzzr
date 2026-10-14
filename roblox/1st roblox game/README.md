@@ -2,7 +2,7 @@
 
 A Roblox "steal-and-run" game in Luau, built with [Rojo](https://rojo.space) 7. It replaces Coin Rush.
 
-Players get a fenced plot. From spawn, one long walled corridor runs through seven themed zones. Each zone has a sleeping giant guardian next to a glowing mother plant. Grab a seed pod, the guardian wakes and chases you, and you run home and plant it. It sprouts into a plant-creature with a weight ("2,018,798 Kg") that earns money. Money buys **trails** (they multiply the Speed you gain by moving) and **plot upgrades** (more slots, more income); Speed gets you further down the corridor, and further zones grow better seeds. **The goal is to reach the Spirit Garden, the last stage, and grow its seeds.**
+Players get a fenced plot. From spawn, one long walled corridor runs through seven themed zones. Each zone has a sleeping giant guardian in its nest on the left side of the corridor, its seed pods scattered beside it. Grab a seed pod, the guardian wakes and chases you, and you run home and plant it. It sprouts into a plant-creature with a weight ("2,018,798 Kg") that earns money. Money buys **trails** (they multiply the Speed you gain by moving) and **plot upgrades** (more slots, more income); Speed gets you further down the corridor, and further zones grow better seeds. **The goal is to reach the Spirit Garden, the last stage, and grow its seeds.**
 
 | # | Zone | Guardian | Seed | Recommended Speed | Length (studs) |
 |---|---|---|---|---|---|

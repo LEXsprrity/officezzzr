@@ -27,16 +27,22 @@ type SimOpts = {
 -- thief's final X and the closest the guard got while the thief was in the corridor.
 local function simulate(k: number, speedStat: number, opts: SimOpts?): (string, number, number, number)
 	local o: SimOpts = opts or {}
-	local nestX = Config.nestX(k)
-	local home = Vector3.new(nestX + Config.GUARD_HOME_OFFSET, 0, 0)
+	local center = Config.nestCenter(k) -- on the left side of the corridor
+	local home = center + Vector3.new(Config.GUARD_HOME_OFFSET, 0, 0)
 	local brain = GuardBrain.new(k, home)
 	if o.wakeDelay then
 		brain.wakeDelay = o.wakeDelay
 	end
 	local guardPos = home
 	-- The pod closest to the guard (worst case).
-	local a = math.pi / 2 + 0.5 * math.pi / Config.PODS_PER_NEST
-	local pod = Vector3.new(nestX + math.cos(a) * 8, 0, math.sin(a) * 8)
+	local pod
+	for i = 1, Config.PODS_PER_NEST do
+		local p = center + Config.podOffset(k, i)
+		if not pod or (p - home).Magnitude < (pod - home).Magnitude then
+			pod = p
+		end
+	end
+	pod = Vector3.new(pod.X, 0, pod.Z)
 	local playerPos = pod
 	local walk = o.walk or Config.walkSpeedFor(speedStat)
 
@@ -249,7 +255,7 @@ H.test("guard: the chase covers the whole 192-stud corridor (a thief hugging a w
 	local halfW = Config.CORRIDOR_WIDTH / 2
 	for _, s in { -1, 1 } do
 		local k = 4
-		local home = Vector3.new(Config.nestX(k) + Config.GUARD_HOME_OFFSET, 0, 0)
+		local home = Config.nestCenter(k) + Vector3.new(Config.GUARD_HOME_OFFSET, 0, 0)
 		local brain = awakeBrain(k, home)
 		GuardBrain.alert(brain, 0)
 		local guardPos = home

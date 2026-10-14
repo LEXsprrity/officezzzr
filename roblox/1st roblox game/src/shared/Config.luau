@@ -24,7 +24,7 @@ Config.WALKWAY_WIDTH = 36 -- the sand walkway down z = 0; the 24 studs between i
 -- from the entrance. Players plant anywhere on their own beds (Shared/Planting).
 Config.PLOT_PATH_WIDTH = 20 -- the grass path between the beds
 Config.BED_FENCE_GAP = 1.5 -- from a bed's outer edges to the fence line
-Config.BED_HEIGHT = 0.4 -- the beds stand this far above the plot's grass; plants stand on top
+Config.BED_HEIGHT = 0.4 -- the beds' depth: their tops are level with the plot's grass (owner: level ground); plants stand on top
 Config.SLOT_SPACING = 8 -- the default planting grid (old saves, auto-placing); creature sizes are budgeted against it
 Config.PLANT_BED_MARGIN = 2 -- a plant's centre stays at least this far inside its bed
 Config.PLANT_OVERLAP = 1 -- two full-grown neighbours may overlap this much (studs)
@@ -125,10 +125,13 @@ Config.ZONES = {
 		seed = "Lotus Wyrm", seedColor = Color3.fromRGB(255, 150, 200), baseWeight = 900_000_000 },
 } :: { Zone }
 
--- Where each zone starts along X, the nest (mother plant) position, and the end of the line.
+-- Where each zone starts along X, the nest (where the boss sleeps by its seed pods), and the end of the line.
 Config.NEST_FRACTION = 0.85 -- nest sits this far into its zone...
-Config.GUARD_HOME_OFFSET = 24 -- the guard sleeps this many studs past the mother plant (+X)
+Config.GUARD_HOME_OFFSET = 24 -- the guard sleeps this many studs past the nest's centre (+X)
 Config.NEST_END_CLEARANCE = 12 -- ...but its guard sleeps at least this far before the zone's end (the short Meadow)
+-- The nest is on the LEFT of a runner coming from the base (-Z; owner request: not in the middle of the
+-- corridor), between the run line and the props along the wall (|z| >= ~50).
+Config.NEST_Z = -32
 
 function Config.zoneStartX(k: number): number
 	local x = Config.CORRIDOR_START_X
@@ -141,6 +144,22 @@ end
 function Config.nestX(k: number): number
 	local len = Config.ZONES[k].length
 	return Config.zoneStartX(k) + math.min(len * Config.NEST_FRACTION, len - Config.GUARD_HOME_OFFSET - Config.NEST_END_CLEARANCE)
+end
+
+-- The nest's centre on the ground (WorldBuilder builds the nest there; the guard's home is GUARD_HOME_OFFSET
+-- further along +X).
+function Config.nestCenter(k: number): Vector3
+	return Vector3.new(Config.nestX(k), Config.GROUND_Y, Config.NEST_Z)
+end
+
+-- Where seed pod `i` of zone `k` floats, from the nest's centre: a loose, natural scatter (not a ring or a
+-- grid) on the base side of the sleeping boss, a little different in every zone, always 2.5 studs up.
+local POD_SCATTER = { { -4, 5 }, { -11, -3 }, { -5, -8 }, { -13, 8 }, { -8, 1 }, { -2, -2 } }
+function Config.podOffset(k: number, i: number): Vector3
+	local base = POD_SCATTER[(i - 1) % #POD_SCATTER + 1]
+	local jx = ((k * 13 + i * 7) % 5 - 2) * 0.6
+	local jz = ((k * 11 + i * 5) % 7 - 3) * 0.7
+	return Vector3.new(base[1] + jx, 2.5, base[2] + jz)
 end
 
 Config.END_X = Config.zoneStartX(#Config.ZONES + 1) -- far end of the corridor: the Spirit Garden's back wall (no finish line)

@@ -344,7 +344,7 @@ H.test("board buttons: the painted Cash/Robux buttons the hit areas point at exi
 	local world = H.workspace:FindFirstChild("World")
 	local plots = WorldBuilder.adopt(world)
 	for i, plot in plots do
-		local board = TreadmillBoard.build(plot.model, plot.belt, plot.center, plot.treadmillLabel)
+		local board = TreadmillBoard.build(plot.model, plot.belt, plot.center)
 		for _, panel in { board.panel, plot.upgradeBoard } do
 			for _, name in { "CashButton", "RobuxButton" } do
 				local b = panel:FindFirstChild(name, true)
@@ -403,7 +403,7 @@ end
 local function checkBoards(plots: { any }, label: string): { any }
 	local boards = {}
 	for i, plot in plots do
-		local board = TreadmillBoard.build(plot.model, plot.belt, plot.center, plot.treadmillLabel)
+		local board = TreadmillBoard.build(plot.model, plot.belt, plot.center)
 		boards[i] = board
 		H.ok(board.model.Parent == plot.model, `{label}: plot {i} board in its plot model`)
 		local count = 0
@@ -434,7 +434,7 @@ local function checkBoards(plots: { any }, label: string): { any }
 		end
 		-- nor in the beds, the owner's sign or the plot's own Upgrade board
 		for b, bed in plot.beds do
-			local dlo, dhi = Assets.bounds(bed)
+			local dlo, dhi = Assets.bounds(bed, nil, true) -- (the bed block is invisible under its tiles)
 			H.ok(not overlaps(lo, hi, Vector3.new(dlo.X, -1e9, dlo.Z), Vector3.new(dhi.X, 1e9, dhi.Z), 0), `{label}: plot {i} board clear of bed {b}`)
 		end
 		local ulo, uhi = Assets.bounds(plot.upgradeBoard)
@@ -447,9 +447,13 @@ local function checkBoards(plots: { any }, label: string): { any }
 		H.ok(Vector3.new(toBelt.X, 0, toBelt.Z).Magnitude < 14, `{label}: plot {i} board next to the treadmill`)
 		local side = if c.Z > 0 then 1 else -1
 		H.ok(board.panel.CFrame.LookVector.Z * -side > 0.99, `{label}: plot {i} board faces the walkway`)
-		-- the old "TREADMILL" billboard is off; the step text floats over the belt's front end
-		local old = plot.treadmillLabel:FindFirstAncestorWhichIsA("BillboardGui")
-		H.ok(old == nil or old.Enabled == false, `{label}: plot {i} "TREADMILL" billboard hidden`)
+		-- no "TREADMILL" sign at all (an old map's is removed); the step text floats over the belt's front end
+		for _, d in plot.model:GetDescendants() do
+			H.ok(d:GetAttribute("Role") ~= "TreadmillSign", `{label}: plot {i} still has a "TREADMILL" sign ({d:GetFullName()})`)
+			if d:IsA("TextLabel") then
+				H.ok(not string.find(string.upper(d.Text), "TREADMILL", 1, true), `{label}: plot {i} {d:GetFullName()} says "{d.Text}"`)
+			end
+		end
 		local anchor = board.stepGui.Adornee
 		H.ok(anchor.Parent == plot.belt, `{label}: plot {i} step text rides on the belt`)
 		local rel = anchor.Position
@@ -481,7 +485,7 @@ H.test("treadmill board: follows the belt when the map moves it", function()
 	local world = H.workspace:FindFirstChild("World")
 	local plots = WorldBuilder.adopt(world)
 	local plot = plots[3]
-	local board = TreadmillBoard.build(plot.model, plot.belt, plot.center, plot.treadmillLabel)
+	local board = TreadmillBoard.build(plot.model, plot.belt, plot.center)
 	local before = board.panel.CFrame.Position
 	plot.belt.CFrame = plot.belt.CFrame * CFrame.new(-4, 0, 0)
 	TreadmillBoard.follow(board) -- PlotService calls it when the belt's CFrame or Size changes
@@ -513,7 +517,7 @@ H.test("treadmill board: shows the tier, both prices and +X/s (the popups' numbe
 	local world = H.workspace:FindFirstChild("World")
 	local plots = WorldBuilder.adopt(world)
 	local plot = plots[1]
-	local board = TreadmillBoard.build(plot.model, plot.belt, plot.center, plot.treadmillLabel)
+	local board = TreadmillBoard.build(plot.model, plot.belt, plot.center)
 
 	TreadmillBoard.render(board, {})
 	H.eq(board.labels.level.Text, "Empty plot")
@@ -544,18 +548,18 @@ H.test("treadmill board: shows the tier, both prices and +X/s (the popups' numbe
 	H.eq(shown(board.labels.cash), "")
 	H.eq(board.stepGui.Enabled, true)
 
-	-- nothing on the board or over the belt says "TREADMILL" in big letters any more
+	-- nothing on the board or over the belt says "TREADMILL" any more (owner playtest: the big sign is gone)
 	for _, d in plot.model:GetDescendants() do
-		if d:IsA("TextLabel") and string.find(string.upper(d.Text), "TREADMILL", 1, true) then
-			local gui = d:FindFirstAncestorWhichIsA("LayerCollector")
-			H.ok(gui ~= nil and gui.Enabled == false, `{d:GetFullName()} still shows "{d.Text}"`)
+		if d:IsA("TextLabel") then
+			H.ok(not string.find(string.upper(d.Text), "TREADMILL", 1, true), `{d:GetFullName()} still shows "{d.Text}"`)
 		end
 	end
+	H.ok(string.find(fs.readFile("src/server/WorldBuilder.luau"), "TREADMILL\"", 1, true) == nil, "WorldBuilder makes no \"TREADMILL\" sign")
 end)
 
 H.test("treadmill board: PlotService builds it per plot, writes it and puts the prompts on it", function()
 	local plot = fs.readFile("src/server/PlotService.luau")
-	H.ok(string.find(plot, "TreadmillBoard.build(info.model, info.belt, info.center, info.treadmillLabel)", 1, true) ~= nil, "built per plot")
+	H.ok(string.find(plot, "TreadmillBoard.build(info.model, info.belt, info.center)", 1, true) ~= nil, "built per plot")
 	H.ok(string.find(plot, "TreadmillBoard.render(state.treadmill", 1, true) ~= nil, "written")
 	H.ok(string.find(plot, "state.treadmill.panel", 1, true) ~= nil, "the prompts are on the board")
 	H.ok(string.find(plot, "Icons.set(state.info.treadmillLabel", 1, true) == nil, "the old sign isn't written any more")
@@ -603,7 +607,7 @@ H.test("treadmill sign: the '+X/s' over the treadmill is exactly what a second o
 	local TreadmillBoard = H.server("TreadmillBoard")
 	local world = H.workspace:FindFirstChild("World")
 	local plot = WorldBuilder.adopt(world)[2]
-	local board = TreadmillBoard.build(plot.model, plot.belt, plot.center, plot.treadmillLabel)
+	local board = TreadmillBoard.build(plot.model, plot.belt, plot.center)
 	local ticks = math.round(1 / Config.TICK)
 	for _, speed in { 0, 250, 9e3, 4e5, 7e6, 3e8, 2e10 } do
 		for _, trail in { "Grey", "Blue", "Red" } do
@@ -658,7 +662,7 @@ local function checkFacing(plots: { any }, label: string)
 		H.ok(rel.Z * Treadmill.FRONT > b.Size.Z / 4, `{label}: plot {i} {head.Name} at the front end ({rel})`)
 		local held = Treadmill.lockCFrame(b.CFrame, b.Size, (b.CFrame * CFrame.new(1, 3, -2)).Position)
 		H.ok(held.LookVector.Z * -side > 0.999, `{label}: plot {i} a locked runner faces the walkway and the console`)
-		local board = TreadmillBoard.build(plot.model, b, plot.center, plot.treadmillLabel)
+		local board = TreadmillBoard.build(plot.model, b, plot.center)
 		local toBoard = b.CFrame:PointToObjectSpace(board.panel.CFrame.Position)
 		H.ok(math.abs(toBoard.Z) < 1 and math.abs(toBoard.X) > b.Size.X / 2 + 2, `{label}: plot {i} board beside the treadmill ({toBoard})`)
 		local fromPath = math.abs(board.panel.CFrame.Position.X - plot.center.X)
@@ -751,7 +755,7 @@ H.test("treadmill tiers: the treadmill swaps to each tier in place; belt, lock, 
 	for step, tier in order do
 		local slot = Assets.treadmillSlot(tier)
 		for i, plot in plots do
-			local board = TreadmillBoard.build(plot.model, plot.belt, plot.center, plot.treadmillLabel)
+			local board = TreadmillBoard.build(plot.model, plot.belt, plot.center)
 			H.eq(TreadmillBoard.showTier(board, tier), step > 1, `plot {i} tier {tier}: swapped only when the tier changed`)
 			H.eq(TreadmillBoard.showTier(board, tier), false, "the same tier again does nothing")
 			local count = 0
@@ -900,6 +904,148 @@ H.test("treadmill saves: v1-v4 tiers keep their multiplier (x2, Robux x3, Robux 
 	H.eq(ProfileStore.deserialize({ v = 5, treadmillTier = 99 }).treadmillTier, Config.TREADMILL_MAX, "clamped")
 	H.eq(ProfileStore.deserialize({ v = 5, treadmillTier = -3 }).treadmillTier, 1, "clamped")
 	H.eq(ProfileStore.defaultProfile().treadmillTier, 1, "new players start on the free x2")
+end)
+
+
+----------------------------------------------------------------------------------------------------
+-- Speed on the treadmill, end to end (owner playtest: "when you exercise on the treadmill your Speed
+-- isn't going up"). Effects.client used to hold a locked runner by ANCHORING its root on the client: a
+-- client-anchored root stops replicating, so the server kept the last position it got before the lock,
+-- just off the belt (the lock fires on the first frame inside it), and SpeedService paid nothing.
+----------------------------------------------------------------------------------------------------
+local Net = H.stubServer("Net", {
+	StatsUpdate = { FireClient = function() end },
+	LootEvent = { FireClient = function() end },
+	toast = function() end,
+})
+local Sessions = H.server("Sessions")
+local SpeedLogic = H.server("SpeedLogic")
+local SpeedService = H.server("SpeedService")
+
+-- A character like a standard R15 one: its root 3 studs over what it stands on (HipHeight 2 + half the root).
+local LIFT = 3
+-- (A table: Lune's parts have no Position. `root:move(pos)` is the client's replicated position arriving.)
+local function character(at: Vector3): (any, any, any)
+	local root = {}
+	function root.move(self: any, pos: Vector3)
+		self.CFrame = CFrame.new(pos)
+		self.Position = pos
+	end
+	root:move(at)
+	local hum = roblox.Instance.new("Humanoid")
+	hum.Health = 100
+	local char = {
+		FindFirstChild = function(_, name: string)
+			return if name == "HumanoidRootPart" then root else nil
+		end,
+		FindFirstChildOfClass = function(_, class: string)
+			return if class == "Humanoid" then hum else nil
+		end,
+		PivotTo = function(_, cf: any) -- a rubber-band
+			root:move(cf.Position)
+		end,
+	}
+	return char, root, hum
+end
+
+-- What the client does each frame (Effects.client): walk toward the belt's centre from beside it at
+-- WalkSpeed until Treadmill.stepLock locks it, then hold it at Treadmill.lockCFrame at the height it
+-- stepped on. Returns the root's position each frame (what the server sees, now that the root is never
+-- anchored) and the frame it locked on.
+local FRAME = 1 / 60
+local function clientRun(belt: any, myPlot: number, walkSpeed: number, frames: number, plotCenter: Vector3): ({ Vector3 }, number)
+	local top = (belt.CFrame * CFrame.new(0, belt.Size.Y / 2, 0)).Position.Y
+	local centre = belt.CFrame.Position
+	local start = Treadmill.exitPosition(belt.CFrame, belt.Size, centre, plotCenter)
+	local pos = Vector3.new(start.X, top + LIFT, start.Z)
+	local lock = Treadmill.newLock()
+	local out, lockedAt = {}, 0
+	for f = 1, frames do
+		if lock.mode ~= "locked" then
+			local to = Vector3.new(centre.X - pos.X, 0, centre.Z - pos.Z)
+			pos += to.Unit * math.min(to.Magnitude, walkSpeed * FRAME)
+		end
+		local standing = Treadmill.standing({ belt }, pos, myPlot)
+		local action = Treadmill.stepLock(lock, { now = f * FRAME, onOwnBelt = standing == "own", alive = true, jumped = false })
+		if action == "lock" then
+			lockedAt = f
+		end
+		if lock.mode == "locked" then
+			pos = Treadmill.lockCFrame(belt.CFrame, belt.Size, pos).Position
+		end
+		out[f] = pos
+	end
+	return out, lockedAt
+end
+
+H.test("treadmill speed: Effects.client never anchors the runner (that stopped its position replicating)", function()
+	local source = fs.readFile("src/client/Effects.client.luau")
+	H.ok(string.find(source, "root.Anchored = true", 1, true) == nil, "the root is never anchored on the client")
+	H.ok(string.find(source, "lockedRoot.Anchored", 1, true) == nil, "the lock doesn't anchor the root")
+	H.ok(string.find(source, "holdStill(humanoid)", 1, true) ~= nil and string.find(source, "humanoid.WalkSpeed = 0", 1, true) ~= nil,
+		"the walking keys are stopped with a local WalkSpeed of 0 instead")
+	H.ok(string.find(source, "lockedHumanoid.WalkSpeed = lockedWalkSpeed", 1, true) ~= nil, "...and the server's WalkSpeed comes back on leaving")
+end)
+
+H.test("treadmill speed: stepping on your own treadmill raises Speed every tick, on every tier's model (server ticks)", function()
+	local world = MapTool.load(MapTool.PATH)
+	local plots = WorldBuilder.adopt(world)
+	H.ok(plots ~= nil, "map/World.rbxm adopts")
+	Assets.refresh(world)
+	for tier = 1, Config.TREADMILL_MAX do
+		local plot = plots[(tier - 1) % #plots + 1]
+		local board = TreadmillBoard.build(plot.model, plot.belt, plot.center)
+		TreadmillBoard.showTier(board, tier)
+		H.eq(plot.model:FindFirstChild("Treadmill"):GetAttribute("Asset"), Assets.treadmillSlot(tier), `tier {tier}'s model`)
+		H.ok(plot.belt.Parent == plot.model, `tier {tier}: the plot's belt is still the map's belt after the swap`)
+
+		local profile = ProfileStore.defaultProfile()
+		profile.treadmillTier = tier
+		profile.speed = 50 * tier
+		local char, root, hum = character(Vector3.zero)
+		local player = { Name = `Runner{tier}`, UserId = tier, Character = char, FindFirstChild = function() return nil end }
+		local s = Sessions.create(player :: any, profile, false)
+		s.plot = plot -- PlotService.assign
+		local walk = Config.walkSpeedFor(profile.speed)
+		hum.WalkSpeed = walk
+
+		local frames, lockedAt = clientRun(plot.belt, plot.index, walk, 15 * 12, plot.center)
+		H.ok(lockedAt > 0, `tier {tier}: the client locked onto the belt`)
+		local held = frames[#frames]
+		local rel = plot.belt.CFrame:PointToObjectSpace(held)
+		H.ok(math.abs(rel.X) < 1e-3 and math.abs(rel.Z) < 1e-3, `tier {tier}: held at the belt's centre`)
+		H.ok(WorldBuilder.onBelt(plot.belt, held), `tier {tier}: the server's belt check sees the held runner on it ({rel})`)
+		-- what the old anchored hold left the server with: the last position before the lock, off the belt
+		H.ok(not WorldBuilder.onBelt(plot.belt, frames[lockedAt - 1]), `tier {tier}: the frame before the lock is off the belt (the bug)`)
+
+		-- the server's ticks, every Config.TICK (15 frames), reading the replicated root
+		local paid, last = 0, profile.speed
+		for f = 15, #frames, 15 do
+			root:move(frames[f])
+			-- (WalkSpeed grows with the Speed it pays, so the gain does too)
+			local perTick = SpeedLogic.treadmillGain(s.walkSpeed, Config.TICK, Sessions.speedPerStud(s), Sessions.treadmillMult(s))
+			SpeedService.tickPlayer(s, Config.TICK, f * FRAME)
+			if f > lockedAt + 15 then
+				H.near(profile.speed - last, perTick, 1e-6, `tier {tier}: a tick on the belt pays the treadmill gain (frame {f})`)
+				paid += 1
+			end
+			last = profile.speed
+			H.ok((root.CFrame.Position - frames[f]).Magnitude < 1e-6, `tier {tier}: never rubber-banded (frame {f})`)
+		end
+		H.ok(paid >= 8, `tier {tier}: {paid} paying ticks`)
+		H.ok(profile.speed > 50 * tier, `tier {tier}: Speed went up ({profile.speed})`)
+
+		-- and the old hold: the server frozen at the pre-lock position pays nothing
+		local frozen = Sessions.create({ Name = "Frozen", Character = char, FindFirstChild = function() return nil end } :: any, ProfileStore.defaultProfile(), false)
+		frozen.plot = plot
+		root:move(frames[lockedAt - 1])
+		for i = 1, 6 do
+			SpeedService.tickPlayer(frozen, Config.TICK, i)
+		end
+		H.eq(frozen.profile.speed, 0, `tier {tier}: frozen just off the belt, no Speed (what the playtest saw)`)
+		Sessions.remove(player :: any)
+	end
+	H.ok(Net ~= nil)
 end)
 
 return nil

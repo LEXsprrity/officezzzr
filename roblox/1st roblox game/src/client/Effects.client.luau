@@ -460,11 +460,14 @@ end)
 
 ----------------------------------------------------------------------------------------------------
 -- Treadmill: step on your OWN plot's belt and you are locked on it (Shared/Treadmill.stepLock): the
--- character is held in place (its root anchored on this client only, centred on the belt, facing the
--- front, the console: held there every frame with AutoRotate off) and sprints in place (its own run
--- animation from the Animate script, sped up), with a "+X" Speed popup over it about every second. The
--- only way off is jumping (Space / the mobile jump button), which puts you just beside the belt; you can't be locked again for a moment. Dying, a respawn or the server
--- moving you off the belt just unlocks. The server sees a player standing still on their belt: the AFK
+-- character is held in place (centred on the belt, facing the front, the console: put back there every
+-- frame, with AutoRotate off and its WalkSpeed 0 on this client only, so the walking keys don't move it) and
+-- sprints in place (its own run animation from the Animate script, sped up), with a "+X" Speed popup over
+-- it about every second. The only way off is jumping (Space / the mobile jump button), which puts you just
+-- beside the belt; you can't be locked again for a moment. Dying, a respawn or the server moving you off
+-- the belt just unlocks. The root is NEVER anchored: a root anchored on the client stops replicating, so the
+-- server kept the last position from before the lock (just off the belt) and paid no Speed (owner playtest:
+-- "Speed isn't going up"). Held this way the server sees a player standing still on their belt: the AFK
 -- treadmill gain, well inside the movement check. Other players' treadmills pay nothing (the server only
 -- checks your plot's belt) and can't be stepped on (their invisible walls, above).
 ----------------------------------------------------------------------------------------------------
@@ -473,7 +476,9 @@ local runHumanoid: Humanoid? = nil
 local lock = Treadmill.newLock()
 local lockedBelt: BasePart? = nil
 local lockedRoot: BasePart? = nil
-local lockedHumanoid: Humanoid? = nil -- its AutoRotate is off while locked
+local lockedHumanoid: Humanoid? = nil -- its AutoRotate is off and its WalkSpeed 0 (locally) while locked
+local lockedWalkSpeed = 16 -- the server's WalkSpeed for it, put back when it leaves
+local walkSpeedHook: RBXScriptConnection? = nil -- keeps it 0 when the server sends a new WalkSpeed
 local lockedLift = 0 -- how high the root stood over the belt's top when it was locked
 local jumpQueued = false
 
@@ -537,12 +542,28 @@ local function myPlotCenter(): Vector3?
 	return nil
 end
 
+-- Stops the walking keys from moving a locked character: its WalkSpeed is 0 on this client only (the
+-- server's own value, what it pays the treadmill from, is untouched). A new WalkSpeed from the server
+-- (more Speed, a stun) is remembered for when it leaves and set back to 0.
+local function holdStill(humanoid: Humanoid)
+	lockedWalkSpeed = humanoid.WalkSpeed
+	humanoid.WalkSpeed = 0
+	walkSpeedHook = humanoid:GetPropertyChangedSignal("WalkSpeed"):Connect(function()
+		if humanoid.WalkSpeed ~= 0 then
+			lockedWalkSpeed = humanoid.WalkSpeed
+			humanoid.WalkSpeed = 0
+		end
+	end)
+end
+
 local function release()
-	if lockedRoot and lockedRoot.Parent then
-		lockedRoot.Anchored = false
+	if walkSpeedHook then
+		walkSpeedHook:Disconnect()
+		walkSpeedHook = nil
 	end
 	if lockedHumanoid and lockedHumanoid.Parent then
 		lockedHumanoid.AutoRotate = true
+		lockedHumanoid.WalkSpeed = lockedWalkSpeed
 	end
 	lockedRoot, lockedBelt, lockedHumanoid = nil, nil, nil
 end
@@ -622,10 +643,11 @@ RunService.Heartbeat:Connect(function()
 		lockedBelt, lockedRoot, lockedHumanoid = belt, root, humanoid
 		if humanoid then
 			humanoid.AutoRotate = false -- the walking keys mustn't turn it away from the console
+			holdStill(humanoid)
 		end
+		-- (unanchored, so this move and every frame's hold replicate: the server must see it on the belt)
 		root.AssemblyLinearVelocity = Vector3.zero
 		root.CFrame = Treadmill.lockCFrame(belt.CFrame, belt.Size, root.Position)
-		root.Anchored = true
 		lockedLift = root.Position.Y - beltTop(belt)
 		nextPopup = now + 0.5
 	elseif lock.mode == "locked" and root and belt and root == lockedRoot then
@@ -635,6 +657,7 @@ RunService.Heartbeat:Connect(function()
 		held += Vector3.new(0, beltTop(belt) + lockedLift - root.Position.Y, 0)
 		if root.CFrame.LookVector:Dot(held.LookVector) < 0.999 or (held.Position - root.Position).Magnitude > 0.05 then
 			root.CFrame = held
+			root.AssemblyLinearVelocity = Vector3.zero
 		end
 	elseif action == "exit" and root and lockedBelt then
 		local from = lockedBelt

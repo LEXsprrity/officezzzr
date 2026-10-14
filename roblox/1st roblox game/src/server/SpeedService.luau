@@ -35,6 +35,7 @@ function SpeedService.teleport(player: Player, cf: CFrame)
 	end
 end
 
+-- One player's tick (also SpeedService.tickPlayer: the tests drive it like the loop below does).
 local function tickPlayer(s: Sessions.Session, dt: number, now: number)
 	local root, hum = rootOf(s.player)
 	if not root or not hum then
@@ -73,6 +74,8 @@ local function tickPlayer(s: Sessions.Session, dt: number, now: number)
 		Sessions.pushCore(s)
 	end
 end
+
+SpeedService.tickPlayer = tickPlayer
 
 function SpeedService.start()
 	task.spawn(function()
