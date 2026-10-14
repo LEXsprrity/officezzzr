@@ -251,8 +251,10 @@ end
 
 -- A wooden fence from a to b (on the ground at a.Y): posts every ~`spacing` studs and two rails between
 -- each pair. Solid, like a real fence; used around plots, never inside the corridor. Each post is a
--- FencePost slot and each stretch of rails between two posts a FenceSection slot.
-function Props.fence(parent: Instance, a: Vector3, b: Vector3, height: number, spacing: number, post: Color3?, rail: Color3?)
+-- FencePost slot and each stretch of rails between two posts a FenceSection slot. Runs that meet share a
+-- post: pass the same `posts` table to each, and a post already standing at a spot is not built twice.
+function Props.fence(parent: Instance, a: Vector3, b: Vector3, height: number, spacing: number, post: Color3?, rail: Color3?,
+	posts: { [string]: boolean }?)
 	local postColor, railColor = post or Props.WOOD, rail or Props.WOOD_LIGHT
 	local delta = b - a
 	local len = delta.Magnitude
@@ -263,9 +265,15 @@ function Props.fence(parent: Instance, a: Vector3, b: Vector3, height: number, s
 	local seg = len / n
 	for i = 0, n do
 		local p = a + dir * (seg * i)
-		Assets.swap("FencePost", parent, CFrame.new(p) * along, function(into)
-			Props.box(into, "FencePost", Vector3.new(1, height + 0.6, 1), CFrame.new(p + Vector3.new(0, (height + 0.6) / 2, 0)), postColor, Enum.Material.Wood)
-		end, Vector3.new(2, 1, 2))
+		local key = `{math.round(p.X * 10)},{math.round(p.Y * 10)},{math.round(p.Z * 10)}`
+		if not (posts and posts[key]) then
+			if posts then
+				posts[key] = true
+			end
+			Assets.swap("FencePost", parent, CFrame.new(p) * along, function(into)
+				Props.box(into, "FencePost", Vector3.new(1, height + 0.6, 1), CFrame.new(p + Vector3.new(0, (height + 0.6) / 2, 0)), postColor, Enum.Material.Wood)
+			end, Vector3.new(2, 1, 2))
+		end
 		if i < n then
 			local mid = p + dir * (seg / 2)
 			Assets.swap("FenceSection", parent, CFrame.new(mid) * along, function(into)

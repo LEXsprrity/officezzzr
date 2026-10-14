@@ -245,7 +245,7 @@ local function freeSlotAtPad(player: Player, s: Sessions.Session, state: PlotSta
 			return i
 		end
 	end
-	Net.toast(player, "Your plot is full! Remove a plant or upgrade your plot (sign at your gate).", "red")
+	Net.toast(player, "Your plot is full! Remove a plant or upgrade your plot (board at your plot's entrance).", "red")
 	return nil
 end
 

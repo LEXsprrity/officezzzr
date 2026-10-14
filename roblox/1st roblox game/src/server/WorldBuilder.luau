@@ -48,8 +48,8 @@ export type NestInfo = {
 
 local GROUND = Config.GROUND_Y
 local HALF_W = Config.CORRIDOR_WIDTH / 2
-local BASE_MIN_X = Config.PLOT_FIRST_X - Config.PLOT_SPACING_X * (Config.PLOT_COLUMNS - 1) - Config.PLOT_SIZE / 2 - 24
-local BASE_HALF_Z = Config.PLOT_OFFSET_Z + Config.PLOT_SIZE / 2 + 20
+local BASE_MIN_X = Config.PLOT_FIRST_X - Config.PLOT_SPACING_X * (Config.PLOT_COLUMNS - 1) - Config.PLOT_SIZE / 2 - 14
+local BASE_HALF_Z = Config.PLOT_OFFSET_Z + Config.PLOT_SIZE / 2 + 14
 
 local box, deco, ball, cylinder, flat = Props.box, Props.deco, Props.ball, Props.cylinder, Props.flat
 
@@ -316,23 +316,34 @@ local function buildBase(world: Folder)
 	local len = Config.CORRIDOR_START_X - BASE_MIN_X
 	local midX = BASE_MIN_X + len / 2
 	studs(box(base, "Ground", Vector3.new(len, 4, BASE_HALF_Z * 2), CFrame.new(midX, GROUND - 2, 0), GRASS))
-	-- The lawn checker, minus the tiles under the plots and the walkway.
+	-- The lawn checker, minus the tiles under the plots and the walkway (a tile can straddle two plots
+	-- that touch, so it is hidden when its corners and middle are all covered).
 	local covered = { { -1e9, 1e9, -18, 18 } } -- the walkway (36 wide)
 	for spot = 1, Config.MAX_PLAYERS do
 		local c = spotCenter(spot)
 		local half = Config.PLOT_SIZE / 2
 		table.insert(covered, { c.X - half, c.X + half, c.Z - half, c.Z + half })
 	end
-	local lawn = Instance.new("Folder")
-	lawn.Name = "Lawn"
-	lawn.Parent = base
-	checker(lawn, BASE_MIN_X, Config.CORRIDOR_START_X, -BASE_HALF_Z, BASE_HALF_Z, GROUND, function(ax, bx, az, bz)
+	local function isCovered(x: number, z: number): boolean
 		for _, r in covered do
-			if ax >= r[1] and bx <= r[2] and az >= r[3] and bz <= r[4] then
+			if x >= r[1] and x <= r[2] and z >= r[3] and z <= r[4] then
 				return true
 			end
 		end
 		return false
+	end
+	local lawn = Instance.new("Folder")
+	lawn.Name = "Lawn"
+	lawn.Parent = base
+	checker(lawn, BASE_MIN_X, Config.CORRIDOR_START_X, -BASE_HALF_Z, BASE_HALF_Z, GROUND, function(ax, bx, az, bz)
+		for _, x in { ax, (ax + bx) / 2, bx } do
+			for _, z in { az, (az + bz) / 2, bz } do
+				if not isCovered(x, z) then
+					return false
+				end
+			end
+		end
+		return true
 	end)
 	studs(flat(base, "Walkway", len, 36, Vector3.new(midX, GROUND, 0), SAND, nil, nil, 0.3))
 
@@ -370,7 +381,9 @@ local PLOT_COLORS = {
 	Color3.fromRGB(60, 215, 140), Color3.fromRGB(255, 120, 200), Color3.fromRGB(255, 145, 50), Color3.fromRGB(70, 210, 225),
 }
 
-local function buildPlot(world: Folder, index: number)
+local PLOT_OPENING = 16 -- the gap in the plot's front fence, around the 14-stud path
+
+local function buildPlot(world: Folder, index: number, posts: { [string]: boolean })
 	local center = spotCenter(index)
 	local side = math.sign(center.Z)
 	local half = Config.PLOT_SIZE / 2
@@ -400,32 +413,30 @@ local function buildPlot(world: Folder, index: number)
 	marker(floor, "Spawn", CFrame.new(at(-24, 12, 4)) * facingIn, "Spawn", "PlotIndex", index)
 	checker(model, center.X - half, center.X + half, center.Z - half, center.Z + half, GROUND + 1)
 
-	-- Simple wooden fence (dark posts, two warm rails) with a 20-stud gate on the walkway side
-	local fenceH, spacing = 4.5, 12
-	local y1 = Vector3.new(0, 1, 0)
-	local function fence(a: Vector3, b: Vector3)
-		Props.fence(model, a + y1, b + y1, fenceH, spacing, FENCE_POST, FENCE_RAIL)
+	-- Simple wooden fence all round (dark posts from the ground up, two warm rails), with one opening on
+	-- the walkway side and no gate. Neighbouring plots touch and share the fence between them: a plot
+	-- builds its +X side only when no plot stands there (the front column; the plot at +X is spot index - 2),
+	-- and a corner post a neighbour already built is not built twice (`posts` is shared by every plot).
+	local fenceH, spacing = 5.5, 12
+	local function fence(u0: number, w0: number, u1: number, w1: number)
+		Props.fence(model, at(u0, w0, 0), at(u1, w1, 0), fenceH, spacing, FENCE_POST, FENCE_RAIL, posts)
 	end
-	fence(center + Vector3.new(-half, 0, -toWalk * half), center + Vector3.new(half, 0, -toWalk * half))
-	for _, sx in { -1, 1 } do
-		fence(center + Vector3.new(sx * half, 0, toWalk * half), center + Vector3.new(sx * half, 0, -toWalk * half))
-		fence(entrance + Vector3.new(sx * 11, 0, 0), entrance + Vector3.new(sx * half, 0, 0))
+	local size = Config.PLOT_SIZE
+	fence(-PLOT_OPENING / 2, 0, -half, 0)
+	fence(-half, 0, -half, size)
+	fence(-half, size, half, size)
+	if index <= 2 or Config.PLOT_SPACING_X > Config.PLOT_SIZE then
+		fence(half, size, half, 0)
 	end
-	Assets.swap("PlotGate", model, Assets.facing(entrance + y1, Vector3.new(0, 0, toWalk)), function(into)
-		for _, sx in { -1, 1 } do
-			box(into, "GatePost", Vector3.new(2, 9, 2), CFrame.new(entrance + Vector3.new(sx * 10, 5.5, 0)), color)
-			ball(into, "GateFinial", 2.6, entrance + Vector3.new(sx * 10, 10.6, 0), color:Lerp(Color3.new(1, 1, 1), 0.35))
-		end
-		deco(into, "GateArch", Vector3.new(22, 1.6, 1.6), CFrame.new(entrance + Vector3.new(0, 9.6, 0)), color)
-	end, Vector3.new(1, 1.5, 0))
+	fence(half, 0, PLOT_OPENING / 2, 0)
 
-	-- Sand path from the walkway to the gate, and on to the pad
+	-- Sand path from the walkway to the opening, and on to the pad
 	local toWalkway = math.abs(entrance.Z) - 18
 	studs(flat(model, "Path", 14, toWalkway, Vector3.new(center.X, GROUND, entrance.Z + toWalk * toWalkway / 2), SAND, nil, nil, 0.3))
 	studs(flat(model, "Path", 10, 5, at(0, 2.5, 1), SAND, nil, nil, 0.15))
 
-	-- House-icon sign over the gate
-	local signPart = tag(box(model, "SignPost", Vector3.new(1, 1, 1), CFrame.new(entrance + Vector3.new(0, 12, 0)), color), "PlotSign", "PlotIndex", index)
+	-- House-icon sign floating over the opening (PlotService writes the owner's name on it)
+	local signPart = tag(box(model, "SignPost", Vector3.new(1, 1, 1), CFrame.new(entrance + Vector3.new(0, 9, 0)), color), "PlotSign", "PlotIndex", index)
 	signPart.Transparency = 1
 	signPart.CanCollide = false
 	-- Sized in studs (not pixels) so it shrinks with distance, and only shown up close: from the
@@ -438,10 +449,11 @@ local function buildPlot(world: Folder, index: number)
 
 	-- Treadmill: stand on it to gain Speed (AFK works). It doesn't move you: the client plays the run
 	-- animation in place and scrolls the belt texture. The belt is the gameplay piece; the frame around it
-	-- is the Treadmill asset slot.
-	local tmU, tmW0, tmLen = 30, 12, 28
+	-- is the Treadmill asset slot. Sized to sit comfortably in the plot's front corner, clear of the fence
+	-- and the plant rows (a model in assets/ is fitted to the frame, and the belt then follows its belt).
+	local tmU, tmW0, tmLen, tmWide = 30, 12, 18, 5.2
 	local beltCenter = at(tmU, tmW0 + tmLen / 2, 1.5)
-	local belt = tag(box(model, "TreadmillBelt", Vector3.new(8, 1, tmLen), CFrame.new(beltCenter) * facingIn,
+	local belt = tag(box(model, "TreadmillBelt", Vector3.new(tmWide, 1, tmLen), CFrame.new(beltCenter) * facingIn,
 		Color3.fromRGB(40, 40, 45), Enum.Material.DiamondPlate), "TreadmillBelt", "PlotIndex", index)
 	local tex = Instance.new("Texture")
 	tex.Name = "Stripes"
@@ -452,11 +464,11 @@ local function buildPlot(world: Folder, index: number)
 	tex.Transparency = 0.4
 	tex.Parent = belt
 	Assets.swap("Treadmill", model, Assets.facing(at(tmU, tmW0 + tmLen / 2, 1), Vector3.new(0, 0, toWalk)), function(into)
-		box(into, "TreadmillFrame", Vector3.new(12, 1, tmLen + 4), CFrame.new(beltCenter - Vector3.new(0, 0.6, 0)) * facingIn, Color3.fromRGB(230, 60, 60))
+		box(into, "TreadmillFrame", Vector3.new(tmWide + 2.6, 1, tmLen + 2.6), CFrame.new(beltCenter - Vector3.new(0, 0.6, 0)) * facingIn, Color3.fromRGB(230, 60, 60))
 		for _, s in { -1, 1 } do
-			box(into, "TreadmillRail", Vector3.new(1, 3, tmLen), CFrame.new(beltCenter + Vector3.new(s * 4.5, 1.5, 0)) * facingIn, Color3.fromRGB(230, 60, 60))
+			box(into, "TreadmillRail", Vector3.new(0.65, 2, tmLen), CFrame.new(beltCenter + Vector3.new(s * (tmWide / 2 + 0.35), 1, 0)) * facingIn, Color3.fromRGB(230, 60, 60))
 		end
-		box(into, "TreadmillStop", Vector3.new(8, 4, 1), CFrame.new(at(tmU, tmW0 - 0.5, 3)), Color3.fromRGB(230, 60, 60))
+		box(into, "TreadmillStop", Vector3.new(tmWide, 2.6, 0.65), CFrame.new(at(tmU, tmW0 - 0.35, 2.3)), Color3.fromRGB(230, 60, 60))
 	end, Vector3.new(1, 6, 1))
 	local tmSignPart = tag(box(model, "TreadmillSign", Vector3.new(1, 1, 1), CFrame.new(beltCenter + Vector3.new(0, 8, 0)), color), "TreadmillSign", "PlotIndex", index)
 	tmSignPart.Transparency = 1
@@ -1102,8 +1114,9 @@ function WorldBuilder.build(): ({ PlotInfo }, { NestInfo })
 	local world = Instance.new("Folder")
 	world.Name = "World"
 	buildBase(world)
+	local fencePosts = {}
 	for i = 1, Config.MAX_PLAYERS do
-		buildPlot(world, i)
+		buildPlot(world, i, fencePosts)
 	end
 	buildShops(world)
 	buildRewards(world)

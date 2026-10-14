@@ -1,6 +1,7 @@
 -- World generation: builds the real map with Lune's Roblox instances (every property is checked
 -- against the reflection database), then checks the layout contract and the performance budget.
 local H = require("./harness")
+local Layout = require("./plot_layout")
 
 local Config = H.shared("Config")
 local WorldBuilder = H.server("WorldBuilder")
@@ -48,9 +49,11 @@ H.test("world: plot layout contract is unchanged (slots, pad, spawn, belt)", fun
 		end
 		H.ok((plot.pad.CFrame.Position - at(0, 10, 1.2)).Magnitude < 1e-3, `pad position {plot.pad.CFrame.Position} vs {at(0, 10, 1.2)}`)
 		H.ok((plot.spawnCFrame.Position - at(-24, 12, 4)).Magnitude < 1e-3, "spawn position")
-		-- With a Treadmill model in assets/, the belt is raised to the model's running surface (same X and Z).
-		local beltDelta = plot.belt.CFrame.Position - at(30, 26, 1.5)
-		H.ok(math.abs(beltDelta.X) < 1e-3 and math.abs(beltDelta.Z) < 1e-3 and beltDelta.Y > -1e-3 and beltDelta.Y < 6, "belt position")
+		-- With a Treadmill model in assets/, the belt takes the model's belt: its running surface and its
+		-- footprint, so it may shift a little along the treadmill.
+		local beltDelta = plot.belt.CFrame.Position - at(30, 21, 1.5)
+		H.ok(math.abs(beltDelta.X) < 0.5 and math.abs(beltDelta.Z) < 2 and beltDelta.Y > -1e-3 and beltDelta.Y < 6, `belt position ({beltDelta})`)
+		H.ok(plot.belt.Size.X <= 6 and plot.belt.Size.Z <= 18, `a plot-sized belt ({plot.belt.Size})`)
 		H.eq(plot.model.PrimaryPart.Name, "Floor")
 		H.ok(plot.soil:IsA("Folder") and plot.plants:IsA("Folder"), "soil/plants folders")
 		H.ok(plot.signLabel:IsA("TextLabel"), "sign label")
@@ -143,7 +146,38 @@ H.test("world: the base is plain (no trees, bushes, flowers, lamps or rocks outs
 				posts += 1
 			end
 		end
-		H.ok(posts >= 20 and posts <= 40, `plot {i} has a simple wooden fence ({posts} posts)`)
+		-- Plots behind the front column share their +X side and two corner posts with the plot in front.
+		H.ok(posts >= 18 and posts <= 32, `plot {i} has a simple wooden fence ({posts} posts)`)
+	end
+end)
+
+H.test("world: plots are compact and share one clean fence (no double fences, gates or FASTEST board)", function()
+	local half = Config.PLOT_SIZE / 2
+	-- Neighbouring plots touch, and the front plots sit near the corridor mouth.
+	H.eq(Config.PLOT_SPACING_X, Config.PLOT_SIZE)
+	H.ok(Config.CORRIDOR_START_X - (Config.PLOT_FIRST_X + half) <= 30, "the front plots are near the corridor mouth")
+	H.ok(Config.PLOT_OFFSET_Z - half <= 32, "the plots are near the walkway")
+	Layout.check(world, plots, "built map")
+	Layout.plotsFullyFenced(world, plots, "built map")
+	for _, plot in plots do
+		local sign = plot.signLabel.Parent.Adornee
+		local side = if plot.center.Z > 0 then 1 else -1
+		local entrance = plot.center - Vector3.new(0, 0, side * half)
+		local p = sign.CFrame.Position
+		H.ok(math.abs(p.X - entrance.X) < 1 and math.abs(p.Z - entrance.Z) < 1 and p.Y > 6, "the name sign floats over the opening")
+		H.eq(plot.signLabel.Text, "🏠 Empty Plot")
+	end
+end)
+
+H.test("world: no server script builds the old FASTEST HERE board", function()
+	local fs = require("@lune/fs")
+	for _, dir in { "src/server", "src/shared", "src/client" } do
+		for _, entry in fs.readDir(dir) do
+			if string.match(entry, "%.luau$") then
+				local text = fs.readFile(dir .. "/" .. entry)
+				H.ok(not string.find(text, "FASTEST HERE", 1, true), `{dir}/{entry} mentions the FASTEST HERE board`)
+			end
+		end
 	end
 end)
 
