@@ -137,8 +137,6 @@ local function apply(p: Profile, name: string, product: Config.DevProduct, incom
 	elseif kind == "Treadmill" then
 		-- A tier at or below the current one only arrives if two prompts raced; keep the better tier.
 		p.treadmillTier = math.max(p.treadmillTier, product.tier :: number)
-	elseif kind == "Dust" then
-		p.items.SleepDust = (p.items.SleepDust or 0) + (product.count :: number)
 	elseif kind == "Trail" then
 		ownTrail(p, Config.trailById(product.trail) :: Config.Trail)
 	end

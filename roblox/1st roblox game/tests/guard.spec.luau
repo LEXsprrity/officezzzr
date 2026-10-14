@@ -17,7 +17,6 @@ end
 
 type SimOpts = {
 	standStill: boolean?,
-	dust: boolean?,
 	walk: number?, -- raw WalkSpeed instead of walkSpeedFor(speedStat)
 	wakeDelay: number?, -- override the guard's wake-up delay
 	reaction: number?, -- seconds the thief stands still after the steal before running
@@ -42,9 +41,6 @@ local function simulate(k: number, speedStat: number, opts: SimOpts?): (string, 
 	local walk = o.walk or Config.walkSpeedFor(speedStat)
 
 	local t = 1000
-	if o.dust then
-		assert(GuardBrain.dust(brain, t - 1), "dust should work on a sleeping guard")
-	end
 	GuardBrain.alert(brain, t)
 	local chased = false
 	local closest = math.huge
@@ -284,21 +280,6 @@ H.test("guard: reaching base (safe) ends the chase", function()
 	H.eq(brain.state, "Returning")
 end)
 
-H.test("guard: Sleep Dust delays waking by SLEEP_DUST_EXTRA more seconds", function()
-	local brain = GuardBrain.new(2, Vector3.new(0, 0, 0))
-	H.ok(GuardBrain.dust(brain, 0))
-	GuardBrain.alert(brain, 10)
-	local wake = 10 + brain.wakeDelay + Config.SLEEP_DUST_EXTRA
-	local target = { { id = "p", pos = Vector3.new(-40, 0, 0), safe = false } }
-	GuardBrain.step(brain, wake - 0.1, Vector3.new(0, 0, 0), target)
-	H.eq(brain.state, "Waking")
-	GuardBrain.step(brain, wake, Vector3.new(0, 0, 0), target)
-	H.eq(brain.state, "Chasing")
-	-- dust is used up by that steal
-	GuardBrain.step(brain, wake + 1, Vector3.new(0, 0, 0), {})
-	H.eq(brain.dustedUntil, 0)
-end)
-
 H.test("guard: bat stun freezes the guard for BAT_STUN seconds, then it resumes the chase", function()
 	local brain = awakeBrain(2, Vector3.new(0, 0, 0))
 	H.eq(GuardBrain.stun(brain, 0, Config.BAT_STUN), false, "can't stun a sleeping guard")
@@ -312,12 +293,6 @@ H.test("guard: bat stun freezes the guard for BAT_STUN seconds, then it resumes 
 	cmd = GuardBrain.step(brain, 1 + Config.BAT_STUN, Vector3.new(0, 0, 0), target)
 	H.eq(brain.state, "Chasing")
 	H.ok(cmd.moveTo ~= nil)
-end)
-
-H.test("guard: with the seed dusted, even a slow thief gets 5s more head start", function()
-	local _, tPlain = simulate(3, 0)
-	local _, tDusted = simulate(3, 0, { dust = true })
-	H.ok(tDusted > tPlain + Config.SLEEP_DUST_EXTRA - 0.5, `dusted {tDusted} vs plain {tPlain}`)
 end)
 
 return nil

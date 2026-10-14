@@ -2,7 +2,7 @@
 --   client -> server: RequestBuy(itemId), RequestUseItem(itemId)
 --     RequestBuy ids: "PlotUpgrade" and "Trail:<id>" (money), "Product:<name>" (developer products,
 --       Robux), "Pass:<name>" (gamepasses)
---     RequestUseItem ids: "Bat", "SleepDust", "Seed:<bagKey>" (plant from the seed bag), "Equip:<trailId>"
+--     RequestUseItem ids: "Bat", "Seed:<bagKey>" (plant from the seed bag), "Equip:<trailId>"
 --   server -> client: StatsUpdate(stats), LootEvent(kind, data), IncomePopup(amount, position)
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 

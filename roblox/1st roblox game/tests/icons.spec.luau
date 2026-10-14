@@ -13,7 +13,7 @@ local WorldBuilder = H.server("WorldBuilder")
 
 local KEYS = {
 	"Bag", "Bat", "Close", "DoubleMoney", "ExtraSlots", "Gift", "Home", "Index", "Leaderboard", "Lock", "Money",
-	"Plants", "PlotUpgrade", "Robux", "SeedPack", "Seeds", "Shop", "SleepDust", "Speed", "Star", "TrailShop", "Treadmill",
+	"Plants", "PlotUpgrade", "Robux", "SeedPack", "Seeds", "Shop", "Speed", "Star", "TrailShop", "Treadmill",
 }
 
 -- Runs fn with only these icon ids set (every other id 0), then puts Config.ICONS back.
@@ -58,7 +58,7 @@ local function show(pieces: { any }?): string?
 	return table.concat(out, " ")
 end
 
-H.test("icons: ids.json loads as Config.ICONS with all 22 keys (uploaded ids or 0)", function()
+H.test("icons: ids.json loads as Config.ICONS with all 21 keys (uploaded ids or 0)", function()
 	local raw = serde.decode("json", fs.readFile("icons/ids.json"))
 	local n = 0
 	for key, id in raw do
@@ -279,7 +279,7 @@ local function reply(code: number, body: any)
 	}
 end
 
-H.test("uploader: --dry-run lists all 22 icons and never needs a key or the network", function()
+H.test("uploader: --dry-run lists all 21 icons and never needs a key or the network", function()
 	local opts = Uploader.parseArgs({ "--dry-run" })
 	H.ok(opts and opts.dryRun)
 	local run = fakeDeps({})
@@ -292,8 +292,8 @@ H.test("uploader: --dry-run lists all 22 icons and never needs a key or the netw
 			would += 1
 		end
 	end
-	H.eq(would, 22, "one line per icon")
-	H.eq(#Uploader.listIcons(run.deps), 22)
+	H.eq(would, 21, "one line per icon")
+	H.eq(#Uploader.listIcons(run.deps), 21)
 end)
 
 H.test("uploader: arguments, creator and the multipart body", function()
@@ -346,7 +346,7 @@ H.test("uploader: an Image upload polls the operation and writes the asset id to
 	for _ in ids do
 		n += 1
 	end
-	H.eq(n, 22, "every key stays in ids.json")
+	H.eq(n, 21, "every key stays in ids.json")
 	for _, line in run.lines do
 		H.ok(not string.find(line, SECRET, 1, true), "the key is never printed")
 	end

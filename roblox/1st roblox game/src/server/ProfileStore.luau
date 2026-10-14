@@ -14,9 +14,9 @@ ProfileStore.__index = ProfileStore
 -- plot level; v1/v2 saves are migrated on load (see migrateSpeedMult and the plot level below).
 ProfileStore.VERSION = 3
 
--- Potions were removed from the game. Saves of any version may still hold potion timers
--- (`potions`, ignored) and potion items, which are dropped from the inventory on load.
-local RETIRED_ITEMS = { PotionSpeed = true, PotionMoney = true, PotionLuck = true }
+-- Items removed from the game (the potions, the guards' sleep item) may still be in saves of any version.
+-- Only ids listed in Config.START_ITEMS are loaded; anything else in `items` is dropped, and old potion
+-- timers (`potions`) are ignored.
 
 -- The removed money-bought Speed Gain tiers (v1/v2 `speedMultTier`): their multiplier and what they cost.
 ProfileStore.LEGACY_SPEED_MULT = {
@@ -208,7 +208,7 @@ function ProfileStore.deserialize(data: any): Profile
 	end
 	if type(data.items) == "table" then
 		for id, n in data.items do
-			if type(id) == "string" and type(n) == "number" and not RETIRED_ITEMS[id] then
+			if type(id) == "string" and type(n) == "number" and Config.START_ITEMS[id] ~= nil then
 				p.items[id] = math.max(0, math.floor(n))
 			end
 		end

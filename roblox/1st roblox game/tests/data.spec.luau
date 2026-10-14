@@ -38,7 +38,7 @@ local function richProfile()
 		{ slot = 7, zone = 7, rarity = 3, mutation = "Rainbow", plantedAt = 1790000456 },
 	}
 	p.index = { ["1:1"] = true, ["4:5"] = true, ["4:Gold"] = true, ["7:3"] = true, ["7:Rainbow"] = true }
-	p.items = { SleepDust = 2 }
+	p.items = {}
 	p.reachedEnd = true
 	p.lastSeen = 1790000999
 	return p
@@ -71,7 +71,7 @@ H.test("data: only the plant timestamp is stored, not weight or income", functio
 	end
 end)
 
-H.test("data: a new player gets defaults (plot level 1 = 5 slots, Grey trail, 3 Sleep Dust, 2x treadmill)", function()
+H.test("data: a new player gets defaults (plot level 1 = 5 slots, Grey trail, no items, 2x treadmill)", function()
 	local p, ok = ProfileStore.new(mockDataStore()):load(7)
 	H.ok(ok)
 	H.eq(p.plotLevel, 1)
@@ -79,7 +79,7 @@ H.test("data: a new player gets defaults (plot level 1 = 5 slots, Grey trail, 3 
 	H.ok(p.trails.Grey, "everyone owns the Grey trail")
 	H.eq(p.equippedTrail, "Grey")
 	H.eq(Config.trailMult(p.equippedTrail), 1.5)
-	H.eq(p.items.SleepDust, 3)
+	H.eq(next(p.items), nil, "the inventory starts empty")
 	H.eq(Config.TREADMILL_TIERS[p.treadmillTier].mult, 2)
 	H.eq(p.money, 0)
 	H.eq(#p.plants, 0)
@@ -119,7 +119,7 @@ H.test("data: garbage and out-of-range values are sanitized", function()
 			"nope",
 		},
 		index = { "1:1", 5, string.rep("x", 100) },
-		items = { SleepDust = 2.7, Bad = "x" },
+		items = { SleepDust = 2.7, Bad = "x" }, -- neither is a current item
 	})
 	H.eq(p.money, 0)
 	H.eq(p.speed, 0)
@@ -133,11 +133,11 @@ H.test("data: garbage and out-of-range values are sanitized", function()
 	H.eq(p.plants[1].plantedAt, 100)
 	H.eq(p.plants[3].mutation, nil)
 	H.ok(p.index["1:1"])
-	H.eq(p.items.SleepDust, 2)
+	H.eq(p.items.SleepDust, nil)
 	H.eq(p.items.Bad, nil)
 end)
 
-H.test("data: v1/v2 saves with potions still load; potion timers and potion items are dropped", function()
+H.test("data: v1/v2 saves with potions and Sleep Dust still load; potion timers and both items are dropped", function()
 	local v1 = {
 		v = 1, money = 50, speed = 10, speedMultTier = 2, treadmillTier = 1, slots = 11,
 		plants = { { s = 1, z = 1, r = 2, t = 1790000000 } }, index = { "1:2" },
@@ -158,7 +158,7 @@ H.test("data: v1/v2 saves with potions still load; potion timers and potion item
 		H.eq(p.equippedTrail, "Green", "Speed Gain x2 -> Green trail x2")
 		H.eq(Config.plotSlots(p.plotLevel), 11, "11 slots kept")
 		H.eq(#p.plants, 1)
-		H.eq(p.items.SleepDust, 2, "Sleep Dust is kept")
+		H.eq(p.items.SleepDust, nil, "Sleep Dust dropped")
 		for _, id in { "PotionSpeed", "PotionMoney", "PotionLuck" } do
 			H.eq(p.items[id], nil, id .. " dropped")
 		end
@@ -168,12 +168,41 @@ H.test("data: v1/v2 saves with potions still load; potion timers and potion item
 		local saved = serde.decode("json", ds.data["Player_7"])
 		H.eq(saved.potions, nil)
 		H.eq(saved.items.PotionLuck, nil)
-		H.eq(saved.items.SleepDust, 2)
+		H.eq(saved.items.SleepDust, nil)
 	end
 	-- malformed potion data doesn't error either
 	local p = ProfileStore.deserialize({ potions = "x", items = { PotionLuck = "y", SleepDust = 1 } })
-	H.eq(p.items.SleepDust, 1)
+	H.eq(p.items.SleepDust, nil)
 	H.eq(p.items.PotionLuck, nil)
+end)
+
+H.test("data: a v3 save holding Sleep Dust loads, drops it and saves without it", function()
+	local old = ProfileStore.serialize(richProfile())
+	old.items = { SleepDust = 5 }
+	local ds = mockDataStore()
+	ds.data["Player_7"] = serde.encode("json", old)
+	local p, ok = ProfileStore.new(ds, 1, 0):load(7)
+	H.ok(ok, "loads without error")
+	H.eq(p.items.SleepDust, nil, "Sleep Dust dropped")
+	local ok2, why = H.deepEq(p, richProfile())
+	H.ok(ok2, why or "everything else is kept")
+	H.ok(ProfileStore.new(ds, 1, 0):save(7, p))
+	H.eq(serde.decode("json", ds.data["Player_7"]).items.SleepDust, nil, "the next save no longer carries it")
+end)
+
+H.test("data: items listed in Config.START_ITEMS are saved and loaded (sanitized)", function()
+	local before = Config.START_ITEMS
+	Config.START_ITEMS = { Example = 0 }
+	local ok, err = pcall(function()
+		local p = ProfileStore.defaultProfile()
+		H.eq(p.items.Example, 0, "a new player gets the listed start count")
+		p.items.Example = 4
+		H.eq(ProfileStore.deserialize(ProfileStore.serialize(p)).items.Example, 4)
+		H.eq(ProfileStore.deserialize({ items = { Example = 2.7 } }).items.Example, 2)
+		H.eq(ProfileStore.deserialize({ items = { Example = -3 } }).items.Example, 0)
+	end)
+	Config.START_ITEMS = before
+	assert(ok, err)
 end)
 
 return nil

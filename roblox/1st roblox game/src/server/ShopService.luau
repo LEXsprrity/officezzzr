@@ -141,25 +141,7 @@ local function onUse(player: Player, itemId: any)
 		end
 		trailChanged(s)
 		Net.toast(player, `🏃 {msg} equipped: x{Sessions.speedMult(s)} Speed gain`, "blue")
-		return
 	end
-
-	if itemId ~= "SleepDust" then -- the only consumable
-		return
-	end
-	local count = s.profile.items.SleepDust or 0
-	if count <= 0 then
-		Net.toast(player, "You don't have any of those. Check the Shop!", "red")
-		return
-	end
-	local guard = GuardService.dust(player)
-	if not guard then
-		Net.toast(player, "Get close to a sleeping guard to use Sleep Dust.", "red")
-		return
-	end
-	s.profile.items.SleepDust = count - 1
-	Net.LootEvent:FireClient(player, "Dusted", { guard = guard, seconds = Config.SLEEP_DUST_EXTRA })
-	Sessions.pushFull(s)
 end
 
 ----------------------------------------------------------------------------------------------------

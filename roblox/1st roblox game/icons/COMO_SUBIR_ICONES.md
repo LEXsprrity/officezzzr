@@ -1,6 +1,6 @@
 # Como subir os ícones para o Roblox
 
-O jogo usa os 22 ícones desta pasta (`Shop.png`, `Robux.png`, ...). O Roblox só mostra imagens que foram **enviadas** para ele, e cada imagem enviada ganha um número (o *asset id*). Esses números ficam em **`icons/ids.json`**:
+O jogo usa os 21 ícones desta pasta (`Shop.png`, `Robux.png`, ...). O Roblox só mostra imagens que foram **enviadas** para ele, e cada imagem enviada ganha um número (o *asset id*). Esses números ficam em **`icons/ids.json`**:
 
 ```json
 {
@@ -20,7 +20,7 @@ Tem dois jeitos de preencher o `ids.json`: o automático (recomendado) e o manua
 
 ## (a) Jeito automático: o uploader
 
-Ele envia os 22 PNGs de uma vez e escreve os números no `ids.json` sozinho.
+Ele envia os 21 PNGs de uma vez e escreve os números no `ids.json` sozinho.
 
 ### 1. Criar uma chave de API (só uma vez)
 1. Abra **https://create.roblox.com/dashboard/credentials** (logado na sua conta).

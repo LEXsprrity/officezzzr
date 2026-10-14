@@ -272,7 +272,7 @@ local dayFrame = new("Frame", { Size = UDim2.fromOffset(240, 40), BackgroundColo
 local dayLabel = text(dayFrame, { Text = "", Size = UDim2.new(1, -12, 1, -6), Position = UDim2.fromOffset(6, 3) })
 
 ----------------------------------------------------------------------------------------------------
--- Hotbar (bottom centre): Bat + Sleep Dust
+-- Hotbar (bottom centre): Bat
 ----------------------------------------------------------------------------------------------------
 local hotbar = new("Frame", {
 	BackgroundTransparency = 1, AnchorPoint = Vector2.new(0.5, 1), Position = UDim2.new(0.5, 0, 1, -14),
@@ -284,14 +284,8 @@ local function useBat()
 		RequestUseItem:FireServer("Bat")
 	end
 end
-local function useDust()
-	RequestUseItem:FireServer("SleepDust")
-end
 local batSlot = button(hotbar, "🏏\nBat", Color3.fromRGB(200, 140, 80), UDim2.fromOffset(84, 84), useBat, "Bat")
-local dustSlot = button(hotbar, "💤\nDust x0", Color3.fromRGB(120, 130, 255), UDim2.fromOffset(84, 84), useDust, "SleepDust")
-for i, slot in { batSlot, dustSlot } do
-	text(slot, { Text = tostring(i), Size = UDim2.fromOffset(18, 18), Position = UDim2.fromOffset(4, 2), TextColor3 = COLORS.gold })
-end
+text(batSlot, { Text = "1", Size = UDim2.fromOffset(18, 18), Position = UDim2.fromOffset(4, 2), TextColor3 = COLORS.gold })
 local batShade = new("Frame", {
 	BackgroundColor3 = Color3.new(0, 0, 0), BackgroundTransparency = 0.45, Size = UDim2.fromScale(1, 0),
 	AnchorPoint = Vector2.new(0, 1), Position = UDim2.fromScale(0, 1), Parent = batSlot,
@@ -303,8 +297,6 @@ UserInputService.InputBegan:Connect(function(input, processed)
 	end
 	if input.KeyCode == Enum.KeyCode.One then
 		useBat()
-	elseif input.KeyCode == Enum.KeyCode.Two then
-		useDust()
 	end
 end)
 
@@ -742,14 +734,6 @@ local function renderShop()
 			`Your treadmill: x{Config.TREADMILL_TIERS[stats.treadmillTier or 1].mult}`, "Treadmill", if owned then "Owned" else nil)
 	end
 
-	-- Items (Robux)
-	section("ITEMS", nextOrder())
-	grid = cardGrid(nextOrder())
-	for i, entry in Config.products("Dust") do
-		productCard(grid, i, entry.name, entry.product, Color3.fromRGB(120, 130, 255), `💤 {entry.product.label}`,
-			`You have {(stats.items or {}).SleepDust or 0} · press 2 near a sleeping guard`, "SleepDust")
-	end
-
 	-- Gamepasses (Robux)
 	section("PASSES", nextOrder())
 	grid = cardGrid(nextOrder())
@@ -1095,8 +1079,6 @@ local function refresh(changed: { [string]: any })
 	multLabel.Text = `x{stats.speedMult or 1}`
 	multLabel.TextColor3 = if trail and not trail.rainbow then trail.color:Lerp(WHITE, 0.3) else COLORS.gold
 
-	setLabel(dustSlot, `💤\nDust x{(stats.items or {}).SleepDust or 0}`, "SleepDust")
-
 	local c = stats.carrying
 	carryBanner.Visible = c ~= false and c ~= nil
 	if c then
@@ -1174,8 +1156,6 @@ LootEvent.OnClientEvent:Connect(function(kind: string, data: any)
 		if data.hit then
 			toast("💫 WHACK! Guard stunned!", "gold", 2)
 		end
-	elseif kind == "Dusted" then
-		toast(`💤 The {data.guard} will sleep {data.seconds}s longer on the next steal.`, "blue")
 	elseif kind == "Offline" then
 		toast(`While you were away ({Format.clock(data.seconds)}): +{Format.money(data.amount)}`, "gold", 6)
 	elseif kind == "End" then
