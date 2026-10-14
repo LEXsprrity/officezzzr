@@ -16,9 +16,12 @@ local KEYS = {
 	"Plants", "PlotUpgrade", "Robux", "SeedPack", "Seeds", "Shop", "SleepDust", "Speed", "Star", "TrailShop", "Treadmill",
 }
 
--- Runs fn with some icon ids set, then puts Config.ICONS back.
+-- Runs fn with only these icon ids set (every other id 0), then puts Config.ICONS back.
 local function withIds(ids: { [string]: number }, fn: () -> ())
 	local saved = table.clone(Config.ICONS)
+	for k in Config.ICONS do
+		Config.ICONS[k] = 0
+	end
 	for k, v in ids do
 		Config.ICONS[k] = v
 	end
@@ -55,7 +58,7 @@ local function show(pieces: { any }?): string?
 	return table.concat(out, " ")
 end
 
-H.test("icons: ids.json loads as Config.ICONS with all 22 keys, all 0 until uploaded", function()
+H.test("icons: ids.json loads as Config.ICONS with all 22 keys (uploaded ids or 0)", function()
 	local raw = serde.decode("json", fs.readFile("icons/ids.json"))
 	local n = 0
 	for key, id in raw do
@@ -68,9 +71,9 @@ H.test("icons: ids.json loads as Config.ICONS with all 22 keys, all 0 until uplo
 	for _, key in KEYS do
 		H.ok(Config.ICONS[key] ~= nil, `Config.ICONS has no {key}`)
 	end
-	-- The committed file has no ids yet: the game must look exactly as before.
+	-- Each id is 0 (not uploaded: the emoji shows) or a whole positive asset id.
 	for key, id in Config.ICONS do
-		H.eq(id, 0, `ids.json {key} should stay 0 in the repo until the owner uploads`)
+		H.ok(id == 0 or (id > 0 and id == math.floor(id)), `ids.json {key} is 0 or an asset id`)
 	end
 	-- The uploader writes the same format the repo keeps.
 	H.eq(Uploader.encodeIds(Config.ICONS), string.gsub(fs.readFile("icons/ids.json"), "\r", ""), "ids.json is in the uploader's format")
@@ -96,6 +99,7 @@ H.test("icons: every Config.ICONS key has icons/<key>.png and an emoji token, an
 end)
 
 H.test("icons: with every id at 0 nothing changes (no images, labels keep their emoji text)", function()
+	withIds({}, function()
 	for _, key in KEYS do
 		H.eq(Icons.image(key), nil, `Icons.image({key})`)
 	end
@@ -116,6 +120,7 @@ H.test("icons: with every id at 0 nothing changes (no images, labels keep their 
 	for _, d in world:GetDescendants() do
 		H.ok(d.Name ~= "IconRow", "no icon rows on the map with no ids")
 	end
+	end)
 end)
 
 H.test("icons: with an id set, Icons.image returns its rbxassetid", function()
@@ -126,7 +131,7 @@ H.test("icons: with an id set, Icons.image returns its rbxassetid", function()
 		H.eq(Icons.image("Gift"), nil, "fractional ids are ignored")
 		H.eq(Icons.image("Index"), nil, "others still 0")
 	end)
-	H.eq(Icons.image("Shop"), nil, "restored")
+	H.eq(Icons.image("Shop"), if Config.ICONS.Shop > 0 then `rbxassetid://{Config.ICONS.Shop}` else nil, "restored to the repo id")
 end)
 
 H.test("icons: emoji become icon pieces (in front, inline, both ends, above the text)", function()
@@ -231,9 +236,15 @@ end)
 ----------------------------------------------------------------------------------------------------
 local SECRET = "test-key-SHOULD-NEVER-BE-PRINTED"
 
--- Deps over the real icons/ folder, with writes, prints and the network captured.
+-- Deps over the real icons/ folder, with writes, prints and the network captured. ids.json starts with
+-- every id at 0 (as before any upload), whatever the repo's real ids are.
 local function fakeDeps(env: { [string]: string? }, handler: ((req: any) -> any)?)
 	local out = { lines = {}, writes = {}, requests = {} }
+	local zero = {}
+	for key in Config.ICONS do
+		zero[key] = 0
+	end
+	local seed = { [Uploader.IDS_FILE] = Uploader.encodeIds(zero), [Uploader.UPLOADS_FILE] = "{}" }
 	out.deps = {
 		request = function(req)
 			table.insert(out.requests, req)
@@ -249,13 +260,13 @@ local function fakeDeps(env: { [string]: string? }, handler: ((req: any) -> any)
 		wait = function() end,
 		readDir = fs.readDir,
 		readFile = function(path)
-			return out.writes[path] or fs.readFile(path)
+			return out.writes[path] or seed[path] or fs.readFile(path)
 		end,
 		writeFile = function(path, data)
 			out.writes[path] = data
 		end,
 		isFile = function(path)
-			return out.writes[path] ~= nil or fs.isFile(path)
+			return out.writes[path] ~= nil or seed[path] ~= nil or fs.isFile(path)
 		end,
 	}
 	return out
