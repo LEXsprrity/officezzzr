@@ -11,7 +11,8 @@ export type Pack = {
 	id: string, -- reveal id: "Pack:<zoneId>"
 	zone: number,
 	name: string,
-	luck: number,
+	luck: number, -- tilts Common..Epic
+	legendaryChance: number, -- 0..1, fixed (never tilted by luck)
 	mutationMult: number,
 	exclusive: string?, -- pack-only mutation id (never from pods)
 	exclusiveChance: number,
@@ -31,6 +32,7 @@ function SeedPacks.zonePack(k: number): Pack
 		zone = k,
 		name = `{zone.seed} Pack`,
 		luck = Config.PACK_LUCK,
+		legendaryChance = Config.PACK_LEGENDARY_CHANCE,
 		mutationMult = Config.PACK_MUTATION_MULT,
 		exclusive = Config.PACK_EXCLUSIVE,
 		exclusiveChance = Config.PACK_EXCLUSIVE_CHANCE,
@@ -60,7 +62,7 @@ end
 -- Odds and rolls
 ----------------------------------------------------------------------------------------------------
 function SeedPacks.odds(pack: Pack): Odds
-	local weights = Config.rarityWeights(pack.zone, pack.luck)
+	local weights = Config.rarityWeights(pack.zone, pack.luck, pack.legendaryChance)
 	local total = 0
 	for _, w in weights do
 		total += w

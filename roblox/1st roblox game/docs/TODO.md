@@ -12,7 +12,7 @@ Marcar com `[x]` quando estiver feito e junto ao jogo.
 
 - [x] **3. Anúncio de subir de nível.** Ao subir de nível aparece rápido no ecrã "LEVEL 3!" com o multiplicador por baixo. É curto e não tapa o jogo. Ref: `03-level-up-announcement.png`.
 
-- [ ] **4. Lendários muito raros no fim do jogo.** Plantas Legendary têm de ser muito, muito raras, sobretudo nas 2 últimas zonas (Deep Space e Spirit Garden). Têm de parecer exclusivas.
+- [x] **4. Lendários muito raros no fim do jogo.** Plantas Legendary têm de ser muito, muito raras, sobretudo nas 2 últimas zonas (Deep Space e Spirit Garden). Têm de parecer exclusivas.
 
 - [x] **5. Lojas bonitas e com scroll para a direita.** As lojas atuais estão feias e não dá para deslizar para a direita. Copiar o estilo da referência na Trail Shop: barra de título colorida com X vermelho, cartões grandes da cor do trail, raridade, "x2 Speed", botão verde de `$` e botão roxo de Robux, e barra de scroll horizontal. Ref: `05-trail-shop-reference.png` (antes: `05-our-trail-shop-before.png`).
 

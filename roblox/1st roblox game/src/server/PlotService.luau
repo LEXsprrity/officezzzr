@@ -294,6 +294,9 @@ local function tryPlant(player: Player, state: PlotState)
 		return
 	end
 	plantSeed(player, s, state, slot, carry.zone, carry.rarity, carry.mutation)
+	if Config.announcesLegendary(carry.zone, carry.rarity, false) then
+		Net.announce(Config.legendaryAnnouncement(player.DisplayName, carry.zone, carry.mutation), "gold")
+	end
 end
 
 -- Plants one seed of kind `key` from the player's seed bag (seeds bought in packs), from the Seeds
