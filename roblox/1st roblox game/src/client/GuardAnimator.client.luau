@@ -37,7 +37,7 @@ local function makeZzz(head: BasePart): (BillboardGui, { TextLabel })
 	gui.Name = "Zzz"
 	gui.Size = UDim2.fromOffset(120, 140)
 	gui.StudsOffsetWorldSpace = Vector3.new(2.5, 7.5, 0)
-	gui.MaxDistance = 160
+	gui.MaxDistance = 100
 	gui.LightInfluence = 0
 	gui.Adornee = head
 	local labels = {}

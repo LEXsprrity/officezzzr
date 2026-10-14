@@ -118,8 +118,37 @@ H.test("treadmill: Effects.client locks, sprints and pops Speed with the shared 
 	H.ok(string.find(source, "CharacterAdded", 1, true) ~= nil, "a respawn resets the lock")
 	H.ok(string.find(source, "partial.plot", 1, true) ~= nil, "reads its plot from StatsUpdate")
 	H.ok(string.find(source, "onAnyBelt", 1, true) == nil, "the any-belt check is gone")
-	local speed = fs.readFile("src/server/SpeedService.luau")
-	H.ok(string.find(speed, "This isn't your treadmill", 1, true) ~= nil, "the server says why someone else's belt pays nothing")
+	-- no toast about somebody else's treadmill (owner playtest): you just can't step on it
+	for _, file in { "src/server/SpeedService.luau", "src/server/PlotService.luau", "src/client/Effects.client.luau", "src/client/HUD.client.luau" } do
+		local text = fs.readFile(file)
+		H.ok(string.find(text, "isn't your treadmill", 1, true) == nil, `{file} has no "isn't your treadmill" toast`)
+	end
+	H.ok(string.find(source, "Treadmill.blockBox(belt.CFrame, belt.Size)", 1, true) ~= nil and string.find(source, "CanCollide = true", 1, true) ~= nil,
+		"Effects.client puts a solid invisible wall over the other belts")
+	H.ok(string.find(source, "belt:GetAttribute(\"PlotIndex\") == myPlot", 1, true) ~= nil, "...but not over its own")
+	H.ok(string.find(source, "AutoRotate = false", 1, true) ~= nil, "a locked runner isn't turned by the walking keys")
+end)
+
+H.test("treadmill wall: someone else's belt is walled off; a runner on it would be inside the wall", function()
+	local b = belt(3, Vector3.new(-40, 1.5, 30))
+	b.Size = Vector3.new(4.5, 1, 9)
+	local cf, size = Treadmill.blockBox(b.CFrame, b.Size)
+	local rel = b.CFrame:PointToObjectSpace(cf.Position)
+	H.ok(math.abs(rel.X) < 1e-4 and math.abs(rel.Z) < 1e-4, "centred over the belt")
+	H.ok(size.X >= b.Size.X and size.Z >= b.Size.Z, "covers its whole footprint")
+	local bottom = rel.Y - size.Y / 2
+	H.ok(bottom >= b.Size.Y / 2 and bottom <= b.Size.Y / 2 + 0.2, `starts just above the belt ({bottom})`)
+	H.ok(size.Y >= 8, "too tall to jump onto")
+	-- every spot the belt check counts as on the belt is inside the wall
+	for _, x in { -2.2, 0, 2.2 } do
+		for _, z in { -4.4, 0, 4.4 } do
+			local pos = (b.CFrame * CFrame.new(x, b.Size.Y / 2 + 3, z)).Position
+			H.ok(Treadmill.onBelt(b.CFrame, b.Size, pos), "on the belt")
+			local p = cf:PointToObjectSpace(pos)
+			H.ok(math.abs(p.X) < size.X / 2 and math.abs(p.Y) < size.Y / 2 and math.abs(p.Z) < size.Z / 2, `({x}, {z}) inside the wall`)
+		end
+	end
+	b:Destroy()
 end)
 
 ----------------------------------------------------------------------------------------------------

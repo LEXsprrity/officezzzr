@@ -25,7 +25,7 @@ GiantMole.JOINTS = {
 	"ShoulderL", "ShoulderR", "WristL", "WristR", "HipL", "HipR", "TailJ",
 }
 
-GiantMole.HEAD_LABEL_OFFSETS = { status = 9.5, name = 7.4 } -- above the Head bone's centre
+GiantMole.HEAD_LABEL_OFFSETS = { status = 9.5 } -- above the Head bone's centre
 
 type Builder = { model: Model, ground: CFrame }
 
