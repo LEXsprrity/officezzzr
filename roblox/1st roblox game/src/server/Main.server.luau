@@ -48,19 +48,24 @@ local store: ProfileStore.Store? = nil
 do
 	local ok, ds = pcall(DataStoreService.GetDataStore, DataStoreService, Config.DATASTORE_NAME)
 	if ok then
-		store = ProfileStore.new(ds)
+		store = ProfileStore.new(ds, nil, nil, game.JobId)
 	else
 		warn("[Main] DataStore unavailable, progress will not save:", ds)
 	end
 end
 
 -- Returns whether the profile reached the DataStore (Robux receipts are only confirmed after that).
-local function save(s: Sessions.Session): boolean
+-- `release`: the session is over (the player left), so its session lock goes with this save (ProfileStore).
+local function save(s: Sessions.Session, release: boolean?): boolean
 	if not store or not s.canSave then
 		return false
 	end
 	s.profile.lastSeen = os.time()
-	return store:save(s.player.UserId, s.profile)
+	local ok, why = store:save(s.player.UserId, s.profile, release)
+	if why == "locked" then
+		s.canSave = false -- another server has this profile now: this session never writes it again
+	end
+	return ok
 end
 ShopService.save = save
 
@@ -116,14 +121,21 @@ local function onPlayerAdded(player: Player)
 		profile, canSave = ProfileStore.defaultProfile(), false
 	end
 	if not player.Parent then
-		return -- left while loading
+		if store and canSave then
+			store:save(player.UserId, profile, true) -- left while loading: let the profile go for their next server
+		end
+		return
 	end
 
 	local s = Sessions.create(player, profile, canSave)
 	ShopService.checkPasses(s)
+	if not player.Parent or Sessions.get(player) ~= s then
+		return -- left while the passes were checked (onPlayerRemoving saved; a plot now would never be freed)
+	end
 	if not PlotService.assign(s) then
 		Sessions.remove(player)
 		player:Kick("This server is full (8 plots). Please join another server.")
+		save(s, true)
 		return
 	end
 	PlotService.grantOffline(s)
@@ -152,7 +164,7 @@ local function onPlayerRemoving(player: Player)
 	end
 	SeedService.returnCarry(player)
 	PlotService.release(player)
-	save(s)
+	save(s, true)
 	Sessions.remove(player)
 end
 
@@ -180,7 +192,7 @@ game:BindToClose(function()
 	for _, s in Sessions.all() do
 		pending += 1
 		task.spawn(function()
-			save(s)
+			save(s, true)
 			pending -= 1
 		end)
 	end

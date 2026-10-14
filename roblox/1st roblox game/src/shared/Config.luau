@@ -697,7 +697,8 @@ Config.BAT_COOLDOWN = 4
 
 -- Gamepasses: create each on the Creator Dashboard and paste its id here; id = 0 = not set up yet (the
 -- Shop says "coming soon"). Ownership is only ever decided on the server (ShopService: UserOwnsGamePassAsync
--- at join, PromptGamePassPurchaseFinished after a purchase) into Sessions.passes; the client only shows it.
+-- at join, and again when PromptGamePassPurchaseFinished reports a purchase) into Sessions.passes; the
+-- client only shows it.
 -- `robux` is the placeholder price shown until the real one (Dashboard) is read with GetProductInfo;
 -- `about` is the Shop card's benefit line; `icon` its Icons key (nil: a gold "VIP" badge); `order` its place.
 export type Gamepass = { id: number, label: string, robux: number, about: string, icon: string?, order: number }

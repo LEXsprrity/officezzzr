@@ -1,6 +1,6 @@
 -- Gamepasses: 2x Speed, 2x Luck, VIP and Fast Grow next to 2x Money and +10 Slots. Each pass's effect
--- applies only to its owner; ownership is decided only on the server (UserOwnsGamePassAsync at join,
--- PromptGamePassPurchaseFinished after a purchase); the Shop's PASSES cards show it.
+-- applies only to its owner; ownership is decided only on the server (UserOwnsGamePassAsync at join, and
+-- after PromptGamePassPurchaseFinished reports a purchase); the Shop's PASSES cards show it.
 local fs = require("@lune/fs")
 local roblox = require("@lune/roblox")
 local H = require("./harness")
@@ -303,6 +303,9 @@ local function thief(passes: { [string]: boolean }?, at: Vector3): any
 	hum.Health = 100
 	hum.Parent = char
 	s.player.Character = char
+	-- the server's movement check has seen them there (SpeedService.trustedRoot)
+	SpeedLogic.teleported(s.tracker, at)
+	s.tracker.at = os.clock()
 	return s
 end
 
@@ -428,8 +431,12 @@ H.test("passes: ownership is checked on the server (join and purchase); the clie
 		Marketplace.PromptGamePassPurchaseFinished.fn(nobody.player, 9004, false)
 		H.eq(nobody.passes.DoubleSpeed, nil, "cancelled: nothing")
 		Marketplace.PromptGamePassPurchaseFinished.fn(nobody.player, 9004, true)
+		H.eq(nobody.passes.DoubleSpeed, nil, "a purchase Roblox doesn't confirm (the client's report alone): nothing")
+		owned[9004] = true -- Roblox has the purchase: UserOwnsGamePassAsync says so
+		Marketplace.PromptGamePassPurchaseFinished.fn(nobody.player, 9004, true)
 		H.eq(nobody.passes.DoubleSpeed, true, "bought: granted")
 		H.eq(Sessions.passSpeedMult(nobody), 2, "and in effect at once")
+		owned[9001] = true
 		Marketplace.PromptGamePassPurchaseFinished.fn(nobody.player, 9001, true)
 		H.eq(nobody.player:GetAttribute("VIP"), true, "VIP bought mid-game: the chat attribute")
 		H.ok(nobody.player.Character:FindFirstChild("Head"):FindFirstChild(VipService.TAG) ~= nil, "...and the head tag")

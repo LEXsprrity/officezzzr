@@ -32,6 +32,59 @@ function SpeedService.teleport(player: Player, cf: CFrame)
 	char:PivotTo(cf)
 	if s then
 		SpeedLogic.teleported(s.tracker, cf.Position)
+		s.tracker.at = os.clock()
+	end
+end
+
+-- The character's root, if it is alive and where the server sees it now is somewhere it could have walked to
+-- since the movement check last saw it (SpeedLogic.plausible). Every position check made between ticks
+-- (stealing a seed, getting home with it, selling, planting, the Upgrade boards, the bat) goes through this:
+-- the client moves its own character, so a teleport, or a client ignoring the rubber-band, would otherwise
+-- count right away. nil when dead, before the first tick, or right after a refused move.
+function SpeedService.trustedRoot(player: Player): BasePart?
+	local s = Sessions.get(player)
+	local root = rootOf(player)
+	if not s or not root then
+		return nil
+	end
+	if not SpeedLogic.plausible(s.tracker, root.CFrame.Position, os.clock() - (s.tracker.at or 0), s.walkSpeed) then
+		return nil
+	end
+	return root
+end
+
+-- Where the server last saw the character get to: its root now if trusted (trustedRoot), else the last
+-- position the movement check accepted. The guards chase this, so a thief can't shake one off by
+-- teleporting into the base and waiting there. nil when dead or never seen.
+function SpeedService.seenPosition(player: Player): Vector3?
+	local root = SpeedService.trustedRoot(player)
+	if root then
+		return root.CFrame.Position
+	end
+	local s = Sessions.get(player)
+	if not s or not rootOf(player) then
+		return nil
+	end
+	return s.tracker.lastGood or s.tracker.lastPos
+end
+
+-- Ticks in a row a session's character has had a root but no Humanoid.
+local headless: { [any]: number } = setmetatable({}, { __mode = "k" }) :: any
+
+-- A root without a Humanoid only happens when a client deletes it (a deletion in your own character can
+-- replicate, see Workspace.RejectCharacterDeletions): then the movement check, the guards and the Died hook
+-- would all skip the character. Two such ticks in a row and it is respawned (CharacterRemoving sends a
+-- carried seed back to its pod).
+local function checkHeadless(s: Sessions.Session)
+	local char = s.player.Character
+	if char and char.Parent and char:FindFirstChild("HumanoidRootPart") and not char:FindFirstChildOfClass("Humanoid") then
+		headless[s] = (headless[s] or 0) + 1
+		if headless[s] >= 2 then
+			headless[s] = nil
+			task.spawn(s.player.LoadCharacter, s.player)
+		end
+	else
+		headless[s] = nil
 	end
 end
 
@@ -39,8 +92,10 @@ end
 local function tickPlayer(s: Sessions.Session, dt: number, now: number)
 	local root, hum = rootOf(s.player)
 	if not root or not hum then
+		checkHeadless(s)
 		return
 	end
+	headless[s] = nil
 	local pos = root.Position
 	-- Only your own plot's belt pays; nobody can step onto somebody else's (Effects.client blocks it).
 	local onTreadmill = s.plot ~= nil and WorldBuilder.onBelt(s.plot.belt, pos)
@@ -51,11 +106,13 @@ local function tickPlayer(s: Sessions.Session, dt: number, now: number)
 		treadmillTier = s.profile.treadmillTier,
 		trailMult = Sessions.speedMult(s),
 	})
+	s.tracker.at = now
 
 	if verdict == "rubberband" and back then
 		local char = s.player.Character
 		if char then
-			char:PivotTo(CFrame.new(back) * root.CFrame.Rotation)
+			local turn = root.CFrame.Rotation
+			char:PivotTo(CFrame.new(back) * (if SpeedLogic.finite(turn.LookVector) then turn else CFrame.new()))
 		end
 	end
 

@@ -47,6 +47,12 @@ local Net = {
 	IncomePopup = remote("IncomePopup"),
 }
 
+-- Server -> client only. Any client can still fire them at the server: those calls are dropped here
+-- (without a listener Roblox would queue every one of them and warn).
+for _, r in { Net.StatsUpdate, Net.LootEvent, Net.IncomePopup } do
+	r.OnServerEvent:Connect(function() end)
+end
+
 folder.Parent = ReplicatedStorage
 
 function Net.toast(player: Player, text: string, color: string?)

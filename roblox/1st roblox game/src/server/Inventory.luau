@@ -110,4 +110,15 @@ function Inventory.isHome(pos: Vector3): boolean
 	return pos.X < Config.CORRIDOR_START_X
 end
 
+-- Whether a player at `pos` is out past the corridor's side walls or its back wall (with OFF_COURSE_MARGIN
+-- studs for the walls' thickness). The walls are WALL_HEIGHT tall, so only flying or clipping gets there,
+-- and no guard can follow (they chase inside the walls): a seed carried there goes back to its pod.
+Inventory.OFF_COURSE_MARGIN = 8
+function Inventory.offCourse(pos: Vector3): boolean
+	if pos.X < Config.CORRIDOR_START_X then
+		return false -- the base
+	end
+	return math.abs(pos.Z) > Config.CORRIDOR_WIDTH / 2 + Inventory.OFF_COURSE_MARGIN or pos.X > Config.END_X + Inventory.OFF_COURSE_MARGIN
+end
+
 return Inventory
