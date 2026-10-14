@@ -33,8 +33,11 @@
           "Size": [12, 1, 12],
           "Position": [20, 0.5, 0],
           "Duration": 0,
-          "Color": [0.35, 0.8, 1.0],
-          "Material": "Neon"
+          "Transparency": 1,
+          "CanCollide": false,
+          "CanTouch": false,
+          "CanQuery": false,
+          "CastShadow": false
         }
       }
     },
