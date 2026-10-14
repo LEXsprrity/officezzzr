@@ -5,6 +5,7 @@ local Shared = ReplicatedStorage:WaitForChild("Shared")
 local Config = require(Shared:WaitForChild("Config"))
 local Format = require(Shared:WaitForChild("Format"))
 local SeedPacks = require(Shared:WaitForChild("SeedPacks"))
+local Icons = require(Shared:WaitForChild("Icons"))
 local Net = require(script.Parent:WaitForChild("Net"))
 local Sessions = require(script.Parent:WaitForChild("Sessions"))
 local SeedService = require(script.Parent:WaitForChild("SeedService"))
@@ -355,12 +356,12 @@ end
 local function renderTreadmillSign(state: PlotState)
 	local s = state.owner and Sessions.get(state.owner)
 	if not s then
-		state.info.treadmillLabel.Text = "🏃 TREADMILL"
+		Icons.set(state.info.treadmillLabel, "Treadmill", "🏃 TREADMILL")
 		return
 	end
 	local tier = Sessions.treadmillMult(s)
 	local perSecond = math.min(s.walkSpeed, Config.GAIN_CAP_STUDS_PER_TICK / Config.TICK) * Sessions.speedPerStud(s) * tier
-	state.info.treadmillLabel.Text = `🏃 TREADMILL x{tier}\n+{Format.short(perSecond)} Speed/s`
+	Icons.set(state.info.treadmillLabel, "Treadmill", `🏃 TREADMILL x{tier}\n+{Format.short(perSecond)} Speed/s`)
 end
 
 -- Writes the owner's level, perk and price on the board (and the prompt's text).
@@ -468,7 +469,7 @@ function PlotService.assign(s: Sessions.Session): WorldBuilder.PlotInfo?
 		if state.owner == nil then
 			state.owner = s.player
 			s.plot = state.info
-			state.info.signLabel.Text = `🏠 {s.player.DisplayName}'s Plot`
+			Icons.set(state.info.signLabel, "Home", `🏠 {s.player.DisplayName}'s Plot`)
 			local padPrompt = state.info.pad:FindFirstChildOfClass("ProximityPrompt")
 			if padPrompt then
 				padPrompt:SetAttribute("OwnerUserId", s.player.UserId)
@@ -503,7 +504,7 @@ function PlotService.release(player: Player)
 	clearPlants(state)
 	state.info.soil:ClearAllChildren()
 	state.owner = nil
-	state.info.signLabel.Text = "🏠 Empty Plot"
+	Icons.set(state.info.signLabel, "Home", "🏠 Empty Plot")
 	state.info.model:SetAttribute("OwnerUserId", nil)
 	local padPrompt = state.info.pad:FindFirstChildOfClass("ProximityPrompt")
 	if padPrompt then

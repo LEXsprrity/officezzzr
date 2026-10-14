@@ -146,6 +146,7 @@ rojo build -o StealASeed.rbxlx          # build a place file (includes the baked
 rojo serve                              # or live-sync into Studio (Rojo plugin)
 luau-compile --null src/**/*.luau       # syntax/compile check
 lune run tests/run.luau                 # mocked server tests (run from this folder; Lune 0.10+)
+lune run tools/upload_icons.luau --dry-run   # list the UI icons the uploader would send (no key needed)
 ```
 The tests also build the whole map with Lune's Roblox instances. Every property WorldBuilder/ZoneThemes set is checked against the Roblox reflection database, the plot/nest layout contract and the part budget are verified, and the per-zone part counts are printed.
 
@@ -196,6 +197,30 @@ luau-lsp analyze --definitions=globalTypes.d.luau --sourcemap=sourcemap.json src
 - **Zone boundaries come from `Config`**, not from the map: `zoneAtX`, the guards' chase lines and the corridor's ends don't change if a zone's floor or walls are moved. Only the look does.
 - **Regenerating from code is explicit.** `lune run tools/build_map.luau` refuses to overwrite an existing `map/World.rbxm`. `--force` regenerates it from WorldBuilder/ZoneThemes/Props and **discards every hand edit in it** (git keeps the old file). The map tests are contract tests: the committed file loads, validates and gives usable plot and nest info (slot counts, belt check, pods). They don't compare it with the code, because hand edits are expected.
 - Guardians and plant-creatures are spawned at runtime, so they only appear in Play.
+
+### UI icons (`icons/`)
+The HUD and the world signs use the 22 PNG icons in `icons/` (256x256, "Free Icon Pack" by @gvesster). Roblox can only show **uploaded** images (`rbxassetid://<id>`), so each icon has an asset id in **`icons/ids.json`**. Rojo turns that file into the ModuleScript `ReplicatedStorage.Shared.IconIds` (Rojo 7 makes any plain `.json` file a ModuleScript returning its data; mapped in `default.project.json`), and `Config.ICONS` reads it. Updating ids never means editing Lua.
+
+- **`0` = not uploaded yet: the emoji stays.** Every icon stands in for an emoji (or `R$`) in some text (`Icons.TOKENS`). While its id is 0 the text is shown exactly as before, so with every id at 0 (the repo default) the game looks the same as without icons.
+- **One helper.** `Icons.image(key)` gives `"rbxassetid://<id>"` or nil. `Icons.set(label, keys, text, size?, textSize?)` writes every icon label: with no uploaded icon it is just `label.Text = text`; with one it empties the label and lays out an `IconRow` inside it: square `ImageLabel`s (`ScaleType.Fit`, `size` x the label height) and the text pieces, styled like the label (font, colour, stroke). The emoji can be in front (`🛒 Shop`), inline (`Buy · R$ 2,000` → Buy · [R$] 2,000), at both ends (`⚡ FASTEST HERE ⚡`), or above the text (`🏏\nBat`). One key whose emoji isn't in the text puts the icon in front (`$1.2K` → [Money] $1.2K, `-- SEED PACKS --`); a list of keys only replaces emoji that are there (so `{ "Lock" }` on "✅ Rec. Speed" adds nothing).
+- **Sizes per context** (`ICON` in the HUD, x the label height): shop card titles big (1), HUD buttons, panels and section titles medium (0.85), R$ price buttons and inline lines small (0.7).
+- **Where:** Shop/Index buttons, stalls and modal titles; the 🏃 Trail Shop button, stall and title; Speed and money panels; Speed/Money/Treadmill/Sleep Dust/pass cards and their sections; SEED PACKS (section, card band) and PLOT UPGRADE (section, card, gate board); every R$ button (Robux icon before the number); 🎁 gift buttons; 🌱/🪴 tabs, side titles, the carry banner and Plant buttons; the hotbar Bat and Sleep Dust; 🔒 on locked zones; the ✖ close button; ✨/🌟 mutation highlights (pack cards, Index, reel, reveal); 🎒 seed bag lines; the "Fastest here" board; the 🏠 plot and 🏃 treadmill signs. Emoji inside sentences (toasts, hints that mention "the 🛒 Shop") and the zone emoji stay text.
+- **World signs** are set at runtime, so `map/World.rbxm` is untouched and keeps the emoji: `WorldBuilder.applyIcons` (end of `WorldBuilder.load`) gives the icon to the sign labels whose text is exactly one of `WorldBuilder.SIGN_ICONS` (the 3 stalls, each plot's Upgrade Plot title, plot sign and treadmill sign; hand-edited texts are left alone), and `PlotService`/`AmbientService` write the plot, treadmill and leaderboard signs through `Icons.set`.
+
+**Uploading** (Portuguese step by step: [icons/COMO_SUBIR_ICONES.md](icons/COMO_SUBIR_ICONES.md)):
+
+```powershell
+$env:ROBLOX_API_KEY = "<Open Cloud key with Assets read + write>"   # this terminal only, never in a file
+$env:ROBLOX_USER_ID = "<your user id>"                              # or $env:ROBLOX_GROUP_ID for a group game
+lune run tools/upload_icons.luau --dry-run   # what would be sent (no key, no network)
+lune run tools/upload_icons.luau             # upload every icon whose id is still 0, write icons/ids.json
+```
+`tools/upload_icons.luau` (logic in `tools/icon_uploader.luau`) POSTs each PNG to the Open Cloud Assets API (`https://apis.roblox.com/assets/v1/assets`, multipart `request` JSON + `fileContent`, header `x-api-key`), polls `assets/v1/operations/<id>` until it is done and writes the id to `icons/ids.json` after each icon (a re-run skips icons that already have an id; `--force` and `--only Shop,Index` re-upload). It also keeps `icons/uploads.json` (asset ids and types, no secrets).
+
+- **Image, not Decal.** The [Assets API docs](https://create.roblox.com/docs/cloud/guides/usage-assets) list *Decal* and *Image* as separate upload types (same formats). An Image asset's id is what `ImageLabel.Image` takes, so the uploader uses `"assetType": "Image"`. A **Decal** id is a different asset that wraps the image: put in an ImageLabel it shows nothing in game (Studio's property box silently converts it when you paste, scripts don't). With `--type Decal` (or if Roblox answers with a decal) the uploader resolves the real image id: Open Cloud asset delivery (`GET apis.roblox.com/asset-delivery-api/v1/assetId/<decalId>` → `location`), downloads the decal and reads its `Texture` id. If that fails (e.g. the key lacks permission for asset delivery), ids.json keeps 0, the decal id stays in `icons/uploads.json`, and the guide explains how to get the image id in Studio.
+- **The key** comes only from `ROBLOX_API_KEY`. It is never printed or written, and only sent to `apis.roblox.com`.
+- **Manual way:** Studio → View → Asset Manager → Bulk Import the PNGs, right-click each → Copy Asset ID, paste into `icons/ids.json` under its file name.
+- Uploaded images go through moderation; one that is still pending or rejected shows blank until approved.
 
 ### Drop-in models (`assets/`)
 `assets/` (Rojo → `ServerStorage.Assets`) holds models made in Blender and saved from Studio (`<Slot>.rbxm`: a Model, or a Folder of variant Models). **For the model maker: [assets/COMO_ADICIONAR_MODELOS.md](assets/COMO_ADICIONAR_MODELOS.md)** (Portuguese, step by step, with the full slot table).
@@ -280,6 +305,8 @@ Each planted seed grows into its zone's creature (`CreatureModels`). The creatur
 | `src/shared/Config.luau` | `ReplicatedStorage.Shared` | All tuning: zones, rarities, mutations, economy/growth formulas, trails, plot levels, developer products, day/night |
 | `src/shared/Format.luau` | `ReplicatedStorage.Shared` | `1.2K / 3.4M / 5B / 7.5T / 3Qa`, `2,018,798 Kg`, `m:ss` |
 | `src/shared/SeedPacks.luau` | 〃 | *Pure*: the two packs, odds tables, rolls, seed-bag keys |
+| `src/shared/Icons.luau` | 〃 | UI icons: `Icons.image(key)`, `Icons.set(label, keys, text)` (icon or the emoji fallback) |
+| `icons/ids.json` | `ReplicatedStorage.Shared.IconIds` | The 22 icons' image asset ids (0 = not uploaded); `icons/*.png` are the source images |
 | `src/server/Main.server.luau` | `ServerScriptService.Server` | Bootstrap: collision groups, world, services, join/leave, autosave, BindToClose |
 | `src/server/Net.luau` | 〃 | Creates the fixed remotes |
 | `src/server/Sessions.luau` | 〃 | Per-player runtime state, multipliers, StatsUpdate + leaderstats |
@@ -296,7 +323,7 @@ Each planted seed grows into its zone's creature (`CreatureModels`). The creatur
 | `src/server/Assets.luau` | 〃 | Drop-in models: slot names and aliases, fitting/placing (`place`), slot groups (`swap`, `replace`, `refresh`) |
 | `assets/` | `ServerStorage.Assets` | Models made in Blender, one file per slot (guide: `assets/COMO_ADICIONAR_MODELOS.md`) |
 | `map/World.rbxm` | `Workspace.World` | The hand-editable map the server adopts |
-| `tools/` | — | `build_map.luau --force` (regenerate the map), `apply_assets.luau` (put assets into the map), `map_tool.luau` (shared) |
+| `tools/` | — | `build_map.luau --force` (regenerate the map), `apply_assets.luau` (put assets into the map), `map_tool.luau` (shared), `upload_icons.luau` (upload the UI icons, write `icons/ids.json`) |
 | `src/server/Shop.luau` | 〃 | *Pure*: money purchases (trails, plot upgrade), trail equip, Robux prompt gates, idempotent receipt grants for every product kind, full-bag compensation |
 | `src/server/ShopService.luau` | 〃 | `RequestBuy` / `RequestUseItem`, gamepass stubs, developer product prompts, `ProcessReceipt` |
 | `src/server/TrailService.luau` | 〃 | The equipped trail's `Trail` + 2 Attachments on the HumanoidRootPart, rebuilt on spawn and equip |
@@ -304,7 +331,7 @@ Each planted seed grows into its zone's creature (`CreatureModels`). The creatur
 | `src/server/AmbientService.luau` | 〃 | Day/night lighting, "Fastest here" board |
 | `src/client/HUD.client.luau` | `StarterPlayerScripts.Client` | All UI, Slow Mode |
 | `src/client/Effects.client.luau` | 〃 | Income popups, sounds, shake, belt scroll, rainbow mutation, creature idle sway, owner-only prompts, per-zone colour grade |
-| `tests/` | — | Lune harness + specs (guard, speed, data, economy, world, packs, shop, progression + its free-player simulation, creatures, assets, map) |
+| `tests/` | — | Lune harness + specs (guard, speed, data, economy, world, packs, shop, progression + its free-player simulation, creatures, assets, map, mole, icons + uploader) |
 
 ## Networking
 `ReplicatedStorage.Remotes`:
@@ -319,3 +346,6 @@ Each planted seed grows into its zone's creature (`CreatureModels`). The creatur
 - No DataStore session locking. Rejoining a different server within seconds can load a save that is up to one autosave old.
 - The guards are welded primitives that glide, with no walk animation. The built-in art is primitives and built-in `rbxasset://` particle textures; drop-in models from `assets/` replace it piece by piece.
 - **Drop-in models are checked under Lune only.** Lune has no `Model:ScaleTo`/`PivotTo`, so the baked map places models by moving and resizing their parts, while the server uses `ScaleTo`/`PivotTo`. Both put the bottom centre on the pivot and fit the same box, but the Roblox path has not been run in Studio yet.
+
+## Credits
+- Icons by @gvesster (Free Icon Pack). The pack's license allows commercial use with optional credit; it may not be resold or claimed as our own work.

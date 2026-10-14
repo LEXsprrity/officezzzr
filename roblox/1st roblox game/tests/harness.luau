@@ -3,6 +3,7 @@
 local fs = require("@lune/fs")
 local luau = require("@lune/luau")
 local roblox = require("@lune/roblox")
+local serde = require("@lune/serde")
 
 local Harness = {}
 
@@ -41,6 +42,8 @@ local function folder(name: string, dir: string, parent: Node?): Node
 end
 
 local sharedNode = folder("Shared", "src/shared", nil)
+-- Like default.project.json: icons/ids.json is the JSON ModuleScript Shared.IconIds (Config.ICONS).
+sharedNode.__children.IconIds = makeNode("IconIds", sharedNode, "icons/ids.json")
 local serverNode = folder("Server", "src/server", nil)
 
 local services = {
@@ -167,7 +170,9 @@ requireModule = function(node: any)
 	if not file then
 		error("mock require: not a module node")
 	end
-	if cache[file] == nil then
+	if cache[file] == nil and string.match(file, "%.json$") then
+		cache[file] = serde.decode("json", fs.readFile(file)) -- Rojo makes a .json file a ModuleScript returning its data
+	elseif cache[file] == nil then
 		local source = fs.readFile(file)
 		local chunk = luau.load(source, { debugName = file, environment = envFor(node) })
 		cache[file] = chunk()

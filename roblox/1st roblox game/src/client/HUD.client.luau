@@ -13,6 +13,7 @@ local Shared = ReplicatedStorage:WaitForChild("Shared")
 local Config = require(Shared:WaitForChild("Config"))
 local Format = require(Shared:WaitForChild("Format"))
 local SeedPacks = require(Shared:WaitForChild("SeedPacks"))
+local Icons = require(Shared:WaitForChild("Icons"))
 
 local player = Players.LocalPlayer
 local remotes = ReplicatedStorage:WaitForChild("Remotes")
@@ -53,6 +54,10 @@ local COLORS = {
 	equip = Color3.fromRGB(60, 160, 255),
 }
 
+-- Icon sizes (x the label's height) per context: shop card titles big, HUD buttons medium, prices small.
+-- Icons.set shows the emoji text as it is while an icon isn't uploaded (Config.ICONS id 0).
+local ICON = { big = 1, medium = 0.85, small = 0.7 }
+
 local function new(className: string, props: { [string]: any }, children: { Instance }?): any
 	local inst = Instance.new(className)
 	for k, v in props do
@@ -90,7 +95,8 @@ local function text(parent: Instance, props: { [string]: any }): TextLabel
 	return label
 end
 
-local function button(parent: Instance, label: string, color: Color3, size: UDim2, onClick: () -> ()): TextButton
+-- `icon`: the icon key(s) that may replace emoji in `label` (see Icons.set), at `iconSize` (default medium).
+local function button(parent: Instance, label: string, color: Color3, size: UDim2, onClick: () -> (), icon: (string | { string })?, iconSize: number?): TextButton
 	local b = new("TextButton", {
 		Size = size,
 		BackgroundColor3 = color,
@@ -98,14 +104,19 @@ local function button(parent: Instance, label: string, color: Color3, size: UDim
 		AutoButtonColor = true,
 		Parent = parent,
 	}, deco(10))
-	text(b, { Name = "Label", Text = label, Size = UDim2.new(1, -10, 1, -6), Position = UDim2.fromOffset(5, 3) })
+	local l = text(b, { Name = "Label", Text = label, Size = UDim2.new(1, -10, 1, -6), Position = UDim2.fromOffset(5, 3) })
+	if icon then
+		Icons.set(l, icon, label, iconSize or ICON.medium)
+	end
 	b.Activated:Connect(onClick)
 	return b
 end
 
-local function setLabel(b: GuiObject, value: string)
+local function setLabel(b: GuiObject, value: string, icon: (string | { string })?)
 	local label = b:FindFirstChild("Label") :: TextLabel?
-	if label then
+	if label and icon then
+		Icons.set(label, icon, value, ICON.medium)
+	elseif label then
 		label.Text = value
 	end
 end
@@ -179,6 +190,7 @@ local moneyPanel = new("Frame", {
 	BackgroundColor3 = COLORS.money, Parent = bottomLeft,
 }, deco(12))
 local moneyLabel = text(moneyPanel, { Text = "$0", Size = UDim2.new(0.62, -10, 1, -10), Position = UDim2.fromOffset(10, 5), TextXAlignment = Enum.TextXAlignment.Left })
+Icons.set(moneyLabel, "Money", "$0", ICON.medium)
 local incomeLabel = text(moneyPanel, { Text = "+$0/s", Size = UDim2.new(0.38, -10, 0.6, 0), Position = UDim2.new(0.62, 0, 0.2, 0),
 	TextXAlignment = Enum.TextXAlignment.Right, TextColor3 = Color3.fromRGB(220, 255, 210) })
 
@@ -187,6 +199,7 @@ local speedPanel = new("Frame", {
 	BackgroundColor3 = COLORS.speed, Parent = bottomLeft,
 }, deco(12))
 local speedLabel = text(speedPanel, { Text = "⚡ 0", Size = UDim2.new(0.6, -10, 0.72, 0), Position = UDim2.fromOffset(10, 4), TextXAlignment = Enum.TextXAlignment.Left })
+Icons.set(speedLabel, "Speed", "⚡ 0", ICON.medium)
 local walkLabel = text(speedPanel, { Text = "WalkSpeed 16", Size = UDim2.new(0.8, -10, 0.26, 0), Position = UDim2.new(0, 10, 0.72, -3),
 	TextXAlignment = Enum.TextXAlignment.Left, TextColor3 = Color3.fromRGB(215, 235, 255) })
 -- "+0.5", "+12.3", "+1.2K": the Speed one step (stud) pays right now (Config.speedPerStud)
@@ -201,7 +214,7 @@ local multLabel = text(speedPanel, { Text = "x1", Size = UDim2.new(0.18, 0, 0.5,
 local openModal: (name: string) -> ()
 button(speedPanel, "🏃", COLORS.index, UDim2.fromOffset(52, 52), function()
 	openModal("Trails")
-end).Position = UDim2.new(1, -57, 0, 5)
+end, "TrailShop").Position = UDim2.new(1, -57, 0, 5)
 
 -- Shop / Index / Slow Mode row, above the speed panel
 local rowButtons = new("Frame", {
@@ -211,10 +224,10 @@ local rowButtons = new("Frame", {
 
 button(rowButtons, "🛒 Shop", COLORS.shop, UDim2.fromOffset(100, 48), function()
 	openModal("Shop")
-end)
+end, "Shop")
 button(rowButtons, "📖 Index", COLORS.index, UDim2.fromOffset(100, 48), function()
 	openModal("Index")
-end)
+end, "Index")
 
 -- Slow Mode: purely local, clamps our own WalkSpeed so we can potter around the base.
 local slowMode = false
@@ -274,8 +287,8 @@ end
 local function useDust()
 	RequestUseItem:FireServer("SleepDust")
 end
-local batSlot = button(hotbar, "🏏\nBat", Color3.fromRGB(200, 140, 80), UDim2.fromOffset(84, 84), useBat)
-local dustSlot = button(hotbar, "💤\nDust x0", Color3.fromRGB(120, 130, 255), UDim2.fromOffset(84, 84), useDust)
+local batSlot = button(hotbar, "🏏\nBat", Color3.fromRGB(200, 140, 80), UDim2.fromOffset(84, 84), useBat, "Bat")
+local dustSlot = button(hotbar, "💤\nDust x0", Color3.fromRGB(120, 130, 255), UDim2.fromOffset(84, 84), useDust, "SleepDust")
 for i, slot in { batSlot, dustSlot } do
 	text(slot, { Text = tostring(i), Size = UDim2.fromOffset(18, 18), Position = UDim2.fromOffset(4, 2), TextColor3 = COLORS.gold })
 end
@@ -351,7 +364,7 @@ local function bagEntries(): { BagEntry }
 end
 
 local function renderSeeds()
-	sideTitle.Text = `🌱 Seeds · 🎒 {SeedPacks.bagCount(stats.seedBag or {})}/{Config.SEED_BAG_MAX}`
+	Icons.set(sideTitle, { "Seeds", "Bag" }, `🌱 Seeds · 🎒 {SeedPacks.bagCount(stats.seedBag or {})}/{Config.SEED_BAG_MAX}`)
 	local c = stats.carrying
 	local top = card(0, if c then COLORS.gold else COLORS.slow, 44)
 	text(top, {
@@ -362,10 +375,8 @@ local function renderSeeds()
 	-- Seed bag (from seed packs): plant at your pad
 	local bag = bagEntries()
 	local hint = card(1, COLORS.index, 40)
-	text(hint, {
-		Text = if #bag == 0 then "🎁 Buy seed packs in the 🛒 Shop: their seeds land here!" else "🎒 Your bag: stand on your plot's pad, then Plant.",
-		Size = UDim2.new(1, -12, 1, -8), Position = UDim2.fromOffset(6, 4),
-	})
+	local hintText = if #bag == 0 then "🎁 Buy seed packs in the 🛒 Shop: their seeds land here!" else "🎒 Your bag: stand on your plot's pad, then Plant."
+	Icons.set(text(hint, { Size = UDim2.new(1, -12, 1, -8), Position = UDim2.fromOffset(6, 4) }), { "Bag" }, hintText, ICON.medium)
 	for i, e in bag do
 		local rarity = Config.RARITIES[e.rarity]
 		local mut = Config.mutationById(e.mutation)
@@ -376,18 +387,18 @@ local function renderSeeds()
 		})
 		button(f, "🌱 Plant", COLORS.money, UDim2.fromOffset(84, 40), function()
 			RequestUseItem:FireServer("Seed:" .. e.key)
-		end).Position = UDim2.new(1, -90, 0, 7)
+		end, "Seeds").Position = UDim2.new(1, -90, 0, 7)
 	end
 
 	for k, zone in Config.ZONES do
 		local ok = stats.speed >= zone.req
 		local f = card(100 + k, if ok then zone.ui else COLORS.disabled, 58)
 		text(f, { Text = `{zone.icon} {zone.seed} · {zone.name} {Config.ACTIVE_ICONS[zone.active]}`, Size = UDim2.new(1, -12, 0.5, -2), Position = UDim2.fromOffset(6, 3), TextXAlignment = Enum.TextXAlignment.Left })
-		text(f, {
-			Text = `{if ok then "✅" else "🔒"} Rec. Speed {Format.short(zone.req)} · {Format.money(Config.seedIncome(k))}/s base`,
+		local reqLabel = text(f, {
 			Size = UDim2.new(1, -12, 0.45, -2), Position = UDim2.new(0, 6, 0.5, 0), TextXAlignment = Enum.TextXAlignment.Left,
 			TextColor3 = if ok then Color3.fromRGB(230, 255, 230) else Color3.fromRGB(255, 235, 235),
 		})
+		Icons.set(reqLabel, { "Lock" }, `{if ok then "✅" else "🔒"} Rec. Speed {Format.short(zone.req)} · {Format.money(Config.seedIncome(k))}/s base`)
 	end
 end
 
@@ -396,7 +407,7 @@ local function renderPlants()
 	table.sort(plants, function(a, b)
 		return a.income > b.income
 	end)
-	sideTitle.Text = `🪴 Plants {#plants}/{stats.slots} · {Format.money(stats.income)}/s`
+	Icons.set(sideTitle, "Plants", `🪴 Plants {#plants}/{stats.slots} · {Format.money(stats.income)}/s`)
 	if #plants == 0 then
 		local f = card(0, COLORS.slow, 60)
 		text(f, { Text = "No plants yet. Steal a seed and plant it on your pad!", Size = UDim2.new(1, -12, 1, -8), Position = UDim2.fromOffset(6, 4) })
@@ -426,7 +437,7 @@ renderSide = function()
 end
 
 for _, tab in { { "Seeds", "🌱" }, { "Plants", "🪴" } } do
-	local name = tab[1]
+	local name = tab[1] -- also the icon key
 	button(rightTabs, tab[2], Color3.fromRGB(110, 210, 120), UDim2.fromOffset(70, 70), function()
 		if sideTab == name then
 			sideTab = nil
@@ -436,7 +447,7 @@ for _, tab in { { "Seeds", "🌱" }, { "Plants", "🪴" } } do
 			sidePanel.Visible = true
 			renderSide()
 		end
-	end)
+	end, name)
 end
 
 ----------------------------------------------------------------------------------------------------
@@ -458,7 +469,7 @@ local trailScrollX = 0 -- the Trail Shop strip's scroll: money ticks re-render t
 button(modal, "✖", COLORS.red, UDim2.fromOffset(44, 44), function()
 	modal.Visible = false
 	modalName = nil
-end).Position = UDim2.new(1, -56, 0, 10)
+end, "Close").Position = UDim2.new(1, -56, 0, 10)
 
 openModal = function(name: string)
 	if modalName == name then
@@ -490,8 +501,8 @@ local function clearModal(padding: number?)
 	})
 end
 
--- Dark text line inside the modal body
-local function heading(label: string, order: number, centered: boolean?, height: number?)
+-- Dark text line inside the modal body, with `icon` (key(s), see Icons.set) once uploaded
+local function heading(label: string, order: number, centered: boolean?, height: number?, icon: (string | { string })?, textSize: number?)
 	local h = text(modalBody, {
 		Text = label, Size = UDim2.new(1, -12, 0, height or 30), TextColor3 = INK, LayoutOrder = order, TextWrapped = true,
 		TextXAlignment = if centered then Enum.TextXAlignment.Center else Enum.TextXAlignment.Left,
@@ -500,11 +511,14 @@ local function heading(label: string, order: number, centered: boolean?, height:
 	if stroke then
 		stroke:Destroy()
 	end
+	if icon then
+		Icons.set(h, icon, label, ICON.medium, textSize)
+	end
 end
 
--- "-- SPEED --" style section title
-local function section(label: string, order: number)
-	heading(`-- {label} --`, order, true, 36)
+-- "-- SPEED --" style section title (the icon goes in front once uploaded)
+local function section(label: string, order: number, icon: string?)
+	heading(`-- {label} --`, order, true, 36, icon, 30)
 end
 
 -- Robux prices. Developer products' real prices are set on the Creator Dashboard, so each is fetched
@@ -555,7 +569,7 @@ local function giftButton(parent: Instance): TextButton
 	-- Gifting needs extra work (choosing a player, granting to them): shown, but not live yet.
 	return button(parent, "🎁", COLORS.robux, UDim2.fromOffset(46, 44), function()
 		toast("🎁 Gifting is coming soon!", "blue")
-	end)
+	end, "Gift")
 end
 
 ----------------------------------------------------------------------------------------------------
@@ -587,7 +601,7 @@ local function mutationLine(pack: SeedPacks.Pack): string
 	local parts = {}
 	for _, m in SeedPacks.odds(pack).mutations do
 		local icon = if m.id == pack.exclusive then "🌟" else "✨"
-		table.insert(parts, `{icon} {m.id} {SeedPacks.percent(m.pct)}`)
+		table.insert(parts, `{icon} {m.id} {SeedPacks.percent(m.pct)}`) -- each emoji becomes the Star icon once uploaded
 	end
 	return table.concat(parts, "  ·  ")
 end
@@ -610,7 +624,7 @@ local function packCard(parent: Instance, order: number, productName: string, pr
 		}) }),
 	}))
 	local band = new("Frame", { Size = UDim2.new(1, 0, 0, 28), BackgroundColor3 = COLORS.gold, BorderSizePixel = 0, Parent = c })
-	text(band, { Text = "💎 PREMIUM · LATE-GAME SEED", Size = UDim2.new(1, -12, 1, -6), Position = UDim2.fromOffset(6, 3) })
+	Icons.set(text(band, { Size = UDim2.new(1, -12, 1, -6), Position = UDim2.fromOffset(6, 3) }), "SeedPack", "💎 PREMIUM · LATE-GAME SEED")
 	text(c, { Text = zone.icon, Size = UDim2.fromOffset(60, 60), Position = UDim2.fromOffset(12, 36) })
 	text(c, { Text = pack.name, Size = UDim2.new(1, -94, 0, 34), Position = UDim2.fromOffset(82, 38), TextXAlignment = Enum.TextXAlignment.Left })
 	text(c, {
@@ -618,20 +632,21 @@ local function packCard(parent: Instance, order: number, productName: string, pr
 		TextXAlignment = Enum.TextXAlignment.Left, TextColor3 = Color3.fromRGB(255, 245, 210),
 	})
 	lootTable(c, pack, UDim2.fromOffset(12, 106), UDim2.new(1, -24, 0, 140))
-	text(c, { Text = mutationLine(pack), Size = UDim2.new(1, -24, 0, 22), Position = UDim2.fromOffset(12, 252), TextColor3 = Color3.fromRGB(255, 240, 180) })
+	Icons.set(text(c, { Size = UDim2.new(1, -24, 0, 22), Position = UDim2.fromOffset(12, 252), TextColor3 = Color3.fromRGB(255, 240, 180) }),
+		{ "Star" }, mutationLine(pack), ICON.small)
 	local exclusive = Config.mutationById(pack.exclusive)
-	text(c, {
-		Text = `💰 {Format.money(Config.seedIncome(pack.zone))}/s per Common sprout`
-			.. (if exclusive then ` · 🌟 {exclusive.id} x{exclusive.income} income, only from packs` else ""),
+	local perks = text(c, {
 		Size = UDim2.new(1, -24, 0, 40), Position = UDim2.fromOffset(12, 280), TextWrapped = true, TextColor3 = Color3.fromRGB(255, 255, 230),
 	})
+	Icons.set(perks, { "Money", "Star" }, `💰 {Format.money(Config.seedIncome(pack.zone))}/s per Common sprout`
+		.. (if exclusive then ` · 🌟 {exclusive.id} x{exclusive.income} income, only from packs` else ""), ICON.small)
 	-- Robux only. With id = 0 the server answers "coming soon"; with a full bag it won't prompt.
 	local live = product.id ~= 0
 	local price = robuxCaption(product)
 	local caption = if not live then `Coming soon · {Format.robux(product.robux)}` elseif bagFull then `🎒 Bag full · {price}` else `Buy · {price}`
 	button(c, caption, if live and not bagFull then COLORS.buy else COLORS.disabled, UDim2.new(1, -82, 0, 58), function()
 		RequestBuy:FireServer("Product:" .. productName)
-	end).Position = UDim2.new(0, 12, 1, -70)
+	end, { "Robux", "Bag" }, ICON.small).Position = UDim2.new(0, 12, 1, -70)
 	local gift = giftButton(c)
 	gift.Size = UDim2.fromOffset(58, 58)
 	gift.Position = UDim2.new(1, -70, 1, -70)
@@ -649,26 +664,27 @@ local function cardGrid(order: number): Frame
 	})
 end
 
--- A shop card: big title, a smaller line, and the buy button (+ the gift button for Robux items).
-local function shopCard(grid: Instance, order: number, color: Color3, title: string, sub: string): Frame
+-- A shop card: big title (its emoji is the `icon` once uploaded), a smaller line, and the buy button (+ the
+-- gift button for Robux items).
+local function shopCard(grid: Instance, order: number, color: Color3, title: string, sub: string, icon: string): Frame
 	local c = new("Frame", { BackgroundColor3 = color, LayoutOrder = order, Parent = grid }, deco(12))
 	new("UIGradient", { Rotation = 90, Color = ColorSequence.new(WHITE, Color3.fromRGB(190, 190, 190)), Parent = c })
-	text(c, { Text = title, Size = UDim2.new(1, -12, 0, 46), Position = UDim2.fromOffset(6, 8) })
+	Icons.set(text(c, { Size = UDim2.new(1, -12, 0, 46), Position = UDim2.fromOffset(6, 8) }), icon, title, ICON.big)
 	text(c, { Text = sub, Size = UDim2.new(1, -12, 0, 44), Position = UDim2.fromOffset(6, 58), TextColor3 = Color3.fromRGB(255, 255, 225), TextWrapped = true })
 	return c
 end
 
 -- A Robux card for developer product `name`; `owned` replaces the price (e.g. a treadmill tier you have).
-local function productCard(grid: Instance, order: number, name: string, product: Config.DevProduct, color: Color3, title: string, sub: string, owned: string?)
-	local c = shopCard(grid, order, color, title, sub)
+local function productCard(grid: Instance, order: number, name: string, product: Config.DevProduct, color: Color3, title: string, sub: string, icon: string, owned: string?)
+	local c = shopCard(grid, order, color, title, sub, icon)
 	button(c, owned or robuxCaption(product), if owned or product.id == 0 then COLORS.disabled else COLORS.buy, UDim2.new(1, -66, 0, 44), function()
 		RequestBuy:FireServer("Product:" .. name)
-	end).Position = UDim2.new(0, 8, 1, -52)
+	end, { "Robux" }, ICON.small).Position = UDim2.new(0, 8, 1, -52)
 	giftButton(c).Position = UDim2.new(1, -54, 1, -52)
 end
 
 local function renderShop()
-	modalTitle.Text = "🛒 Shop"
+	Icons.set(modalTitle, "Shop", "🛒 Shop")
 	clearModal(8)
 	local order = 0
 	local function nextOrder(): number
@@ -677,7 +693,7 @@ local function renderShop()
 	end
 
 	-- Seed packs (Robux)
-	section("SEED PACKS", nextOrder())
+	section("SEED PACKS", nextOrder(), "SeedPack")
 	local bagCount = SeedPacks.bagCount(stats.seedBag or {})
 	local bagFull = bagCount >= Config.SEED_BAG_MAX
 	local row = new("Frame", { BackgroundTransparency = 1, Size = UDim2.new(1, -12, 0, 400), LayoutOrder = nextOrder(), Parent = modalBody },
@@ -685,45 +701,45 @@ local function renderShop()
 	for i, entry in Config.products("Pack") do
 		packCard(row, i, entry.name, entry.product, bagFull)
 	end
-	heading(`🎒 Seed bag {bagCount}/{Config.SEED_BAG_MAX}{if bagFull then " (full: plant some first!)" else ""} · plant bagged seeds from the 🌱 Seeds menu at your plot's pad`, nextOrder())
+	heading(`🎒 Seed bag {bagCount}/{Config.SEED_BAG_MAX}{if bagFull then " (full: plant some first!)" else ""} · plant bagged seeds from the 🌱 Seeds menu at your plot's pad`, nextOrder(), nil, nil, { "Bag" })
 
 	-- Plot upgrade (money; also on the board at your plot's gate)
-	section("PLOT UPGRADE", nextOrder())
+	section("PLOT UPGRADE", nextOrder(), "PlotUpgrade")
 	local plotGrid = cardGrid(nextOrder())
 	local level = stats.plotLevel or 1
 	local price = Config.priceOf("PlotUpgrade", stats :: any)
 	local plotCard = shopCard(plotGrid, 1, Color3.fromRGB(90, 190, 90),
 		if price then `🏡 Level {level} → {level + 1}` else `🏡 Level {level} · MAX`,
-		if price then `+1 slot · cash x{Config.plotMoneyMult(level)} → x{Config.plotMoneyMult(level + 1)}` else `{Config.plotSlots(level)} slots · cash x{Config.plotMoneyMult(level)}`)
+		if price then `+1 slot · cash x{Config.plotMoneyMult(level)} → x{Config.plotMoneyMult(level + 1)}` else `{Config.plotSlots(level)} slots · cash x{Config.plotMoneyMult(level)}`, "PlotUpgrade")
 	button(plotCard, if price then Format.money(price) else "Maxed", if price and stats.money >= price then COLORS.buy else COLORS.disabled,
 		UDim2.new(1, -16, 0, 44), function()
 			RequestBuy:FireServer("PlotUpgrade")
 		end).Position = UDim2.new(0, 8, 1, -52)
 
 	-- Speed (Robux)
-	section("SPEED", nextOrder())
+	section("SPEED", nextOrder(), "Speed")
 	local grid = cardGrid(nextOrder())
 	for i, entry in Config.products("Speed") do
-		productCard(grid, i, entry.name, entry.product, COLORS.speed, `⚡ {entry.product.label}`, "Added to your Speed right away")
+		productCard(grid, i, entry.name, entry.product, COLORS.speed, `⚡ {entry.product.label}`, "Added to your Speed right away", "Speed")
 	end
 
 	-- Money (Robux): the card shows what you'd get right now (fixed, or minutes of your income)
-	section("MONEY", nextOrder())
+	section("MONEY", nextOrder(), "Money")
 	grid = cardGrid(nextOrder())
 	for i, entry in Config.products("Money") do
 		local amount = Config.moneyPackAmount(entry.product, stats.income or 0)
 		productCard(grid, i, entry.name, entry.product, COLORS.money, `💰 {Format.money(amount)}`,
-			`{entry.product.label} · at least {entry.product.minutes} min of income`)
+			`{entry.product.label} · at least {entry.product.minutes} min of income`, "Money")
 	end
 
 	-- Treadmill (Robux)
-	section("TREADMILL", nextOrder())
+	section("TREADMILL", nextOrder(), "Treadmill")
 	grid = cardGrid(nextOrder())
 	for i, entry in Config.products("Treadmill") do
 		local tier = entry.product.tier :: number
 		local owned = (stats.treadmillTier or 1) >= tier
 		productCard(grid, i, entry.name, entry.product, Color3.fromRGB(240, 90, 90), `🏃 Treadmill x{Config.TREADMILL_TIERS[tier].mult}`,
-			`Your treadmill: x{Config.TREADMILL_TIERS[stats.treadmillTier or 1].mult}`, if owned then "Owned" else nil)
+			`Your treadmill: x{Config.TREADMILL_TIERS[stats.treadmillTier or 1].mult}`, "Treadmill", if owned then "Owned" else nil)
 	end
 
 	-- Items (Robux)
@@ -731,7 +747,7 @@ local function renderShop()
 	grid = cardGrid(nextOrder())
 	for i, entry in Config.products("Dust") do
 		productCard(grid, i, entry.name, entry.product, Color3.fromRGB(120, 130, 255), `💤 {entry.product.label}`,
-			`You have {(stats.items or {}).SleepDust or 0} · press 2 near a sleeping guard`)
+			`You have {(stats.items or {}).SleepDust or 0} · press 2 near a sleeping guard`, "SleepDust")
 	end
 
 	-- Gamepasses (Robux)
@@ -740,10 +756,10 @@ local function renderShop()
 	for i, name in { "DoubleMoney", "ExtraSlots" } do
 		local pass = Config.GAMEPASSES[name]
 		local owned = stats.passes[name] == true
-		local c = shopCard(grid, i, Color3.fromRGB(0, 180, 200), `💎 {pass.label}`, if name == "DoubleMoney" then "Doubles all plant income" else "On top of your plot level's slots")
+		local c = shopCard(grid, i, Color3.fromRGB(0, 180, 200), `💎 {pass.label}`, if name == "DoubleMoney" then "Doubles all plant income" else "On top of your plot level's slots", name)
 		button(c, if owned then "Owned" else "Buy · R$", if owned or pass.id == 0 then COLORS.disabled else COLORS.buy, UDim2.new(1, -66, 0, 44), function()
 			RequestBuy:FireServer("Pass:" .. name)
-		end).Position = UDim2.new(0, 8, 1, -52)
+		end, { "Robux" }, ICON.small).Position = UDim2.new(0, 8, 1, -52)
 		giftButton(c).Position = UDim2.new(1, -54, 1, -52)
 	end
 end
@@ -805,13 +821,13 @@ local function trailCard(parent: Instance, order: number, t: Config.Trail)
 	if product then
 		button(c, robuxCaption(product), if product.id == 0 then COLORS.disabled else COLORS.robux, UDim2.new(1, -20, 0, 50), function()
 			RequestBuy:FireServer("Product:" .. (t.product :: string))
-		end).Position = UDim2.new(0, 10, 1, -64)
+		end, { "Robux" }, ICON.small).Position = UDim2.new(0, 10, 1, -64)
 	end
 end
 
 local function renderTrails()
 	local current = Config.trailById(stats.equippedTrail) or Config.TRAILS[1]
-	modalTitle.Text = "🏃 Trail Shop"
+	Icons.set(modalTitle, "TrailShop", "🏃 Trail Shop")
 	clearModal(10)
 	heading(`Trails multiply the Speed you gain: you get {perStepText()} Speed per step now, more as your Speed grows. Equipped: {current.name} (x{current.mult}). Any trail can be bought directly.`, 1, false, 44)
 	local strip = new("ScrollingFrame", {
@@ -844,7 +860,7 @@ local function renderIndex()
 			end
 		end
 	end
-	modalTitle.Text = `📖 Index · {found}/{total} discovered`
+	Icons.set(modalTitle, "Index", `📖 Index · {found}/{total} discovered`)
 	modalBody:ClearAllChildren()
 	new("UIListLayout", { Padding = UDim.new(0, 8), SortOrder = Enum.SortOrder.LayoutOrder, Parent = modalBody })
 	for k, zone in Config.ZONES do
@@ -855,7 +871,8 @@ local function renderIndex()
 				mutText ..= " " .. m.id
 			end
 		end
-		text(row, { Text = `{zone.icon} {zone.seed}{if mutText ~= "" then " ✨" .. mutText else ""}`, Size = UDim2.new(1, -12, 0, 28), Position = UDim2.fromOffset(6, 4), TextXAlignment = Enum.TextXAlignment.Left })
+		local rowTitle = text(row, { Size = UDim2.new(1, -12, 0, 28), Position = UDim2.fromOffset(6, 4), TextXAlignment = Enum.TextXAlignment.Left })
+		Icons.set(rowTitle, { "Star" }, `{zone.icon} {zone.seed}{if mutText ~= "" then " ✨" .. mutText else ""}`)
 		local cells = new("Frame", { BackgroundTransparency = 1, Position = UDim2.fromOffset(6, 36), Size = UDim2.new(1, -12, 0, 52), Parent = row },
 			{ new("UIListLayout", { FillDirection = Enum.FillDirection.Horizontal, Padding = UDim.new(0, 6) }) })
 		for r, rarity in Config.RARITIES do
@@ -924,7 +941,7 @@ local function seedCard(parent: Instance, zone: number, rarity: number, mutation
 	text(f, { Text = Config.ZONES[zone].icon, Size = UDim2.fromScale(1, 0.46), Position = UDim2.fromScale(0, 0.08) })
 	text(f, { Text = r.id, Size = UDim2.new(1, -8, 0.2, 0), Position = UDim2.new(0, 4, 0.56, 0) })
 	if mut then
-		text(f, { Text = "✨" .. mut.id, Size = UDim2.new(1, -8, 0.18, 0), Position = UDim2.new(0, 4, 0.78, 0) })
+		Icons.set(text(f, { Size = UDim2.new(1, -8, 0.18, 0), Position = UDim2.new(0, 4, 0.78, 0) }), "Star", "✨" .. mut.id)
 	end
 	return f
 end
@@ -1024,7 +1041,7 @@ local function playReveal(data: any, fast: boolean)
 	resultScale.Scale = 0.4
 	TweenService:Create(resultScale, TweenInfo.new(0.45, Enum.EasingStyle.Back, Enum.EasingDirection.Out), { Scale = 1 }):Play()
 	local exclusive = best.mutation ~= nil and best.mutation == pack.exclusive
-	resultSub.Text = `{if exclusive then "🌟 PACK EXCLUSIVE! " else ""}{Config.ZONES[best.zone].icon} {SeedPacks.seedName(best.zone, best.rarity, best.mutation)} → your 🌱 Seeds bag`
+	Icons.set(resultSub, { "Star" }, `{if exclusive then "🌟 PACK EXCLUSIVE! " else ""}{Config.ZONES[best.zone].icon} {SeedPacks.seedName(best.zone, best.rarity, best.mutation)} → your 🌱 Seeds bag`)
 	resultSub.Visible = true
 
 	continueHint.Visible = true
@@ -1070,20 +1087,20 @@ end
 ----------------------------------------------------------------------------------------------------
 local lastUnlocked = -1
 local function refresh(changed: { [string]: any })
-	moneyLabel.Text = Format.money(stats.money)
+	Icons.set(moneyLabel, "Money", Format.money(stats.money), ICON.medium)
 	incomeLabel.Text = "+" .. Format.money(stats.income) .. "/s"
-	speedLabel.Text = "⚡ " .. Format.short(stats.speed)
+	Icons.set(speedLabel, "Speed", "⚡ " .. Format.short(stats.speed), ICON.medium)
 	walkLabel.Text = `WalkSpeed {math.floor(stats.walkSpeed)} · {perStepText()} Speed/step`
 	local trail = Config.trailById(stats.equippedTrail)
 	multLabel.Text = `x{stats.speedMult or 1}`
 	multLabel.TextColor3 = if trail and not trail.rainbow then trail.color:Lerp(WHITE, 0.3) else COLORS.gold
 
-	setLabel(dustSlot, `💤\nDust x{(stats.items or {}).SleepDust or 0}`)
+	setLabel(dustSlot, `💤\nDust x{(stats.items or {}).SleepDust or 0}`, "SleepDust")
 
 	local c = stats.carrying
 	carryBanner.Visible = c ~= false and c ~= nil
 	if c then
-		carryLabel.Text = `🌱 {if c.mutation then c.mutation .. " " else ""}{Config.RARITIES[c.rarity].id} {Config.ZONES[c.zone].seed} — run home & plant it!`
+		Icons.set(carryLabel, "Seeds", `🌱 {if c.mutation then c.mutation .. " " else ""}{Config.RARITIES[c.rarity].id} {Config.ZONES[c.zone].seed} — run home & plant it!`, ICON.medium)
 		carryBanner.BackgroundColor3 = Config.RARITIES[c.rarity].color:Lerp(Color3.new(0, 0, 0), 0.15)
 	end
 

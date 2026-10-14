@@ -3,7 +3,10 @@
   "tree": {
     "$className": "DataModel",
     "ReplicatedStorage": {
-      "Shared": { "$path": "src/shared" }
+      "Shared": {
+        "$path": "src/shared",
+        "IconIds": { "$path": "icons/ids.json" }
+      }
     },
     "ServerStorage": {
       "Assets": { "$path": "assets" }

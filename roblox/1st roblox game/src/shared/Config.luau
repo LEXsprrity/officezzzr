@@ -606,6 +606,14 @@ Config.DATASTORE_NAME = "StealASeed_v1"
 Config.AUTOSAVE_INTERVAL = 90
 Config.SAVE_RETRIES = 4
 
+-- UI icons (icons/*.png): their image asset ids, from icons/ids.json, which Rojo puts next to this module
+-- as the IconIds ModuleScript. 0 = not uploaded yet: the UI keeps the emoji (Shared/Icons). Fill the file
+-- with tools/upload_icons.luau or by hand (icons/COMO_SUBIR_ICONES.md), never here.
+Config.ICONS = {} :: { [string]: number }
+for key, id in require(script.Parent:WaitForChild("IconIds")) :: any do
+	Config.ICONS[key] = if type(id) == "number" then id else 0
+end
+
 -- Sounds (P3). Built-in client sounds so nothing needs uploading; swap for asset ids freely.
 Config.SOUNDS = {
 	Pickup = "rbxasset://sounds/electronicpingshort.wav",
