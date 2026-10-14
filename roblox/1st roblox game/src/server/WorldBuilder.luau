@@ -1,6 +1,6 @@
 -- Generates the whole map from primitives: base area with a fenced plot per player (two dirt beds and a
 -- grass path inside, a treadmill in front), the walled corridor split into themed zones (ZoneThemes; no
--- gates or zone signs, just floor and wall colours), a mother-plant nest per zone with a small "recommended
+-- gates or zone signs, just floor and wall colours), a nest per zone on the left side (the boss and its seed pods) with a small "recommended
 -- Speed" plank beside it; the Spirit Garden's back wall ends it. Decoration is anchored and non-colliding
 -- (see Props). Clean cartoony look only: flat bright plastic, studs and checkers (ZoneThemes header).
 --
@@ -524,14 +524,14 @@ WorldBuilder.PLANK_SIZE = Vector3.new(6, 3.5, 1) -- the board
 WorldBuilder.PLANK_POST_SIZE = Vector3.new(1.6, 1.8, 1.4) -- a short thick post: the board's bottom at 1.8
 local PLANK_PPS = 50 -- SurfaceGui pixels per stud
 local PLANK_FONT = Font.new("rbxasset://fonts/families/Montserrat.json", Enum.FontWeight.Heavy, Enum.FontStyle.Italic)
-WorldBuilder.SPEED_SIGN_OFFSET = Vector3.new(-10, 0, -26) -- ground point under the post, from the nest centre
+WorldBuilder.SPEED_SIGN_OFFSET = Vector3.new(-20, 0, 14) -- ground point under the post, from the nest centre (toward the base, run side)
 
 function WorldBuilder.speedSignText(k: number): (string, string)
 	return Format.speedPlank(Config.ZONES[k].req) -- Client/SpeedPlanks rewrites it from the same function
 end
 
 local function buildSpeedSign(folder: Instance, k: number)
-	local base = Vector3.new(Config.nestX(k), GROUND, 0) + WorldBuilder.SPEED_SIGN_OFFSET
+	local base = Config.nestCenter(k) + WorldBuilder.SPEED_SIGN_OFFSET
 	local model = Instance.new("Model")
 	model.Name = "SpeedSign"
 	model.Parent = folder
@@ -571,54 +571,43 @@ local function buildSpeedSign(folder: Instance, k: number)
 	end
 end
 
--- The zone's nest. Its gameplay piece is NestCore, an invisible part where the mother bulb glows: it holds
--- the tagged Attachments for the nest centre, the pods and the guard's home (no floating "Mother Plant"
--- title: owner playtest).
--- The mother plant itself (mound, stones, stem, bulb, leaves) is the Nest_<zone> slot.
+-- The zone's nest, on the LEFT side of the corridor (Config.nestCenter; owner request: not in the middle):
+-- where the boss sleeps, its seed pods scattered on the ground beside it on the base side. No mother plant
+-- (owner request). Its gameplay piece is NestCore, an invisible part on the ground at the centre: it holds
+-- the tagged Attachments for the nest centre, the pods and the guard's home. The look (a patch in the
+-- zone's seed colour with a few pebbles round it) is the Nest_<zone> slot.
+WorldBuilder.NEST_PATCH = { offset = Vector3.new(-8, 0, 0), diameter = 26 } -- under the pods, from the centre
 local function buildNest(folder: Folder, k: number)
 	local zone = Config.ZONES[k]
 	local theme = ZoneThemes.theme(k)
-	local x = Config.nestX(k)
-	local center = Vector3.new(x, GROUND, 0)
+	local center = Config.nestCenter(k)
 	local model = tag(Instance.new("Model"), "Nest", "ZoneIndex", k)
 	model.Name = "Nest_" .. zone.id
 	model.ModelStreamingMode = Enum.ModelStreamingMode.Atomic
 	model.Parent = folder
 
 	-- Non-colliding so neither runners nor the giant snag on it.
-	Assets.swap("Nest_" .. zone.id, model, Assets.facing(center, -Vector3.xAxis), function(into)
-		studs(cylinder(into, "Mound", 1, 22, center + Vector3.new(0, 0.2, 0), theme.mound))
-		studs(Props.disc(into, "NestRing", 26, center, zone.seedColor, Enum.Material.Plastic, 0.35)) -- (0.35: prouder than the floor decals, no z-fighting)
-		for i = 1, 8 do
-			local a = i / 8 * math.pi * 2
-			Props.rock(into, center + Vector3.new(math.cos(a) * 12.5, 0, math.sin(a) * 12.5), Vector3.new(3, 2.2, 2.6), theme.nestStone, Enum.Material.SmoothPlastic, a, false)
-		end
-		cylinder(into, "Stem", 14, 2, center + Vector3.new(0, 8, 0), Color3.fromRGB(70, 190, 70))
-		local bulb = ball(into, "MotherBulb", 8, center + Vector3.new(0, 16, 0), zone.seedColor, Enum.Material.Neon)
-		local light = Instance.new("PointLight")
-		light.Color = zone.seedColor
-		light.Range = 30
-		light.Brightness = 3
-		light.Parent = bulb
-		for i = 0, 3 do
-			local a = i * math.pi / 2 + math.pi / 4
-			Props.blob(into, "Leaf", Vector3.new(10, 0.8, 4.5),
-				CFrame.new(center + Vector3.new(math.cos(a) * 5, 9, math.sin(a) * 5)) * CFrame.Angles(0, -a, math.rad(20)),
-				theme.leaf)
-		end
-		Props.emitOn(bulb, {
-			color = zone.seedColor, rate = 6, lifetime = NumberRange.new(1.5, 2.5), speed = NumberRange.new(2, 4),
-			size = NumberSequence.new(0.6), spread = Vector2.new(180, 180), lightEmission = 1,
+	local patch = center + WorldBuilder.NEST_PATCH.offset
+	Assets.swap("Nest_" .. zone.id, model, Assets.facing(patch, -Vector3.xAxis), function(into)
+		local d = WorldBuilder.NEST_PATCH.diameter
+		local ring = studs(Props.disc(into, "NestRing", d, patch, zone.seedColor, Enum.Material.Plastic, 0.35)) -- (0.35: prouder than the floor decals, no z-fighting)
+		Props.emitOn(ring, { -- soft sparkles rising off it, in the seeds' colour
+			color = zone.seedColor, rate = 4, lifetime = NumberRange.new(1.5, 2.5), speed = NumberRange.new(1.5, 3),
+			size = NumberSequence.new(0.5), spread = Vector2.new(20, 20), lightEmission = 1,
+			direction = Enum.NormalId.Right, -- (a disc lies on its side: its +X is up)
 		})
+		for i = 1, 5 do -- a few pebbles round its edge, not evenly spaced
+			local a = i / 5 * math.pi * 2 + (i % 2) * 0.5
+			Props.rock(into, patch + Vector3.new(math.cos(a), 0, math.sin(a)) * (d / 2 + 0.5), Vector3.new(2.4, 1.6, 2), theme.nestStone, Enum.Material.SmoothPlastic, a, false)
+		end
 	end, Vector3.new(1, 2, 1))
 
-	local core = tag(hidden(model, "NestCore", Vector3.new(2, 2, 2), CFrame.new(center + Vector3.new(0, 16, 0))), "NestCore", "ZoneIndex", k)
+	local core = tag(hidden(model, "NestCore", Vector3.new(2, 2, 2), CFrame.new(center + Vector3.new(0, 1, 0))), "NestCore", "ZoneIndex", k)
 	model.PrimaryPart = core
 	marker(core, "Center", CFrame.new(center), "NestCenter", "ZoneIndex", k)
-	-- Pods ring the mound on the -X half, so thieves grab and run home with the guard behind them.
+	-- Pods scattered on the base side of the sleeping boss, so thieves grab and run home with it behind them.
 	for i = 1, Config.PODS_PER_NEST do
-		local a = math.pi / 2 + (i - 0.5) * math.pi / Config.PODS_PER_NEST
-		marker(core, "Pod" .. i, CFrame.new(center + Vector3.new(math.cos(a) * 8, 2.5, math.sin(a) * 8)), "Pod", "ZoneIndex", k):SetAttribute("PodIndex", i)
+		marker(core, "Pod" .. i, CFrame.new(center + Config.podOffset(k, i)), "Pod", "ZoneIndex", k):SetAttribute("PodIndex", i)
 	end
 	marker(core, "GuardHome", CFrame.new(center + Vector3.new(Config.GUARD_HOME_OFFSET, 0, 0)), "GuardHome", "ZoneIndex", k)
 end

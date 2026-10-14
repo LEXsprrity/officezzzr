@@ -52,9 +52,7 @@ export type Theme = {
 	floorLight: Color3, -- the checker over the floor (Config zone .floor is the floor itself)
 	wallLight: Color3, -- the checker on the walls (Config zone .wall)
 	cap: Color3, -- the strip along the top of both walls
-	mound: Color3,
 	nestStone: Color3,
-	leaf: Color3,
 	build: (ctx: Ctx) -> (),
 }
 
@@ -845,37 +843,37 @@ end
 local THEMES: { [string]: Theme } = {
 	Meadow = {
 		floorLight = rgb(124, 212, 64), wallLight = rgb(212, 144, 94), cap = rgb(90, 214, 64),
-		mound = rgb(150, 100, 64), nestStone = rgb(190, 190, 205), leaf = rgb(90, 210, 80),
+		nestStone = rgb(190, 190, 205),
 		build = buildMeadow,
 	},
 	Desert = {
 		floorLight = rgb(248, 224, 164), wallLight = rgb(238, 196, 112), cap = rgb(250, 222, 150),
-		mound = rgb(214, 160, 96), nestStone = rgb(226, 160, 96), leaf = rgb(90, 190, 80),
+		nestStone = rgb(226, 160, 96),
 		build = buildDesert,
 	},
 	Jungle = {
 		floorLight = rgb(72, 184, 82), wallLight = rgb(86, 156, 84), cap = rgb(96, 206, 80),
-		mound = rgb(130, 88, 54), nestStone = rgb(120, 160, 110), leaf = rgb(50, 190, 76),
+		nestStone = rgb(120, 160, 110),
 		build = buildJungle,
 	},
 	Lava = {
 		floorLight = rgb(106, 68, 76), wallLight = rgb(88, 58, 66), cap = rgb(255, 120, 40),
-		mound = rgb(80, 54, 60), nestStone = rgb(70, 46, 54), leaf = rgb(240, 100, 40),
+		nestStone = rgb(70, 46, 54),
 		build = buildLava,
 	},
 	Snow = {
 		floorLight = rgb(214, 232, 252), wallLight = rgb(180, 222, 252), cap = SNOW,
-		mound = rgb(226, 240, 252), nestStone = ICE, leaf = rgb(60, 170, 120),
+		nestStone = ICE,
 		build = buildSnow,
 	},
 	Space = {
 		floorLight = rgb(78, 60, 156), wallLight = rgb(60, 48, 124), cap = rgb(36, 28, 84),
-		mound = rgb(80, 64, 140), nestStone = rgb(160, 120, 255), leaf = rgb(120, 255, 180),
+		nestStone = rgb(160, 120, 255),
 		build = buildSpace,
 	},
 	Spirit = {
 		floorLight = rgb(128, 214, 110), wallLight = rgb(156, 156, 224), cap = ROOF,
-		mound = rgb(140, 104, 82), nestStone = rgb(170, 170, 214), leaf = rgb(255, 170, 200),
+		nestStone = rgb(170, 170, 214),
 		build = buildSpirit,
 	},
 }

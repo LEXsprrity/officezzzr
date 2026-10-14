@@ -99,15 +99,42 @@ H.test("world: plot layout contract (two dirt beds, a grass path, origin, spawn,
 	end
 end)
 
-H.test("world: nest contract is unchanged (centre, pods, guard home)", function()
+H.test("world: nests on the left side, pods scattered beside the boss, no mother plant (centre, pods, guard home)", function()
+	local halfW = Config.CORRIDOR_WIDTH / 2
 	for k, nest in nests do
-		local center = Vector3.new(Config.nestX(k), Config.GROUND_Y, 0)
+		local center = Config.nestCenter(k)
 		H.ok((nest.center - center).Magnitude < 1e-3, "nest centre")
+		-- the runner's left (-Z, walking +X from the base), off the middle, inside the zone, clear of the wall
+		H.ok(center.Z <= -20 and center.Z >= -(halfW - 40), `zone {k}: nest on the left side ({center.Z})`)
+		H.eq(Config.zoneAtX(center.X), k, `zone {k}: nest inside its zone`)
+		H.eq(Config.zoneAtX(nest.guardHome.X), k, `zone {k}: the boss sleeps inside its zone`)
 		H.eq(#nest.podCFrames, Config.PODS_PER_NEST)
+		local xs, zs = {}, {}
 		for i, cf in nest.podCFrames do
-			local a = math.pi / 2 + (i - 0.5) * math.pi / Config.PODS_PER_NEST
-			local want = center + Vector3.new(math.cos(a) * 8, 2.5, math.sin(a) * 8)
+			local want = center + Config.podOffset(k, i)
 			H.ok((cf.Position - want).Magnitude < 1e-3, "pod position")
+			local rel = cf.Position - center
+			H.ok(rel.X < 0 and rel.X > -16 and math.abs(rel.Z) < 13, `zone {k} pod {i}: beside the boss, on the base side ({rel})`)
+			H.ok(math.abs(cf.Position.Z) < halfW - 40, `zone {k} pod {i}: clear of the wall's props`)
+			for j, other in nest.podCFrames do
+				if j ~= i then
+					H.ok((other.Position - cf.Position).Magnitude > 4, `zone {k}: pods {i} and {j} apart`)
+				end
+			end
+			xs[rel.X] = true
+			zs[rel.Z] = true
+		end
+		-- a loose scatter: no two pods share a row or a column (not a grid, not a line)
+		local nx, nz = 0, 0
+		for _ in xs do
+			nx += 1
+		end
+		for _ in zs do
+			nz += 1
+		end
+		H.ok(nx == Config.PODS_PER_NEST and nz == Config.PODS_PER_NEST, `zone {k}: pods scattered, not in a grid`)
+		for _, d in nest.model:GetDescendants() do
+			H.ok(not (d.Name == "MotherBulb" or d.Name == "Mound" or d.Name == "Stem" or d.Name == "Leaf"), `zone {k}: no mother plant ({d:GetFullName()})`)
 		end
 		H.ok((nest.guardHome - (center + Vector3.new(Config.GUARD_HOME_OFFSET, 0, 0))).Magnitude < 1e-3, "guard home")
 		H.eq(nest.model.PrimaryPart:GetAttribute("Role"), "NestCore")
@@ -291,7 +318,7 @@ H.test("world: beside each nest a small wooden plank on a post says the zone's r
 		H.eq(plank.FrontSurface, Enum.SurfaceType.Studs, `{zone.id}: studded`)
 		H.ok(post.CFrame.Position.Y + post.Size.Y / 2 <= plank.CFrame.Position.Y - plank.Size.Y / 2 + 0.01, "the post holds the plank up")
 		-- next to the nest, toward the base, facing the players coming from it
-		local nest = Vector3.new(Config.nestX(k), Config.GROUND_Y, 0)
+		local nest = Config.nestCenter(k)
 		local flat = Vector3.new(plank.CFrame.Position.X, Config.GROUND_Y, plank.CFrame.Position.Z)
 		H.ok((flat - nest).Magnitude < 40, `{zone.id}: next to the nest ({(flat - nest).Magnitude} studs)`)
 		H.ok(flat.X < nest.X and math.abs(flat.Z) > 16 and math.abs(flat.Z) < Config.CORRIDOR_WIDTH / 2 - 10, `{zone.id}: in front of the nest, beside the run`)
