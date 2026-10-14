@@ -225,7 +225,7 @@ function TreadmillBoard.build(model: Model, belt: BasePart, center: Vector3): Bo
 	anchor.Parent = belt
 	local gui = Instance.new("BillboardGui")
 	gui.Name = "StepText"
-	gui.Size = UDim2.fromScale(7, 1.8) -- studs: small, it shrinks with distance
+	gui.Size = UDim2.fromScale(4.4, 1.15) -- studs: small, it shrinks with distance
 	gui.LightInfluence = 0
 	gui.MaxDistance = Treadmill.RATE_TEXT_DISTANCE
 	gui.Adornee = anchor
