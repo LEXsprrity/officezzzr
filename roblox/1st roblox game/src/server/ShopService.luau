@@ -214,13 +214,14 @@ local function processReceipt(receiptInfo: { [string]: any }): Enum.ProductPurch
 	return if confirm then Enum.ProductPurchaseDecision.PurchaseGranted else Enum.ProductPurchaseDecision.NotProcessedYet
 end
 
--- The Sell window at the SELL stall: a list of plant slots (PlotService.sellPlants checks it all).
-local function onSell(player: Player, slots: any)
+-- The Sell window at the SELL stall: a list of plant slots and one of inventory ids (PlotService.sellPlants
+-- checks it all).
+local function onSell(player: Player, slots: any, ids: any)
 	local s = Sessions.get(player)
 	if not s or type(slots) ~= "table" or not Sessions.allowRequest(s, REQUESTS_PER_SECOND) then
 		return
 	end
-	PlotService.sellPlants(player, slots)
+	PlotService.sellPlants(player, slots, ids)
 end
 
 -- The planting preview: plant the carried seed (or bagged seed `bagKey`) at `position` (PlotService.plantAt

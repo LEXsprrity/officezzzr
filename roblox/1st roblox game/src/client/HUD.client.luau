@@ -380,7 +380,7 @@ local sideList = new("ScrollingFrame", {
 	Parent = sidePanel,
 }, { new("UIListLayout", { Padding = UDim.new(0, 6), SortOrder = Enum.SortOrder.LayoutOrder }) })
 
-local sideTab: string? = nil
+local sideTab: string? = nil -- "Plants" or "Inventory" (the Plants panel's tabs)
 local renderSide: () -> ()
 
 local function card(order: number, color: Color3, height: number?): Frame
@@ -415,80 +415,23 @@ local function bagEntries(): { BagEntry }
 	return list
 end
 
-local function renderSeeds()
-	Icons.set(sideTitle, "Seeds", `🌱 Seeds · Bag {SeedPacks.bagCount(stats.seedBag or {})}/{Config.SEED_BAG_MAX}`)
-	-- One slim line: what you carry (in its rarity colour), and how the bag fills or empties
-	local c = stats.carrying
-	local status = text(sideList, {
-		Text = if c then `Carrying: {SeedPacks.seedName(c.zone, c.rarity, c.mutation)}` else "Not carrying a seed",
-		Size = UDim2.new(1, -8, 0, 24), TextColor3 = if c then Config.RARITIES[c.rarity].color:Lerp(INK, 0.35) else Color3.fromRGB(120, 120, 135),
-		TextXAlignment = Enum.TextXAlignment.Left, LayoutOrder = 0,
-	})
-	status:FindFirstChildOfClass("UIStroke"):Destroy()
-
-	-- Seed bag (from seed packs): Plant, then click or tap your dirt (Planting.client)
-	local bag = bagEntries()
-	local hint = text(sideList, {
-		Text = if #bag == 0 then "Buy seed packs in the Shop: their seeds land here." else "Press Plant, then click or tap your plot's dirt.",
-		Size = UDim2.new(1, -8, 0, 18), TextColor3 = Color3.fromRGB(110, 110, 125), TextXAlignment = Enum.TextXAlignment.Left, LayoutOrder = 1,
-	})
-	hint:FindFirstChildOfClass("UIStroke"):Destroy()
-	for i, e in bag do
-		local rarity = Config.RARITIES[e.rarity]
-		local mut = Config.mutationById(e.mutation)
-		local f = card(1 + i, (if mut then mut.color else rarity.color):Lerp(Color3.new(0, 0, 0), 0.3), 54)
-		text(f, {
-			Text = `{SeedPacks.seedName(e.zone, e.rarity, e.mutation)} x{e.count} · {Config.ZONES[e.zone].name}`, -- (the flower is a surprise)
-			Size = UDim2.new(1, -98, 1, -10), Position = UDim2.fromOffset(6, 5), TextXAlignment = Enum.TextXAlignment.Left,
-		})
-		button(f, "Plant", COLORS.money, UDim2.fromOffset(84, 40), function()
-			RequestUseItem:FireServer("Seed:" .. e.key)
-		end).Position = UDim2.new(1, -90, 0, 7)
-	end
-
-	-- The zones' seeds: unlocked in green words, locked with the lock
-	for k, zone in Config.ZONES do
-		local ok = stats.speed >= zone.req
-		local f = card(100 + k, if ok then zone.ui else COLORS.disabled, 58)
-		text(f, {
-			Text = `{zone.seed} · {zone.name} · {if zone.active == "night" then "Night" else "Day"}`,
-			Size = UDim2.new(1, -12, 0.5, -2), Position = UDim2.fromOffset(6, 3), TextXAlignment = Enum.TextXAlignment.Left,
-		})
-		local reqLabel = text(f, {
-			Size = UDim2.new(1, -12, 0.45, -2), Position = UDim2.new(0, 6, 0.5, 0), TextXAlignment = Enum.TextXAlignment.Left,
-			TextColor3 = if ok then Color3.fromRGB(160, 255, 120) else Color3.fromRGB(255, 235, 235),
-		})
-		local income = `{Format.money(Config.seedIncome(k))}/s base`
-		Icons.set(reqLabel, { "Lock" }, if ok then `Unlocked · {income}` else `🔒 Rec. Speed {Format.short(zone.req)} · {income}`)
-	end
-end
-
 -- The Plants list (its block comes after the window kit, whose chunky buttons it uses). `full` rebuilds it;
 -- otherwise it only rebuilds when the plants themselves changed, and updates the numbers in place.
 local renderPlants: (full: boolean?) -> ()
 
 renderSide = function()
 	clearSide()
-	if sideTab == "Seeds" then
-		renderSeeds()
-	elseif sideTab == "Plants" then
-		renderPlants(true)
+	if sidePanel.Visible then
+		renderPlants(true) -- its Plants or Inventory tab
 	end
 end
 
-for _, tab in { { "Seeds", "🌱" }, { "Plants", "🪴" } } do
-	local name = tab[1] -- also the icon key
-	button(rightTabs, tab[2], Color3.fromRGB(110, 235, 80), UDim2.fromOffset(70, 70), function()
-		if sideTab == name then
-			sideTab = nil
-			sidePanel.Visible = false
-		else
-			sideTab = name
-			sidePanel.Visible = true
-			renderSide()
-		end
-	end, name)
-end
+-- The one side button: opens and closes the Plants panel (on the tab it was left on)
+button(rightTabs, "🪴", Color3.fromRGB(110, 235, 80), UDim2.fromOffset(70, 70), function()
+	sidePanel.Visible = not sidePanel.Visible
+	sideTab = sideTab or "Plants"
+	renderSide()
+end, "Plants")
 
 ----------------------------------------------------------------------------------------------------
 -- Modals: Shop, Trail Shop and Index share one chunky window, like the reference: a coloured title bar
@@ -663,13 +606,44 @@ local function fitModal()
 end
 
 ----------------------------------------------------------------------------------------------------
--- Plants panel (right side): "Plants 1/5 · $5/s", then one bright card per plant, best first: an accent
--- strip in its rarity (or mutation) colour, the plant's name (the flower it grew into), rarity, mutation
--- and weight, its $/s (with the day/night bonus while it's on) and a Remove button that asks once more
--- ("Sure?" for 2 s). The server re-checks it (remote RemovePlant: one of your own plants).
+-- Plants panel (right side): the one panel there (the Seeds menu is gone), with two tabs at its top.
+--   Plants: "Plants 1/5 · $5/s", then one bright card per plant, best first: an accent strip in its rarity
+--   (or mutation) colour, the plant's name (the flower it grew into), rarity, mutation and weight, its $/s
+--   (with the day/night bonus while it's on) and a Remove button that asks once more ("Sure?" for 2 s).
+--   Remove puts the plant in the Inventory, as it is (never money; the server re-checks it: remote
+--   RemovePlant, one of your own plants).
+--   Inventory: the seeds in the seed bag ("Rare Seed", their flower a surprise) and the removed plants
+--   (their flower's name), each with a Plant button that starts the ghost planting preview
+--   (Planting.client); the SELL stall sells them too. Full bag or inventory: a relief line says so.
 ----------------------------------------------------------------------------------------------------
 do
 	local RemovePlant = remotes:WaitForChild("RemovePlant") :: RemoteEvent
+	-- The tabs, over the list
+	sideList.Position = UDim2.fromOffset(10, 96)
+	sideList.Size = UDim2.new(1, -20, 1, -106)
+	local tabRow = new("Frame", { BackgroundTransparency = 1, Position = UDim2.fromOffset(10, 48), Size = UDim2.new(1, -20, 0, 42), Parent = sidePanel }, {
+		new("UIListLayout", { FillDirection = Enum.FillDirection.Horizontal, HorizontalAlignment = Enum.HorizontalAlignment.Center, Padding = UDim.new(0, 10) }),
+	})
+	local tabButtons: { [string]: TextButton } = {}
+	for _, name in { "Plants", "Inventory" } do
+		tabButtons[name] = chunky(tabRow, name, COLORS.disabled, UDim2.fromOffset(148, 40), function()
+			sideTab = name
+			renderSide()
+		end)
+	end
+	local function paintTabs()
+		for name, b in tabButtons do
+			b.BackgroundColor3 = if sideTab == name then COLORS.money else COLORS.disabled
+		end
+	end
+	-- A line of relief text in the list (a free-placed label in its own row, so its dropped copy can sit
+	-- behind it; UiFx.relief)
+	local function reliefLine(order: number, words: string, color: Color3)
+		local row = new("Frame", { BackgroundTransparency = 1, Size = UDim2.new(1, -8, 0, 40), LayoutOrder = order, Parent = sideList })
+		local label = bold(row, 3, { Text = words, Size = UDim2.new(1, -8, 1, -6), Position = UDim2.fromOffset(4, 1), TextColor3 = color, TextWrapped = true })
+		UiFx.relief(label, 3, 3)
+	end
+	local inventoryShown = "" -- what the Inventory shows
 	local CARD_H = 66
 	local SURE_SECONDS = 2
 	local GREEN_INK, MUTED_INK = Color3.fromRGB(30, 160, 55), Color3.fromRGB(120, 124, 140)
@@ -712,6 +686,7 @@ do
 
 		local slot = p.slot
 		local remove: TextButton
+		local full = #(stats.inventory or {}) >= Config.INVENTORY_MAX -- (the list says so above)
 		local function look()
 			local pending = sure[slot] ~= nil and os.clock() - sure[slot] < SURE_SECONDS
 			if not pending then
@@ -719,10 +694,12 @@ do
 			end
 			local label = remove:FindFirstChild("Label") :: TextLabel
 			label.Text = if pending then "Sure?" else "Remove"
-			remove.BackgroundColor3 = if pending then COLORS.gold else COLORS.red
+			remove.BackgroundColor3 = if full then COLORS.disabled elseif pending then COLORS.gold else COLORS.red
 		end
 		remove = chunky(f, "Remove", COLORS.red, UDim2.fromOffset(88, 42), function()
-			if sure[slot] and os.clock() - sure[slot] < SURE_SECONDS then
+			if full then
+				return
+			elseif sure[slot] and os.clock() - sure[slot] < SURE_SECONDS then
 				sure[slot] = nil
 				RemovePlant:FireServer(slot) -- the list rebuilds when the server's plants view comes back without it
 			else
@@ -750,7 +727,79 @@ do
 		table.insert(updaters, update)
 	end
 
+	-- One Inventory card: a seed from the bag or a removed plant, with its Plant button.
+	local function itemCard(order: number, name: string, sub: string, rarityIndex: number, mutation: string?, key: string)
+		local rarity = Config.RARITIES[rarityIndex]
+		local mut = Config.mutationById(mutation)
+		local accent = if mut then mut.color else rarity.color
+		local f = new("Frame", { Name = "Item_" .. key, Size = UDim2.new(1, -8, 0, CARD_H), BackgroundColor3 = WHITE, LayoutOrder = order, Parent = sideList }, {
+			new("UICorner", { CornerRadius = UDim.new(0, 12) }),
+			new("UIStroke", { Thickness = 2, Color = accent:Lerp(INK, 0.3), ApplyStrokeMode = Enum.ApplyStrokeMode.Border }),
+			new("UIGradient", { Rotation = 90, Color = ColorSequence.new(WHITE, accent:Lerp(WHITE, 0.8)) }),
+		})
+		new("Frame", { Size = UDim2.new(0, 8, 1, -14), Position = UDim2.fromOffset(7, 7), BackgroundColor3 = accent, BorderSizePixel = 0, Parent = f },
+			{ new("UICorner", { CornerRadius = UDim.new(1, 0) }) })
+		ink(f, { Text = name, Size = UDim2.new(1, -118, 0, 24), Position = UDim2.fromOffset(22, 5), TextColor3 = accent:Lerp(INK, 0.45) })
+		ink(f, { Text = sub, Size = UDim2.new(1, -118, 0, 16), Position = UDim2.fromOffset(22, 33), TextColor3 = MUTED_INK })
+		local plant = chunky(f, "Plant", COLORS.money, UDim2.fromOffset(88, 42), function()
+			RequestUseItem:FireServer("Seed:" .. key) -- the server answers with the planting preview (PlaceSeed)
+		end)
+		plant.Name = "Plant"
+		plant.AnchorPoint = Vector2.new(1, 0.5)
+		plant.Position = UDim2.new(1, -8, 0.5, 0)
+	end
+
+	local function renderInventory(full: boolean?)
+		local inventory = stats.inventory or {}
+		local bag = bagEntries()
+		local bagCount = SeedPacks.bagCount(stats.seedBag or {})
+		Icons.set(sideTitle, "Plants", `🪴 Inventory {#inventory}/{Config.INVENTORY_MAX} · Seeds {bagCount}/{Config.SEED_BAG_MAX}`)
+		local c = stats.carrying
+		local stuck = c ~= nil and #(stats.plants or {}) >= (stats.slots or 0) and bagCount >= Config.SEED_BAG_MAX
+		local keys = { tostring(stuck) }
+		for _, e in bag do
+			table.insert(keys, `{e.key}x{e.count}`)
+		end
+		for _, p in inventory do
+			table.insert(keys, `{p.id}:{p.name or ""}`)
+		end
+		local signature = table.concat(keys, ",")
+		if not full and signature == inventoryShown then
+			return
+		end
+		inventoryShown = signature
+		clearSide()
+		table.clear(updaters)
+		local order = 0
+		local function nextOrder(): number
+			order += 1
+			return order
+		end
+		if stuck then -- a seed brought home goes to the bag by itself, unless the bag is full too
+			reliefLine(nextOrder(), "Plot and seed bag full: plant or sell to make room for your seed!", COLORS.red)
+		end
+		if #inventory >= Config.INVENTORY_MAX then
+			reliefLine(nextOrder(), "Inventory full: plant or sell some plants.", COLORS.red)
+		end
+		if #bag == 0 and #inventory == 0 then
+			reliefLine(nextOrder(), "Removed plants and seeds from packs wait here.", WHITE)
+		end
+		for _, e in bag do
+			itemCard(nextOrder(), SeedPacks.seedName(e.zone, e.rarity, e.mutation), `x{e.count} · {Config.ZONES[e.zone].name}`, e.rarity, e.mutation, e.key)
+		end
+		for _, p in inventory do
+			local rarity = Config.RARITIES[p.rarity]
+			itemCard(nextOrder(), p.name or SeedPacks.seedName(p.zone, p.rarity, p.mutation),
+				`{rarity.id}{if p.mutation then " · " .. p.mutation else ""} · {Config.ZONES[p.zone].name}`, p.rarity, p.mutation, `inv:{p.id}`)
+		end
+	end
+
 	renderPlants = function(full: boolean?)
+		paintTabs()
+		if sideTab == "Inventory" then
+			renderInventory(full)
+			return
+		end
 		local plants = table.clone(stats.plants or {})
 		table.sort(plants, function(a, b)
 			if a.income ~= b.income then
@@ -763,9 +812,11 @@ do
 		for _, p in plants do
 			table.insert(keys, `{p.slot}:{p.zone}:{p.rarity}:{p.mutation or ""}:{p.name or ""}`)
 		end
+		table.insert(keys, tostring(#(stats.inventory or {}) >= Config.INVENTORY_MAX)) -- (Remove is off while it's full)
 		local signature = table.concat(keys, ",")
 		if not full and signature == shown then
 			for _, update in updaters do
+
 				update()
 			end
 			return
@@ -773,6 +824,9 @@ do
 		shown = signature
 		clearSide()
 		table.clear(updaters)
+		if #(stats.inventory or {}) >= Config.INVENTORY_MAX then
+			reliefLine(-1, "Inventory full: plant or sell some plants before removing more.", COLORS.red)
+		end
 		if #plants == 0 then
 			local f = card(0, WHITE, 60)
 			ink(f, { Text = "No plants yet. Steal a seed and plant it on your dirt!", Size = UDim2.new(1, -16, 1, -12), Position = UDim2.fromOffset(8, 6), TextWrapped = true })
@@ -1200,7 +1254,7 @@ do
 		for i, entry in Config.products("Pack") do
 			packCard(row, i, entry.name, entry.product, bagFull)
 		end
-		note(`Seed bag {bagCount}/{Config.SEED_BAG_MAX}{if bagFull then " (full: plant some first!)" else ""} · plant bagged seeds from the Seeds menu on your plot's dirt`, nextOrder())
+		note(`Seed bag {bagCount}/{Config.SEED_BAG_MAX}{if bagFull then " (full: plant some first!)" else ""} · plant them from the Inventory in the Plants panel`, nextOrder())
 
 		-- Plot upgrade: money or Robux (also on the board at your plot's gate). The R$ product is the one
 		-- for the plot's current price tier (looked up on every render, so it follows plotLevel); none at
@@ -1454,11 +1508,12 @@ end
 
 ----------------------------------------------------------------------------------------------------
 -- SELL window (TODO 9; the SELL stall in the shop plaza opens it). Everything for it is in this block;
--- renderModal and refresh call renderSell / sellChanged. One card per planted plant, cheapest first: the
--- plant's name in its rarity colour, its mutation (only on a mutated plant), weight, $/s (with the day/night
--- bonus while it's on), the sell price and a Sell button. Above them "Sell all Common" / "Sell all below Rare" (they keep mutated plants). Every sale asks
+-- renderModal and refresh call renderSell / sellChanged. One card per plant, planted or in the Inventory,
+-- cheapest first: the plant's name in its rarity colour, its mutation (only on a mutated plant), weight, $/s
+-- (with the day/night bonus while it's on; "In your Inventory" for one there), the sell price and a Sell
+-- button. Above them "Sell all Common" / "Sell all below Rare" (they keep mutated plants). Every sale asks
 -- once more inside the window: the card's button turns into "Sure?", a quick sell shows a confirm bar.
--- The server re-checks it all (remote SellPlants: your plants, the slots, standing at the stall).
+-- The server re-checks it all (remote SellPlants: your plants and inventory, standing at the stall).
 -- Scoped in a do-block (the HUD's main chunk is near Luau's 200-locals limit); only these two leave it.
 ----------------------------------------------------------------------------------------------------
 local renderSell: () -> ()
@@ -1485,55 +1540,79 @@ do
 		{ label = "Sell all below Rare", what = "below Rare", max = rarityIndex("Rare") - 1 },
 	}
 
-	type SellPending = { slot: number?, group: number? }
-	local sellPending: SellPending? = nil -- the sale waiting for its confirm: one plant's slot, or a quick sell
+	type SellPending = { key: string?, group: number? }
+	local sellPending: SellPending? = nil -- the sale waiting for its confirm: one plant's key, or a quick sell
 	local sellUpdaters: { () -> () } = {} -- the open window's prices and $/s, updated in place on payouts
 	local sellShown = "" -- which plants the window shows (sellSignature)
 
-	-- Which plants there are (slot and kind), so a payout tick (same plants, new numbers) doesn't rebuild the
+	-- Every plant the stall can sell: the planted ones ("p<slot>") and those in the Inventory ("i<id>").
+	local function sellables(): { any }
+		local out = {}
+		for _, p in stats.plants or {} do
+			local item = table.clone(p)
+			item.key = `p{p.slot}`
+			table.insert(out, item)
+		end
+		for _, p in stats.inventory or {} do
+			local item = table.clone(p)
+			item.key, item.inv = `i{p.id}`, true
+			table.insert(out, item)
+		end
+		return out
+	end
+
+	-- Which plants there are (key and kind), so a payout tick (same plants, new numbers) doesn't rebuild the
 	-- window under the player's finger, but a sale or a new plant does.
 	local function sellSignature(): string
 		local keys = {}
-		for _, p in stats.plants or {} do
-			table.insert(keys, `{p.slot}:{p.zone}:{p.rarity}:{p.mutation or ""}`)
+		for _, p in sellables() do
+			table.insert(keys, `{p.key}:{p.zone}:{p.rarity}:{p.mutation or ""}`)
 		end
 		table.sort(keys)
 		return table.concat(keys, ",")
 	end
 
-	local function plantInSlot(slot: number): any
-		for _, p in stats.plants or {} do
-			if p.slot == slot then
+	local function itemOf(key: string): any
+		for _, p in sellables() do
+			if p.key == key then
 				return p
 			end
 		end
 		return nil
 	end
 
-	-- The slots a sale would sell and what it pays right now.
-	local function saleOf(pending: SellPending): ({ number }, number)
-		local slots, total = {}, 0
+	-- The slots and inventory ids a sale would sell and what it pays right now.
+	local function saleOf(pending: SellPending): ({ number }, { number }, number)
+		local slots, ids, total = {}, {}, 0
 		local group = pending.group and SELL_GROUPS[pending.group]
-		for _, p in stats.plants or {} do
-			if (pending.slot ~= nil and p.slot == pending.slot) or (group ~= nil and p.mutation == nil and p.rarity <= group.max) then
-				table.insert(slots, p.slot)
+		for _, p in sellables() do
+			if (pending.key ~= nil and p.key == pending.key) or (group ~= nil and p.mutation == nil and p.rarity <= group.max) then
+				table.insert(if p.inv then ids else slots, if p.inv then p.id else p.slot)
 				total += p.sell or 0
 			end
 		end
-		return slots, total
+		return slots, ids, total
+	end
+
+	local function saleCount(pending: SellPending): number
+		local slots, ids = saleOf(pending)
+		return #slots + #ids
 	end
 
 	local function sellNow(pending: SellPending)
-		local slots = saleOf(pending)
+		local slots, ids = saleOf(pending)
 		sellPending = nil
-		if #slots > 0 then
-			SellPlants:FireServer(slots)
+		if #slots + #ids > 0 then
+			SellPlants:FireServer(slots, ids)
 		end
 		renderModal()
 	end
 
 	-- "$1.2K/s · Night x0.8" in a muted grey while the plant is out of its phase (earning less), like its billboard.
 	local function sellIncomeText(p: any): (string, Color3)
+		if p.inv then
+			return "In your Inventory", NOTE_COLOR
+		end
 		local bonus = Config.bonusLabel(p.zone, (Config.dayPhase(workspace:GetServerTimeNow())))
 		return `{Format.money(p.income)}/s{if bonus then " · " .. bonus else ""}`, if bonus then Config.OFF_TIME_COLOR else MONEY_GREEN
 	end
@@ -1559,17 +1638,17 @@ do
 		local incomeLabel = bold(c, 2, { Size = UDim2.new(1, -14, 0, 22), Position = UDim2.fromOffset(7, 132) })
 		-- What the stall pays, and the button (a second click confirms)
 		local priceLabel = bold(c, 3, { Size = UDim2.new(1, -14, 0, 34), Position = UDim2.fromOffset(7, 158), TextColor3 = MONEY_GREEN })
-		local sure = sellPending ~= nil and sellPending.slot == p.slot
+		local sure = sellPending ~= nil and sellPending.key == p.key
 		chunky(c, if sure then "Sure? Sell" else "Sell", if sure then COLORS.gold else SELL_RED, UDim2.new(1, -16, 0, 48), function()
 			if sure then
-				sellNow({ slot = p.slot })
+				sellNow({ key = p.key })
 			else
-				sellPending = { slot = p.slot }
+				sellPending = { key = p.key }
 				renderModal()
 			end
 		end).Position = UDim2.new(0, 8, 1, -56)
 		local function update()
-			local now = plantInSlot(p.slot) or p
+			local now = itemOf(p.key) or p
 			incomeLabel.Text, incomeLabel.TextColor3 = sellIncomeText(now)
 			priceLabel.Text = Format.money(now.sell or 0)
 		end
@@ -1582,14 +1661,14 @@ do
 		moneySubtitle()
 		table.clear(sellUpdaters)
 		sellShown = sellSignature()
-		local plants = table.clone(stats.plants or {})
+		local plants = sellables()
 		table.sort(plants, function(a, b)
 			if (a.sell or 0) ~= (b.sell or 0) then
 				return (a.sell or 0) < (b.sell or 0)
 			end
-			return a.slot < b.slot
+			return a.key < b.key
 		end)
-		note(`The stall pays {Config.SELL_STALL_SECONDS // 60} min of a plant's income (Remove in the Plants list: {Config.SELL_SECONDS} s).`, 1)
+		note(`The stall pays {Config.SELL_STALL_SECONDS // 60} min of a plant's income. Plants in your Inventory sell here too.`, 1)
 		if #plants == 0 then
 			note("No plants yet: steal a seed and plant it on your dirt!", 2)
 			return
@@ -1600,7 +1679,7 @@ do
 			new("UIListLayout", { FillDirection = Enum.FillDirection.Horizontal, HorizontalAlignment = Enum.HorizontalAlignment.Center, Padding = UDim.new(0, 14) }),
 		})
 		for i, group in SELL_GROUPS do
-			local count = #(saleOf({ group = i }))
+			local count = saleCount({ group = i })
 			chunky(row, `{group.label} ({count})`, if count > 0 then SELL_ORANGE else COLORS.disabled, UDim2.fromOffset(330, 56), function()
 				if count > 0 then
 					sellPending = { group = i }
@@ -1613,7 +1692,7 @@ do
 		-- The quick sell's confirm bar
 		local pending = sellPending
 		local group = pending and pending.group and SELL_GROUPS[pending.group]
-		if pending and group and #(saleOf(pending)) == 0 then
+		if pending and group and saleCount(pending) == 0 then
 			sellPending, pending, group = nil, nil, nil -- nothing left to sell
 		end
 		if pending and group then
@@ -1622,8 +1701,9 @@ do
 				Size = UDim2.new(1, -350, 1, -18), Position = UDim2.fromOffset(16, 9), TextXAlignment = Enum.TextXAlignment.Left, TextColor3 = HEADING_GOLD,
 			})
 			local function update()
-				local slots, total = saleOf(pending :: SellPending)
-				question.Text = `Sell {#slots} {group.what} plant{if #slots == 1 then "" else "s"} for {Format.money(total)}?`
+				local _, _, total = saleOf(pending :: SellPending)
+				local count = saleCount(pending :: SellPending)
+				question.Text = `Sell {count} {group.what} plant{if count == 1 then "" else "s"} for {Format.money(total)}?`
 			end
 			update()
 			table.insert(sellUpdaters, update)
@@ -1651,7 +1731,8 @@ do
 
 	-- The plants view arrives with every payout: rebuild only when the plants themselves changed.
 	sellChanged = function(changed: { [string]: any })
-		if changed.plants then
+		if changed.plants or changed.inventory then
+
 			if sellSignature() ~= sellShown then
 				renderModal()
 			else
@@ -1855,7 +1936,8 @@ do
 		resultScale.Scale = 0.4
 		TweenService:Create(resultScale, TweenInfo.new(0.45, Enum.EasingStyle.Back, Enum.EasingDirection.Out), { Scale = 1 }):Play()
 		local exclusive = best.mutation ~= nil and best.mutation == pack.exclusive
-		resultSub.Text = `{if exclusive then "PACK EXCLUSIVE! " else ""}{SeedPacks.seedName(best.zone, best.rarity, best.mutation)} → your Seeds bag`
+		resultSub.Text = `{if exclusive then "PACK EXCLUSIVE! " else ""}{SeedPacks.seedName(best.zone, best.rarity, best.mutation)} → your Inventory`
+
 		resultSub.Visible = true
 
 		continueHint.Visible = true
@@ -1900,29 +1982,19 @@ end
 ----------------------------------------------------------------------------------------------------
 -- Refresh from stats
 ----------------------------------------------------------------------------------------------------
-local lastUnlocked = -1
 local function refresh(changed: { [string]: any })
 	speedValue.Text = Format.short(stats.speed)
 	moneyValue.Text = Format.money(stats.money)
 
-	-- (No banner while carrying a seed: the seed in hand and the planting hint, Planting.client, say it.)
+	-- (No banner while carrying a seed: the seed in hand and the planting ghost, Planting.client, say it.)
 	if not slowMode and changed.walkSpeed then
 		applySlow()
 	end
 	-- Rebuilding lists every money tick is wasteful; only when their data changed.
-	local unlocked = 0
-	for _, zone in Config.ZONES do
-		if stats.speed >= zone.req then
-			unlocked += 1
-		end
+	if sidePanel.Visible and (changed.plants or changed.slots or changed.income or changed.inventory or changed.seedBag or changed.carrying) then
+		renderPlants() -- rebuilt only when what it lists changed (a payout just updates the numbers)
 	end
-	local unlockChanged = unlocked ~= lastUnlocked
-	lastUnlocked = unlocked
-	if sidePanel.Visible and sideTab == "Plants" and (changed.plants or changed.slots or changed.income) then
-		renderPlants() -- rebuilt only when the plants changed (a payout just updates the numbers)
-	elseif sidePanel.Visible and sideTab == "Seeds" and (changed.carrying or changed.items or changed.seedBag or unlockChanged) then
-		renderSide()
-	end
+
 	-- The open window is rebuilt when what it lists changes; money, income and Speed only update it in place.
 	if modal.Visible and modalName == "Sell" then
 		sellChanged(changed)

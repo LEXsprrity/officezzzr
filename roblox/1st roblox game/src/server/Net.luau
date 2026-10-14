@@ -2,15 +2,21 @@
 --   client -> server: RequestBuy(itemId), RequestUseItem(itemId)
 --     RequestBuy ids: "PlotUpgrade", "TreadmillUpgrade" and "Trail:<id>" (money), "Product:<name>"
 --       (developer products, Robux), "Pass:<name>" (gamepasses)
---     RequestUseItem ids: "Bat", "Seed:<bagKey>" (plant from the seed bag), "Equip:<trailId>"
---   client -> server: SellPlants(slots) (a list of plant slots, sold at the SELL stall; PlotService checks)
+--     RequestUseItem ids: "Bat", "Seed:<bagKey>" (plant from the seed bag), "Seed:inv:<id>" (plant a plant
+--       from the inventory again), "Equip:<trailId>"
+--   client -> server: SellPlants(slots, ids?) (plant slots and inventory ids, sold at the SELL stall;
+--     PlotService checks)
 --   client -> server: RemovePlant(slot) (the HUD Plants panel's Remove button: one of your own plants, from
---     anywhere, for a small refund; PlotService.removePlant rate-limits it, Selling.remove checks it)
+--     anywhere, into your inventory, for no money; PlotService.removePlant rate-limits it, Inventory.take
+--     checks it)
 --   server -> client: StatsUpdate "catalog" (catalog[zone][rarity] = the flower model names the Index lists)
---   client -> server: PlantSeed(position, bagKey?) (plant the carried seed, or a bagged one, on your own dirt
---     bed at `position`, from the planting preview; PlotService.plantAt checks it all)
---   server -> client: LootEvent "PlaceSeed" { key, zone, rarity, name } (the Seeds menu's Plant button: show the
---     preview for that bagged seed)
+--   client -> server: PlantSeed(position, bagKey?) (plant the carried seed, a bagged one or an inventory plant
+--     "inv:<id>" on your own dirt bed at `position`, from the planting preview; PlotService.plantAt checks it all)
+--   server -> client: LootEvent "PlaceSeed" { key, zone, rarity, name, scale } (the Inventory's Plant button:
+--     show the ghost preview for that seed or plant, `scale` its size next to a full-grown one)
+--   server -> client: LootEvent "Stored" { zone, rarity, mutation } (a seed brought home to a full plot went
+--     to the seed bag)
+
 --   client -> server: ClaimReward(kind) ("Gift": the Free Gift window's CLAIM button; RewardService checks)
 --   server -> client: StatsUpdate(stats), LootEvent(kind, data), IncomePopup(amount, position)
 --     LootEvent "Announce" { text, color } goes to every client (Net.announce)

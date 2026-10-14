@@ -7,6 +7,8 @@ local SeedPacks = require(Shared:WaitForChild("SeedPacks"))
 local Net = require(script.Parent:WaitForChild("Net"))
 local Sessions = require(script.Parent:WaitForChild("Sessions"))
 local WorldBuilder = require(script.Parent:WaitForChild("WorldBuilder"))
+local Inventory = require(script.Parent:WaitForChild("Inventory"))
+
 
 local SeedService = {}
 
@@ -207,6 +209,34 @@ function SeedService.returnCarry(player: Player)
 	showPod(pod, carry.zone)
 end
 
+-- A stolen seed brought home (into the base) while the plot is full goes into the seed bag by itself
+-- (Inventory.carryHome; owner request): the pod regrows as if it was planted, and a Legendary from the
+-- last zones is announced now (planting from the bag never announces). With the bag full too it stays
+-- carried (the Inventory says so). PlotService's payout loop checks every plot owner. Returns whether it
+-- stored the seed.
+function SeedService.storeCarried(player: Player): boolean
+	local s = Sessions.get(player)
+	local char = player.Character
+	local root = char and char:FindFirstChild("HumanoidRootPart") :: BasePart?
+	if not s or not s.carry or not root then
+		return false
+	end
+	if Inventory.carryHome(s.profile, Sessions.maxSlots(s), Inventory.isHome(root.Position)) ~= "store" then
+		return false
+	end
+	local carry = SeedService.consumeCarry(player)
+	if not carry then
+		return false
+	end
+	SeedPacks.addToBag(s.profile.seedBag, carry.zone, carry.rarity, carry.mutation)
+	Sessions.pushFull(s)
+	Net.LootEvent:FireClient(player, "Stored", { zone = carry.zone, rarity = carry.rarity, mutation = carry.mutation })
+	if Config.announcesLegendary(carry.zone, carry.rarity, false) then
+		Net.announce(Config.legendaryAnnouncement(player.DisplayName, carry.zone, carry.mutation), "gold")
+	end
+	return true
+end
+
 -- Planted: the pod regrows later with a fresh roll.
 function SeedService.consumeCarry(player: Player): Sessions.Carry?
 	local s = Sessions.get(player)
@@ -214,15 +244,19 @@ function SeedService.consumeCarry(player: Player): Sessions.Carry?
 	if not carry then
 		return nil
 	end
-	local pod = nests[carry.zone].pods[carry.pod]
-	pod.regrowToken += 1
-	local token = pod.regrowToken
-	task.delay(Config.POD_REGROW, function()
-		if pod.regrowToken == token and not pod.available then
-			regrow(pod, carry.zone)
-		end
-	end)
+	local nest = nests[carry.zone]
+	local pod = nest and nest.pods[carry.pod]
+	if pod then -- (always, unless the nest's pods were never set up)
+		pod.regrowToken += 1
+		local token = pod.regrowToken
+		task.delay(Config.POD_REGROW, function()
+			if pod.regrowToken == token and not pod.available then
+				regrow(pod, carry.zone)
+			end
+		end)
+	end
 	return carry
+
 end
 
 return SeedService

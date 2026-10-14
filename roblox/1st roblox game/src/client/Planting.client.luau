@@ -1,10 +1,10 @@
 --!strict
--- Free planting: while you carry a seed (or after pressing Plant on a bagged seed in the 🌱 Seeds menu), a
--- see-through preview follows the mouse (or your last tap, or the spot in front of you on a gamepad) over
--- your own plot's brown dirt beds: green where the seed may go, red where it may not (Shared/Planting, the
--- same rules the server checks). Click (tap, or R2 on a gamepad) to plant there: the client only sends the
--- spot (remote PlantSeed); PlotService.plantAt checks it all again and plants. Q or the Cancel word cancels a
--- bagged seed. Kept out of HUD.client (its register headroom at -O0).
+-- Free planting: while you carry a seed (or after pressing Plant on a seed or a plant in the Plants panel's
+-- Inventory), a translucent 3D ghost of the plant follows the mouse (or your last tap, or the spot in front
+-- of you on a gamepad) over your own plot's brown dirt beds: green where it may go, red where it may not
+-- (Shared/Planting, the same rules the server checks). Click (tap, or R2 on a gamepad) to plant there: the
+-- client only sends the spot (remote PlantSeed); PlotService.plantAt checks it all again and plants. Q or
+-- the Cancel word cancels a picked seed or plant. Kept out of HUD.client (its register headroom at -O0).
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local RunService = game:GetService("RunService")
@@ -22,7 +22,6 @@ local PlantSeed = Remotes:WaitForChild("PlantSeed") :: RemoteEvent
 
 local player = Players.LocalPlayer
 
-local GOOD = Color3.fromRGB(90, 255, 120)
 local BAD = Color3.fromRGB(255, 80, 80)
 local HINT_RANGE = 90 -- a refusal shows while carrying within this many studs of your plot
 local SEND_GAP = 0.3 -- seconds between two plant requests
@@ -35,7 +34,9 @@ local myPlot: number? = nil
 local carrying: { zone: number, rarity: number }? = nil
 local plants: { PlantView } = {}
 local slots = Config.SLOTS_START
-local bag: { key: string, rarity: number, name: string }? = nil -- a bagged seed picked in the Seeds menu
+-- A bagged seed or an inventory plant picked in the Inventory ("inv:<id>" keys); `scale`: its size next to
+-- a full-grown one (1 for a seed)
+local bag: { key: string, zone: number, rarity: number, name: string, scale: number }? = nil
 local seedBag: { [string]: number } = {}
 
 -- The rarity of the seed we would plant now, or nil when there is nothing to plant.
@@ -44,6 +45,14 @@ local function seedRarity(): number?
 		return bag.rarity
 	end
 	return if carrying then carrying.rarity else nil
+end
+
+-- What the preview shows: the zone, rarity and size of what we would plant now.
+local function seedLook(): (number, number, number)
+	if bag then
+		return bag.zone, bag.rarity, bag.scale
+	end
+	return if carrying then carrying.zone else 1, if carrying then carrying.rarity else 1, 1
 end
 
 ----------------------------------------------------------------------------------------------------
@@ -86,40 +95,77 @@ local function plotReady(): boolean
 end
 
 ----------------------------------------------------------------------------------------------------
--- The preview: a see-through disc the size of the plant's full-grown reach, with a little sprout
+-- The preview (owner request): a translucent 3D ghost of the plant at its full-grown size (an inventory
+-- plant: its own size), standing where it would grow and facing the way plants face. The ghosts come from
+-- the server (ReplicatedStorage.PlantGhosts, Server/PlantGhosts): the zone's first model of that rarity,
+-- as a silhouette, since a seed's flower is a surprise until it is planted. Ghost-green where it may go,
+-- red where it may not. Until the ghosts have arrived, a see-through ball the size of its reach.
 ----------------------------------------------------------------------------------------------------
-local preview = Instance.new("Model")
-preview.Name = "PlantPreview"
-local function ghost(name: string, shape: Enum.PartType, size: Vector3): Part
-	local p = Instance.new("Part")
-	p.Name = name
-	p.Shape = shape
-	p.Size = size
-	p.Anchored = true
-	p.CanCollide = false
-	p.CanQuery = false
-	p.CanTouch = false
-	p.CastShadow = false
-	p.Material = Enum.Material.SmoothPlastic
-	p.Transparency = 0.45
-	p.Parent = preview
-	return p
-end
-local disc = ghost("Disc", Enum.PartType.Cylinder, Vector3.new(0.2, 4, 4))
-local sprout = ghost("Sprout", Enum.PartType.Ball, Vector3.new(1.6, 1.6, 1.6))
+local GHOST_OK = Color3.fromRGB(190, 255, 205)
+local GHOST_TRANSPARENCY = 0.5
+local preview: Model? = nil
+local previewKey = ""
+local previewOk: boolean? = nil
 
-local function showPreview(pos: Vector3?, ok: boolean, rarity: number)
-	if not pos then
-		preview.Parent = nil
+local function makePreview(zone: number, rarity: number, scale: number): Model
+	local folder = ReplicatedStorage:FindFirstChild("PlantGhosts")
+	local template = folder and folder:FindFirstChild(`Ghost_{zone}_{rarity}`)
+	local model: Model
+	if template and template:IsA("Model") then
+		model = template:Clone()
+		if math.abs(scale - 1) > 0.01 then
+			model:ScaleTo(model:GetScale() * math.clamp(scale, 0.1, 1))
+		end
+	else
+		model = Instance.new("Model")
+		local d = Planting.radius(rarity) * 2
+		local ball = Instance.new("Part")
+		ball.Shape = Enum.PartType.Ball
+		ball.Size = Vector3.new(d, d, d)
+		ball.PivotOffset = CFrame.new(0, -d / 2, 0) -- its pivot on the soil
+		ball.Parent = model
+		model.PrimaryPart = ball
+	end
+	for _, d in model:GetDescendants() do
+		if d:IsA("BasePart") then
+			d.Anchored = true
+			d.CanCollide = false
+			d.CanQuery = false
+			d.CanTouch = false
+			d.CastShadow = false
+			d.Transparency = GHOST_TRANSPARENCY
+		end
+	end
+	model.Name = "PlantPreview"
+	return model
+end
+
+local function showPreview(pos: Vector3?, ok: boolean)
+	if not pos or not origin then
+		if preview then
+			preview.Parent = nil
+		end
 		return
 	end
-	local d = Planting.radius(rarity) * 2
-	disc.Size = Vector3.new(0.2, d, d)
-	disc.CFrame = CFrame.new(pos + Vector3.new(0, 0.12, 0)) * CFrame.Angles(0, 0, math.pi / 2)
-	sprout.CFrame = CFrame.new(pos + Vector3.new(0, 1.1, 0))
-	local color = if ok then GOOD else BAD
-	disc.Color, sprout.Color = color, color
-	preview.Parent = workspace
+	local zone, rarity, scale = seedLook()
+	local key = `{zone}:{rarity}:{math.round(scale * 100)}:{ReplicatedStorage:FindFirstChild("PlantGhosts") ~= nil}`
+	if not preview or key ~= previewKey then
+		if preview then
+			preview:Destroy()
+		end
+		preview, previewKey, previewOk = makePreview(zone, rarity, scale), key, nil
+	end
+	local model = preview :: Model
+	if ok ~= previewOk then
+		previewOk = ok
+		for _, d in model:GetDescendants() do
+			if d:IsA("BasePart") then
+				d.Color = if ok then GHOST_OK else BAD
+			end
+		end
+	end
+	model:PivotTo(CFrame.new(pos) * (origin :: CFrame).Rotation * CFrame.Angles(0, math.pi, 0)) -- facing the entrance, like the plants
+	model.Parent = workspace
 end
 
 ----------------------------------------------------------------------------------------------------
@@ -294,12 +340,12 @@ RunService.RenderStepped:Connect(function()
 		near = root ~= nil and (root.Position - (origin :: CFrame).Position).Magnitude < HINT_RANGE
 		local pos = aim()
 		if pos then
-			showPreview(pos, (check(pos, rarity)), rarity)
+			showPreview(pos, (check(pos, rarity)))
 		else
-			showPreview(nil, false, rarity)
+			showPreview(nil, false)
 		end
 	else
-		showPreview(nil, false, 1)
+		showPreview(nil, false)
 	end
 	updateHint(near)
 end)
@@ -365,15 +411,30 @@ StatsUpdate.OnClientEvent:Connect(function(partial: any)
 	end
 	if type(partial.seedBag) == "table" then
 		seedBag = partial.seedBag
-		if bag and (seedBag[bag.key] or 0) <= 0 then
+		if bag and not string.find(bag.key, "^inv:") and (seedBag[bag.key] or 0) <= 0 then
 			stopBag() -- that seed is gone (planted or bag changed)
 		end
 	end
+	if type(partial.inventory) == "table" and bag and string.find(bag.key, "^inv:") then
+		local still = false
+		for _, p in partial.inventory do
+			still = still or (type(p) == "table" and `inv:{p.id}` == bag.key)
+		end
+		if not still then
+			stopBag() -- that plant is gone from the inventory (planted or sold)
+		end
+	end
+
 end)
 
 LootEvent.OnClientEvent:Connect(function(kind: string, data: any)
 	if kind == "PlaceSeed" and type(data) == "table" and type(data.key) == "string" and type(data.rarity) == "number" then
-		bag = { key = data.key, rarity = data.rarity, name = if type(data.name) == "string" then data.name else "the seed" }
+		bag = {
+			key = data.key, rarity = data.rarity, name = if type(data.name) == "string" then data.name else "the seed",
+			zone = if type(data.zone) == "number" and Config.ZONES[data.zone] then data.zone else 1,
+			scale = if type(data.scale) == "number" and data.scale == data.scale then data.scale else 1,
+		}
+
 		lastTouch = nil
 	elseif kind == "Planted" then
 		stopBag() -- one seed per Plant press; press Plant again for the next

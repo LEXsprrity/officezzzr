@@ -18,6 +18,8 @@ local ProfileStore = require(script.Parent:WaitForChild("ProfileStore"))
 local CreatureModels = require(script.Parent:WaitForChild("CreatureModels"))
 local Shop = require(script.Parent:WaitForChild("Shop"))
 local Selling = require(script.Parent:WaitForChild("Selling"))
+local Inventory = require(script.Parent:WaitForChild("Inventory"))
+
 local TreadmillBoard = require(script.Parent:WaitForChild("TreadmillBoard"))
 
 local PlotService = {}
@@ -49,7 +51,7 @@ local sellStalls: { BasePart } = {} -- the SELL stalls' prompt parts (WorldBuild
 -- Pure-ish helpers (also used for offline income)
 ----------------------------------------------------------------------------------------------------
 function PlotService.plantStats(plant: ProfileStore.Plant, now: number): (number, number)
-	local variance = Config.plantVariance(plant.plantedAt, plant.slot)
+	local variance = Config.varianceOf(plant)
 	local weight = Config.plantWeight(plant.zone, plant.rarity, now - plant.plantedAt, variance)
 	return weight, Config.plantIncome(plant.zone, plant.rarity, weight, plant.mutation)
 end
@@ -219,7 +221,16 @@ local function pushPlants(s: Sessions.Session, now: number)
 			sell = Selling.price(plant, now, mult),
 		})
 	end
-	Sessions.push(s.player, { plants = view, slots = Sessions.maxSlots(s) })
+	-- The inventory (the Plants panel's Inventory part, the Sell window): each plant as it left the plot
+	local inventory = {}
+	for _, entry in s.profile.inventory do
+		local plant = Inventory.asPlant(entry, now)
+		table.insert(inventory, {
+			id = entry.id, zone = entry.zone, rarity = entry.rarity, mutation = entry.mutation, weight = Inventory.weight(entry),
+			name = PlotService.plantName(plant), sell = Selling.price(plant, now, mult),
+		})
+	end
+	Sessions.push(s.player, { plants = view, inventory = inventory, slots = Sessions.maxSlots(s) })
 end
 
 local function refreshIncome(s: Sessions.Session, now: number)
@@ -266,14 +277,16 @@ end
 
 -- Plants a seed (carried or from the seed bag) at (x, z) in the plot's space, under a new id: its flower is
 -- drawn now, at random among the zone's plant models of its rarity (a surprise until planted; kept in
--- `variant`), then model, Index, income and client updates. "Planted" carries the flower's name and the
--- spot over the plant, where the client pops the name up for a moment (the reveal).
+-- `variant`), then model, Index, income and client updates. With `from` (a plant from the inventory) it is
+-- that plant again: its flower, mutation and growth. "Planted" carries the flower's name and the spot over
+-- the plant, where the client pops the name up for a moment (the reveal).
 local flowerRng = Random.new()
-local function plantSeed(player: Player, s: Sessions.Session, state: PlotState, x: number, z: number, zone: number, rarity: number, mutation: string?)
+local function plantSeed(player: Player, s: Sessions.Session, state: PlotState, x: number, z: number, zone: number, rarity: number, mutation: string?, from: ProfileStore.InvPlant?)
 	local now = os.time()
-	local plant: ProfileStore.Plant = {
-		slot = Planting.newId(s.profile.plants :: any), zone = zone, rarity = rarity, mutation = mutation, plantedAt = now,
-		x = math.round(x * 100) / 100, z = math.round(z * 100) / 100,
+	local slot = Planting.newId(s.profile.plants :: any)
+	x, z = math.round(x * 100) / 100, math.round(z * 100) / 100
+	local plant: ProfileStore.Plant = if from then Inventory.toPlant(from, slot, now, x, z) else {
+		slot = slot, zone = zone, rarity = rarity, mutation = mutation, plantedAt = now, x = x, z = z,
 		variant = CreatureModels.randomVariant(zone, rarity, function()
 			return flowerRng:NextNumber()
 		end),
@@ -307,11 +320,18 @@ local function finite(v: Vector3): boolean
 	return v.X == v.X and v.Y == v.Y and v.Z == v.Z and math.abs(v.X) < 1e6 and math.abs(v.Y) < 1e6 and math.abs(v.Z) < 1e6
 end
 
--- Plants the carried seed, or (with `bagKey`) one from the seed bag, at `pos`: the remote PlantSeed, sent by
--- the client's planting preview (Planting.client), so nothing in it is trusted. The spot must be on one of
--- the player's OWN dirt beds, clear of their other plants (by full-grown size), within reach of where they
--- stand, and the plot must have a free slot (Shared/Planting.check). A refused spot toasts why and
--- plants nothing; the seed stays carried or in the bag.
+-- A plant from the inventory is named by the key "inv:<id>" (the bag's keys are "zone:rarity[:Mutation]").
+local function inventoryId(key: any): number?
+	local id = if type(key) == "string" then tonumber(string.match(key, "^inv:(%d+)$")) else nil
+	return if id and id <= 1e9 then id else nil
+end
+
+-- Plants the carried seed, or (with `bagKey`) one from the seed bag or a plant from the inventory
+-- ("inv:<id>"), at `pos`: the remote PlantSeed, sent by the client's planting preview (Planting.client), so
+-- nothing in it is trusted. The spot must be on one of the player's OWN dirt beds, clear of their other
+-- plants (by full-grown size), within reach of where they stand, and the plot must have a free slot
+-- (Shared/Planting.check). A refused spot toasts why and plants nothing; the seed stays carried or in the
+-- bag, the plant in the inventory.
 function PlotService.plantAt(player: Player, pos: any, bagKey: any)
 	local s = Sessions.get(player)
 	local state = plotOf(player)
@@ -322,7 +342,14 @@ function PlotService.plantAt(player: Player, pos: any, bagKey: any)
 		return
 	end
 	local zone: number?, rarity: number?, mutation: string?
-	if bagKey then
+	local invId = inventoryId(bagKey)
+	local entry = if invId then Inventory.find(s.profile, invId) else nil
+	if invId then
+		if not entry then
+			return
+		end
+		zone, rarity, mutation = entry.zone, entry.rarity, entry.mutation
+	elseif bagKey then
 		zone, rarity, mutation = SeedPacks.parseBagKey(bagKey)
 		if (s.profile.seedBag[bagKey] or 0) <= 0 then
 			return
@@ -331,7 +358,7 @@ function PlotService.plantAt(player: Player, pos: any, bagKey: any)
 		zone, rarity, mutation = s.carry.zone, s.carry.rarity, s.carry.mutation
 	else
 		local hasBag = SeedPacks.bagCount(s.profile.seedBag) > 0
-		Net.toast(player, if hasBag then "Steal a seed, or plant one from your 🌱 Seeds bag!" else "Steal a seed from the corridor first!", "red")
+		Net.toast(player, if hasBag then "Steal a seed, or plant one from your Inventory!" else "Steal a seed from the corridor first!", "red")
 		return
 	end
 	local char = player.Character
@@ -352,7 +379,11 @@ function PlotService.plantAt(player: Player, pos: any, bagKey: any)
 		Net.toast(player, Planting.MESSAGES[why :: Planting.Reason], "red")
 		return
 	end
-	if bagKey then
+	if invId then
+		if not Inventory.remove(s.profile, invId) then
+			return
+		end
+	elseif bagKey then
 		if not SeedPacks.takeFromBag(s.profile.seedBag, bagKey) then
 			return
 		end
@@ -360,26 +391,43 @@ function PlotService.plantAt(player: Player, pos: any, bagKey: any)
 		return
 	end
 	local x, z = Planting.toLocal(state.info.origin, pos)
-	local plant = plantSeed(player, s, state, x, z, zone, rarity, mutation)
+	local plant = plantSeed(player, s, state, x, z, zone, rarity, mutation, entry)
 	if not bagKey and Config.announcesLegendary(zone, rarity, false) then
 		Net.announce(Config.legendaryAnnouncement(player.DisplayName, zone, mutation, PlotService.plantName(plant)), "gold")
 	end
 end
 
--- The Seeds menu's Plant button on a bagged seed (seeds bought in packs): if the player has one, their
--- client shows the planting preview for it (LootEvent "PlaceSeed"); clicking or tapping their dirt then
--- plants it through PlotService.plantAt.
+-- The Inventory's Plant button on a bagged seed or an inventory plant ("inv:<id>"): if the player has it,
+-- their client shows the planting preview for it (LootEvent "PlaceSeed", with `scale`: how big it is next
+-- to a full-grown one, 1 for a seed); clicking or tapping their dirt then plants it through
+-- PlotService.plantAt.
 function PlotService.plantFromBag(player: Player, key: string)
 	local s = Sessions.get(player)
-	local zone, rarity, mutation = SeedPacks.parseBagKey(key)
-	if not s or not plotOf(player) or not zone or not rarity or (s.profile.seedBag[key] or 0) <= 0 then
+	if not s or not plotOf(player) then
 		return
 	end
-	Net.LootEvent:FireClient(player, "PlaceSeed", { key = key, zone = zone, rarity = rarity, name = SeedService.seedName(zone, rarity, mutation) })
+	local invId = inventoryId(key)
+	if invId then
+		local entry = Inventory.find(s.profile, invId)
+		if entry then
+			local full = CreatureModels.scaleFor(entry.zone, entry.rarity, Config.plantWeight(entry.zone, entry.rarity, Config.GROW_TIME, entry.variance))
+			Net.LootEvent:FireClient(player, "PlaceSeed", {
+				key = key, zone = entry.zone, rarity = entry.rarity, name = PlotService.plantName(Inventory.asPlant(entry, os.time())),
+				scale = CreatureModels.scaleFor(entry.zone, entry.rarity, Inventory.weight(entry)) / full,
+			})
+		end
+		return
+	end
+	local zone, rarity, mutation = SeedPacks.parseBagKey(key)
+	if not zone or not rarity or (s.profile.seedBag[key] or 0) <= 0 then
+		return
+	end
+	Net.LootEvent:FireClient(player, "PlaceSeed", { key = key, zone = zone, rarity = rarity, name = SeedService.seedName(zone, rarity, mutation), scale = 1 })
 end
 
--- The HUD Plants panel's Remove button (remote RemovePlant, rate-limited): removes the player's own plant in
--- `slot` (untrusted: Selling.remove checks it is one of theirs) for SELL_SECONDS of its income.
+-- The HUD Plants panel's Remove button (remote RemovePlant, rate-limited): takes the player's own plant in
+-- `slot` (untrusted: Inventory.take checks it is one of theirs) off the plot into their inventory, as it
+-- was. It never sells (owner request): plants are sold at the SELL stall, from the plot or the inventory.
 local REMOVES_PER_SECOND = 4
 function PlotService.removePlant(player: Player, slot: any)
 	local s = Sessions.get(player)
@@ -388,23 +436,28 @@ function PlotService.removePlant(player: Player, slot: any)
 		return
 	end
 	local now = os.time()
-	local refund = Selling.remove(s.profile, slot, now, Sessions.moneyMult(s))
-	if not refund then
+	for _, plant in s.profile.plants do
+		if plant.slot == slot then -- (an older plant's flower comes from its id: keep it once the id is gone)
+			plant.variant = CreatureModels.flowerOf(plant.zone, plant.rarity, plant.variant, plant.slot)
+		end
+	end
+	if not Inventory.take(s.profile, slot, now) then
+		-- gone, or the inventory is full (the panel says so in its Inventory part, no toast)
 		pushPlants(s, now) -- the panel was showing a plant that is gone: redraw it
 		return
 	end
+
 	removePlantModel(state, slot)
 	refreshIncome(s, now)
 	pushPlants(s, now)
 	Sessions.pushCore(s)
-	Net.LootEvent:FireClient(player, "Sold", { amount = refund })
 end
 
 -- The SELL stall (the HUD's Sell window, remote SellPlants): sells the plants in `slots` for
 -- SELL_STALL_SECONDS of their income each (Selling). The player must stand within SELL_STALL_DISTANCE of
 -- a SELL stall. Like removePlant: frees the slots, refreshes income and the plants view (saved by the
 -- autosave).
-function PlotService.sellPlants(player: Player, slots: any)
+function PlotService.sellPlants(player: Player, slots: any, ids: any?)
 	local s = Sessions.get(player)
 	local state = plotOf(player)
 	if not s or not state then
@@ -420,7 +473,7 @@ function PlotService.sellPlants(player: Player, slots: any)
 		end
 	end
 	local now = os.time()
-	local sale, why = Selling.sell(s.profile, slots, distance, now, Sessions.moneyMult(s))
+	local sale, why = Selling.sell(s.profile, slots, distance, now, Sessions.moneyMult(s), ids)
 	if not sale then
 		if why == "far" then
 			Net.toast(player, "Walk up to the SELL stall in the shop plaza to sell plants.", "red")
@@ -435,7 +488,7 @@ function PlotService.sellPlants(player: Player, slots: any)
 	refreshIncome(s, now)
 	pushPlants(s, now)
 	Sessions.pushCore(s)
-	local count = #sale.slots
+	local count = #sale.slots + #sale.ids
 	Net.LootEvent:FireClient(player, "SoldPlants", { amount = sale.total, count = count })
 	if stall then
 		Net.IncomePopup:FireClient(player, sale.total, stall.Position + Vector3.new(0, 6, 0))
@@ -943,6 +996,10 @@ function PlotService.start()
 				local s = owner and Sessions.get(owner)
 				if s then
 					local ok, err = pcall(payout, s, state, now)
+					if not ok then
+						warn("[PlotService]", err)
+					end
+					ok, err = pcall(SeedService.storeCarried, owner :: Player) -- a seed brought home to a full plot goes to the bag
 					if not ok then
 						warn("[PlotService]", err)
 					end

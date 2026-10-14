@@ -276,7 +276,7 @@ end)
 
 -- v8: each plant keeps the flower drawn when it was planted
 H.test("v8 plant flower: saved and loaded; v7 plants load without one (the id pick) and keep everything else", function()
-	H.eq(ProfileStore.VERSION, 8)
+	H.ok(ProfileStore.VERSION >= 8)
 	local p = ProfileStore.defaultProfile()
 	table.insert(p.plants, { slot = 1, zone = 6, rarity = 1, plantedAt = 100, x = 1, z = 2, variant = "NebulaRose" })
 	table.insert(p.plants, { slot = 2, zone = 2, rarity = 2, mutation = "Gold", plantedAt = 100, x = 3, z = 4 })
@@ -292,7 +292,7 @@ H.test("v8 plant flower: saved and loaded; v7 plants load without one (the id pi
 	H.eq(old.plants[1].x, 2)
 	H.eq(old.plants[1].z, -3)
 	H.eq(old.speed, 5e9, "v7 Speed is already on the new scale")
-	H.eq(ProfileStore.serialize(old).v, 8, "saved back as v8")
+	H.eq(ProfileStore.serialize(old).v, ProfileStore.VERSION, "saved back in the current version")
 	-- junk in the field is dropped, never trusted as a name
 	for _, bad in { 5, "", string.rep("x", 41), "Bad<Name>", { 1 } } do
 		local data = { v = 8, plants = { { s = 1, z = 1, r = 1, t = 1, px = 0, pz = 0, vr = bad } } }

@@ -4,6 +4,7 @@
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Config = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("Config"))
 local ProfileStore = require(script.Parent:WaitForChild("ProfileStore"))
+local Inventory = require(script.Parent:WaitForChild("Inventory"))
 
 local Selling = {}
 
@@ -11,60 +12,85 @@ local Selling = {}
 Selling.MAX_SLOTS = Config.SLOTS_MAX + Config.PASS_EXTRA_SLOTS
 
 -- What the stall pays for `plant` right now: SELL_STALL_SECONDS of its base income (the same formula as
--- PlotService.plantStats, no day/night, like the R-key refund) x `moneyMult` (plot level, 2x Money).
+-- PlotService.plantStats, no day/night) x `moneyMult` (plot level, 2x Money). A plant in the inventory sells
+-- for the same as it would on the plot (Inventory.asPlant: its growth stopped where it left).
 function Selling.price(plant: ProfileStore.Plant, now: number, moneyMult: number): number
-	local variance = Config.plantVariance(plant.plantedAt, plant.slot)
+	local variance = Config.varianceOf(plant)
 	local weight = Config.plantWeight(plant.zone, plant.rarity, now - plant.plantedAt, variance)
 	return Config.plantIncome(plant.zone, plant.rarity, weight, plant.mutation) * Config.SELL_STALL_SECONDS * moneyMult
 end
 
--- Checks a request from the client (untrusted): `slots` must be a plain list of at most MAX_SLOTS whole
--- numbers, and `distance` (studs from the player to the nearest SELL stall, nil when there is none) at
--- most SELL_STALL_DISTANCE. Returns the slots the player has a plant in, each once and in request order
--- (a slot named twice is sold once; a slot with no plant, e.g. sold a moment ago, is skipped), or nil
--- and why: "far", "bad" or "none".
-function Selling.check(profile: ProfileStore.Profile, slots: any, distance: number?): ({ number }?, string?)
-	if type(distance) ~= "number" or distance ~= distance or distance > Config.SELL_STALL_DISTANCE then
-		return nil, "far"
+-- A plain list of at most `max` whole numbers (nil counts as empty), or nil.
+local function numberList(list: any, max: number): { number }?
+	if list == nil then
+		return {}
 	end
-	if type(slots) ~= "table" then
-		return nil, "bad"
+	if type(list) ~= "table" then
+		return nil
 	end
 	local count = 0
-	for key, slot in slots do
+	for key, n in list do
 		count += 1
-		if count > Selling.MAX_SLOTS or type(key) ~= "number" or type(slot) ~= "number" or slot ~= math.floor(slot) then
-			return nil, "bad"
+		if count > max or type(key) ~= "number" or type(n) ~= "number" or n ~= math.floor(n) then
+			return nil
 		end
 	end
-	if count ~= #slots then
-		return nil, "bad" -- holes or extra keys: not a plain list
+	if count ~= #list then
+		return nil -- holes or extra keys: not a plain list
+	end
+	return list
+end
+
+-- The members of `list` that `has` says are there, each once and in request order.
+local function present(list: { number }, has: { [number]: boolean }): { number }
+	local out: { number } = {}
+	local seen: { [number]: boolean } = {}
+	for _, n in list do
+		if has[n] and not seen[n] then
+			seen[n] = true
+			table.insert(out, n)
+		end
+	end
+	return out
+end
+
+-- Checks a request from the client (untrusted): `slots` (planted plants) and `ids` (inventory plants, may be
+-- nil) must be plain lists of whole numbers (at most MAX_SLOTS and INVENTORY_MAX), and `distance` (studs
+-- from the player to the nearest SELL stall, nil when there is none) at most SELL_STALL_DISTANCE. Returns
+-- the slots the player has a plant in and the ids they have in their inventory, each once and in request
+-- order (one named twice is sold once; one that is gone, e.g. sold a moment ago, is skipped), or nil and
+-- why: "far", "bad" or "none".
+function Selling.check(profile: ProfileStore.Profile, slots: any, distance: number?, ids: any?): ({ number }?, { number }?, string?)
+	if type(distance) ~= "number" or distance ~= distance or distance > Config.SELL_STALL_DISTANCE then
+		return nil, nil, "far"
+	end
+	local slotList = numberList(slots, Selling.MAX_SLOTS)
+	local idList = numberList(ids, Config.INVENTORY_MAX)
+	if not slotList or not idList or slots == nil then
+		return nil, nil, "bad"
 	end
 	local planted: { [number]: boolean } = {}
 	for _, plant in profile.plants do
 		planted[plant.slot] = true
 	end
-	local out: { number } = {}
-	local seen: { [number]: boolean } = {}
-	for _, slot in slots do
-		if planted[slot] and not seen[slot] then
-			seen[slot] = true
-			table.insert(out, slot)
-		end
+	local stored: { [number]: boolean } = {}
+	for _, entry in profile.inventory do
+		stored[entry.id] = true
 	end
-	if #out == 0 then
-		return nil, "none"
+	local outSlots, outIds = present(slotList, planted), present(idList, stored)
+	if #outSlots == 0 and #outIds == 0 then
+		return nil, nil, "none"
 	end
-	return out
+	return outSlots, outIds
 end
 
-export type Sale = { slots: { number }, total: number }
+export type Sale = { slots: { number }, ids: { number }, total: number }
 
--- Checks the request (Selling.check) and sells: removes those plants from the profile and pays their
--- price. Returns what was sold, or nil and why (nothing changes then).
-function Selling.sell(profile: ProfileStore.Profile, slots: any, distance: number?, now: number, moneyMult: number): (Sale?, string?)
-	local ok, why = Selling.check(profile, slots, distance)
-	if not ok then
+-- Checks the request (Selling.check) and sells: removes those plants from the plot and the inventory and
+-- pays their price. Returns what was sold, or nil and why (nothing changes then).
+function Selling.sell(profile: ProfileStore.Profile, slots: any, distance: number?, now: number, moneyMult: number, ids: any?): (Sale?, string?)
+	local ok, okIds, why = Selling.check(profile, slots, distance, ids)
+	if not ok or not okIds then
 		return nil, why
 	end
 	local selling: { [number]: boolean } = {}
@@ -83,27 +109,14 @@ function Selling.sell(profile: ProfileStore.Profile, slots: any, distance: numbe
 	end
 	table.clear(profile.plants)
 	table.move(kept, 1, #kept, 1, profile.plants)
-	profile.money += total
-	return { slots = ok, total = total }
-end
-
--- The Plants panel's Remove button (remote RemovePlant, from anywhere): `slot` (untrusted) must be a whole
--- number naming one of the player's own plants. Removes it from the profile and refunds SELL_SECONDS of
--- its base income x `moneyMult` (less than the stall pays). Returns the refund, or nil and why: "bad"
--- (not a slot number) or "none" (no plant of theirs there); nothing changes then.
-function Selling.remove(profile: ProfileStore.Profile, slot: any, now: number, moneyMult: number): (number?, string?)
-	if type(slot) ~= "number" or slot ~= math.floor(slot) or math.abs(slot) > 1e6 then
-		return nil, "bad"
-	end
-	for i, plant in profile.plants do
-		if plant.slot == slot then
-			local refund = Selling.price(plant, now, moneyMult) / Config.SELL_STALL_SECONDS * Config.SELL_SECONDS
-			table.remove(profile.plants, i)
-			profile.money += refund
-			return refund
+	for _, id in okIds do
+		local entry = Inventory.remove(profile, id)
+		if entry then
+			total += Selling.price(Inventory.asPlant(entry, now), now, moneyMult)
 		end
 	end
-	return nil, "none"
+	profile.money += total
+	return { slots = ok, ids = okIds, total = total }
 end
 
 return Selling
