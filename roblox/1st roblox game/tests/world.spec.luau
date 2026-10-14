@@ -84,17 +84,17 @@ H.test("world: everything is anchored", function()
 	end
 end)
 
--- Inside the corridor only the floor, walls, the zone arches' wall-flush pillars and the end wall
+-- Inside the corridor only the floor, walls (the Spirit Garden's back wall too) and the gates' wall-flush pillars
 -- may collide, so props never block runners or the guards' MoveTo line.
 H.test("world: corridor props never collide (only floor/walls/pillars)", function()
-	local allowed = { Floor = true, Wall = true, GatePillar = true, EndWall = true }
+	local allowed = { Floor = true, Wall = true, GatePillar = true }
 	local corridor = world:FindFirstChild("Corridor")
 	for _, p in parts(corridor) do
 		if p.CanCollide and not allowed[p.Name] then
 			error(`{p:GetFullName()} collides`)
 		end
 	end
-	-- Pillars stay flush with the walls: at least 56 of the 64 studs stay open.
+	-- Pillars stay flush with the walls: at most 4 studs proud of each wall.
 	for _, p in parts(corridor) do
 		if p.Name == "GatePillar" then
 			H.ok(math.abs(p.CFrame.Position.Z) - p.Size.Z / 2 >= Config.CORRIDOR_WIDTH / 2 - 4, "pillar intrudes into the corridor")
@@ -260,3 +260,212 @@ H.test("world: each plot has a small, non-colliding Upgrade Plot board just outs
 	end
 end)
 
+
+----------------------------------------------------------------------------------------------------
+-- Art direction (owner playtest): clean cartoony look, a 3x wider corridor, a gate per zone, wall caps,
+-- few props early, no finish line, market stalls.
+----------------------------------------------------------------------------------------------------
+local Assets = H.server("Assets")
+
+H.test("world: no realistic materials or textures anywhere on the map (plastic, studs, neon, glass only)", function()
+	local bad = Layout.realisticBits(world)
+	H.eq(#bad, 0, "realistic bits: " .. table.concat(bad, ", ", 1, math.min(#bad, 8)))
+	local plastic = 0
+	for _, p in parts(world) do
+		if p.Material == Enum.Material.Plastic and p.TopSurface == Enum.SurfaceType.Studs then
+			plastic += 1
+		end
+	end
+	H.ok(plastic > 500, `lots of studded plastic ({plastic} parts)`)
+end)
+
+H.test("world: the corridor is 192 studs wide, wall to wall, in every zone", function()
+	H.eq(Config.CORRIDOR_WIDTH, 192)
+	local halfW = Config.CORRIDOR_WIDTH / 2
+	for k, zone in Config.ZONES do
+		local folder = world.Corridor:FindFirstChild(string.format("%d_%s", k, zone.id))
+		local floor = folder:FindFirstChild("Floor")
+		H.ok(floor and math.abs(floor.Size.Z - Config.CORRIDOR_WIDTH) < 1e-3 and floor.CanCollide, `{zone.id} floor spans the width`)
+		local sides = {}
+		for _, p in folder:GetChildren() do
+			if p:IsA("BasePart") and p.Name == "Wall" and p.Size.X > 100 then
+				local inner = math.abs(p.CFrame.Position.Z) - p.Size.Z / 2
+				H.ok(math.abs(inner - halfW) < 1e-3 and p.CanCollide, `{zone.id} wall's inner face at {inner}`)
+				H.ok(p.Size.Y >= Config.WALL_HEIGHT, "tall walls")
+				sides[math.sign(p.CFrame.Position.Z)] = true
+			end
+		end
+		H.ok(sides[1] and sides[-1], `{zone.id} has both walls`)
+	end
+end)
+
+H.test("world: no finish line: the Spirit Garden's back wall ends the corridor, with no End area or sign", function()
+	H.eq(world.Corridor:FindFirstChild("End"), nil, "no End folder")
+	local spirit = world.Corridor:FindFirstChild(string.format("%d_%s", #Config.ZONES, Config.ZONES[#Config.ZONES].id))
+	local back = nil
+	for _, p in spirit:GetChildren() do
+		if p:IsA("BasePart") and p.Name == "Wall" and p.Size.Z >= Config.CORRIDOR_WIDTH and p.CFrame.Position.X >= Config.END_X then
+			back = p
+		end
+	end
+	H.ok(back and back.CanCollide, "a solid back wall closes the corridor at END_X")
+	for _, d in world:GetDescendants() do
+		H.ok(not (d:IsA("BasePart") and (d.Name == "EndPad" or d.Name == "EndWall" or d.Name == "EndConfetti")), `{d:GetFullName()}: finish piece`)
+		if d:IsA("TextLabel") then
+			local text = string.upper(d.Text)
+			for _, banned in { "END OF THE LINE", "YOU MADE IT", "FINISH" } do
+				H.ok(not string.find(text, banned, 1, true), `{d:GetFullName()} says "{d.Text}"`)
+			end
+		end
+	end
+	local fs = require("@lune/fs")
+	for _, path in { "src/client/HUD.client.luau", "src/server/SpeedService.luau", "src/server/WorldBuilder.luau" } do
+		local text = string.upper(fs.readFile(path))
+		H.ok(not string.find(text, "END OF THE LINE", 1, true) and not string.find(text, "REACHED THE END", 1, true), `{path} has no finish message`)
+	end
+end)
+
+H.test("world: every zone has a chunky gate at its entrance, and every wall a cap", function()
+	local halfW = Config.CORRIDOR_WIDTH / 2
+	for k, zone in Config.ZONES do
+		local folder = world.Corridor:FindFirstChild(string.format("%d_%s", k, zone.id))
+		local gate = folder:FindFirstChild("Arch_" .. zone.id)
+		H.ok(gate and gate:IsA("Model") and gate:GetAttribute("AssetSlot") == "Arch_" .. zone.id, `{zone.id}: the Arch_ slot holds its gate`)
+		local pillars, beam = {}, nil
+		for _, p in gate:GetDescendants() do
+			if p:IsA("BasePart") and p.Name == "GatePillar" then
+				table.insert(pillars, p)
+			elseif p:IsA("BasePart") and p.Name == "GateBeam" then
+				beam = p
+			end
+		end
+		H.eq(#pillars, 2, `{zone.id}: two pillars`)
+		local x0 = Config.zoneStartX(k)
+		for _, p in pillars do
+			H.ok(p.Size.X >= 10 and p.Size.Z >= 10, `{zone.id}: chunky pillars`)
+			H.ok(math.abs(p.CFrame.Position.X - x0) < 15 and p.Size.Y > Config.WALL_HEIGHT, `{zone.id}: at the entrance, above the walls`)
+		end
+		H.ok(beam and beam.Size.Z >= Config.CORRIDOR_WIDTH and beam.CFrame.Position.Y > Config.WALL_HEIGHT, `{zone.id}: a beam over the whole corridor`)
+		local caps = 0
+		for _, p in folder:GetChildren() do
+			if p:IsA("BasePart") and p.Name == "WallCap" and p.Size.X > 100 and math.abs(p.CFrame.Position.Z) > halfW - 2 then
+				caps += 1
+				H.ok(p.CFrame.Position.Y > Config.WALL_HEIGHT, "on top of the wall")
+			end
+		end
+		H.ok(caps >= 2, `{zone.id}: both walls capped ({caps})`)
+	end
+end)
+
+-- Decoration in a zone: everything visible but the floor, walls, their checker and caps, the gate, the
+-- sign and the nest (the Spirit Garden's roof is its cap).
+local STRUCTURE = { Floor = true, FloorTile = true, Wall = true, WallTile = true, WallCap = true, Threshold = true, Sign = true,
+	Roof = true, RoofTile = true, RoofTrim = true }
+local function propParts(folder: any): number
+	local id = string.match(folder.Name, "^%d+_(.+)$")
+	local n = 0
+	for _, p in parts(folder) do
+		local inGate = p:FindFirstAncestor("Arch_" .. id)
+		local inNest = p:FindFirstAncestor("Nest_" .. id)
+		if not STRUCTURE[p.Name] and not inGate and not inNest and p.Transparency < 1 then
+			n += 1
+		end
+	end
+	return n
+end
+
+H.test("world: the early stages are clean, with only a few props", function()
+	local counts = {}
+	for k, zone in Config.ZONES do
+		counts[k] = propParts(world.Corridor:FindFirstChild(string.format("%d_%s", k, zone.id)))
+	end
+	print(`        prop parts per zone: {table.concat(counts, ", ")}`)
+	H.ok(counts[1] <= 60, `the Meadow is nearly empty ({counts[1]} prop parts)`)
+	H.ok(counts[2] <= 80, `the Desert has few props ({counts[2]} prop parts)`)
+	for k = 1, #Config.ZONES do
+		local per100 = counts[k] / Config.ZONES[k].length * 100
+		H.ok(per100 <= 30, `{Config.ZONES[k].id}: {per100} prop parts per 100 studs`)
+	end
+end)
+
+H.test("world: the base is wider than the corridor and its front walls close the corners of the corridor mouth", function()
+	local halfW = Config.CORRIDOR_WIDTH / 2
+	local front = {}
+	for _, p in world.Base:GetChildren() do
+		if p:IsA("BasePart") and p.Name == "Wall" and math.abs(p.CFrame.Position.X - (Config.CORRIDOR_START_X + 2)) < 0.1 then
+			table.insert(front, p)
+		end
+	end
+	H.eq(#front, 2, "a front wall each side of the mouth")
+	for _, p in front do
+		local lo, hi = Assets.bounds(p)
+		local near = math.min(math.abs(lo.Z), math.abs(hi.Z))
+		H.ok(math.abs(near - halfW) < 1e-3, `the front wall starts right at the corridor wall ({near})`)
+	end
+	local _, hi = Assets.bounds(front[1])
+	local _, hi2 = Assets.bounds(front[2])
+	local outer = math.max(math.abs(hi.Z), math.abs(hi2.Z))
+	for _, plot in plots do -- the plots sit inside the base, clear of its side walls
+		H.ok(math.abs(plot.center.Z) + Config.PLOT_SIZE / 2 < outer - 4, "plot inside the base")
+	end
+end)
+
+H.test("world: four market stalls (posts, stone counter, striped scalloped awning, glowing ring, title, prompt)", function()
+	local plaza = world:FindFirstChild("ShopPlaza")
+	local labels = { Shop = "🛒 SHOP", Trails = "🏃 TRAIL SHOP", Index = "📖 INDEX", Sell = "SELL" }
+	local awningColors = {}
+	for _, d in plaza:GetDescendants() do
+		if d:IsA("ProximityPrompt") then
+			local opens = d:GetAttribute("OpensShop")
+			local host = d.Parent
+			local stall = plaza:FindFirstChild("ShopStall_" .. opens)
+			H.ok(stall and stall:IsA("Model"), `{opens}: its stall`)
+			H.eq(d.ObjectText, labels[opens], `{opens}: prompt text`)
+			H.eq(d.KeyboardKeyCode, Enum.KeyCode.E)
+			local count = { Post = 0, Counter = 0, Awning = 0, Scallop = 0 }
+			local white, colored = 0, nil
+			for _, p in stall:GetDescendants() do
+				if p:IsA("BasePart") and count[p.Name] then
+					count[p.Name] += 1
+					if p.Name == "Awning" then
+						if p.Color.R > 0.95 and p.Color.G > 0.95 and p.Color.B > 0.95 then
+							white += 1
+						else
+							colored = p.Color
+						end
+					end
+				end
+			end
+			H.eq(count.Post, 4, `{opens}: four posts`)
+			H.ok(count.Counter >= 3, `{opens}: a counter on three sides`)
+			H.ok(count.Awning >= 6 and white >= 3 and colored, `{opens}: a striped awning`)
+			H.eq(count.Scallop, count.Awning, `{opens}: a scalloped edge`)
+			table.insert(awningColors, colored)
+			-- the glowing ring in front of it (toward the walkway), within reach of the prompt
+			local ring = nil
+			for _, r in plaza:GetChildren() do
+				if r:IsA("BasePart") and r.Material == Enum.Material.Neon and (r.Name == "StallRing" or r.Name == "SellCircle")
+					and math.abs(r.CFrame.Position.X - host.CFrame.Position.X) < 1 then
+					ring = r
+				end
+			end
+			H.ok(ring and not ring.CanCollide and math.abs(ring.CFrame.Position.Z) < math.abs(host.CFrame.Position.Z), `{opens}: a glowing ring in front`)
+			H.ok((ring.CFrame.Position - host.CFrame.Position).Magnitude < d.MaxActivationDistance, `{opens}: the prompt works from the ring`)
+			local title = nil
+			for _, l in plaza:GetDescendants() do
+				if l:IsA("TextLabel") and l.Text == labels[opens] then
+					title = l
+				end
+			end
+			H.ok(title and title.Parent:IsA("BillboardGui") and title.Parent.Adornee.CFrame.Position.Y > host.CFrame.Position.Y + 12, `{opens}: a title floating over the awning`)
+			H.ok(title:FindFirstChildOfClass("UIStroke").Thickness >= 4, `{opens}: outlined title`)
+		end
+	end
+	H.eq(#awningColors, 4, "four stalls")
+	for i = 1, #awningColors do
+		for j = i + 1, #awningColors do
+			local a, b = awningColors[i], awningColors[j]
+			H.ok(math.abs(a.R - b.R) + math.abs(a.G - b.G) + math.abs(a.B - b.B) > 0.3, "each stall has its own awning colour")
+		end
+	end
+end)

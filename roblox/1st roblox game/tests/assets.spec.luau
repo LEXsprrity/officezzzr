@@ -339,7 +339,7 @@ H.test("assets: a whole map built with dummy models keeps its contract (roles, p
 		end
 	end
 	H.eq(prompts, 4, "the stall prompts stay")
-	local allowed = { Floor = true, Wall = true, GatePillar = true, EndWall = true }
+	local allowed = { Floor = true, Wall = true, GatePillar = true }
 	for _, p in partsOf(world.Corridor) do
 		H.ok(p.Anchored, p:GetFullName() .. " anchored")
 		if p.CanCollide and not allowed[p.Name] then

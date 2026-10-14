@@ -203,7 +203,7 @@ function ZoneThemes.gate(into: Instance, k: number, x: number)
 end
 
 -- Where the zone sign hangs (centre of the board) and its size: under the gate's tie beam.
-ZoneThemes.GATE_SIGN_Y = GROUND + GATE_H - 27
+ZoneThemes.GATE_SIGN_Y = GROUND + GATE_H - 25 -- its top edge meets the tie beam
 ZoneThemes.GATE_SIGN_SIZE = Vector2.new(72, 20)
 
 ----------------------------------------------------------------------------------------------------

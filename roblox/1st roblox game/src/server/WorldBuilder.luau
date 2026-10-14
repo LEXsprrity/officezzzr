@@ -714,7 +714,7 @@ end
 -- of the corridor mouth, by the spawn. Every run to the corridor passes it, and it is off the walkway,
 -- the plots and the plaza. RewardService finds both by their Role (WorldBuilder.rewardPoints).
 ----------------------------------------------------------------------------------------------------
-local CHEST_POS = Vector3.new(Config.CORRIDOR_START_X - 10, GROUND, -(HALF_W + 32)) -- ground point under the chest
+local CHEST_POS = Vector3.new(Config.CORRIDOR_START_X - 10, GROUND, -(HALF_W + 28)) -- ground point under the chest (the gift box stands 11 further out)
 local MONEY_BOARD_POS = Vector3.new(Config.CORRIDOR_START_X - 4, GROUND, -(HALF_W + 14)) -- ground point under the board
 local MONEY_PANEL = Vector2.new(12, 18) -- the list panel (studs); its bottom edge is 4 studs up
 local MONEY_PPS = 40

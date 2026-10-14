@@ -192,6 +192,26 @@ function Layout.plotsFullyFenced(world: any, plots: { any }, label: string)
 	end
 end
 
+-- Every realistic-material part or texture in a map (the art direction is clean and cartoony: plastic,
+-- studs, neon, glass; drop-in models get plastic from Assets). The treadmill belt's scrolling "Stripes"
+-- texture is the one texture the map keeps. Returns a description of each offender.
+function Layout.realisticBits(root: any): { string }
+	local bad = {}
+	for _, d in root:GetDescendants() do
+		if d:IsA("BasePart") then
+			if Assets.REALISTIC[d.Material.Name] then
+				table.insert(bad, `{d:GetFullName()} ({d.Material.Name})`)
+			end
+			if d.MaterialVariant ~= "" then
+				table.insert(bad, `{d:GetFullName()} (MaterialVariant {d.MaterialVariant})`)
+			end
+		elseif (d:IsA("Texture") or d:IsA("Decal")) and not (d.Name == "Stripes" and d.Parent:GetAttribute("Role") == "TreadmillBelt") then
+			table.insert(bad, `{d:GetFullName()} ({d.ClassName})`)
+		end
+	end
+	return bad
+end
+
 -- Everything that holds for any map, hand-edited or not.
 function Layout.check(world: any, plots: { any }, label: string)
 	Layout.fencesDontOverlap(world, label)
