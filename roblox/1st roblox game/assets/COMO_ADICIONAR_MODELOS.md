@@ -198,10 +198,11 @@ O **ninho** é a planta-mãe com o monte de terra, as pedras e a flor brilhante.
 | `Treadmill` | a estrutura da esteira (moldura, corrimãos, painel). A faixa preta onde se corre continua do jogo, a 1 stud do chão do lote. Frente = lado do painel, virado para o portão | cada lote | até ~24 | 12 × 32 |
 | `UpgradeSign` | o suporte da placa "Upgrade" (moldura com studs e o poste curto). O painel azul-escuro com o texto e os botões continua do jogo | na frente de cada lote | ~7 | ~8 |
 | `PlotGate` | o portão do lote (dois pilares + arco), 20 studs de abertura. Não colide | entrada de cada lote | até ~16 | ~23 |
-| `ShopStall` | barraca da praça das lojas (balcão, fundo, toldo). Frente = calçada. Vale para as três barracas | praça das lojas | ~21 | 18 × 21 |
+| `ShopStall` | barraca da praça das lojas (balcão, fundo, toldo). Frente = calçada. Vale para as barracas SHOP, TRAIL SHOP e INDEX (não para a SELL) | praça das lojas | ~21 | 18 × 21 |
 | `ShopStall_Shop` | só a barraca 🛒 SHOP (se existir, vale mais que `ShopStall`) | praça das lojas | ~21 | 18 × 21 |
 | `ShopStall_Trails` | só a barraca 🏃 TRAIL SHOP | praça das lojas | ~21 | 18 × 21 |
 | `ShopStall_Index` | só a barraca 📖 INDEX | praça das lojas | ~21 | 18 × 21 |
+| `ShopStall_Sell` | só a barraca SELL (vender plantas): balcão de madeira, quatro postes e o toldo vermelho e branco. O círculo verde no chão e o texto "SELL" continuam do jogo. Sem modelo, fica a barraca do jogo (não usa `ShopStall`) | praça das lojas | ~14 | 18 × 13 |
 | `SpawnSign` | a placa grande "🌱 STEAL A SEED 🌱" que flutua na entrada do corredor. O apoio é a borda de baixo da placa. **O texto tem que estar no seu modelo** (textura ou letras 3D) | entrada do corredor | ~12 | ~44 |
 
 ### Criaturas (aparecem quando uma semente é plantada)

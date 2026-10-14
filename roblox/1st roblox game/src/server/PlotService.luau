@@ -14,6 +14,7 @@ local WorldBuilder = require(script.Parent:WaitForChild("WorldBuilder"))
 local ProfileStore = require(script.Parent:WaitForChild("ProfileStore"))
 local CreatureModels = require(script.Parent:WaitForChild("CreatureModels"))
 local Shop = require(script.Parent:WaitForChild("Shop"))
+local Selling = require(script.Parent:WaitForChild("Selling"))
 
 local PlotService = {}
 
@@ -25,6 +26,7 @@ type PlotState = {
 }
 
 local plots: { PlotState } = {}
+local sellStalls: { BasePart } = {} -- the SELL stalls' prompt parts (WorldBuilder.sellPoints)
 
 ----------------------------------------------------------------------------------------------------
 -- Pure-ish helpers (also used for offline income)
@@ -198,7 +200,11 @@ local function pushPlants(s: Sessions.Session, now: number)
 	for _, plant in s.profile.plants do
 		local weight, income = PlotService.plantStats(plant, now)
 		income *= mult * Config.timeMult(plant.zone, isNight)
-		table.insert(view, { slot = plant.slot, zone = plant.zone, rarity = plant.rarity, mutation = plant.mutation, weight = weight, income = income })
+		-- `sell`: what the SELL stall pays for it right now (Selling.price)
+		table.insert(view, {
+			slot = plant.slot, zone = plant.zone, rarity = plant.rarity, mutation = plant.mutation, weight = weight, income = income,
+			sell = Selling.price(plant, now, mult),
+		})
 	end
 	Sessions.push(s.player, { plants = view, slots = Sessions.maxSlots(s) })
 end
@@ -345,6 +351,53 @@ function PlotService.removePlant(player: Player, slot: number)
 	end
 end
 
+-- The SELL stall (the HUD's Sell window, remote SellPlants): sells the plants in `slots` for
+-- SELL_STALL_SECONDS of their income each (Selling). The player must stand within SELL_STALL_DISTANCE of
+-- a SELL stall. Like removePlant: frees the slots, refreshes income and the plants view (saved by the
+-- autosave).
+function PlotService.sellPlants(player: Player, slots: any)
+	local s = Sessions.get(player)
+	local state = plotOf(player)
+	if not s or not state then
+		return
+	end
+	local char = player.Character
+	local root = char and char:FindFirstChild("HumanoidRootPart") :: BasePart?
+	local distance: number?, stall: BasePart? = nil, nil -- to the nearest stall
+	for _, part in sellStalls do
+		local d = if root and part.Parent then (root.Position - part.Position).Magnitude else nil
+		if d and (distance == nil or d < distance) then
+			distance, stall = d, part
+		end
+	end
+	local now = os.time()
+	local sale, why = Selling.sell(s.profile, slots, distance, now, Sessions.moneyMult(s))
+	if not sale then
+		if why == "far" then
+			Net.toast(player, "Walk up to the SELL stall in the shop plaza to sell plants.", "red")
+		elseif why == "none" then
+			pushPlants(s, now) -- the window was showing plants that are gone: redraw it
+		end
+		return
+	end
+	for _, slot in sale.slots do
+		local model = state.models[slot]
+		if model then
+			model:Destroy()
+		end
+		state.models[slot] = nil
+		state.scales[slot] = nil
+	end
+	refreshIncome(s, now)
+	pushPlants(s, now)
+	Sessions.pushCore(s)
+	local count = #sale.slots
+	Net.LootEvent:FireClient(player, "SoldPlants", { amount = sale.total, count = count })
+	if stall then
+		Net.IncomePopup:FireClient(player, sale.total, stall.Position + Vector3.new(0, 6, 0))
+	end
+end
+
 ----------------------------------------------------------------------------------------------------
 -- Plot upgrades: the board at each plot's gate (money or Robux), and the Shop's "PlotUpgrade" (money)
 ----------------------------------------------------------------------------------------------------
@@ -479,7 +532,10 @@ local UPGRADE_PROMPTS = {
 ----------------------------------------------------------------------------------------------------
 -- Assignment
 ----------------------------------------------------------------------------------------------------
-function PlotService.init(infos: { WorldBuilder.PlotInfo })
+-- `stalls`: the SELL stalls' prompt parts (WorldBuilder.sellPoints); none means plants can't be sold
+-- at a stall (the R-key Remove still works).
+function PlotService.init(infos: { WorldBuilder.PlotInfo }, stalls: { BasePart }?)
+	sellStalls = stalls or {}
 	for i, info in infos do
 		local state: PlotState = { info = info, owner = nil, models = {}, scales = {} }
 		plots[i] = state

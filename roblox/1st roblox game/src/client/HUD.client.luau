@@ -916,7 +916,7 @@ openShopAt = function(sectionName: string)
 end
 
 -- Walk-up stalls in the base's shop plaza: their prompts say which menu to open ("Shop", "Trails" or
--- "Index"). Always opens (never toggles shut).
+-- "Index"; the SELL stall's "Sell" is handled in the SELL window's block). Always opens (never toggles shut).
 game:GetService("ProximityPromptService").PromptTriggered:Connect(function(prompt: ProximityPrompt)
 	local opens = prompt:GetAttribute("OpensShop")
 	if (opens == "Shop" or opens == "Trails" or opens == "Index") and modalName ~= opens then
@@ -1436,6 +1436,245 @@ local function renderIndex()
 	end
 end
 
+----------------------------------------------------------------------------------------------------
+-- SELL window (TODO 9; the SELL stall in the shop plaza opens it). Everything for it is in this block;
+-- renderModal and refresh call renderSell / sellChanged. One card per planted plant, cheapest first: the
+-- creature in its rarity colour, the mutation, weight, $/s with its ☀️/🌙 tag, the sell price and a Sell
+-- button. Above them "Sell all Common" / "Sell all below Rare" (they keep mutated plants). Every sale asks
+-- once more inside the window: the card's button turns into "Sure?", a quick sell shows a confirm bar.
+-- The server re-checks it all (remote SellPlants: your plants, the slots, standing at the stall).
+-- Scoped in a do-block (the HUD's main chunk is near Luau's 200-locals limit); only these two leave it.
+----------------------------------------------------------------------------------------------------
+local renderSell: () -> ()
+local sellChanged: (changed: { [string]: any }) -> ()
+do
+	local SellPlants = remotes:WaitForChild("SellPlants") :: RemoteEvent
+	WINDOWS.Sell = { title = "Sell", icon = "Money", from = Color3.fromRGB(255, 70, 45), to = Color3.fromRGB(255, 150, 30) }
+	local SELL_RED = Color3.fromRGB(235, 60, 50)
+	local SELL_ORANGE = Color3.fromRGB(255, 140, 30)
+	local SELL_DARK = Color3.fromRGB(52, 58, 76)
+	local SELL_CARD_W, SELL_CARD_H = 190, 252
+
+	local function rarityIndex(id: string): number
+		for i, r in Config.RARITIES do
+			if r.id == id then
+				return i
+			end
+		end
+		return 0
+	end
+	-- The quick sells: every plant up to rarity `max` that has no mutation.
+	local SELL_GROUPS = {
+		{ label = "Sell all Common", what = "Common", max = rarityIndex("Common") },
+		{ label = "Sell all below Rare", what = "below Rare", max = rarityIndex("Rare") - 1 },
+	}
+
+	type SellPending = { slot: number?, group: number? }
+	local sellPending: SellPending? = nil -- the sale waiting for its confirm: one plant's slot, or a quick sell
+	local sellUpdaters: { () -> () } = {} -- the open window's prices and $/s, updated in place on payouts
+	local sellShown = "" -- which plants the window shows (sellSignature)
+
+	-- Which plants there are (slot and kind), so a payout tick (same plants, new numbers) doesn't rebuild the
+	-- window under the player's finger, but a sale or a new plant does.
+	local function sellSignature(): string
+		local keys = {}
+		for _, p in stats.plants or {} do
+			table.insert(keys, `{p.slot}:{p.zone}:{p.rarity}:{p.mutation or ""}`)
+		end
+		table.sort(keys)
+		return table.concat(keys, ",")
+	end
+
+	local function plantInSlot(slot: number): any
+		for _, p in stats.plants or {} do
+			if p.slot == slot then
+				return p
+			end
+		end
+		return nil
+	end
+
+	-- The slots a sale would sell and what it pays right now.
+	local function saleOf(pending: SellPending): ({ number }, number)
+		local slots, total = {}, 0
+		local group = pending.group and SELL_GROUPS[pending.group]
+		for _, p in stats.plants or {} do
+			if (pending.slot ~= nil and p.slot == pending.slot) or (group ~= nil and p.mutation == nil and p.rarity <= group.max) then
+				table.insert(slots, p.slot)
+				total += p.sell or 0
+			end
+		end
+		return slots, total
+	end
+
+	local function sellNow(pending: SellPending)
+		local slots = saleOf(pending)
+		sellPending = nil
+		if #slots > 0 then
+			SellPlants:FireServer(slots)
+		end
+		renderModal()
+	end
+
+	-- "☀️ $1.2K/s 1.5x!" in gold while the plant's phase is on, like its billboard.
+	local function sellIncomeText(p: any): (string, Color3)
+		local zone = Config.ZONES[p.zone]
+		local active = Config.isActiveTime(p.zone, (Config.dayPhase(workspace:GetServerTimeNow())))
+		return `{Config.ACTIVE_ICONS[zone.active]} {Format.money(p.income)}/s{if active then string.format(" %gx!", Config.ACTIVE_TIME_MULT) else ""}`,
+			if active then HEADING_GOLD else MONEY_GREEN
+	end
+
+	local function sellCard(grid: Instance, order: number, p: any)
+		local rarity = Config.RARITIES[p.rarity]
+		local mut = Config.mutationById(p.mutation)
+		local zone = Config.ZONES[p.zone]
+		local c = new("Frame", { BackgroundColor3 = SELL_DARK, LayoutOrder = order, Parent = grid }, {
+			new("UICorner", { CornerRadius = UDim.new(0, 14) }),
+			new("UIStroke", { Thickness = 4, Color = if mut then mut.color else FRAME_INK, ApplyStrokeMode = Enum.ApplyStrokeMode.Border }),
+		})
+		-- The rarity band: creature and rarity
+		local band = new("Frame", { Size = UDim2.new(1, 0, 0, 70), BorderSizePixel = 0, Parent = c }, { new("UICorner", { CornerRadius = UDim.new(0, 14) }) })
+		shade(band, rarity.color, 0.25, 0.25)
+		shine(band, 14)
+		bold(band, 3, { Text = `{zone.icon} {zone.seed}`, Size = UDim2.new(1, -14, 0, 32), Position = UDim2.fromOffset(7, 6) })
+		bold(band, 3, { Text = rarity.id, Size = UDim2.new(1, -14, 0, 24), Position = UDim2.fromOffset(7, 40) })
+		-- Mutation, weight, $/s
+		local mutLabel = bold(c, 2, {
+			Text = if mut then "✨ " .. mut.id else "no mutation", Size = UDim2.new(1, -14, 0, 24), Position = UDim2.fromOffset(7, 78),
+			TextColor3 = if mut then mut.color else NOTE_COLOR, TextTransparency = if mut then 0 else 0.35,
+		})
+		if mut then
+			Icons.set(mutLabel, "Star", mutLabel.Text, ICON.small)
+		end
+		local weightLabel = text(c, { Text = Format.weight(p.weight), Size = UDim2.new(1, -14, 0, 22), Position = UDim2.fromOffset(7, 106) })
+		local incomeLabel = bold(c, 2, { Size = UDim2.new(1, -14, 0, 22), Position = UDim2.fromOffset(7, 132) })
+		-- What the stall pays, and the button (a second click confirms)
+		local priceLabel = bold(c, 3, { Size = UDim2.new(1, -14, 0, 34), Position = UDim2.fromOffset(7, 158), TextColor3 = MONEY_GREEN })
+		local sure = sellPending ~= nil and sellPending.slot == p.slot
+		chunky(c, if sure then "Sure? Sell" else "Sell", if sure then COLORS.gold else SELL_RED, UDim2.new(1, -16, 0, 48), function()
+			if sure then
+				sellNow({ slot = p.slot })
+			else
+				sellPending = { slot = p.slot }
+				renderModal()
+			end
+		end).Position = UDim2.new(0, 8, 1, -56)
+		local function update()
+			local now = plantInSlot(p.slot) or p
+			weightLabel.Text = Format.weight(now.weight)
+			incomeLabel.Text, incomeLabel.TextColor3 = sellIncomeText(now)
+			Icons.set(priceLabel, "Money", `💰 {Format.money(now.sell or 0)}`, ICON.small)
+		end
+		update()
+		table.insert(sellUpdaters, update)
+	end
+
+	renderSell = function()
+		clearModal(10)
+		moneySubtitle()
+		table.clear(sellUpdaters)
+		sellShown = sellSignature()
+		local plants = table.clone(stats.plants or {})
+		table.sort(plants, function(a, b)
+			if (a.sell or 0) ~= (b.sell or 0) then
+				return (a.sell or 0) < (b.sell or 0)
+			end
+			return a.slot < b.slot
+		end)
+		note(`💰 The stall pays {Config.SELL_STALL_SECONDS // 60} min of a plant's income (R on a plant only gives {Config.SELL_SECONDS} s).`, 1, "Money")
+		if #plants == 0 then
+			note("No plants yet: steal a seed and plant it on your pad!", 2)
+			return
+		end
+
+		-- Quick sells (they keep mutated plants)
+		local row = new("Frame", { BackgroundTransparency = 1, Size = UDim2.new(1, -12, 0, 60), LayoutOrder = 2, Parent = modalBody }, {
+			new("UIListLayout", { FillDirection = Enum.FillDirection.Horizontal, HorizontalAlignment = Enum.HorizontalAlignment.Center, Padding = UDim.new(0, 14) }),
+		})
+		for i, group in SELL_GROUPS do
+			local count = #(saleOf({ group = i }))
+			chunky(row, `{group.label} ({count})`, if count > 0 then SELL_ORANGE else COLORS.disabled, UDim2.fromOffset(330, 56), function()
+				if count > 0 then
+					sellPending = { group = i }
+					renderModal()
+				end
+			end)
+		end
+		note("Quick sells keep your mutated plants.", 3, "Star")
+
+		-- The quick sell's confirm bar
+		local pending = sellPending
+		local group = pending and pending.group and SELL_GROUPS[pending.group]
+		if pending and group and #(saleOf(pending)) == 0 then
+			sellPending, pending, group = nil, nil, nil -- nothing left to sell
+		end
+		if pending and group then
+			local bar = new("Frame", { Size = UDim2.new(1, -12, 0, 72), BackgroundColor3 = FRAME_INK, BackgroundTransparency = 0.15, LayoutOrder = 4, Parent = modalBody }, deco(12, 3))
+			local question = bold(bar, 3, {
+				Size = UDim2.new(1, -350, 1, -18), Position = UDim2.fromOffset(16, 9), TextXAlignment = Enum.TextXAlignment.Left, TextColor3 = HEADING_GOLD,
+			})
+			local function update()
+				local slots, total = saleOf(pending :: SellPending)
+				question.Text = `Sell {#slots} {group.what} plant{if #slots == 1 then "" else "s"} for {Format.money(total)}?`
+			end
+			update()
+			table.insert(sellUpdaters, update)
+			chunky(bar, "Yes, sell!", COLORS.buy, UDim2.fromOffset(170, 56), function()
+				sellNow(pending :: SellPending)
+			end).Position = UDim2.new(1, -330, 0, 8)
+			chunky(bar, "Cancel", COLORS.disabled, UDim2.fromOffset(140, 56), function()
+				sellPending = nil
+				renderModal()
+			end).Position = UDim2.new(1, -150, 0, 8)
+		end
+
+		local grid = new("Frame", {
+			BackgroundTransparency = 1, Size = UDim2.new(1, -8, 0, 0), AutomaticSize = Enum.AutomaticSize.Y, LayoutOrder = 5, Parent = modalBody,
+		}, {
+			new("UIGridLayout", {
+				CellSize = UDim2.fromOffset(SELL_CARD_W, SELL_CARD_H), CellPadding = UDim2.fromOffset(12, 12), SortOrder = Enum.SortOrder.LayoutOrder,
+				HorizontalAlignment = Enum.HorizontalAlignment.Center,
+			}),
+		})
+		for i, p in plants do
+			sellCard(grid, i, p)
+		end
+	end
+
+	-- The plants view arrives with every payout: rebuild only when the plants themselves changed.
+	sellChanged = function(changed: { [string]: any })
+		if changed.plants then
+			if sellSignature() ~= sellShown then
+				renderModal()
+			else
+				for _, update in sellUpdaters do
+					update()
+				end
+			end
+		end
+		if changed.money or changed.income then
+			for _, update in moneyWatchers do
+				update()
+			end
+		end
+	end
+
+	-- The SELL stall's prompt (the plaza's other stalls are handled above). Opens fresh, never toggles shut.
+	game:GetService("ProximityPromptService").PromptTriggered:Connect(function(prompt: ProximityPrompt)
+		if prompt:GetAttribute("OpensShop") == "Sell" and modalName ~= "Sell" then
+			sellPending = nil
+			openModal("Sell")
+		end
+	end)
+
+	LootEvent.OnClientEvent:Connect(function(kind: string, data: any)
+		if kind == "SoldPlants" and type(data) == "table" then
+			toast(`💰 +{Format.money(data.amount or 0)} for {data.count} plant{if data.count == 1 then "" else "s"}`, "gold")
+		end
+	end)
+end
+------------------------------------------------------------------------------------------ end of SELL
+
 -- Rebuilds the open window. The scroll position is kept (a purchase rebuilds it), except when the
 -- Shop was asked to jump to a section.
 renderModal = function()
@@ -1450,6 +1689,8 @@ renderModal = function()
 		renderTrails()
 	elseif modalName == "Index" then
 		renderIndex()
+	elseif modalName == "Sell" then
+		renderSell()
 	end
 	if not focused then
 		modalBody.CanvasPosition = keep
@@ -1709,7 +1950,9 @@ local function refresh(changed: { [string]: any })
 		renderSide()
 	end
 	-- The open window is rebuilt when what it lists changes; money, income and Speed only update it in place.
-	if modal.Visible and (changed.index or changed.items or changed.slots or changed.plotLevel or changed.trails or changed.equippedTrail
+	if modal.Visible and modalName == "Sell" then
+		sellChanged(changed)
+	elseif modal.Visible and (changed.index or changed.items or changed.slots or changed.plotLevel or changed.trails or changed.equippedTrail
 		or changed.treadmillTier or changed.passes or changed.seedBag) then
 		renderModal()
 	elseif modal.Visible and (changed.money or changed.income or changed.speed) then

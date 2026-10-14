@@ -31,7 +31,7 @@ Assets.SLOTS = {
 	"Snow_Pine", "Snow_Snowman", "Snow_Crystal",
 	"Space_Planet", "Space_Crystal", "Space_Asteroid", "Space_Mushroom", "Space_UFO",
 	"Spirit_Torii", "Spirit_Lantern", "Spirit_CherryTree",
-	"Treadmill", "UpgradeSign", "PlotGate", "ShopStall", "ShopStall_Shop", "ShopStall_Trails", "ShopStall_Index", "SpawnSign",
+	"Treadmill", "UpgradeSign", "PlotGate", "ShopStall", "ShopStall_Shop", "ShopStall_Trails", "ShopStall_Index", "ShopStall_Sell", "SpawnSign",
 } :: { string }
 for _, zone in Config.ZONES do
 	table.insert(Assets.SLOTS, "Arch_" .. zone.id)
@@ -51,11 +51,12 @@ Assets.FALLBACK = {
 	ShopStall_Trails = "ShopStall",
 	ShopStall_Index = "ShopStall",
 } :: { [string]: string }
+-- (ShopStall_Sell has no fallback: the SELL stall keeps its own red-and-white look until it gets its own model.)
 
 -- Solid slots keep the collision the model was saved with; every other slot is pure decoration.
 Assets.SOLID = {
 	FencePost = true, FenceSection = true,
-	ShopStall = true, ShopStall_Shop = true, ShopStall_Trails = true, ShopStall_Index = true,
+	ShopStall = true, ShopStall_Shop = true, ShopStall_Trails = true, ShopStall_Index = true, ShopStall_Sell = true,
 } :: { [string]: boolean }
 
 -- Other names a file or folder may have (compared without case, accents, spaces or underscores).

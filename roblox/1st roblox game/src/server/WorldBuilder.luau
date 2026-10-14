@@ -638,7 +638,46 @@ local STALLS = {
 	{ opens = "Shop", label = "🛒 SHOP", color = Color3.fromRGB(255, 90, 160), stripe = Color3.fromRGB(255, 235, 245) },
 	{ opens = "Trails", label = "🏃 TRAIL SHOP", color = Color3.fromRGB(60, 160, 255), stripe = Color3.fromRGB(235, 245, 255) },
 	{ opens = "Index", label = "📖 INDEX", color = Color3.fromRGB(160, 100, 255), stripe = Color3.fromRGB(245, 235, 255) },
+	-- Sell old plants (docs/references/09-sell-stall-reference.png): an open wooden stall with a red-and-white
+	-- awning, a soft green glowing circle on the floor in front and big red "SELL" text over it. The server
+	-- measures the sell distance from its prompt part (WorldBuilder.sellPoints).
+	{ opens = "Sell", label = "SELL", color = Color3.fromRGB(225, 35, 45), stripe = Color3.fromRGB(250, 248, 245), action = "Sell plants" },
 }
+local STALL_SPACING = 21 -- four 18-stud awnings across the 84-stud plaza
+local SELL_WOOD = Color3.fromRGB(150, 112, 78)
+local SELL_WOOD_DARK = Color3.fromRGB(104, 76, 56)
+local SELL_GLOW = Color3.fromRGB(70, 255, 140)
+local SELL_TEXT = Color3.fromRGB(235, 30, 40)
+
+-- The SELL stall's look (asset slot ShopStall_Sell, which doesn't fall back to ShopStall): a long plank
+-- counter, four posts, a back shelf and the striped awning with a striped valance on its front edge.
+local function sellStall(into: Instance, at: (number, number, number) -> Vector3, u: number, w0: number, side: number, stall: { [string]: any })
+	box(into, "Counter", Vector3.new(16, 3.4, 2.6), CFrame.new(at(u, w0, 1.7)), SELL_WOOD_DARK, Enum.Material.WoodPlanks)
+	box(into, "CounterTop", Vector3.new(17, 0.6, 3.6), CFrame.new(at(u, w0, 3.7)), SELL_WOOD, Enum.Material.WoodPlanks)
+	deco(into, "CounterPlank", Vector3.new(16.4, 0.5, 0.4), CFrame.new(at(u, w0 - 1.4, 2.2)), SELL_WOOD, Enum.Material.WoodPlanks)
+	deco(into, "Shelf", Vector3.new(16, 0.6, 2), CFrame.new(at(u, w0 + 6.8, 4.5)), SELL_WOOD, Enum.Material.WoodPlanks)
+	for _, du in { -7.5, 7.5 } do
+		for _, post in { { w = -1, h = 11.4 }, { w = 7, h = 13.4 } } do -- up to the sloping awning
+			box(into, "Post", Vector3.new(1, post.h, 1), CFrame.new(at(u + du, w0 + post.w, post.h / 2)), SELL_WOOD_DARK, Enum.Material.Wood)
+		end
+	end
+	local tilt = CFrame.Angles(math.rad(-side * 14), 0, 0)
+	for s = 0, 7 do
+		local color = if s % 2 == 0 then stall.color else stall.stripe
+		local cf = CFrame.new(at(u - 7.875 + s * 2.25, w0 + 3, 12.6)) * tilt
+		deco(into, "Awning", Vector3.new(2.25, 0.5, 11), cf, color, Enum.Material.Fabric)
+		deco(into, "Valance", Vector3.new(2.25, 1.2, 0.4), cf * CFrame.new(0, -0.8, -side * 5.4), color, Enum.Material.Fabric)
+	end
+end
+
+-- The soft green glowing circle in front of the SELL stall: a Neon rim under a lighter, see-through fill.
+local function sellCircle(parent: Instance, pos: Vector3)
+	local rim = Props.disc(parent, "SellCircle", 17, pos, SELL_GLOW, Enum.Material.Neon, 0.15)
+	rim.Transparency = 0.25
+	local fill = Props.disc(parent, "SellCircleFill", 14.6, pos, Color3.fromRGB(170, 255, 190), Enum.Material.SmoothPlastic, 0.25)
+	fill.Transparency = 0.45
+	Props.light(fill, SELL_GLOW, 14, 0.8)
+end
 
 local function buildShops(world: Folder)
 	local center = spotCenter(Config.MAX_PLAYERS + 1) -- laid out like one more plot
@@ -656,12 +695,16 @@ local function buildShops(world: Folder)
 	studs(flat(model, "PlazaPath", 14, toWalkway, Vector3.new(center.X, GROUND, side * (18 + toWalkway / 2)), SAND, nil, nil, 0.3))
 	studs(flat(model, "Plaza", Config.PLOT_SIZE, 22, at(0, 11, 0), SAND, nil, nil, 0.3))
 
-	local spacing = 26
 	for i, stall in STALLS do
-		local u = (i - (#STALLS + 1) / 2) * spacing
+		local u = (i - (#STALLS + 1) / 2) * STALL_SPACING
 		local w0 = 18 -- counter's distance in from the plaza's front edge
+		local selling = stall.opens == "Sell"
 		-- The stall (ShopStall_<menu> slot, else ShopStall) faces the walkway.
 		Assets.swap("ShopStall_" .. stall.opens, model, Assets.facing(at(u, w0 + 3.5, 0), Vector3.new(0, 0, -side)), function(into)
+			if selling then
+				sellStall(into, at, u, w0, side, stall)
+				return
+			end
 			box(into, "Counter", Vector3.new(16, 4, 3), CFrame.new(at(u, w0, 2)), stall.color, Enum.Material.WoodPlanks)
 			deco(into, "CounterTop", Vector3.new(17, 0.6, 4), CFrame.new(at(u, w0, 4.3)), Color3.fromRGB(250, 245, 235), Enum.Material.SmoothPlastic)
 			box(into, "Back", Vector3.new(16, 12, 1), CFrame.new(at(u, w0 + 8, 6)), stall.color, Enum.Material.WoodPlanks)
@@ -677,14 +720,21 @@ local function buildShops(world: Folder)
 					if s % 2 == 0 then stall.color else stall.stripe, Enum.Material.Fabric)
 			end
 		end, Vector3.new(1, 1.5, 1.5))
-		local signPart = deco(model, "StallSign", Vector3.new(1, 1, 1), CFrame.new(at(u, w0, 17)), stall.color)
+		local signPart = deco(model, "StallSign", Vector3.new(1, 1, 1), CFrame.new(at(u, w0, if selling then 18 else 17)), stall.color)
 		signPart.Transparency = 1
-		billboard(signPart, stall.label, UDim2.fromScale(15, 3), Vector3.zero, 90)
+		local signLabel = billboard(signPart, stall.label, if selling then UDim2.fromScale(13, 4.6) else UDim2.fromScale(15, 3), Vector3.zero, 90)
+		if selling then -- big red "SELL" with a dark outline, like the reference
+			signLabel.TextColor3 = SELL_TEXT
+			local stroke = signLabel:FindFirstChildOfClass("UIStroke") :: UIStroke
+			stroke.Thickness = 5
+			stroke.Color = Color3.fromRGB(70, 8, 12)
+			sellCircle(model, at(u, 7, 0.3)) -- on the plaza's sand, in front of the counter
+		end
 
 		-- The prompt sits on an invisible part at the counter, so it stays when the stall is re-modelled.
 		local promptHost = hidden(model, "StallPrompt", Vector3.new(16, 4, 3), CFrame.new(at(u, w0, 2)))
 		local prompt = Instance.new("ProximityPrompt")
-		prompt.ActionText = "Open"
+		prompt.ActionText = stall.action or "Open"
 		prompt.ObjectText = stall.label
 		prompt.KeyboardKeyCode = Enum.KeyCode.E
 		prompt.HoldDuration = 0
@@ -868,6 +918,28 @@ function WorldBuilder.build(): ({ PlotInfo }, { NestInfo })
 	local plots, nests, problems = WorldBuilder.adopt(world)
 	assert(plots and nests, "the generated map breaks its own contract:\n" .. table.concat(problems, "\n"))
 	return plots, nests
+end
+
+-- The SELL stalls' prompt parts (a ProximityPrompt with OpensShop = "Sell" on a part, or on an Attachment
+-- in a part), wherever the map has them: PlotService only sells to players standing near one. A map
+-- without one is warned about; the game still runs (plants can still be removed with R).
+function WorldBuilder.sellPoints(world: Instance?): { BasePart }
+	local out: { BasePart } = {}
+	for _, d in if world then world:GetDescendants() else {} do
+		if d:IsA("ProximityPrompt") and d:GetAttribute("OpensShop") == "Sell" then
+			local host = d.Parent
+			if host and host:IsA("Attachment") then
+				host = host.Parent
+			end
+			if host and host:IsA("BasePart") then
+				table.insert(out, host)
+			end
+		end
+	end
+	if #out == 0 then
+		warn(`[WorldBuilder] the map has no SELL stall (a ProximityPrompt with OpensShop = "Sell"), so plants can't be sold at a stall`)
+	end
+	return out
 end
 
 -- The fixed sign texts that show an icon once it is uploaded (Config.ICONS), matched by their exact text so
