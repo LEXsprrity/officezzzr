@@ -474,7 +474,12 @@ local lock = Treadmill.newLock()
 local lockedBelt: BasePart? = nil
 local lockedRoot: BasePart? = nil
 local lockedHumanoid: Humanoid? = nil -- its AutoRotate is off while locked
+local lockedLift = 0 -- how high the root stood over the belt's top when it was locked
 local jumpQueued = false
+
+local function beltTop(belt: BasePart): number
+	return (belt.CFrame * CFrame.new(0, belt.Size.Y / 2, 0)).Position.Y
+end
 local nextPopup = 0
 -- What the Speed popups need from the stats (StatsUpdate sends partial tables).
 local stats = { speed = 0, walkSpeed = 0, equippedTrail = nil :: string?, treadmillMult = 1 }
@@ -621,11 +626,14 @@ RunService.Heartbeat:Connect(function()
 		root.AssemblyLinearVelocity = Vector3.zero
 		root.CFrame = Treadmill.lockCFrame(belt.CFrame, belt.Size, root.Position)
 		root.Anchored = true
+		lockedLift = root.Position.Y - beltTop(belt)
 		nextPopup = now + 0.5
 	elseif lock.mode == "locked" and root and belt and root == lockedRoot then
-		-- Still locked: keep it facing the console (nothing may turn it while it runs).
+		-- Still locked: keep it facing the console (nothing may turn it while it runs), centred and at the
+		-- height it stood over the belt (a new tier's model moves the belt: PlotService swaps it on an upgrade).
 		local held = Treadmill.lockCFrame(belt.CFrame, belt.Size, root.Position)
-		if root.CFrame.LookVector:Dot(held.LookVector) < 0.999 then
+		held += Vector3.new(0, beltTop(belt) + lockedLift - root.Position.Y, 0)
+		if root.CFrame.LookVector:Dot(held.LookVector) < 0.999 or (held.Position - root.Position).Magnitude > 0.05 then
 			root.CFrame = held
 		end
 	elseif action == "exit" and root and lockedBelt then

@@ -161,7 +161,9 @@ H.test("world: the base is plain (no trees, bushes, flowers, lamps or rocks outs
 			if d:IsA("Model") and banned[d:GetAttribute("AssetSlot")] then
 				error(`{d:GetFullName()} is a {d:GetAttribute("AssetSlot")} in the base`)
 			end
-			H.ok(not d:IsA("PointLight"), `{d:GetFullName()}: no lamps in the base`)
+			-- (a treadmill model's console screen may glow: that's no lamp)
+			local tm = d:FindFirstAncestor("Treadmill")
+			H.ok(not d:IsA("PointLight") or (tm and tm:GetAttribute("AssetSlot") == "Treadmill"), `{d:GetFullName()}: no lamps in the base`)
 		end
 	end
 	for i, plot in plots do

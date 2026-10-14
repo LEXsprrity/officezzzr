@@ -14,3 +14,4 @@ sourcemap.json
 # Claude Code personal settings
 .claude/settings.local.json
 *.lock
+!**/models/treadmills/*.rbxl

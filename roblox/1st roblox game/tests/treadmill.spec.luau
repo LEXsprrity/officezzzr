@@ -673,9 +673,129 @@ H.test("treadmill facing: the runner, the console and the board face the middle 
 	local plots = WorldBuilder.adopt(world)
 	Assets.refresh(world)
 	checkFacing(plots, "map")
-	-- the model's console is at its +Z end, so the asset carries Yaw = 180 (its front is then -Z, as Assets expects)
-	local model = roblox.deserializeModel(fs.readFile("assets/Treadmill.rbxm"))[1]
-	H.eq(model:GetAttribute("Yaw"), 180, "assets/Treadmill.rbxm is turned to put its console at the front")
+	-- the models' console is at their +Z end, so each tier's asset carries Yaw = 180 (its front is then -Z, as
+	-- Assets expects)
+	for tier = 1, Config.TREADMILL_MAX do
+		local model = roblox.deserializeModel(fs.readFile(`assets/Treadmill_T{tier}.rbxm`))[1]
+		H.eq(model:GetAttribute("Yaw"), 180, `assets/Treadmill_T{tier}.rbxm is turned to put its console at the front`)
+	end
+end)
+
+----------------------------------------------------------------------------------------------------
+-- One model per treadmill tier (assets/Treadmill_T1..T10, made by tools/export_treadmills.luau)
+----------------------------------------------------------------------------------------------------
+H.test("treadmill tiers: each tier has its model file (one Model, no code, tools or welds, anchored, non-colliding, a Belt and a console)", function()
+	for tier = 1, Config.TREADMILL_MAX do
+		local slot = Assets.treadmillSlot(tier)
+		H.eq(slot, `Treadmill_T{tier}`)
+		H.ok(table.find(Assets.SLOTS, slot) ~= nil, `{slot} is a slot`)
+		local path = `assets/{slot}.rbxm`
+		H.ok(fs.isFile(path), `{path} exists`)
+		local roots = roblox.deserializeModel(fs.readFile(path))
+		H.eq(#roots, 1, `{path} holds one instance`)
+		local model = roots[1]
+		H.ok(model:IsA("Model"), `{path} holds a Model`)
+		H.eq(model:GetAttribute("KeepScale"), true, `{path} is saved at its game size`)
+		H.eq(model:GetAttribute("Tier"), tier)
+		local belts, consoles, parts = 0, 0, 0
+		for _, d in model:GetDescendants() do
+			H.ok(not (d:IsA("LuaSourceContainer") or d:IsA("Tool") or d:IsA("JointInstance") or d:IsA("WeldConstraint")
+				or d:IsA("ProximityPrompt") or d:IsA("ClickDetector") or d:IsA("BillboardGui")), `{path}: no {d.ClassName} ({d:GetFullName()})`)
+			if d:IsA("BasePart") then
+				parts += 1
+				H.ok(d.Anchored and not d.CanCollide and not d.CanTouch, `{path}: {d.Name} anchored, no collision`)
+				if d.Name == "Belt" then
+					belts += 1
+					H.eq(d.Transparency, 1, `{path}: the Belt marker is invisible`)
+				elseif string.find(d.Name, "Console", 1, true) then
+					consoles += 1
+				end
+			end
+		end
+		H.ok(parts > 3, `{path} has its parts`)
+		H.eq(belts, 1, `{path} marks its running surface with one part named Belt`)
+		H.ok(consoles >= 1, `{path} has its console`)
+		-- the game (ServerStorage.Assets) loads it as that tier's model
+		local template, matched = Assets.get(slot)
+		H.ok(template ~= nil and template.Name == slot and matched == slot, `the game uses {path} for tier {tier}`)
+	end
+	-- the map's treadmill piece (the Studio view, an empty plot) looks like tier 1, and a tier without a model
+	-- like the tier below it
+	H.eq(select(2, Assets.get("Treadmill")), "Treadmill_T1", "no assets/Treadmill.rbxm: the map shows tier 1")
+	local t5 = H.assets:FindFirstChild("Treadmill_T5")
+	t5.Parent = nil
+	local ok, err = pcall(function()
+		H.eq(select(2, Assets.get("Treadmill_T5")), "Treadmill_T4", "a missing tier falls back to the one below")
+	end)
+	t5.Parent = H.assets
+	H.ok(ok, tostring(err))
+	H.eq(Assets.treadmillSlot(0), "Treadmill_T1", "a bad tier is clamped")
+	H.eq(Assets.treadmillSlot(99), `Treadmill_T{Config.TREADMILL_MAX}`)
+end)
+
+H.test("treadmill tiers: the treadmill swaps to each tier in place; belt, lock, +X/s text and board follow every tier", function()
+	local world = H.workspace:FindFirstChild("World")
+	local plots = WorldBuilder.adopt(world)
+	Assets.refresh(world)
+	local pivots = {}
+	for i, plot in plots do
+		local tm = plot.model:FindFirstChild("Treadmill")
+		H.eq(tm:GetAttribute("Asset"), "Treadmill_T1", `plot {i} starts on tier 1`)
+		pivots[i] = Assets.pivotOf(tm)
+	end
+	local order = {}
+	for tier = 1, Config.TREADMILL_MAX do
+		table.insert(order, tier)
+	end
+	table.insert(order, 1) -- and back to tier 1 (the owner left: an empty plot)
+	for step, tier in order do
+		local slot = Assets.treadmillSlot(tier)
+		for i, plot in plots do
+			local board = TreadmillBoard.build(plot.model, plot.belt, plot.center, plot.treadmillLabel)
+			H.eq(TreadmillBoard.showTier(board, tier), step > 1, `plot {i} tier {tier}: swapped only when the tier changed`)
+			H.eq(TreadmillBoard.showTier(board, tier), false, "the same tier again does nothing")
+			local count = 0
+			for _, child in plot.model:GetChildren() do
+				count += if child.Name == "Treadmill" then 1 else 0
+			end
+			H.eq(count, 1, `plot {i} tier {tier}: one treadmill`)
+			local tm = plot.model:FindFirstChild("Treadmill")
+			H.eq(tm:GetAttribute("Asset"), slot, `plot {i} shows tier {tier}`)
+			H.eq(tm:GetAttribute("AssetSlot"), "Treadmill", "it stays the map's treadmill piece")
+			H.ok((Assets.pivotOf(tm).Position - pivots[i].Position).Magnitude < 1e-3, `plot {i} tier {tier}: in the same spot`)
+			-- the hidden belt is the model's Belt: same footprint, its top at the Belt's top
+			local b = plot.belt
+			local lo, hi = Assets.bounds(tm:FindFirstChild("Belt", true), b.CFrame, true)
+			local h = b.Size / 2
+			H.ok(math.abs(lo.X + h.X) < 0.01 and math.abs(hi.X - h.X) < 0.01 and math.abs(lo.Z + h.Z) < 0.01 and math.abs(hi.Z - h.Z) < 0.01
+				and math.abs(hi.Y - h.Y) < 0.01, `plot {i} tier {tier}: the belt fits under the model's belt ({lo}..{hi}, belt {b.Size})`)
+			H.eq(b.Transparency, 1, "the belt is hidden under the model")
+			H.ok(math.min(b.Size.X, b.Size.Z) >= 4 and math.min(b.Size.X, b.Size.Z) <= 5 and math.max(b.Size.X, b.Size.Z) >= 6.5
+				and math.max(b.Size.X, b.Size.Z) <= 10.5, `plot {i} tier {tier}: a character-sized belt ({b.Size})`)
+			H.ok(b.Size.Z >= b.Size.X, "it still runs along its own Z (front end +Z)")
+			-- the board and the step text followed the belt
+			H.ok((board.panel.CFrame.Position - TreadmillBoard.placement(plot.model, b, plot.center).Position).Magnitude < 1e-3,
+				`plot {i} tier {tier}: the board followed`)
+			H.ok((board.stepGui.Adornee.Position - Treadmill.stepTextOffset(b.Size)).Magnitude < 1e-3, `plot {i} tier {tier}: the step text followed`)
+		end
+		-- every tier stands in the treadmill strip, faces the walkway, and leaves room for its board
+		Layout.treadmillsFit(plots, `tier {tier}`)
+		checkFacing(plots, `tier {tier}`)
+		checkBoards(plots, `tier {tier}`)
+		Layout.postsClearOfProps(world, plots, `tier {tier}`)
+	end
+end)
+
+H.test("treadmill tiers: PlotService shows the owner's tier (an empty plot tier 1) whenever it writes the board", function()
+	local plot = fs.readFile("src/server/PlotService.luau")
+	local render = string.match(plot, "local function renderTreadmillSign.-\nend")
+	H.ok(render ~= nil, "renderTreadmillSign")
+	H.ok(string.find(render, "TreadmillBoard.showTier(state.treadmill, if s then s.profile.treadmillTier else 1)", 1, true) ~= nil,
+		"renderTreadmillSign swaps the model (after an upgrade, a Robux receipt, an owner arriving or leaving)")
+	for _, fn in { "function PlotService.upgradeTreadmill", "function PlotService.refreshTreadmill", "function PlotService.assign", "function PlotService.release" } do
+		local body = string.match(plot, fn .. ".-\nend")
+		H.ok(body ~= nil and string.find(body, "renderTreadmillSign(state)", 1, true) ~= nil, `{fn} re-renders the treadmill`)
+	end
 end)
 
 ----------------------------------------------------------------------------------------------------
