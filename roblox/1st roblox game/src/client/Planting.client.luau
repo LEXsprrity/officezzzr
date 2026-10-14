@@ -358,7 +358,7 @@ local function paintSlot()
 	local count = SeedPacks.bagCount(seedBag)
 	slotCount.Text = `x{count}`
 	local picked = bag ~= nil and not string.find(bag.key, "^inv:")
-	seedSlot.BackgroundColor3 = if count > 0 then SEED_GREEN else Color3.fromRGB(130, 135, 140)
+	seedSlot.BackgroundColor3 = SEED_GREEN -- always green, even with an empty bag (owner)
 	slotStroke.Color = if picked then Color3.fromRGB(255, 205, 50) else INK
 	slotStroke.Thickness = if picked then 4 else 3
 end
