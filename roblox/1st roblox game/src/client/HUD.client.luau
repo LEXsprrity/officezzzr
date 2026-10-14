@@ -14,6 +14,7 @@ local Config = require(Shared:WaitForChild("Config"))
 local Format = require(Shared:WaitForChild("Format"))
 local SeedPacks = require(Shared:WaitForChild("SeedPacks"))
 local Icons = require(Shared:WaitForChild("Icons"))
+local UiFx = require(Shared:WaitForChild("UiFx"))
 
 local player = Players.LocalPlayer
 local remotes = ReplicatedStorage:WaitForChild("Remotes")
@@ -113,6 +114,7 @@ end
 
 local gui = new("ScreenGui", { Name = "SeedHUD", ResetOnSpawn = false, ZIndexBehavior = Enum.ZIndexBehavior.Sibling })
 local uiScale = new("UIScale", { Parent = gui })
+UiFx.watch(gui) -- every button in the HUD (and the Rewards window in it) pops when hovered or pressed
 local function rescale()
 	local cam = workspace.CurrentCamera
 	local y = if cam then cam.ViewportSize.Y else 900
@@ -212,6 +214,8 @@ iconLabel(statsFrame, "Money", "💰", { Size = UDim2.fromOffset(48, 48), Positi
 local moneyValue = bold(statsFrame, 4, {
 	Text = "$0", Size = UDim2.new(1, -62, 0, 44), Position = UDim2.fromOffset(62, 54), TextXAlignment = Enum.TextXAlignment.Left, TextColor3 = MONEY_GREEN,
 })
+UiFx.relief(speedValue, 4, 4) -- raised, not flat: a dropped dark copy behind, a bevel, a thick outline
+UiFx.relief(moneyValue, 4, 4)
 -- The Speed icon and its yellow "+" badge both open the Shop on the Speed section.
 new("TextButton", { BackgroundTransparency = 1, Text = "", Size = UDim2.fromOffset(48, 48), Parent = statsFrame }).Activated:Connect(function()
 	openShopAt("Speed")
@@ -236,8 +240,11 @@ local leftScale = new("UIScale", { Parent = leftColumn })
 
 -- Bright, lit buttons: the colour with a light top and a soft white shine.
 local function sideButton(order: number, label: string, icon: string, emoji: string, color: Color3, onClick: () -> ())
+	-- The column lays out the holder; the button sits centred in it so its hover pop grows from the middle.
+	local holder = new("Frame", { Name = label, Size = UDim2.fromOffset(92, 74), BackgroundTransparency = 1, LayoutOrder = order, Parent = leftColumn })
 	local b = new("TextButton", {
-		Name = label, Size = UDim2.fromOffset(92, 74), BackgroundColor3 = WHITE, Text = "", AutoButtonColor = true, LayoutOrder = order, Parent = leftColumn,
+		Name = "Button", AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.5), Size = UDim2.fromScale(1, 1),
+		BackgroundColor3 = WHITE, Text = "", AutoButtonColor = true, Parent = holder,
 	}, deco(14, 4))
 	new("UIGradient", { Rotation = 90, Color = ColorSequence.new(color:Lerp(WHITE, 0.3), color), Parent = b })
 	new("Frame", { Size = UDim2.fromScale(1, 0.5), BackgroundColor3 = WHITE, BorderSizePixel = 0, Parent = b }, {
@@ -372,16 +379,6 @@ do
 		end)
 	end
 end
-
-----------------------------------------------------------------------------------------------------
--- Bottom-right: day/night timer
-----------------------------------------------------------------------------------------------------
-local bottomRight = new("Frame", {
-	BackgroundTransparency = 1, AnchorPoint = Vector2.new(1, 1), Position = UDim2.new(1, -14, 1, -14),
-	Size = UDim2.fromOffset(260, 200), Parent = gui,
-}, { new("UIListLayout", { VerticalAlignment = Enum.VerticalAlignment.Bottom, HorizontalAlignment = Enum.HorizontalAlignment.Right, Padding = UDim.new(0, 6), SortOrder = Enum.SortOrder.LayoutOrder }) })
-local dayFrame = new("Frame", { Size = UDim2.fromOffset(240, 40), BackgroundColor3 = COLORS.shop, LayoutOrder = 2, Parent = bottomRight }, deco(10))
-local dayLabel = text(dayFrame, { Text = "", Size = UDim2.new(1, -12, 1, -6), Position = UDim2.fromOffset(6, 3) })
 
 ----------------------------------------------------------------------------------------------------
 -- Hotbar (bottom centre): Bat
@@ -1679,6 +1676,7 @@ do
 	local resultSub = text(stage, { Text = "", Size = UDim2.new(1, 0, 0, 28), Position = UDim2.fromOffset(0, 60 + REEL_H + 70), ZIndex = 3 })
 	local continueHint = text(stage, { Text = "Click to continue", Size = UDim2.new(1, 0, 0, 24), Position = UDim2.new(0, 0, 1, -24), TextColor3 = Color3.fromRGB(220, 220, 235) })
 	local closeButton = new("TextButton", { Size = UDim2.fromScale(1, 1), BackgroundTransparency = 1, Text = "", ZIndex = 10, Visible = false, Parent = revealGui })
+	closeButton:SetAttribute("NoPop", true) -- the whole screen: "Click to continue"
 
 	local function seedCard(parent: Instance, zone: number, rarity: number, mutation: string?, size: UDim2): Frame
 		local r = Config.RARITIES[rarity]
@@ -1941,9 +1939,9 @@ LootEvent.OnClientEvent:Connect(function(kind: string, data: any)
 end)
 
 ----------------------------------------------------------------------------------------------------
--- Per-frame bits: timers, bat cooldown (the zone you enter is announced by ZoneBanner.client)
+-- Per-frame bits: bat cooldown, pack shines (the zone you enter is announced by ZoneBanner.client, the
+-- day/night timer is DayTimer.client, top right)
 ----------------------------------------------------------------------------------------------------
-local lastTimerUpdate = 0
 RunService.RenderStepped:Connect(function()
 	local left = batCooldownUntil - os.clock()
 	batShade.Size = UDim2.fromScale(1, math.clamp(left / Config.BAT_COOLDOWN, 0, 1))
@@ -1957,13 +1955,6 @@ RunService.RenderStepped:Connect(function()
 		end
 	end
 
-	if os.clock() - lastTimerUpdate >= 0.25 then
-		lastTimerUpdate = os.clock()
-		local now = workspace:GetServerTimeNow()
-		local night, remaining = Config.dayPhase(now)
-		dayLabel.Text = if night then `🌙 Night · Day in {Format.clock(remaining)}` else `☀️ Day · Night in {Format.clock(remaining)}`
-		dayFrame.BackgroundColor3 = if night then Color3.fromRGB(70, 70, 160) else COLORS.shop
-	end
 end)
 
 rescale()

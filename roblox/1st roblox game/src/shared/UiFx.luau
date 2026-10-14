@@ -1,0 +1,262 @@
+--!strict
+-- Shared UI juice for the client scripts (HUD, Rewards, DayTimer):
+--   * UiFx.pop(button): the button inflates with a springy pop while the mouse is over it or a finger holds
+--     it, squashes a little while the mouse holds it down, and springs back on release. A UIScale named
+--     "Pop" does it; a button outside a layout is scaled about its centre (its AnchorPoint moves to the
+--     centre while it is popped and back once it rests, so it never shifts).
+--   * UiFx.watch(root): pop() on every button already under `root` and every one added later (the Shop's
+--     cards are rebuilt on every render). A button with the attribute NoPop, or its own UIScale, is skipped.
+--   * UiFx.relief(label): text with relief instead of flat 2D: a bevel gradient (lighter top, darker
+--     bottom), a thick round dark outline and a dark copy dropped behind it, like a raised sticker.
+local RunService = game:GetService("RunService")
+local TweenService = game:GetService("TweenService")
+local UserInputService = game:GetService("UserInputService")
+
+local UiFx = {}
+
+UiFx.HOVER = 1.1 -- hovered / held by a finger
+UiFx.PRESS = 0.92 -- held down by the mouse
+
+local GROW = TweenInfo.new(0.3, Enum.EasingStyle.Back, Enum.EasingDirection.Out)
+local SHRINK = TweenInfo.new(0.22, Enum.EasingStyle.Back, Enum.EasingDirection.Out)
+local SQUASH = TweenInfo.new(0.08, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
+local SPRING = TweenInfo.new(0.5, Enum.EasingStyle.Elastic, Enum.EasingDirection.Out)
+local CENTRE = Vector2.new(0.5, 0.5)
+
+local INK = Color3.fromRGB(25, 25, 35)
+local SHADOW = Color3.fromRGB(10, 10, 18)
+local BEVEL = Color3.fromRGB(185, 188, 205) -- multiplies the text colour at the bottom
+
+-- Whether a layout places `g` (it ignores Position, so it can't be re-anchored to scale about its centre).
+local function inLayout(g: GuiObject): boolean
+	local parent = g.Parent
+	return parent ~= nil and parent:FindFirstChildWhichIsA("UIGridStyleLayout") ~= nil
+end
+
+-- Whether `g` is on screen: it and every GuiObject above it visible, inside an enabled ScreenGui.
+local function shown(g: Instance): boolean
+	local node: Instance? = g
+	while node do
+		if node:IsA("GuiObject") then
+			if not node.Visible then
+				return false
+			end
+		elseif node:IsA("LayerCollector") then
+			return node.Enabled and node.Parent ~= nil
+		end
+		node = node.Parent
+	end
+	return false
+end
+
+local function touching(): boolean
+	return UserInputService:GetLastInputType() == Enum.UserInputType.Touch
+end
+
+function UiFx.pop(b: GuiButton)
+	if b:GetAttribute("NoPop") or b:FindFirstChildWhichIsA("UIScale") then
+		return
+	end
+	local scale = Instance.new("UIScale")
+	scale.Name = "Pop"
+	scale.Parent = b
+
+	local hovered, pressed, held = false, false, false -- mouse over, mouse down, finger down
+	local released = false -- the next change springs back from a press
+	local current = 1
+	local tween: Tween? = nil
+	local watcher: RBXScriptConnection? = nil
+	local saved: { anchor: Vector2, position: UDim2, centred: UDim2 }? = nil
+
+	local function centre()
+		if saved or b.AnchorPoint == CENTRE or inLayout(b) then
+			return
+		end
+		local a, p, s = b.AnchorPoint, b.Position, b.Size
+		local dx, dy = CENTRE.X - a.X, CENTRE.Y - a.Y
+		local centred = p + UDim2.new(s.X.Scale * dx, s.X.Offset * dx, s.Y.Scale * dy, s.Y.Offset * dy)
+		saved = { anchor = a, position = p, centred = centred }
+		b.AnchorPoint = CENTRE
+		b.Position = centred
+	end
+	local function uncentre()
+		local s = saved
+		if s then
+			saved = nil
+			if b.Position == s.centred then
+				b.Position = s.position
+			end -- else the script moved it meanwhile (in its own anchor's terms): keep that
+			b.AnchorPoint = s.anchor
+		end
+	end
+	local function rest()
+		if watcher then
+			watcher:Disconnect()
+			watcher = nil
+		end
+		uncentre()
+	end
+
+	local update: () -> ()
+	local function watch()
+		if watcher then
+			return
+		end
+		-- While popped: let go of a press released off the button, and snap back when it is hidden
+		-- (a window closed under the mouse never sends MouseLeave).
+		watcher = RunService.RenderStepped:Connect(function()
+			if not shown(b) then
+				hovered, pressed, held = false, false, false
+				if tween then
+					tween:Cancel()
+					tween = nil
+				end
+				current = 1
+				scale.Scale = 1
+				rest()
+			elseif pressed and not UserInputService:IsMouseButtonPressed(Enum.UserInputType.MouseButton1) then
+				pressed, released = false, true
+				update()
+			end
+		end)
+	end
+
+	update = function()
+		local goal = if held then UiFx.HOVER elseif pressed then UiFx.PRESS elseif hovered then UiFx.HOVER else 1
+		if goal == current then
+			return
+		end
+		local info = if goal == UiFx.PRESS then SQUASH elseif released then SPRING elseif goal > current then GROW else SHRINK
+		released = false
+		current = goal
+		if goal ~= 1 then
+			centre()
+			watch()
+		end
+		if tween then
+			tween:Cancel()
+		end
+		local t = TweenService:Create(scale, info, { Scale = goal })
+		tween = t
+		t.Completed:Connect(function(state)
+			if state == Enum.PlaybackState.Completed and tween == t and current == 1 then
+				tween = nil
+				rest()
+			end
+		end)
+		t:Play()
+	end
+
+	b.MouseEnter:Connect(function()
+		if not touching() then -- a tap sends MouseEnter but no MouseLeave
+			hovered = true
+			update()
+		end
+	end)
+	b.MouseLeave:Connect(function()
+		hovered = false
+		update()
+	end)
+	b.MouseButton1Down:Connect(function()
+		if not touching() then
+			pressed = true
+			update()
+		end
+	end)
+	b.MouseButton1Up:Connect(function()
+		if pressed then
+			pressed, released = false, true
+			update()
+		end
+	end)
+	b.InputBegan:Connect(function(input: InputObject)
+		if input.UserInputType == Enum.UserInputType.Touch then
+			held = true
+			update()
+		end
+	end)
+	b.InputEnded:Connect(function(input: InputObject)
+		if input.UserInputType == Enum.UserInputType.Touch and held then
+			held, released = false, true
+			update()
+		end
+	end)
+end
+
+function UiFx.watch(root: Instance)
+	for _, d in root:GetDescendants() do
+		if d:IsA("GuiButton") then
+			UiFx.pop(d)
+		end
+	end
+	root.DescendantAdded:Connect(function(d)
+		if d:IsA("GuiButton") then
+			-- after the script that made it has finished (it may still add NoPop or its own UIScale)
+			task.defer(function()
+				if d:IsDescendantOf(root) then
+					UiFx.pop(d :: GuiButton)
+				end
+			end)
+		end
+	end)
+end
+
+-- Relief for `label` (free-positioned, not in a layout): returns the shadow copy, which follows the
+-- label's text, visibility and placement. `depth`: how far the shadow drops, in pixels (default 3).
+local MIRRORED = { "Text", "Visible", "TextTransparency", "Size", "AnchorPoint", "TextXAlignment", "TextYAlignment", "Rotation" }
+function UiFx.relief(label: TextLabel, depth: number?, outline: number?): TextLabel
+	local d = depth or 3
+	local stroke = label:FindFirstChildWhichIsA("UIStroke")
+	if not stroke then
+		stroke = Instance.new("UIStroke")
+		stroke.Color = INK
+		stroke.Parent = label
+	end
+	assert(stroke)
+	stroke.Thickness = outline or math.max(stroke.Thickness, 3)
+	stroke.LineJoinMode = Enum.LineJoinMode.Round
+
+	local shadow = label:Clone()
+	shadow.Name = label.Name .. "Shadow"
+	for _, c in shadow:GetChildren() do
+		if not c:IsA("UIStroke") then
+			c:Destroy()
+		end
+	end
+	shadow.TextColor3 = SHADOW
+	local shadowStroke = shadow:FindFirstChildWhichIsA("UIStroke")
+	if shadowStroke then
+		shadowStroke.Color = SHADOW
+	end
+	local offset = UDim2.fromOffset(math.ceil(d / 3), d)
+	shadow.Position = label.Position + offset
+	shadow.ZIndex = label.ZIndex
+	label.ZIndex += 1 -- in front of its shadow
+	shadow.Parent = label.Parent
+
+	for _, prop in MIRRORED do
+		label:GetPropertyChangedSignal(prop):Connect(function()
+			(shadow :: any)[prop] = (label :: any)[prop]
+		end)
+	end
+	label:GetPropertyChangedSignal("Position"):Connect(function()
+		shadow.Position = label.Position + offset
+	end)
+	label.Destroying:Connect(function()
+		shadow:Destroy()
+	end)
+
+	-- the bevel: full colour on top, a shade darker at the bottom
+	local bevel = Instance.new("UIGradient")
+	bevel.Name = "Bevel"
+	bevel.Rotation = 90
+	bevel.Color = ColorSequence.new({
+		ColorSequenceKeypoint.new(0, Color3.new(1, 1, 1)),
+		ColorSequenceKeypoint.new(0.45, Color3.new(1, 1, 1)),
+		ColorSequenceKeypoint.new(1, BEVEL),
+	})
+	bevel.Parent = label
+	return shadow
+end
+
+return UiFx
