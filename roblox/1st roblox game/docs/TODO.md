@@ -5,12 +5,12 @@ Marcar com `[x]` quando estiver feito e junto ao jogo.
 
 - [x] **1. Tirar o Sleep Dust.** Remover a mecânica toda (hotbar tecla 2, produto na loja, inventário). Saves antigos que têm Sleep Dust continuam a carregar.
 
-- [ ] **2. HUD nova e mais simples, igual à referência.**
+- [x] **2. HUD nova e mais simples, igual à referência.**
   - Canto inferior esquerdo só com o ícone de Speed (o nosso, com um "+") e o valor em rosa, e o ícone de dinheiro com o valor em verde, com texto grande e contorno. Ref: `02-simple-hud-speed-money.png`.
   - Barra de "Level" de Speed (Level X, progresso 0/10) com três botões de compra rápida `+10K`, `+100K`, `+1M` (amarelo, vermelho, arco-íris) com o preço em Robux, e o multiplicador atual ("x3 Multiplier"). Ref: `02-speed-level-bar.png`, `03-level-up-announcement.png`.
   - Botões Shop e Index com o mesmo estilo da referência (verde e azul, ícone e texto grandes, bolinha vermelha de notificação), e Slow Mode como interruptor.
 
-- [ ] **3. Anúncio de subir de nível.** Ao subir de nível aparece rápido no ecrã "LEVEL 3!" com o multiplicador por baixo. É curto e não tapa o jogo. Ref: `03-level-up-announcement.png`.
+- [x] **3. Anúncio de subir de nível.** Ao subir de nível aparece rápido no ecrã "LEVEL 3!" com o multiplicador por baixo. É curto e não tapa o jogo. Ref: `03-level-up-announcement.png`.
 
 - [ ] **4. Lendários muito raros no fim do jogo.** Plantas Legendary têm de ser muito, muito raras, sobretudo nas 2 últimas zonas (Deep Space e Spirit Garden). Têm de parecer exclusivas.
 

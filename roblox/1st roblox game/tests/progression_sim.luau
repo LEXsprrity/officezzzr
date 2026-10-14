@@ -21,6 +21,7 @@ export type Options = {
 
 export type Result = {
 	arrivals: { number }, -- seconds until Speed >= ZONES[k].req
+	levels: { number }, -- seconds until Speed level n (Config.speedLevel)
 	buys: { { t: number, what: string, price: number } },
 	finalSpeed: number,
 	finalMoney: number,
@@ -59,6 +60,7 @@ function Sim.run(opts: Options?): Result
 	local trailIndex = 1
 	local plants: { Plant } = {}
 	local arrivals: { number } = {}
+	local levels: { number } = {}
 	local buys = {}
 	local income = 0
 	local incomeAt = -math.huge
@@ -78,6 +80,9 @@ function Sim.run(opts: Options?): Result
 			if not arrivals[k] and speed >= zone.req then
 				arrivals[k] = t
 			end
+		end
+		for n = #levels + 1, (Config.speedLevel(speed)) do
+			levels[n] = t
 		end
 	end
 
@@ -181,6 +186,7 @@ function Sim.run(opts: Options?): Result
 	refreshIncome()
 	return {
 		arrivals = arrivals,
+		levels = levels,
 		buys = buys,
 		finalSpeed = speed,
 		finalMoney = money,

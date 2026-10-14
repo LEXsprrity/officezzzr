@@ -55,6 +55,69 @@ Config.MOVE_SLACK = 1.5 -- per-tick distance allowed = WalkSpeed * dt * slack + 
 Config.MOVE_EPSILON = 2
 Config.MOVE_BUCKET_SECONDS = 1 -- sustained over-speed beyond this much budget -> rubber-band
 
+-- Speed levels: milestones of the Speed stat, shown on the HUD's level bar with a "LEVEL N!" pop-up.
+-- Purely visual progress, no bonus. SPEED_LEVELS[n] is the Speed level n starts at. Every zone's
+-- recommended Speed is a level; the steps shrink from x2.5 early to x1.25-x1.5 late because each
+-- decade of Speed takes longer (README "Progression"), so a free player still levels up every few
+-- minutes early on and about every 15-60 minutes before the Spirit Garden (level 30 at 5B, tests/hud.spec). Past the table the
+-- levels go on as 10B, 20B, 50B, 100B, ...
+Config.SPEED_LEVELS = {
+	0, 1e3, 2.5e3, 5e3, 10e3, -- 5: Desert
+	25e3, 50e3, 100e3, 250e3, 500e3, -- 10: Jungle
+	1e6, 2.5e6, 5e6, -- 13: Lava Fields
+	10e6, 15e6, 25e6, 50e6, -- 17: Snow Peaks
+	75e6, 100e6, 150e6, 250e6, 400e6, 500e6, -- 23: Deep Space
+	750e6, 1e9, 1.5e9, 2e9, 3e9, 4e9, 5e9, -- 30: Spirit Garden
+}
+local LEVEL_STEPS = { 1, 2, 5 } -- mantissas of the levels past the table
+
+-- The Speed level `level` starts at (level 1 at 0).
+function Config.speedLevelThreshold(level: number): number
+	local n = #Config.SPEED_LEVELS
+	if level <= n then
+		return Config.SPEED_LEVELS[math.max(1, level)]
+	end
+	local j = level - n - 1 -- 0 = the first level past the table
+	local decade = math.floor(math.log10(Config.SPEED_LEVELS[n])) + 1 + j // #LEVEL_STEPS
+	return LEVEL_STEPS[j % #LEVEL_STEPS + 1] * 10 ^ decade
+end
+
+-- (level, the Speed it started at, the Speed of the next level) for `speed`.
+function Config.speedLevel(speed: number): (number, number, number)
+	speed = if speed == speed then math.clamp(speed, 0, 1e300) else 0 -- NaN/inf/negative-safe
+	local n = #Config.SPEED_LEVELS
+	local level = 1
+	if speed >= Config.SPEED_LEVELS[n] then
+		-- past the table: jump close by log10, then settle exactly
+		local past = math.max(0, math.floor((math.log10(speed) - math.log10(Config.SPEED_LEVELS[n])) * #LEVEL_STEPS) - 2)
+		level = n + past
+		while Config.speedLevelThreshold(level + 1) <= speed do
+			level += 1
+		end
+		while level > n and Config.speedLevelThreshold(level) > speed do
+			level -= 1
+		end
+	else
+		while Config.SPEED_LEVELS[level + 1] <= speed do
+			level += 1
+		end
+	end
+	return level, Config.speedLevelThreshold(level), Config.speedLevelThreshold(level + 1)
+end
+
+-- The HUD's "LEVEL N!" trigger. `best` is the highest level seen this session (nil before the first
+-- stats arrive). Returns the new best and the level to announce, if any: nothing on the first stats
+-- (joining at level 12 isn't a level-up), nothing for the same or a lower level, and only the highest
+-- level when a Speed pack jumps several at once.
+function Config.levelUp(best: number?, level: number): (number, number?)
+	if best == nil then
+		return level, nil
+	elseif level > best then
+		return level, level
+	end
+	return best, nil
+end
+
 ----------------------------------------------------------------------------------------------------
 -- Zones. The corridor is the concatenation of zone lengths (4,750 studs). The Meadow is short so a first seed is a quick grab.
 ----------------------------------------------------------------------------------------------------
@@ -460,8 +523,11 @@ Config.DEVELOPER_PRODUCTS = {
 	PackSpace = { id = 0, kind = "Pack", label = "Starpetal Pack", robux = 2000, zone = 6 },
 	PackSpirit = { id = 0, kind = "Pack", label = "Lotus Wyrm Pack", robux = 3000, zone = 7 },
 
+	-- Speed10K/100K/1M are also the HUD's quick-buy buttons under the level bar
+	Speed10K = { id = 0, kind = "Speed", label = "+10K Speed", robux = 9, amount = 10e3 },
+	Speed100K = { id = 0, kind = "Speed", label = "+100K Speed", robux = 36, amount = 100e3 },
 	Speed150K = { id = 0, kind = "Speed", label = "+150K Speed", robux = 64, amount = 150e3 },
-	Speed1M = { id = 0, kind = "Speed", label = "+1M Speed", robux = 200, amount = 1e6 },
+	Speed1M = { id = 0, kind = "Speed", label = "+1M Speed", robux = 76, amount = 1e6 },
 	Speed10M = { id = 0, kind = "Speed", label = "+10M Speed", robux = 560, amount = 10e6 },
 	Speed50M = { id = 0, kind = "Speed", label = "+50M Speed", robux = 1200, amount = 50e6 },
 	Speed500M = { id = 0, kind = "Speed", label = "+500M Speed", robux = 1600, amount = 500e6 },
@@ -618,6 +684,7 @@ Config.SOUNDS = {
 	Bat = "rbxasset://sounds/swordslash.wav",
 	Buy = "rbxasset://sounds/electronicpingshort.wav",
 	Click = "rbxasset://sounds/button.wav",
+	LevelUp = "rbxasset://sounds/electronicpingshort.wav",
 }
 
 return Config
