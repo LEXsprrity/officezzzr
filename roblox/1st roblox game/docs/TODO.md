@@ -18,7 +18,7 @@ Marcar com `[x]` quando estiver feito e junto ao jogo.
 
 - [x] **6. Recompensas para incentivar Like, Favorito e Comunidade.**
   - Janela "Free Gift!": "LIMITED TIME! 10,000 SPEED!" com 3 passos (dar Like, Favoritar, Entrar na comunidade) e botão para resgatar.
-  - Baú grátis "FREE!" no mapa e quadro "MOST MONEY/s" (ranking).
+  - Presente "FREE GIFT" no mapa (no lugar do antigo baú grátis, que o dono pediu para tirar) e quadro "MOST MONEY/s" (ranking).
   - Ref: `06-free-gift-like-favorite-join.png`, `06-free-chest-and-leaderboard.png`.
   - **Falta o dono:** criar a comunidade (grupo) do jogo no Roblox e pôr o número dela em `Config.COMMUNITY_GROUP_ID` (e o nome em `Config.COMMUNITY_NAME`). Enquanto for `0`, o Free Gift diz "coming soon". A recompensa depende só de estar na comunidade: o Roblox não deixa verificar Likes nem dar prémios em troca de Like/Favorito (ver README, "Community rewards").
 

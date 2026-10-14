@@ -17,7 +17,7 @@ Config.CORRIDOR_WIDTH = 192 -- wide and open: a big flat field between two tall 
 Config.WALL_HEIGHT = 52
 Config.PLOT_SIZE = 84
 Config.PLOT_SPACING_X = 84 -- = PLOT_SIZE: neighbouring plots touch and share the fence between them
-Config.PLOT_FIRST_X = -6 -- the front plots end 24 studs before the corridor mouth (room for the free chest)
+Config.PLOT_FIRST_X = -6 -- the front plots end 24 studs before the corridor mouth (room for the free gift)
 Config.PLOT_OFFSET_Z = 84 -- plots sit at z = +/-84, the walkway runs down z = 0
 Config.WALKWAY_WIDTH = 36 -- the sand walkway down z = 0; the 24 studs between it and a plot's front fence hold its treadmill
 -- Inside a plot (owner's reference): two brown dirt beds, left and right, with a grass path down the middle
@@ -91,7 +91,7 @@ export type Zone = {
 	baseWeight: number, -- Kg of a sprouted Common, before growth
 	icon: string,
 	active: "day" | "night", -- this zone's plants earn ACTIVE_TIME_MULT during that phase
-	wakeDelay: number, -- seconds between a steal and the guard's chase (its "❗" state); see Guards below
+	wakeDelay: number, -- slack (s) on top of the guard's head start before it chases (Config.wakeDelay; see Guards below)
 }
 
 Config.ZONES = {
@@ -154,17 +154,36 @@ function Config.nestCenter(k: number): Vector3
 	return Vector3.new(Config.nestX(k), Config.GROUND_Y, Config.NEST_Z)
 end
 
--- Where seed pod `i` of zone `k` sits, from the nest's centre: a loose, natural scatter (not a ring or a
--- grid) on the sleeping boss's RIGHT, between it and the middle of the corridor (+Z, clear of its flank),
--- a little different in every zone, each resting on the floor. They stay about GUARD_HOME_OFFSET ahead of
--- its root along the run home: the guard chases at the runner's speed, so that head start along X is what
--- holds (a sideways gap closes to about half during the chase; tests/guard.spec).
-local POD_SCATTER = { { -4, 17 }, { -12, 24 }, { -5, 29 }, { -13, 16.5 }, { -8, 21 }, { -2, 25 } }
+-- How far each zone's sleeping boss reaches from its root (studs; it sleeps facing the base, -X):
+--   side:  toward the middle of the corridor (+Z), half its model's width;
+--   front: toward the base (-X), its model's front (-Z).
+-- Each is its rest bounds (as GuardAnimator measures them: BossRigs halfWidth where its pose differs) or
+-- its sleeping bones plus 2.5 studs of body, whichever reaches further (the Giant Snake sleeps curled up,
+-- the Volcano Gorilla lies forward). tests/bosses.spec measures both from the Guard assets.
+Config.BOSS_REACH = {
+	Meadow = { side = 7.1, front = 11.3 },
+	Desert = { side = 14.2, front = 16.2 },
+	Jungle = { side = 11, front = 17.8 },
+	Lava = { side = 14.8, front = 18.2 },
+	Snow = { side = 11.9, front = 13.2 },
+	Space = { side = 14.3, front = 9.3 },
+	Spirit = { side = 7.1, front = 8.1 },
+} :: { [string]: { side: number, front: number } }
+
+-- Where seed pod `i` of zone `k` sits, from the nest's centre: RIGHT next to the sleeping boss (owner
+-- request and reference, docs/references/11-pods-by-the-boss.png): a loose little cluster at its right,
+-- between it and the middle of the corridor (+Z), a few studs off its flank and at about its depth (around
+-- its root, not ahead of it toward the base), each resting on the floor, a little different in every
+-- zone. There is no head start along the run home any more: the guard's wake-up gives it instead
+-- (Config.wakeDelay).
+local POD_SCATTER = { { -5.5, 3 }, { -1, 6.5 }, { 3.5, 3 }, { 5.5, 7.5 }, { -4.5, 9.5 }, { 1.5, 11 } } -- { along its body, off its flank }
 function Config.podOffset(k: number, i: number): Vector3
 	local base = POD_SCATTER[(i - 1) % #POD_SCATTER + 1]
-	local jx = ((k * 13 + i * 7) % 5 - 2) * 0.6
-	local jz = ((k * 11 + i * 5) % 7 - 3) * 0.7
-	return Vector3.new(base[1] + jx, 1.5, base[2] + jz) -- (the pod, a 3-stud ball, rests on the floor)
+	local jx = ((k * 13 + i * 7) % 5 - 2) * 0.3
+	local jz = ((k * 11 + i * 5) % 7 - 3) * 0.2
+	local flank = Config.BOSS_REACH[Config.ZONES[k].id].side
+	-- (the pod, a 3-stud ball, rests on the floor)
+	return Vector3.new(Config.GUARD_HOME_OFFSET + base[1] + jx, 1.5, flank + base[2] + jz)
 end
 
 Config.END_X = Config.zoneStartX(#Config.ZONES + 1) -- far end of the corridor: the Spirit Garden's back wall (no finish line)
@@ -185,13 +204,14 @@ end
 -- Guards (soft gates)
 ----------------------------------------------------------------------------------------------------
 -- The guard runs exactly as fast as a player at the zone's recommended Speed, so that player escapes on
--- the head start alone: the ~28 studs between the pods and the sleeping guard (GUARD_HOME_OFFSET), plus
--- the zone's wakeDelay. The delay is slack for reaction time and lag, but it also lets slower players
--- escape, and both trade against the run home: the shorter it is, the less a slower thief loses on the way.
--- With the zone lengths above, every zone gets about 0.3 s of slack (from the smallest delay that
--- gives it), and the lowest escaping Speed lands at ~50-70% of the sign (tests/guard.spec prints the
--- table; the recommended Speeds are only ~3-4x apart from the Lava Fields on, so a thief can't be far
--- below the sign). The Meadow (req 0) is the tutorial.
+-- the head start alone. The pods lie right by the sleeping guard, so the head start is its wake-up (the
+-- "❗"): it lasts while a recommended-Speed thief runs GUARD_HEAD_START studs (the ~28 studs the pods used
+-- to lie ahead of it), the same distance in every zone, so the same balance as when it was a distance.
+-- The zone's wakeDelay adds slack for reaction time and lag, but it also lets slower players escape, and
+-- both trade against the run home: the shorter it is, the less a slower thief loses on the way. With the
+-- zone lengths above, every zone gets 0.4-0.6 s of slack, and the lowest escaping Speed lands at ~50-70%
+-- of the sign (tests/guard.spec prints the table; the recommended Speeds are only ~3-4x apart from the
+-- Lava Fields on, so a thief can't be far below the sign). The Meadow (req 0) is the tutorial.
 Config.GUARD_SPEED_FACTOR = 1 -- chase WalkSpeed = walkSpeedFor(zone.req) * this
 Config.GUARD_RETURN_FACTOR = 0.6 -- walking home is slower than chasing
 Config.CATCH_DISTANCE = 6 -- horizontal studs, root to root
@@ -199,9 +219,16 @@ Config.CHASE_TIMEOUT = 45
 Config.GUARD_SCALE = 3 -- body size multiplier ("giant")
 Config.KNOCKBACK_STUDS = 30
 Config.CATCH_STUN = 1 -- seconds the caught player can't move
+Config.GUARD_HEAD_START = 28 -- studs a recommended-Speed thief runs while the guard wakes up (Config.wakeDelay)
 
 function Config.guardChaseSpeed(k: number): number
 	return Config.walkSpeedFor(Config.ZONES[k].req) * Config.GUARD_SPEED_FACTOR
+end
+
+-- Seconds between a steal and zone k's guard's chase (its "❗" state): the time a thief at the recommended
+-- Speed takes to run GUARD_HEAD_START studs, plus the zone's wakeDelay slack.
+function Config.wakeDelay(k: number): number
+	return Config.GUARD_HEAD_START / Config.guardChaseSpeed(k) + Config.ZONES[k].wakeDelay
 end
 
 -- The "👟 700M recommended" plank by each nest (WorldBuilder) reads GREEN when your Speed reaches the
@@ -864,21 +891,6 @@ Config.COMMUNITY_GROUP_ID = 0
 Config.COMMUNITY_NAME = "Steal a Seed Community" -- what the window tells players to search for
 Config.FREE_GIFT_SPEED = 25_000 -- the Desert's recommended Speed
 Config.FREE_GIFT_AUTO_OPEN = 20 -- seconds after joining: the window opens by itself, once per account
-
--- The free chest in the base: money worth FREE_CHEST_MINUTES of the player's income ($/s with every
--- multiplier, what the HUD shows), at least FREE_CHEST_MIN, every FREE_CHEST_COOLDOWN seconds per player
--- (saved, so rejoining doesn't reset it).
-Config.FREE_CHEST_COOLDOWN = 15 * 60
-Config.FREE_CHEST_MINUTES = 5
-Config.FREE_CHEST_MIN = 1_000
-Config.FREE_CHEST_DISTANCE = 14 -- studs from the chest the player must stand within
-
-function Config.freeChestAmount(income: number): number
-	if type(income) ~= "number" or income ~= income or income < 0 then
-		income = 0
-	end
-	return math.floor(math.max(Config.FREE_CHEST_MIN, income * Config.FREE_CHEST_MINUTES * 60))
-end
 
 -- The "MOST MONEY/s" board: the global top players by current income (an OrderedDataStore), written
 -- and read every minute by each server.

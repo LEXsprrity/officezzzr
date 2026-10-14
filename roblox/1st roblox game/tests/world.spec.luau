@@ -99,7 +99,7 @@ H.test("world: plot layout contract (two dirt beds, a grass path, origin, spawn,
 	end
 end)
 
-H.test("world: nests against the left wall, pods on the floor at the boss's right, nothing under them (centre, pods, guard home)", function()
+H.test("world: nests against the left wall, pods on the floor right by the boss's right flank, nothing under them (centre, pods, guard home)", function()
 	local halfW = Config.CORRIDOR_WIDTH / 2
 	for k, nest in nests do
 		local center = Config.nestCenter(k)
@@ -114,9 +114,11 @@ H.test("world: nests against the left wall, pods on the floor at the boss's righ
 			local want = center + Config.podOffset(k, i)
 			H.ok((cf.Position - want).Magnitude < 1e-3, "pod position")
 			local rel = cf.Position - nest.guardHome
-			-- at the boss's right (toward the middle, clear of its ~14-stud flank), a head start ahead of it
-			H.ok(rel.Z >= 14 and rel.Z <= 32, `zone {k} pod {i}: at the boss's right ({rel})`)
-			H.ok(rel.X <= -Config.GUARD_HOME_OFFSET + 2 and rel.X >= -Config.GUARD_HOME_OFFSET - 16, `zone {k} pod {i}: a head start ahead of the boss ({rel})`)
+			-- right next to the boss, at its right (toward the middle): the 3-stud pod a few studs off its flank,
+			-- along its body (its root at rel 0, facing the base)
+			local off = rel.Z - 1.5 - Config.BOSS_REACH[Config.ZONES[k].id].side
+			H.ok(off >= 0.5 and off <= 7, `zone {k} pod {i}: {off} studs off the boss's right flank ({rel})`)
+			H.ok(rel.X >= -9 and rel.X <= 7, `zone {k} pod {i}: beside the boss, not ahead of it ({rel})`)
 			H.near(cf.Position.Y - Config.GROUND_Y, 1.5, 1e-6, `zone {k} pod {i}: the 3-stud pod rests on the floor`)
 			for j, other in nest.podCFrames do
 				if j ~= i then
@@ -332,7 +334,7 @@ H.test("world: no zone gates, arches, threshold lines, zone name signs or STEAL 
 	end
 end)
 
-H.test("world: beside each nest a small wooden plank on a post says the zone's recommended Speed", function()
+H.test("world: just in front of each sleeping boss a small wooden plank on a post says the zone's recommended Speed", function()
 	local Format = H.shared("Format")
 	for k, zone in Config.ZONES do
 		local folder = world.Corridor:FindFirstChild(string.format("%d_%s", k, zone.id))
@@ -355,11 +357,14 @@ H.test("world: beside each nest a small wooden plank on a post says the zone's r
 		end
 		H.eq(plank.FrontSurface, Enum.SurfaceType.Studs, `{zone.id}: studded`)
 		H.ok(post.CFrame.Position.Y + post.Size.Y / 2 <= plank.CFrame.Position.Y - plank.Size.Y / 2 + 0.01, "the post holds the plank up")
-		-- next to the nest, toward the base, facing the players coming from it
-		local nest = Config.nestCenter(k)
+		-- just in front of the sleeping boss (base side), a little to its left, a few studs from its nose,
+		-- facing the players coming from the base (owner's reference)
+		local home = Config.nestCenter(k) + Vector3.new(Config.GUARD_HOME_OFFSET, 0, 0)
+		local nose = home.X - Config.BOSS_REACH[zone.id].front
 		local flat = Vector3.new(plank.CFrame.Position.X, Config.GROUND_Y, plank.CFrame.Position.Z)
-		H.ok((flat - nest).Magnitude < 40, `{zone.id}: next to the nest ({(flat - nest).Magnitude} studs)`)
-		H.ok(flat.X < nest.X and math.abs(flat.Z) > 16 and math.abs(flat.Z) < Config.CORRIDOR_WIDTH / 2 - 10, `{zone.id}: in front of the nest, beside the run`)
+		H.ok(flat.X < nose - 1 and flat.X > nose - 6, `{zone.id}: a few studs in front of the boss's nose ({nose - flat.X})`)
+		H.ok(flat.Z < home.Z and flat.Z > home.Z - 6, `{zone.id}: a little left of the boss ({flat.Z - home.Z})`)
+		H.ok(math.abs(flat.Z) + plank.Size.X / 2 < Config.CORRIDOR_WIDTH / 2 - 4, `{zone.id}: clear of the left wall`)
 		H.ok(plank.CFrame.LookVector.X < -0.99, `{zone.id}: faces the base`)
 		local gui = plank:FindFirstChildOfClass("SurfaceGui")
 		H.ok(gui and gui.Face == Enum.NormalId.Front, `{zone.id}: a SurfaceGui on the plank's front`)

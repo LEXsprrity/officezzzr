@@ -203,8 +203,7 @@ O **ninho** fica bem no canto ESQUERDO do corredor (quem vem da base), encostado
 | `ShopStall_Trails` | só a barraca 🏃 TRAIL SHOP | praça das lojas | ~17 | 17 × 13 |
 | `ShopStall_Index` | só a barraca 📖 INDEX | praça das lojas | ~17 | 17 × 13 |
 | `ShopStall_Sell` | só a barraca SELL (vender plantas): a mesma barraca, com o toldo vermelho e branco. O anel verde no chão e o texto "SELL" continuam do jogo. Sem modelo, fica a barraca do jogo (não usa `ShopStall`) | praça das lojas | ~17 | 17 × 13 |
-| `FreeChest` | o baú grátis "FREE!" (vermelho e dourado). O círculo verde no chão, o texto "FREE!", a contagem e o prompt "Claim" continuam do jogo. Frente = virada para a base | canto das recompensas, junto ao muro ao lado da entrada do corredor | ~6 | ~7 × 5 |
-| `MoneyBoard` | a moldura do quadro "MOST MONEY/s" (moldura com studs, o topo e o pedestal). O painel com o título e a lista dos 10 melhores continua do jogo (12 × 18 studs, a 4 studs do chão) | ao lado do baú grátis | ~23 | ~16 |
+| `MoneyBoard` | a moldura do quadro "MOST MONEY/s" (moldura com studs, o topo e o pedestal). O painel com o título e a lista dos 10 melhores continua do jogo (12 × 18 studs, a 4 studs do chão) | ao lado do presente FREE GIFT | ~23 | ~16 |
 
 #### Esteiras por nível (`Treadmill_T1` ... `Treadmill_T10`)
 

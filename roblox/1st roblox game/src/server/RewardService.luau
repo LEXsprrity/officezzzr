@@ -2,9 +2,8 @@
 --   * Free Gift: ClaimReward("Gift") from the window's CLAIM button. The server checks the community
 --     (Player:IsInGroupAsync, then GroupService for a player who joined during this session), grants once per
 --     account and toasts. The window opens by itself once, Config.FREE_GIFT_AUTO_OPEN s after joining, and
---     from the gift box placed here beside the free chest (GiftBox; its prompt is handled on the client).
---   * Free chest: the chest's ProximityPrompt in the base. Distance, rate limit and the per-player
---     cooldown are checked here; the client only draws the countdown.
+--     from the gift box placed here on the map's GiftSpot, where the free chest used to stand (GiftBox; its
+--     prompt is handled on the client). There is no free chest any more (owner request).
 --   * "MOST MONEY/s": every Config.MONEY_BOARD_INTERVAL s this server writes its players' income to an
 --     OrderedDataStore and reads the top rows back. If the DataStore can't be used (Studio without API
 --     access, outages) the board shows this server's players instead.
@@ -14,7 +13,6 @@ local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Shared = ReplicatedStorage:WaitForChild("Shared")
 local Config = require(Shared:WaitForChild("Config"))
-local Format = require(Shared:WaitForChild("Format"))
 local Net = require(script.Parent:WaitForChild("Net"))
 local Sessions = require(script.Parent:WaitForChild("Sessions"))
 local Rewards = require(script.Parent:WaitForChild("Rewards"))
@@ -26,10 +24,8 @@ local RewardService = {}
 
 local REQUESTS_PER_SECOND = 8
 local GIFT_CLAIM_GAP = 2 -- seconds between two gift checks of one player
-local CHEST_CLAIM_GAP = 1
 
 local members: Rewards.MemberCache = {}
-local chest: BasePart? = nil
 local board: WorldBuilder.MoneyBoardLabels? = nil
 
 ----------------------------------------------------------------------------------------------------
@@ -87,39 +83,7 @@ local function claimGift(player: Player)
 	Net.toast(player, text, color)
 	Net.LootEvent:FireClient(player, "FreeGift", { result = result, claimed = s.profile.freeGift })
 end
-
-----------------------------------------------------------------------------------------------------
--- Free chest
-----------------------------------------------------------------------------------------------------
-local function claimChest(player: Player)
-	local s = Sessions.get(player)
-	local host = chest
-	if not s or not host then
-		return
-	end
-	local now = os.clock()
-	if now < (s.cooldowns.Chest or 0) then
-		return
-	end
-	s.cooldowns.Chest = now + CHEST_CLAIM_GAP
-	local char = player.Character
-	local root = char and char:FindFirstChild("HumanoidRootPart") :: BasePart?
-	if not root or (root.Position - host.Position).Magnitude > Config.FREE_CHEST_DISTANCE then
-		return
-	end
-	local amount, left = Rewards.claimChest(s.profile, os.time(), s.income * Sessions.moneyMult(s))
-	if not amount then
-		Net.toast(player, `🎁 The free chest is ready again in {Format.clock(left)}.`, "blue")
-		Sessions.push(player, { chestAt = s.profile.chestAt }) -- in case the client's countdown is off
-		return
-	end
-	Sessions.pushCore(s)
-	Sessions.push(player, { chestAt = s.profile.chestAt })
-	Net.toast(player, `🎁 Free chest: +{Format.money(amount)}! Come back in {Format.clock(left)}.`, "gold")
-	Net.LootEvent:FireClient(player, "FreeChest", { amount = amount, cooldown = left }) -- the cash sound (Effects)
-	Net.IncomePopup:FireClient(player, amount, host.Position + Vector3.new(0, 4, 0))
-end
-
+
 ----------------------------------------------------------------------------------------------------
 -- "MOST MONEY/s" board
 ----------------------------------------------------------------------------------------------------
@@ -195,7 +159,8 @@ end
 ----------------------------------------------------------------------------------------------------
 -- `world`: the adopted map (Workspace.World).
 function RewardService.init(world: Instance?)
-	chest, board = WorldBuilder.rewardPoints(world)
+	local giftSpot, labels = WorldBuilder.rewardPoints(world)
+	board = labels
 	Net.ClaimReward.OnServerEvent:Connect(function(player: Player, kind: any)
 		local s = Sessions.get(player)
 		if not s or not Sessions.allowRequest(s, REQUESTS_PER_SECOND) then
@@ -205,12 +170,8 @@ function RewardService.init(world: Instance?)
 			claimGift(player)
 		end
 	end)
-	local prompt = chest and chest:FindFirstChildOfClass("ProximityPrompt")
-	if prompt then
-		prompt.Triggered:Connect(claimChest)
-	end
-	if chest then
-		GiftBox.build(chest)
+	if giftSpot then
+		GiftBox.build(giftSpot)
 	end
 end
 

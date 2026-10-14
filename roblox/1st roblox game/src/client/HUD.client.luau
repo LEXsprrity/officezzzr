@@ -181,7 +181,7 @@ end
 -- Left side, kept minimal, with no panels behind the numbers:
 --   * bottom-left: Speed (with a "+" that opens the Shop's Speed section) in pink, money in green;
 --   * middle of the left edge: the Shop / Index buttons and the Slow Mode switch. (Trails opens from
---     the TRAIL SHOP stall in the plaza, the Free Gift from the gift box by the free chest.)
+--     the TRAIL SHOP stall in the plaza, the Free Gift from the gift box where the free chest stood.)
 -- Sizes are design pixels: the screen is 900 tall at UIScale 1, about 680 on a landscape phone (the
 -- 0.55 minimum scale). The button column shrinks on its own if it would run into the Speed and money.
 ----------------------------------------------------------------------------------------------------

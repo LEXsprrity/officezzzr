@@ -1,12 +1,12 @@
--- The Free Gift's box in the world, next to the free chest ("like the treasure"): a pink present with a
+-- The Free Gift's box in the world, where the free chest used to stand (owner request): a pink present with a
 -- gold ribbon and bow on a glowing pink circle, "FREE GIFT" floating above it and a ProximityPrompt
 -- (attribute FreeGift) that opens the Free Gift window on the client (Rewards.client). Built at runtime
--- by RewardService beside the chest the map has, so it follows the chest wherever the map puts it.
+-- by RewardService on the map's gift spot (Role "GiftSpot", WorldBuilder), so it follows the spot wherever the
+-- map puts it.
 -- Opening the window decides nothing: the window's CLAIM! button asks the server (ClaimReward "Gift").
 local GiftBox = {}
 
-GiftBox.OFFSET = 11 -- studs from the chest, along the chest's right (away from the MOST MONEY/s board)
-GiftBox.CIRCLE = 9 -- the glowing circle's diameter (the chest's is 11: they don't touch)
+GiftBox.CIRCLE = 9 -- the glowing circle's diameter
 GiftBox.LABEL = "FREE GIFT"
 
 local PINK = Color3.fromRGB(240, 70, 175)
@@ -40,17 +40,16 @@ local function disc(parent: Instance, name: string, diameter: number, cf: CFrame
 	return p
 end
 
--- The ground point beside `chest` (the Role "FreeChest" prompt part: 5 tall, its bottom 0.6 above the
--- ground), facing the way the chest faces.
-function GiftBox.groundCFrame(chest: BasePart): CFrame
-	return chest.CFrame * CFrame.new(GiftBox.OFFSET, -(chest.Size.Y / 2 + 0.6), 0)
+-- The ground point under `spot` (the Role "GiftSpot" part, resting on the ground), facing the way it faces.
+function GiftBox.groundCFrame(spot: BasePart): CFrame
+	return spot.CFrame * CFrame.new(0, -spot.Size.Y / 2, 0)
 end
 
--- Builds the box beside `chest`, in the chest's parent. Returns the model and its prompt.
-function GiftBox.build(chest: BasePart): (Model, ProximityPrompt)
+-- Builds the box on `spot`, in the spot's parent. Returns the model and its prompt.
+function GiftBox.build(spot: BasePart): (Model, ProximityPrompt)
 	local model = Instance.new("Model")
 	model.Name = "GiftBox"
-	local ground = GiftBox.groundCFrame(chest)
+	local ground = GiftBox.groundCFrame(spot)
 	local function at(x: number, y: number, z: number): CFrame
 		return ground * CFrame.new(x, y, z)
 	end
@@ -80,7 +79,7 @@ function GiftBox.build(chest: BasePart): (Model, ProximityPrompt)
 	prompt:SetAttribute("FreeGift", true)
 	prompt.Parent = body
 
-	-- "FREE GIFT" above it, pink like the box (the chest's "FREE!" is green)
+	-- "FREE GIFT" above it, pink like the box
 	local gui = Instance.new("BillboardGui")
 	gui.Name = "GiftSign"
 	gui.Size = UDim2.fromScale(10, 3.2)
@@ -103,7 +102,7 @@ function GiftBox.build(chest: BasePart): (Model, ProximityPrompt)
 	stroke.Parent = label
 	label.Parent = gui
 
-	model.Parent = chest.Parent
+	model.Parent = spot.Parent
 	return model, prompt
 end
 

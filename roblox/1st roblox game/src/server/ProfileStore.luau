@@ -106,7 +106,7 @@ export type Profile = {
 	lastSeen: number,
 	freeGift: boolean, -- the Free Gift (community Speed) was claimed: never again on this account
 	giftShown: boolean, -- the Free Gift window already opened by itself once
-	chestAt: number, -- unix seconds of the last free chest claim (0 = never)
+	chestAt: number, -- unix seconds of the last free chest claim (0 = never); the chest is gone, kept so saves round-trip
 }
 
 function ProfileStore.defaultProfile(): Profile

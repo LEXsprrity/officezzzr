@@ -13,7 +13,7 @@ export type Brain = {
 	home: Vector3,
 	chaseSpeed: number,
 	returnSpeed: number,
-	wakeDelay: number, -- seconds from alert to chase (the zone's wakeDelay)
+	wakeDelay: number, -- seconds from alert to chase (Config.wakeDelay)
 	wakeAt: number,
 	chaseStarted: number,
 	stunnedUntil: number,
@@ -38,7 +38,7 @@ function GuardBrain.new(zoneIndex: number, home: Vector3): Brain
 		home = home,
 		chaseSpeed = chase,
 		returnSpeed = math.max(Config.BASE_WALKSPEED, chase * Config.GUARD_RETURN_FACTOR),
-		wakeDelay = Config.ZONES[zoneIndex].wakeDelay,
+		wakeDelay = Config.wakeDelay(zoneIndex),
 		wakeAt = 0,
 		chaseStarted = 0,
 		stunnedUntil = 0,

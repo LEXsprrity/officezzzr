@@ -159,7 +159,6 @@ function Sessions.pushFull(s: Session)
 		index = table.clone(p.index),
 		reachedEnd = p.reachedEnd,
 		freeGift = p.freeGift, -- the Free Gift window's CLAIMED state
-		chestAt = p.chestAt, -- the free chest's last claim (the client draws its countdown)
 		passes = table.clone(s.passes),
 		carrying = carryView(s),
 		plot = if s.plot then s.plot.index else nil,

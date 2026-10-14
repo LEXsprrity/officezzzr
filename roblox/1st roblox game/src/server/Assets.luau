@@ -32,7 +32,7 @@ Assets.SLOTS = {
 	"Space_Planet", "Space_Crystal", "Space_Asteroid", "Space_Mushroom", "Space_UFO",
 	"Spirit_Torii", "Spirit_Lantern", "Spirit_CherryTree",
 	"Treadmill", "UpgradeSign", "ShopStall", "ShopStall_Shop", "ShopStall_Trails", "ShopStall_Index", "ShopStall_Sell",
-	"FreeChest", "MoneyBoard",
+	"MoneyBoard",
 } :: { string }
 for _, zone in Config.ZONES do
 	table.insert(Assets.SLOTS, "Creature_" .. compact(zone.seed))
