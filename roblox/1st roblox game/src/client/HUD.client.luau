@@ -1192,7 +1192,7 @@ local function renderShop(): boolean
 	end
 	note(`🎒 Seed bag {bagCount}/{Config.SEED_BAG_MAX}{if bagFull then " (full: plant some first!)" else ""} · plant bagged seeds from the 🌱 Seeds menu at your plot's pad`, nextOrder(), { "Bag", "Seeds" })
 
-	-- Plot upgrade: money (also on the board at your plot's gate), and Robux once Config sells it
+	-- Plot upgrade: money or Robux (also on the board at your plot's gate)
 	section("PLOT UPGRADE", nextOrder(), HEADING_GREEN, "PlotUpgrade")
 	local plotGrid = cardGrid(nextOrder())
 	local plotColor = Color3.fromRGB(90, 190, 90)
@@ -1207,14 +1207,11 @@ local function renderShop(): boolean
 	watchMoney(function()
 		plotButton.BackgroundColor3 = if price and stats.money >= price then COLORS.buy else COLORS.disabled
 	end)
-	-- The same level for Robux, when Config sells it (Config.plotUpgradeProduct: the product for the
-	-- plot's current price tier): a purple R$ button beside the $ one, like the board at the gate.
-	local plotProductFor = (Config :: any).plotUpgradeProduct
-	local plotProductName, plotProduct = nil, nil
-	if price and type(plotProductFor) == "function" then
-		plotProductName, plotProduct = plotProductFor(level)
-	end
-	if plotProductName and plotProduct then
+	-- The same level for Robux: a purple R$ button beside the $ one, like the board at the gate. The
+	-- product is the one for the plot's current price tier (looked up on every render, so it follows
+	-- plotLevel); none at the last level.
+	local plotProductName, plotProduct = Config.plotUpgradeProduct(level)
+	if price and plotProductName and plotProduct then
 		plotButton.Size = UDim2.new(0.55, -10, 0, 50)
 		local robuxButton = chunky(plotCard, Format.robux(robuxPrice(plotProduct)), if plotProduct.id == 0 then SOON_PURPLE else COLORS.robux,
 			UDim2.new(0.45, -10, 0, 50), function()
