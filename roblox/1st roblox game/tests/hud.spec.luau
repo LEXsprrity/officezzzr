@@ -189,4 +189,46 @@ H.test("Shop: bright cards with light rays, green R$ buttons, no filler text or 
 	end
 end)
 
+H.test("HUD: no zone / recommended-Speed banner at the top; the carry banner takes its place", function()
+	for _, gone in { "zoneBanner", "zoneLabel", "lastZone", "zoneAtX" } do
+		H.ok(not string.find(HUD, gone, 1, true), `"{gone}" is gone from the HUD`)
+	end
+	H.ok(not string.find(HUD, "string.upper(z.name)", 1, true), "no \"SNOW PEAKS · Rec. Speed\" text")
+	local carry = string.match(HUD, "local carryBanner = new%(\"Frame\", (%b{})")
+	H.ok(carry and string.find(carry, "Position = UDim2.new(0.5, 0, 0, 8)", 1, true), "the carry banner sits at the top")
+end)
+
+H.test("HUD: Shop / Index / Slow Mode are centred on the left edge; Speed and money stay bottom-left", function()
+	local column = string.match(HUD, "local leftColumn = new%(\"Frame\", (%b{})")
+	H.ok(column and string.find(column, "AnchorPoint = Vector2.new(0, 0.5), Position = UDim2.new(0, 14, 0.5, 0)", 1, true), "anchored at the middle")
+	local layout = string.match(HUD, "local leftColumn = new%(\"Frame\", %b{}, (%b{})")
+	H.ok(layout and string.find(layout, "VerticalAlignment.Center", 1, true), "its buttons centred in it")
+	local statsFrame = string.match(HUD, "local statsFrame = new%(\"Frame\", (%b{})")
+	H.ok(statsFrame and string.find(statsFrame, "AnchorPoint = Vector2.new(0, 1)", 1, true), "Speed and money at the bottom")
+	H.ok(string.find(HUD, "height / 2 - STATS_BOTTOM - STATS_H", 1, true), "the column shrinks before it reaches them")
+end)
+
+H.test("HUD: bright windows: the modal body takes the bar's colours, no dark slate", function()
+	for _, gone in { "BODY_COLOR", "SELL_DARK", "Color3.fromRGB(44, 50, 66)", "Color3.fromRGB(52, 58, 76)", "Color3.fromRGB(28, 24, 46)" } do
+		H.ok(not string.find(HUD, gone, 1, true), `"{gone}" is gone from the HUD`)
+	end
+	H.ok(string.find(HUD, "modal.BackgroundColor3 = window.from:Lerp(window.to, 0.5):Lerp(WHITE, 0.25)", 1, true), "tinted per window")
+	H.ok(not string.find(REWARDS, "Color3.fromRGB(44, 50, 66)", 1, true), "the Free Gift window is bright too")
+end)
+
+H.test("ZoneBanner.client: entering a zone flashes its name and a face for ~2 s (from Config.zoneAtX)", function()
+	H.ok(fs.isFile("src/client/ZoneBanner.client.luau"), "the script exists")
+	local BANNER = fs.readFile("src/client/ZoneBanner.client.luau")
+	H.ok(string.find(BANNER, "Config.zoneAtX(root.Position.X)", 1, true), "zone from Config.zoneAtX")
+	H.ok(string.find(BANNER, "local HOLD = 2", 1, true), "holds about two seconds")
+	H.ok(string.find(BANNER, "CanvasGroup", 1, true) and string.find(BANNER, "{ GroupTransparency = 0 }", 1, true), "fades in as one")
+	H.ok(string.find(BANNER, "{ GroupTransparency = 1, Position", 1, true), "fades and slides out")
+	H.ok(string.find(BANNER, "NumberSequenceKeypoint.new(0, 1)", 1, true) and string.find(BANNER, "NumberSequenceKeypoint.new(1, 1)", 1, true),
+		"the strip fades out at both ends")
+	H.ok(string.find(BANNER, "\"Your Base\"", 1, true), "back at the base")
+	for _, zone in Config.ZONES do
+		H.ok(string.find(BANNER, `%s{zone.id} = \{ color = Color3.fromRGB%(%d+, %d+, %d+%), face = "[^"]+" \}`), `{zone.id} has a colour and a face`)
+	end
+end)
+
 return nil

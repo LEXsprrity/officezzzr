@@ -153,33 +153,26 @@ local function toast(message: string, color: string?, seconds: number?)
 end
 
 ----------------------------------------------------------------------------------------------------
--- Top: zone banner + carry banner
+-- Top: carry banner (entering a zone flashes its name below it: ZoneBanner.client)
 ----------------------------------------------------------------------------------------------------
-local zoneBanner = new("Frame", {
-	AnchorPoint = Vector2.new(0.5, 0), Position = UDim2.new(0.5, 0, 0, 8), Size = UDim2.fromOffset(460, 44),
-	BackgroundColor3 = COLORS.money, Visible = false, Parent = gui,
-}, deco(12))
-local zoneLabel = text(zoneBanner, { Size = UDim2.new(1, -16, 1, -8), Position = UDim2.fromOffset(8, 4) })
-
 local carryBanner = new("Frame", {
-	AnchorPoint = Vector2.new(0.5, 0), Position = UDim2.new(0.5, 0, 0, 58), Size = UDim2.fromOffset(460, 50),
+	AnchorPoint = Vector2.new(0.5, 0), Position = UDim2.new(0.5, 0, 0, 8), Size = UDim2.fromOffset(460, 50),
 	BackgroundColor3 = COLORS.gold, Visible = false, Parent = gui,
 }, deco(12))
 local carryLabel = text(carryBanner, { Size = UDim2.new(1, -16, 1, -8), Position = UDim2.fromOffset(8, 4), TextColor3 = WHITE })
 
 ----------------------------------------------------------------------------------------------------
--- Bottom-left, stacked bottom-up and kept minimal, with no panels behind the numbers:
---   * Speed (with a "+" that opens the Shop's Speed section) in pink, money in green;
---   * the Shop / Index buttons and the Slow Mode switch. (Trails opens from the TRAIL SHOP stall in
---     the plaza, the Free Gift from the gift box by the free chest.)
+-- Left side, kept minimal, with no panels behind the numbers:
+--   * bottom-left: Speed (with a "+" that opens the Shop's Speed section) in pink, money in green;
+--   * middle of the left edge: the Shop / Index buttons and the Slow Mode switch. (Trails opens from
+--     the TRAIL SHOP stall in the plaza, the Free Gift from the gift box by the free chest.)
 -- Sizes are design pixels: the screen is 900 tall at UIScale 1, about 680 on a landscape phone (the
--- 0.55 minimum scale). The button column shrinks on its own if it would run into the top of the screen.
+-- 0.55 minimum scale). The button column shrinks on its own if it would run into the Speed and money.
 ----------------------------------------------------------------------------------------------------
 local SPEED_PINK = Color3.fromRGB(255, 70, 150)
 local MONEY_GREEN = Color3.fromRGB(85, 240, 70)
 local STATS_H, LEFT_H = 100, 194 -- LEFT_H: 2 side buttons + Slow Mode
 local STATS_BOTTOM = 10
-local LEFT_BOTTOM = STATS_BOTTOM + STATS_H + 10
 
 local openModal: (name: string) -> ()
 local openShopAt: (section: string) -> ()
@@ -232,29 +225,34 @@ plusBadge.Activated:Connect(function()
 	openShopAt("Speed")
 end)
 
--- Shop / Index, then the Slow Mode switch, above the Speed and money.
+-- Shop / Index, then the Slow Mode switch, centred on the left edge (the Speed and money stay bottom-left).
 local leftColumn = new("Frame", {
-	Name = "LeftColumn", BackgroundTransparency = 1, AnchorPoint = Vector2.new(0, 1), Position = UDim2.new(0, 14, 1, -LEFT_BOTTOM),
+	Name = "LeftColumn", BackgroundTransparency = 1, AnchorPoint = Vector2.new(0, 0.5), Position = UDim2.new(0, 14, 0.5, 0),
 	Size = UDim2.fromOffset(180, LEFT_H), Parent = gui,
 }, {
-	new("UIListLayout", { Padding = UDim.new(0, 8), SortOrder = Enum.SortOrder.LayoutOrder, VerticalAlignment = Enum.VerticalAlignment.Bottom }),
+	new("UIListLayout", { Padding = UDim.new(0, 8), SortOrder = Enum.SortOrder.LayoutOrder, VerticalAlignment = Enum.VerticalAlignment.Center }),
 })
 local leftScale = new("UIScale", { Parent = leftColumn })
 
+-- Bright, lit buttons: the colour with a light top and a soft white shine.
 local function sideButton(order: number, label: string, icon: string, emoji: string, color: Color3, onClick: () -> ())
 	local b = new("TextButton", {
-		Name = label, Size = UDim2.fromOffset(92, 74), BackgroundColor3 = color, Text = "", AutoButtonColor = true, LayoutOrder = order, Parent = leftColumn,
+		Name = label, Size = UDim2.fromOffset(92, 74), BackgroundColor3 = WHITE, Text = "", AutoButtonColor = true, LayoutOrder = order, Parent = leftColumn,
 	}, deco(14, 4))
-	new("UIGradient", { Rotation = 90, Color = ColorSequence.new(WHITE, Color3.fromRGB(200, 200, 200)), Parent = b })
+	new("UIGradient", { Rotation = 90, Color = ColorSequence.new(color:Lerp(WHITE, 0.3), color), Parent = b })
+	new("Frame", { Size = UDim2.fromScale(1, 0.5), BackgroundColor3 = WHITE, BorderSizePixel = 0, Parent = b }, {
+		new("UICorner", { CornerRadius = UDim.new(0, 14) }),
+		new("UIGradient", { Rotation = 90, Transparency = NumberSequence.new(0.6, 1) }),
+	})
 	iconLabel(b, icon, emoji, { Size = UDim2.fromOffset(46, 46), AnchorPoint = Vector2.new(0.5, 0), Position = UDim2.new(0.5, 0, 0, 2) })
 	bold(b, 3, { Text = label, Size = UDim2.new(1, -6, 0, 26), Position = UDim2.new(0, 3, 1, -28) })
 	b.Activated:Connect(onClick)
 end
 
-sideButton(1, "Shop", "Shop", "🛒", Color3.fromRGB(70, 210, 70), function()
+sideButton(1, "Shop", "Shop", "🛒", Color3.fromRGB(95, 230, 45), function()
 	openModal("Shop")
 end)
-sideButton(2, "Index", "Index", "📖", Color3.fromRGB(40, 200, 235), function()
+sideButton(2, "Index", "Index", "📖", Color3.fromRGB(35, 195, 255), function()
 	openModal("Index")
 end)
 
@@ -262,10 +260,10 @@ end)
 local slowMode = false
 local slowRow = new("TextButton", { Name = "SlowMode", Size = UDim2.new(1, 0, 0, 30), BackgroundTransparency = 1, Text = "", LayoutOrder = 3, Parent = leftColumn })
 local slowTrack = new("Frame", {
-	Size = UDim2.fromOffset(54, 28), Position = UDim2.fromOffset(0, 1), BackgroundColor3 = Color3.fromRGB(80, 80, 92), Parent = slowRow,
+	Size = UDim2.fromOffset(54, 28), Position = UDim2.fromOffset(0, 1), BackgroundColor3 = Color3.fromRGB(150, 165, 215), Parent = slowRow,
 }, { new("UICorner", { CornerRadius = UDim.new(1, 0) }), new("UIStroke", { Thickness = 3, Color = INK }) })
 local slowKnob = new("Frame", {
-	Size = UDim2.fromOffset(22, 22), Position = UDim2.fromOffset(3, 3), BackgroundColor3 = Color3.fromRGB(195, 195, 205), Parent = slowTrack,
+	Size = UDim2.fromOffset(22, 22), Position = UDim2.fromOffset(3, 3), BackgroundColor3 = WHITE, Parent = slowTrack,
 }, { new("UICorner", { CornerRadius = UDim.new(1, 0) }), new("UIStroke", { Thickness = 2, Color = INK }) })
 bold(slowRow, 3, { Text = "Slow Mode", Size = UDim2.new(1, -62, 0, 24), Position = UDim2.fromOffset(62, 3), TextXAlignment = Enum.TextXAlignment.Left })
 
@@ -283,9 +281,11 @@ slowRow.Activated:Connect(function()
 	local info = TweenInfo.new(0.15, Enum.EasingStyle.Quad)
 	TweenService:Create(slowKnob, info, {
 		Position = UDim2.fromOffset(if slowMode then 29 else 3, 3),
-		BackgroundColor3 = if slowMode then Color3.fromRGB(80, 225, 70) else Color3.fromRGB(195, 195, 205),
+		BackgroundColor3 = if slowMode then Color3.fromRGB(190, 255, 150) else WHITE,
 	}):Play()
-	TweenService:Create(slowTrack, info, { BackgroundColor3 = if slowMode then Color3.fromRGB(40, 110, 45) else Color3.fromRGB(80, 80, 92) }):Play()
+	TweenService:Create(slowTrack, info, {
+		BackgroundColor3 = if slowMode then Color3.fromRGB(70, 205, 60) else Color3.fromRGB(150, 165, 215),
+	}):Play()
 	applySlow()
 end)
 local function hookHumanoid(char: Model)
@@ -302,10 +302,11 @@ if player.Character then
 	task.spawn(hookHumanoid, player.Character)
 end
 
--- Short screens (phones): shrink the button column so it stays below the top of the screen.
+-- Short screens (phones): shrink the centred button column so its bottom stays above the Speed and money.
 local function fitLeftColumn()
 	local height = gui.AbsoluteSize.Y / uiScale.Scale
-	leftScale.Scale = math.clamp((height - LEFT_BOTTOM - 8) / LEFT_H, 0.5, 1)
+	local room = height / 2 - STATS_BOTTOM - STATS_H - 10 -- from the middle of the screen down to the readout
+	leftScale.Scale = math.clamp(room / (LEFT_H / 2), 0.5, 1)
 end
 
 ----------------------------------------------------------------------------------------------------
@@ -541,7 +542,7 @@ end
 
 for _, tab in { { "Seeds", "🌱" }, { "Plants", "🪴" } } do
 	local name = tab[1] -- also the icon key
-	button(rightTabs, tab[2], Color3.fromRGB(110, 210, 120), UDim2.fromOffset(70, 70), function()
+	button(rightTabs, tab[2], Color3.fromRGB(110, 235, 80), UDim2.fromOffset(70, 70), function()
 		if sideTab == name then
 			sideTab = nil
 			sidePanel.Visible = false
@@ -555,8 +556,9 @@ end
 
 ----------------------------------------------------------------------------------------------------
 -- Modals: Shop, Trail Shop and Index share one chunky window, like the reference: a coloured title bar
--- (light diagonal stripes, a shine, the big outlined title) with a red square X, over a dark slate body
--- with a faint stud pattern. Each window has its own bar colour (WINDOWS). The body scrolls down (Shop,
+-- (light diagonal stripes, a shine, the big outlined title) with a red square X, over a bright body
+-- (the bar's colours, lightened) with a faint stud pattern. Each window has its own colours
+-- (WINDOWS). The body scrolls down (Shop,
 -- Index) or sideways (Trail Shop: one row of tall cards, a scrollbar at the bottom, arrows on the sides).
 -- Sizes are design pixels; modalScale shrinks the whole window to fit small screens (fitModal).
 ----------------------------------------------------------------------------------------------------
@@ -564,7 +566,6 @@ local MODAL_W, MODAL_H, TITLE_H = 860, 600, 84
 local MODAL_PAD = 14 -- the body's inset from the window's edges
 local SCROLLBAR = 14
 local FRAME_INK = Color3.fromRGB(16, 18, 26)
-local BODY_COLOR = Color3.fromRGB(44, 50, 66)
 local NOTE_COLOR = Color3.fromRGB(215, 222, 240)
 local NUMBER_GREEN = "#5FFF3C" -- the "x2" on the trail cards' Speed pill
 local HEADING_GOLD = Color3.fromRGB(255, 214, 50)
@@ -613,11 +614,11 @@ end
 
 local modal = new("Frame", {
 	AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.5), Size = UDim2.fromOffset(MODAL_W, MODAL_H),
-	BackgroundColor3 = BODY_COLOR, Active = true, Visible = false, ZIndex = 10, Parent = gui,
+	BackgroundColor3 = WHITE, Active = true, Visible = false, ZIndex = 10, Parent = gui, -- tinted per window (openModal)
 }, {
 	new("UICorner", { CornerRadius = UDim.new(0, 18) }),
 	new("UIStroke", { Thickness = 6, Color = FRAME_INK, ApplyStrokeMode = Enum.ApplyStrokeMode.Border }),
-	new("UIGradient", { Rotation = 90, Color = ColorSequence.new(WHITE, Color3.fromRGB(190, 192, 205)) }),
+	new("UIGradient", { Rotation = 90, Color = ColorSequence.new(WHITE, Color3.fromRGB(215, 218, 232)) }),
 })
 local modalScale = new("UIScale", { Parent = modal })
 
@@ -813,6 +814,7 @@ openModal = function(name: string)
 	local window = WINDOWS[name]
 	modalName = name
 	titleGradient.Color = ColorSequence.new(window.from, window.to)
+	modal.BackgroundColor3 = window.from:Lerp(window.to, 0.5):Lerp(WHITE, 0.25) -- a bright body in the bar's colours
 	barBottomGradient.Color = titleGradient.Color
 	local tokens = Icons.TOKENS[window.icon]
 	Icons.set(modalTitle, window.icon, `{if tokens then tokens[1] .. " " else ""}{window.title}`, ICON.big)
@@ -996,7 +998,7 @@ do
 		for i, rarity in Config.RARITIES do
 			local pct = odds.rarities[i]
 			local row = new("Frame", {
-				Size = UDim2.new(1, 0, 1 / rows, -3), BackgroundColor3 = Color3.fromRGB(28, 24, 46), LayoutOrder = i, Parent = holder,
+				Size = UDim2.new(1, 0, 1 / rows, -3), BackgroundColor3 = FRAME_INK, BackgroundTransparency = 0.55, LayoutOrder = i, Parent = holder,
 			}, { new("UICorner", { CornerRadius = UDim.new(0, 6) }) })
 			new("Frame", {
 				Size = UDim2.new(math.clamp(pct / 100, 0.03, 1), 0, 1, 0), BackgroundColor3 = rarity.color, BackgroundTransparency = 0.45, Parent = row,
@@ -1357,14 +1359,14 @@ local function renderIndex()
 		for r, rarity in Config.RARITIES do
 			local got = stats.index[`{k}:{r}`] == true
 			local cell = new("Frame", {
-				Size = UDim2.new(1 / rarities, -8 * (rarities - 1) / rarities, 1, 0), BackgroundColor3 = Color3.fromRGB(52, 58, 76), LayoutOrder = r, Parent = cells,
+				Size = UDim2.new(1 / rarities, -8 * (rarities - 1) / rarities, 1, 0), BackgroundColor3 = zone.ui:Lerp(WHITE, 0.5), LayoutOrder = r, Parent = cells,
 			}, deco(10, 3))
 			if got then
 				shade(cell, rarity.color, 0.3, 0.2)
 			end
 			bold(cell, if got then 3 else 2, {
 				Text = if got then rarity.id else "???", Size = UDim2.new(1, -10, 1, -12), Position = UDim2.fromOffset(5, 6),
-				TextColor3 = if got then WHITE else Color3.fromRGB(150, 156, 175),
+				TextColor3 = WHITE, TextTransparency = if got then 0 else 0.15,
 			})
 		end
 	end
@@ -1386,7 +1388,7 @@ do
 	WINDOWS.Sell = { title = "Sell", icon = "Money", from = Color3.fromRGB(255, 70, 45), to = Color3.fromRGB(255, 150, 30) }
 	local SELL_RED = Color3.fromRGB(235, 60, 50)
 	local SELL_ORANGE = Color3.fromRGB(255, 140, 30)
-	local SELL_DARK = Color3.fromRGB(52, 58, 76)
+	local SELL_CARD = Color3.fromRGB(85, 125, 235) -- the cards' body under the rarity band
 	local SELL_CARD_W, SELL_CARD_H = 190, 252
 
 	local function rarityIndex(id: string): number
@@ -1462,7 +1464,7 @@ do
 		local rarity = Config.RARITIES[p.rarity]
 		local mut = Config.mutationById(p.mutation)
 		local zone = Config.ZONES[p.zone]
-		local c = new("Frame", { BackgroundColor3 = SELL_DARK, LayoutOrder = order, Parent = grid }, {
+		local c = new("Frame", { BackgroundColor3 = SELL_CARD, LayoutOrder = order, Parent = grid }, {
 			new("UICorner", { CornerRadius = UDim.new(0, 14) }),
 			new("UIStroke", { Thickness = 4, Color = if mut then mut.color else FRAME_INK, ApplyStrokeMode = Enum.ApplyStrokeMode.Border }),
 		})
@@ -1939,25 +1941,10 @@ LootEvent.OnClientEvent:Connect(function(kind: string, data: any)
 end)
 
 ----------------------------------------------------------------------------------------------------
--- Per-frame bits: zone banner, timers, bat cooldown
+-- Per-frame bits: timers, bat cooldown (the zone you enter is announced by ZoneBanner.client)
 ----------------------------------------------------------------------------------------------------
-local lastZone: number? = -1
 local lastTimerUpdate = 0
 RunService.RenderStepped:Connect(function()
-	local char = player.Character
-	local root = char and char:FindFirstChild("HumanoidRootPart") :: BasePart?
-	local zone = if root then Config.zoneAtX(root.Position.X) else nil
-	if zone ~= lastZone then
-		lastZone = zone
-		zoneBanner.Visible = zone ~= nil
-	end
-	if zone then
-		local z = Config.ZONES[zone]
-		local ok = stats.speed >= z.req
-		zoneLabel.Text = `{z.icon} {string.upper(z.name)} · Rec. Speed {Format.short(z.req)}{if ok then " ✅" else " ⚠️"}`
-		zoneBanner.BackgroundColor3 = if ok then COLORS.money else COLORS.red
-	end
-
 	local left = batCooldownUntil - os.clock()
 	batShade.Size = UDim2.fromScale(1, math.clamp(left / Config.BAT_COOLDOWN, 0, 1))
 
