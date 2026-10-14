@@ -1,9 +1,11 @@
 -- Animates the zone bosses (rigged pets with a "Rig" attribute, built on the server by GuardService) on
 -- this client: every frame it poses their Bones (Bone.Transform) with BossRigs from the guard's "State"
 -- attribute, cross-fading between states, and drives the local look: footstep dust and thumps, and the
--- floating Zzz while asleep. Only bosses within ANIMATE_RANGE of the camera are posed. Near a side wall
--- the body slides inward a little (BossRigs.wallShift) so it never pokes through. Purely visual: nothing
--- here replicates or touches gameplay.
+-- floating Zzz and shut eyes (the profile's eye meshes hidden) while asleep. Only bosses within
+-- ANIMATE_RANGE of the camera are posed. Near a side wall the body slides inward a little
+-- (BossRigs.wallShift) so it never pokes through. Purely visual: nothing here replicates or touches
+-- gameplay. The Bones deform the meshes only because each MeshPart hangs off the bone host by a Motor6D
+-- (tools/export_bosses.luau, GuardBody.attach); each boss it starts on prints one line in the Output.
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local RunService = game:GetService("RunService")
 
@@ -14,7 +16,7 @@ local Config = require(Shared:WaitForChild("Config"))
 local ANIMATE_RANGE = 150 -- studs from the camera
 local WALL = Config.CORRIDOR_WIDTH / 2 - 1 -- the side walls' inner faces, less a stud
 local FULL_SPEED = 6 -- studs/s at which the gait reaches full swing
-local MAX_STRIDES = 3 -- stride cycles per second, at most (the late zones' bosses run very fast)
+local MAX_STRIDES = 3.5 -- stride cycles per second, at most (the late zones' bosses run very fast)
 
 type Boss = {
 	model: Model,
@@ -29,6 +31,8 @@ type Boss = {
 	thump: Sound,
 	zzz: BillboardGui?,
 	zLabels: { TextLabel },
+	eyes: { [BasePart]: number }, -- the eyeball meshes and their own Transparency (hidden asleep)
+	eyesShut: boolean,
 	state: string,
 	stateSince: number,
 	wokeAt: number?,
@@ -98,15 +102,16 @@ local function makeFeet(root: BasePart, hip: number): (ParticleEmitter, Sound)
 	return e, s
 end
 
-local function track(model: Model)
+-- Starts animating a boss. Returns false while its parts haven't all arrived (tried again later).
+local function track(model: Model): boolean
 	if bosses[model] or not model.Parent then
-		return
+		return true
 	end
 	local profile = BossRigs.PROFILES[model:GetAttribute("Rig") :: any]
 	local root = model:FindFirstChild("HumanoidRootPart")
 	local lo, hi = model:GetAttribute("BodyMin"), model:GetAttribute("BodyMax")
 	if not profile or not root or not root:IsA("BasePart") or typeof(lo) ~= "Vector3" or typeof(hi) ~= "Vector3" then
-		return
+		return false
 	end
 	local body: Model? = nil
 	for _, d in model:GetDescendants() do
@@ -116,8 +121,8 @@ local function track(model: Model)
 		end
 	end
 	local host = body and body.PrimaryPart
-	if not body or not host then
-		return
+	if not body or not host or not host:FindFirstChildOfClass("Bone") then
+		return false
 	end
 	local scale = tonumber(body:GetAttribute("RigScale")) or 1
 	if profile.halfWidth then
@@ -129,20 +134,47 @@ local function track(model: Model)
 	local boss: Boss = {
 		model = model, root = root, profile = profile, rig = BossRigs.rig(host, profile, scale), lo = lo, hi = hi,
 		stride = profile.stride * scale, legged = profile.legs ~= nil and #profile.legs > 0,
-		dust = dust, thump = thump, zLabels = {},
+		dust = dust, thump = thump, zLabels = {}, eyes = {}, eyesShut = false,
 		state = (model:GetAttribute("State") :: string?) or "Sleeping", stateSince = os.clock(), speed = 0, phase = 0,
 	}
+	for _, name in profile.eyes do
+		local eye = body:FindFirstChild(name)
+		if eye and eye:IsA("BasePart") then
+			boss.eyes[eye] = eye.Transparency
+		end
+	end
 	thump.PlaybackSpeed = math.clamp(1.1 - scale * 0.08, 0.45, 0.9)
 	local head = model:FindFirstChild("Head")
 	if head and head:IsA("BasePart") then
 		boss.zzz, boss.zLabels = makeZzz(head)
 	end
 	bosses[model] = boss
+	local skinned = 0
+	for _, d in body:GetChildren() do
+		if d:IsA("MeshPart") and d:FindFirstChildOfClass("Motor6D") then
+			skinned += 1
+		end
+	end
+	-- (one line per boss in the Output: what to look at when a boss doesn't move)
+	print(`[GuardAnimator] animating {model.Name} ({profile.pet}): {#boss.rig.joints} bones, {skinned} meshes joined to them`)
+	return true
+end
+
+-- Eyes closed asleep: the eyeballs hide (the lids stay), open again on waking.
+local function shutEyes(boss: Boss, shut: boolean)
+	if boss.eyesShut == shut then
+		return
+	end
+	boss.eyesShut = shut
+	for eye, own in boss.eyes do
+		eye.Transparency = if shut then 1 else own
+	end
 end
 
 local function untrack(model: Model)
 	local boss = bosses[model]
 	if boss then
+		shutEyes(boss, false)
 		for _, d in { boss.zzz, boss.thump, boss.dust.Parent } do
 			if d then
 				d:Destroy()
@@ -165,7 +197,7 @@ local function animate(boss: Boss, t: number, dt: number, serverNow: number)
 	end
 
 	-- Ground speed from how far the root moved, smoothed; it drives the stride phase.
-	local pos = root.Position
+	local pos = root.CFrame.Position
 	if boss.lastPos and dt > 0 then
 		local d = pos - boss.lastPos
 		local v = Vector3.new(d.X, 0, d.Z).Magnitude / dt
@@ -204,6 +236,7 @@ local function animate(boss: Boss, t: number, dt: number, serverNow: number)
 	end
 	boss.dust.Rate = if moving then math.min(boss.speed, 120) * (if state == "Chasing" then 0.6 else 0.25) else 0
 
+	shutEyes(boss, state == "Sleeping")
 	if boss.zzz then
 		local asleep = state == "Sleeping"
 		boss.zzz.Enabled = asleep
@@ -226,7 +259,7 @@ RunService.RenderStepped:Connect(function(dt: number)
 	for model, boss in bosses do
 		if not model.Parent then
 			untrack(model)
-		elseif (boss.root.Position - eye).Magnitude <= ANIMATE_RANGE then
+		elseif (boss.root.CFrame.Position - eye).Magnitude <= ANIMATE_RANGE then
 			animate(boss, t, dt, serverNow)
 		else
 			boss.lastPos = nil -- (no speed spike from the distance it covered unseen)
@@ -235,9 +268,11 @@ RunService.RenderStepped:Connect(function(dt: number)
 	end
 end)
 
+-- Bosses whose parts haven't all arrived yet: tried again every half second.
+local waiting: { [Model]: boolean } = {}
 local function consider(inst: Instance)
 	if inst:IsA("Model") and inst:GetAttribute("Rig") ~= nil then
-		task.defer(track, inst) -- let its parts arrive first
+		waiting[inst] = true
 	end
 end
 for _, d in workspace:GetDescendants() do
@@ -247,5 +282,15 @@ workspace.DescendantAdded:Connect(consider)
 workspace.DescendantRemoving:Connect(function(inst)
 	if inst:IsA("Model") and bosses[inst] then
 		untrack(inst)
+	end
+end)
+task.spawn(function()
+	while true do
+		for model in waiting do
+			if not model.Parent or track(model) then
+				waiting[model] = nil
+			end
+		end
+		task.wait(0.5)
 	end
 end)
