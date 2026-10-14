@@ -101,7 +101,7 @@ local function showState(g: Guard)
 		return
 	end
 	g.shownState = state
-	local text = ({ Sleeping = "💤", Waking = "❗", Chasing = "", Returning = "", Stunned = "" } -- only Zzz (sleep) and ❗ (waking) show (owner) :: any)[state]
+	local text = ({ Sleeping = "💤", Waking = "❗", Chasing = "", Returning = "", Stunned = "" } :: any)[state] -- only Zzz (sleep) and ❗ (waking) show (owner)
 	g.status.Text = if state == "Sleeping" and g.rigged then "" else text or ""
 	for _, eye in g.eyes do
 		local open = state ~= "Sleeping"
