@@ -314,6 +314,7 @@ H.test("assets: a whole map built with dummy models keeps its contract (roles, p
 	end
 	H.eq(used.ShopStall_Shop, 1, "the shared ShopStall fills each stall")
 	H.eq(used.ShopStall_Index, 1)
+	H.eq(used.ShopStall_Sell, nil, "the SELL stall keeps its own look (no ShopStall fallback)")
 	for _, slot in slots do
 		if slot ~= "ShopStall" then
 			H.ok((used[slot] or 0) >= 1, slot .. " used")
@@ -327,7 +328,7 @@ H.test("assets: a whole map built with dummy models keeps its contract (roles, p
 			prompts += 1
 		end
 	end
-	H.eq(prompts, 3, "the stall prompts stay")
+	H.eq(prompts, 4, "the stall prompts stay")
 	local allowed = { Floor = true, Wall = true, GatePillar = true, EndWall = true }
 	for _, p in partsOf(world.Corridor) do
 		H.ok(p.Anchored, p:GetFullName() .. " anchored")

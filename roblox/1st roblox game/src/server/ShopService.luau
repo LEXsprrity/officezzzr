@@ -1,4 +1,4 @@
--- RequestBuy / RequestUseItem handlers. Every request is rate-limited, type-checked and validated
+-- RequestBuy / RequestUseItem / SellPlants handlers. Every request is rate-limited, type-checked and validated
 -- against server state; the client only says what it wants. Money buys trails and plot upgrades;
 -- everything else is Robux: the developer product prompt (gated) and ProcessReceipt (always grants what
 -- was paid for), plus the gamepasses.
@@ -208,9 +208,19 @@ local function processReceipt(receiptInfo: { [string]: any }): Enum.ProductPurch
 	return if confirm then Enum.ProductPurchaseDecision.PurchaseGranted else Enum.ProductPurchaseDecision.NotProcessedYet
 end
 
+-- The Sell window at the SELL stall: a list of plant slots (PlotService.sellPlants checks it all).
+local function onSell(player: Player, slots: any)
+	local s = Sessions.get(player)
+	if not s or type(slots) ~= "table" or not Sessions.allowRequest(s, REQUESTS_PER_SECOND) then
+		return
+	end
+	PlotService.sellPlants(player, slots)
+end
+
 function ShopService.init()
 	Net.RequestBuy.OnServerEvent:Connect(onBuy)
 	Net.RequestUseItem.OnServerEvent:Connect(onUse)
+	Net.SellPlants.OnServerEvent:Connect(onSell)
 	MarketplaceService.ProcessReceipt = processReceipt
 	MarketplaceService.PromptGamePassPurchaseFinished:Connect(function(player: Player, passId: number, purchased: boolean)
 		if not purchased then

@@ -398,6 +398,11 @@ Config.CREATURE_ASSETS = {} :: { [number]: number }
 
 Config.OFFLINE_CAP_SECONDS = 3600
 Config.SELL_SECONDS = 30 -- removing a plant refunds this many seconds of its income
+-- The SELL stall in the shop plaza pays more than the R-key refund, so walking there is worth it: 120 s
+-- of the plant's base income (no day/night, like the refund) x the plot level / 2x Money multiplier. A
+-- plant keeps earning forever, so even 4x the refund is only ~2 min of what it would make by staying.
+Config.SELL_STALL_SECONDS = 120
+Config.SELL_STALL_DISTANCE = 20 -- studs from the stall's prompt part the player must stand within
 
 ----------------------------------------------------------------------------------------------------
 -- Shop. In-game money buys only two things: TRAILS and PLOT UPGRADES (Config.priceOf). Everything else

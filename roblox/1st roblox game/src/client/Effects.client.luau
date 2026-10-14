@@ -101,7 +101,7 @@ end)
 
 local SOUND_FOR = {
 	Pickup = "Pickup", Planted = "Plant", Caught = "Caught", GuardWake = "Wake",
-	Bat = "Bat", Bought = "Buy", End = "Pickup", PackRoll = "Buy", Announce = "Pickup",
+	Bat = "Bat", Bought = "Buy", End = "Pickup", PackRoll = "Buy", Announce = "Pickup", SoldPlants = "Buy",
 }
 
 LootEvent.OnClientEvent:Connect(function(kind: string, data: any)

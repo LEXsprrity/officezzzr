@@ -1,8 +1,9 @@
--- The fixed remote contract. Everything else (pickup, planting, selling) goes through ProximityPrompts.
+-- The fixed remote contract. Everything else (pickup, planting, removing) goes through ProximityPrompts.
 --   client -> server: RequestBuy(itemId), RequestUseItem(itemId)
 --     RequestBuy ids: "PlotUpgrade" and "Trail:<id>" (money), "Product:<name>" (developer products,
 --       Robux), "Pass:<name>" (gamepasses)
 --     RequestUseItem ids: "Bat", "Seed:<bagKey>" (plant from the seed bag), "Equip:<trailId>"
+--   client -> server: SellPlants(slots) (a list of plant slots, sold at the SELL stall; PlotService checks)
 --   server -> client: StatsUpdate(stats), LootEvent(kind, data), IncomePopup(amount, position)
 --     LootEvent "Announce" { text, color } goes to every client (Net.announce)
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -20,6 +21,7 @@ end
 local Net = {
 	RequestBuy = remote("RequestBuy"),
 	RequestUseItem = remote("RequestUseItem"),
+	SellPlants = remote("SellPlants"),
 	StatsUpdate = remote("StatsUpdate"),
 	LootEvent = remote("LootEvent"),
 	IncomePopup = remote("IncomePopup"),
