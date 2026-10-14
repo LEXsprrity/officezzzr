@@ -1154,12 +1154,12 @@ end
 -- Trail Shop icon tinted over a ribbon of the trail's colours, an "x2 Speed" pill, then a green $ button
 -- and a purple R$ button, or Equip / Equipped once owned.
 ----------------------------------------------------------------------------------------------------
--- "+0.5", "+12.3", "+1.2K": the Speed one step (stud) pays right now (Config.speedPerStud)
+-- "+1", "+1.25", "+3": the Speed one step (stud) pays with the equipped trail (Config.speedPerStud)
 local renderTrails: () -> ()
 do
 	local function perStepText(): string
 		local x = Config.speedPerStud(stats.equippedTrail)
-		return "+" .. (if x < 100 then string.format("%.1f", x) else Format.short(x))
+		return "+" .. (if x < 100 then (string.gsub(string.format("%.2f", x), "%.?0+$", "")) else Format.short(x))
 	end
 
 	local function trailCard(parent: Instance, order: number, t: Config.Trail): Frame

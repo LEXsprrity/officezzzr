@@ -148,4 +148,14 @@ H.test("speed: server teleports reset tracking (no false positive after knockbac
 	H.eq(verdict, "ok")
 end)
 
+H.test("speed: each zone's recommended Speed runs within 10% of its pre-v7 WalkSpeed (what the guards are tuned for)", function()
+	local ProfileStore = H.server("ProfileStore")
+	for k, zone in Config.ZONES do
+		local before = math.clamp(16 + 16 * math.log10(1 + ProfileStore.LEGACY_ZONE_REQ[k]), 16, 180) -- the pre-v7 curve
+		local now = Config.walkSpeedFor(zone.req)
+		H.ok(math.abs(now - before) <= before * 0.1, `{zone.id}: {now} vs {before}`)
+	end
+	H.ok(Config.walkSpeedFor(Config.ZONES[#Config.ZONES].req) < Config.MAX_WALKSPEED, "the cap is past the Spirit Garden")
+end)
+
 return nil

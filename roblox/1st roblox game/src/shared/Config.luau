@@ -164,8 +164,9 @@ end
 -- the zone's wakeDelay. The delay is slack for reaction time and lag, but it also lets slower players
 -- escape, and both trade against the run home: the shorter it is, the less a slower thief loses on the way.
 -- With the zone lengths above, every zone gets about 0.3 s of slack (from the smallest delay that
--- gives it), and the lowest escaping Speed lands at >= 45% of the sign; the Desert's 264-stud run home
--- only manages ~30% (tests/guard.spec prints the table). The Meadow (req 0) is the tutorial.
+-- gives it), and the lowest escaping Speed lands at ~50-70% of the sign (tests/guard.spec prints the
+-- table; the recommended Speeds are only ~3-4x apart from the Lava Fields on, so a thief can't be far
+-- below the sign). The Meadow (req 0) is the tutorial.
 Config.GUARD_SPEED_FACTOR = 1 -- chase WalkSpeed = walkSpeedFor(zone.req) * this
 Config.GUARD_RETURN_FACTOR = 0.6 -- walking home is slower than chasing
 Config.CATCH_DISTANCE = 6 -- horizontal studs, root to root
@@ -377,7 +378,10 @@ Config.SELL_STALL_DISTANCE = 20 -- studs from the stall's prompt part the player
 -- Trails: a coloured Trail behind the player (Server/TrailService) that multiplies the Speed gained from
 -- walking and the treadmill. Players own trails (saved) and equip one at a time. Grey is free: everyone
 -- owns it and starts with it equipped. Any other tier can be bought directly, for money (`price`) or
--- Robux (the `product` developer product); there is no need to own the tier below.
+-- Robux (the `product` developer product); there is no need to own the tier below. A trail is a small
+-- multiplier on the flat Speed per step: x1 (Grey) up to x3 (Rainbow). The money prices are where the
+-- free player's income reaches them (tests/progression_sim): Green-Golden in the first 35 minutes, Red
+-- around the Snow Peaks, Rainbow after the Deep Space.
 export type Trail = {
 	id: string,
 	name: string,
@@ -467,7 +471,7 @@ end
 -- prompts) or in the Shop: for money (`price`, Config.priceOf "TreadmillUpgrade") or Robux (one tier per
 -- TreadmillT1..T3 receipt, Config.treadmillUpgradeProduct). Prices grow x10 a tier: a free player buys
 -- x2.25 after ~10 minutes and has x5 ($1T) by the Spirit Garden; x6 and x8 are late-game sinks like the
--- last plot levels. Tuned with tests/progression_sim (the Speed curve above was lowered with them): a
+-- last plot levels. Tuned with tests/progression_sim, together with the zones' recommended Speed: a
 -- free player who buys these lands every zone near its target, and an AFK farmer (fills the plot once,
 -- then only stands on the treadmill) is far slower than a player who keeps running the corridor. Saves
 -- before v5 had 3 tiers (x2, Robux x3, Robux x5): ProfileStore maps them to the tiers with the same

@@ -485,8 +485,9 @@ H.test("treadmill board: PlotService builds it per plot, writes it and puts the 
 end)
 
 H.test("treadmill step: what one step pays, as text", function()
-	H.eq(Treadmill.perStep(0, nil, 2), Config.speedPerStud(0, nil) * 2)
-	H.eq(Treadmill.perStep(5000, "Grey", 3), Config.speedPerStud(5000, "Grey") * 3)
+	H.eq(Treadmill.perStep(0, nil, 2), Config.speedPerStud(nil) * 2)
+	H.eq(Treadmill.perStep(5e6, "Blue", 2), Treadmill.perStep(0, "Blue", 2), "the same at any Speed (flat gain)")
+	H.eq(Treadmill.perStep(5000, "Grey", 3), Config.speedPerStud("Grey") * 3)
 	H.eq(Treadmill.perSecond(20, 5000, nil, 3), 20 * Treadmill.perStep(5000, nil, 3))
 	H.eq(Treadmill.perSecond(1e6, 5000, nil, 3), Config.GAIN_CAP_STUDS_PER_TICK / Config.TICK * Treadmill.perStep(5000, nil, 3), "capped like SpeedLogic")
 	H.eq(Treadmill.gainText(0.5), "+0.5")
@@ -516,7 +517,7 @@ H.test("treadmill step: what one step pays, as text", function()
 	-- and the treadmill sums match SpeedLogic's treadmill gain for a whole second
 	local SpeedLogic = H.server("SpeedLogic")
 	local walk, speed = 24, 1e5
-	local mult = Config.speedPerStud(speed, nil)
+	local mult = Config.speedPerStud(nil)
 	H.ok(math.abs(SpeedLogic.treadmillGain(walk, 1, mult, 2.5) - Treadmill.perSecond(walk, speed, nil, 2.5)) < 1e-6, "same as the server's gain")
 end)
 
