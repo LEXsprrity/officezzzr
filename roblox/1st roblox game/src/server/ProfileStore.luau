@@ -57,7 +57,7 @@ export type Profile = {
 	items: { [string]: number },
 	seedBag: { [string]: number }, -- seeds from packs, "zone:rarity[:Mutation]" -> count
 	receipts: { string }, -- last Config.RECEIPT_HISTORY processed Robux PurchaseIds
-	reachedEnd: boolean,
+	reachedEnd: boolean, -- legacy (the old "End of the Line" finish, now gone): kept so saves round-trip
 	lastSeen: number,
 	freeGift: boolean, -- the Free Gift (community Speed) was claimed: never again on this account
 	giftShown: boolean, -- the Free Gift window already opened by itself once

@@ -599,47 +599,63 @@ end
 -- Shop plaza: walk-up stalls in the spot after the last plot. Each stall's prompt carries an
 -- "OpensShop" attribute; the HUD opens that menu when the local player triggers it.
 ----------------------------------------------------------------------------------------------------
+-- Every stall has the same cartoon market-stall look (owner's reference): four studded wooden posts, a
+-- grey stone counter with rails under it on three sides, a striped scalloped awning in the stall's colour
+-- and white, a glowing ring on the floor in front and a big floating title. The SELL stall is the red one
+-- with the green ring (docs/references/09-sell-stall-reference.png); the server measures the sell
+-- distance from its prompt part (WorldBuilder.sellPoints).
 local STALLS = {
-	{ opens = "Shop", label = "🛒 SHOP", color = Color3.fromRGB(255, 90, 160), stripe = Color3.fromRGB(255, 235, 245) },
-	{ opens = "Trails", label = "🏃 TRAIL SHOP", color = Color3.fromRGB(60, 160, 255), stripe = Color3.fromRGB(235, 245, 255) },
-	{ opens = "Index", label = "📖 INDEX", color = Color3.fromRGB(160, 100, 255), stripe = Color3.fromRGB(245, 235, 255) },
-	-- Sell old plants (docs/references/09-sell-stall-reference.png): an open wooden stall with a red-and-white
-	-- awning, a soft green glowing circle on the floor in front and big red "SELL" text over it. The server
-	-- measures the sell distance from its prompt part (WorldBuilder.sellPoints).
-	{ opens = "Sell", label = "SELL", color = Color3.fromRGB(225, 35, 45), stripe = Color3.fromRGB(250, 248, 245), action = "Sell plants" },
+	{ opens = "Shop", label = "🛒 SHOP", color = Color3.fromRGB(255, 200, 40), ring = Color3.fromRGB(255, 225, 60), title = Color3.fromRGB(255, 225, 70) },
+	{ opens = "Trails", label = "🏃 TRAIL SHOP", color = Color3.fromRGB(60, 160, 255), ring = Color3.fromRGB(90, 210, 255), title = Color3.fromRGB(120, 210, 255) },
+	{ opens = "Index", label = "📖 INDEX", color = Color3.fromRGB(165, 95, 255), ring = Color3.fromRGB(190, 140, 255), title = Color3.fromRGB(205, 160, 255) },
+	{ opens = "Sell", label = "SELL", color = Color3.fromRGB(225, 35, 45), ring = Color3.fromRGB(70, 255, 140), title = Color3.fromRGB(235, 30, 40), action = "Sell plants" },
 }
-local STALL_SPACING = 21 -- four 18-stud awnings across the 84-stud plaza
-local SELL_WOOD = Color3.fromRGB(150, 112, 78)
-local SELL_WOOD_DARK = Color3.fromRGB(104, 76, 56)
-local SELL_GLOW = Color3.fromRGB(70, 255, 140)
-local SELL_TEXT = Color3.fromRGB(235, 30, 40)
+local STALL_SPACING = 21 -- four 16.4-stud awnings across the 84-stud plaza
+local STALL_DEPTH = 9 -- front posts to back posts
+local STALL_STRIPE = Color3.fromRGB(255, 255, 250)
+local STALL_WOOD = Color3.fromRGB(150, 98, 58)
+local STALL_STONE = Color3.fromRGB(150, 152, 168)
+local STALL_STONE_DARK = Color3.fromRGB(96, 98, 116)
 
--- The SELL stall's look (asset slot ShopStall_Sell, which doesn't fall back to ShopStall): a long plank
--- counter, four posts, a back shelf and the striped awning with a striped valance on its front edge.
-local function sellStall(into: Instance, at: (number, number, number) -> Vector3, u: number, w0: number, side: number, stall: { [string]: any })
-	box(into, "Counter", Vector3.new(16, 3.4, 2.6), CFrame.new(at(u, w0, 1.7)), SELL_WOOD_DARK, Enum.Material.WoodPlanks)
-	box(into, "CounterTop", Vector3.new(17, 0.6, 3.6), CFrame.new(at(u, w0, 3.7)), SELL_WOOD, Enum.Material.WoodPlanks)
-	deco(into, "CounterPlank", Vector3.new(16.4, 0.5, 0.4), CFrame.new(at(u, w0 - 1.4, 2.2)), SELL_WOOD, Enum.Material.WoodPlanks)
-	deco(into, "Shelf", Vector3.new(16, 0.6, 2), CFrame.new(at(u, w0 + 6.8, 4.5)), SELL_WOOD, Enum.Material.WoodPlanks)
-	for _, du in { -7.5, 7.5 } do
-		for _, post in { { w = -1, h = 11.4 }, { w = 7, h = 13.4 } } do -- up to the sloping awning
-			box(into, "Post", Vector3.new(1, post.h, 1), CFrame.new(at(u + du, w0 + post.w, post.h / 2)), SELL_WOOD_DARK, Enum.Material.Wood)
+-- The stall's look (asset slot ShopStall_<menu>; Shop, Trails and Index fall back to ShopStall). `at` maps
+-- (across, in from the plaza's front edge, up) to the world; `w0` is the counter's front line.
+local function marketStall(into: Instance, at: (number, number, number) -> Vector3, u: number, w0: number, side: number, stall: { [string]: any })
+	local half = 7.3
+	local mid = w0 + STALL_DEPTH / 2
+	for _, du in { -half, half } do
+		for _, post in { { w = w0, h = 11 }, { w = w0 + STALL_DEPTH, h = 13.4 } } do -- up to the sloping awning
+			studs(box(into, "Post", Vector3.new(1.4, post.h, 1.4), CFrame.new(at(u + du, post.w, post.h / 2)), STALL_WOOD))
+			studs(deco(into, "PostFoot", Vector3.new(2.2, 1, 2.2), CFrame.new(at(u + du, post.w, 0.5)), STALL_STONE_DARK))
+		end
+		-- the side counter and its rails
+		studs(box(into, "Counter", Vector3.new(2.6, 1, STALL_DEPTH), CFrame.new(at(u + du, mid, 4.2)), STALL_STONE))
+		for _, y in { 1.6, 3 } do
+			studs(box(into, "CounterRail", Vector3.new(0.6, 0.6, STALL_DEPTH), CFrame.new(at(u + du, mid, y)), STALL_WOOD))
 		end
 	end
+	studs(box(into, "Counter", Vector3.new(2 * half + 1.4, 1, 2.6), CFrame.new(at(u, w0, 4.2)), STALL_STONE))
+	for _, y in { 1.6, 3 } do
+		studs(box(into, "CounterRail", Vector3.new(2 * half, 0.6, 0.6), CFrame.new(at(u, w0, y)), STALL_WOOD))
+	end
+	-- Striped awning sloping down toward the walkway, with a scalloped edge along the front.
 	local tilt = CFrame.Angles(math.rad(-side * 14), 0, 0)
-	for s = 0, 7 do
-		local color = if s % 2 == 0 then stall.color else stall.stripe
-		local cf = CFrame.new(at(u - 7.875 + s * 2.25, w0 + 3, 12.6)) * tilt
-		deco(into, "Awning", Vector3.new(2.25, 0.5, 11), cf, color, Enum.Material.Fabric)
-		deco(into, "Valance", Vector3.new(2.25, 1.2, 0.4), cf * CFrame.new(0, -0.8, -side * 5.4), color, Enum.Material.Fabric)
+	local stripes, width = 8, 2.05
+	for s = 0, stripes - 1 do
+		local color = if s % 2 == 0 then stall.color else STALL_STRIPE
+		local cf = CFrame.new(at(u - (stripes - 1) / 2 * width + s * width, mid, 13)) * tilt
+		deco(into, "Awning", Vector3.new(width, 0.5, STALL_DEPTH + 3), cf, color)
+		local edge = cf * CFrame.new(0, -0.6, -side * (STALL_DEPTH + 3) / 2)
+		deco(into, "Valance", Vector3.new(width, 1, 0.3), edge, color)
+		local scallop = deco(into, "Scallop", Vector3.new(0.3, width, width), edge * CFrame.new(0, -0.5, 0) * CFrame.Angles(0, math.rad(90), 0), color)
+		scallop.Shape = Enum.PartType.Cylinder
 	end
 end
 
--- The soft green glowing circle in front of the SELL stall: a Neon rim under a lighter, see-through fill.
-local function sellCircle(parent: Instance, pos: Vector3)
-	local rim = Props.disc(parent, "SellCircle", 17, pos, SELL_GLOW, Enum.Material.Neon, 0.15)
+-- The glowing ring in front of a stall: a Neon rim under a lighter, see-through fill.
+local function stallRing(parent: Instance, name: string, pos: Vector3, color: Color3)
+	local rim = Props.disc(parent, name, 15, pos, color, Enum.Material.Neon, 0.15)
 	rim.Transparency = 0.25
-	local fill = Props.disc(parent, "SellCircleFill", 14.6, pos, Color3.fromRGB(170, 255, 190), Enum.Material.SmoothPlastic, 0.25)
+	local fill = Props.disc(parent, name .. "Fill", 12.6, pos, color:Lerp(Color3.new(1, 1, 1), 0.55), Enum.Material.SmoothPlastic, 0.25)
 	fill.Transparency = 0.45
 end
 
@@ -664,36 +680,19 @@ local function buildShops(world: Folder)
 		local w0 = 18 -- counter's distance in from the plaza's front edge
 		local selling = stall.opens == "Sell"
 		-- The stall (ShopStall_<menu> slot, else ShopStall) faces the walkway.
-		Assets.swap("ShopStall_" .. stall.opens, model, Assets.facing(at(u, w0 + 3.5, 0), Vector3.new(0, 0, -side)), function(into)
-			if selling then
-				sellStall(into, at, u, w0, side, stall)
-				return
-			end
-			box(into, "Counter", Vector3.new(16, 4, 3), CFrame.new(at(u, w0, 2)), stall.color, Enum.Material.WoodPlanks)
-			deco(into, "CounterTop", Vector3.new(17, 0.6, 4), CFrame.new(at(u, w0, 4.3)), Color3.fromRGB(250, 245, 235), Enum.Material.SmoothPlastic)
-			box(into, "Back", Vector3.new(16, 12, 1), CFrame.new(at(u, w0 + 8, 6)), stall.color, Enum.Material.WoodPlanks)
-			for _, du in { -7.5, 7.5 } do
-				for _, dw in { -1, 8 } do
-					box(into, "Post", Vector3.new(1, 12, 1), CFrame.new(at(u + du, w0 + dw, 6)), Color3.fromRGB(110, 70, 40), Enum.Material.Wood)
-				end
-			end
-			-- Striped awning sloping down toward the walkway
-			local tilt = CFrame.Angles(math.rad(-side * 14), 0, 0)
-			for s = 0, 7 do
-				deco(into, "Awning", Vector3.new(2.25, 0.5, 12), CFrame.new(at(u - 7.875 + s * 2.25, w0 + 2.5, 12.5)) * tilt,
-					if s % 2 == 0 then stall.color else stall.stripe, Enum.Material.Fabric)
-			end
+		Assets.swap("ShopStall_" .. stall.opens, model, Assets.facing(at(u, w0 + STALL_DEPTH / 2, 0), Vector3.new(0, 0, -side)), function(into)
+			marketStall(into, at, u, w0, side, stall)
 		end, Vector3.new(1, 1.5, 1.5))
-		local signPart = deco(model, "StallSign", Vector3.new(1, 1, 1), CFrame.new(at(u, w0, if selling then 18 else 17)), stall.color)
+		stallRing(model, if selling then "SellCircle" else "StallRing", at(u, 8, 0.3), stall.ring) -- on the sand, in front of the counter
+
+		-- A big title floating over the awning, in the stall's colour with a dark outline.
+		local signPart = deco(model, "StallSign", Vector3.new(1, 1, 1), CFrame.new(at(u, w0 + STALL_DEPTH / 2, 19)), stall.color)
 		signPart.Transparency = 1
-		local signLabel = billboard(signPart, stall.label, if selling then UDim2.fromScale(13, 4.6) else UDim2.fromScale(15, 3), Vector3.zero, 90)
-		if selling then -- big red "SELL" with a dark outline, like the reference
-			signLabel.TextColor3 = SELL_TEXT
-			local stroke = signLabel:FindFirstChildOfClass("UIStroke") :: UIStroke
-			stroke.Thickness = 5
-			stroke.Color = Color3.fromRGB(70, 8, 12)
-			sellCircle(model, at(u, 7, 0.3)) -- on the plaza's sand, in front of the counter
-		end
+		local signLabel = billboard(signPart, stall.label, if selling then UDim2.fromScale(13, 4.6) else UDim2.fromScale(16, 4), Vector3.zero, 110)
+		signLabel.TextColor3 = stall.title
+		local stroke = signLabel:FindFirstChildOfClass("UIStroke") :: UIStroke
+		stroke.Thickness = 5
+		stroke.Color = stall.color:Lerp(Color3.new(0, 0, 0), 0.7)
 
 		-- The prompt sits on an invisible part at the counter, so it stays when the stall is re-modelled.
 		local promptHost = hidden(model, "StallPrompt", Vector3.new(16, 4, 3), CFrame.new(at(u, w0, 2)))

@@ -142,7 +142,9 @@ H.test("assets: tree variants are picked deterministically from the position, fi
 			for _, p in partsOf(a) do
 				materials[tostring(p.Material)] = true
 			end
-			H.ok(materials[tostring(Enum.Material.Wood)] and materials[tostring(Enum.Material.Grass)], "variant3 keeps its Wood/Grass materials")
+			-- the friend saved it in realistic Wood/Grass: the map is cartoony, so it gets plain plastic in the same colours
+			H.ok(materials[tostring(Enum.Material.Plastic)] and not materials[tostring(Enum.Material.Wood)] and not materials[tostring(Enum.Material.Grass)],
+				"variant3's Wood/Grass become plastic")
 		end
 	end
 	for _, name in { "arvore_variant1", "arvore_variant2", "arvore_variant3" } do
@@ -207,6 +209,14 @@ end)
 
 H.test("assets: KeepScale keeps the saved size, Yaw turns the model, solid slots keep their collision", function()
 	local folder = scratch()
+	local realistic = dummy("Rock", { { Vector3.new(4, 2, 6), Vector3.zero } })
+	realistic.Piece1.Material = Enum.Material.Slate
+	local cartoon = Assets.place("Rock", folder, CFrame.new(1, 0, 1), Vector3.new(4, 4, 4))
+	H.eq(partsOf(cartoon)[1].Material, Enum.Material.SmoothPlastic, "a realistic material becomes plastic on the map")
+	realistic:SetAttribute("KeepMaterials", true)
+	local kept = Assets.place("Rock", folder, CFrame.new(1, 0, 1), Vector3.new(4, 4, 4))
+	realistic:Destroy()
+	H.eq(partsOf(kept)[1].Material, Enum.Material.Slate, "KeepMaterials = true keeps it")
 	local keep = dummy("Rock", { { Vector3.new(4, 2, 6), Vector3.zero } }, { KeepScale = true })
 	local rock = Assets.place("Rock", folder, CFrame.new(1, 0, 1), Vector3.new(1, 1, 1))
 	keep:Destroy()

@@ -239,6 +239,34 @@ H.test("guard: a guard that steps over a thief between ticks still catches them"
 	H.eq(cmd.caughtId, "p")
 end)
 
+H.test("guard: the chase covers the whole 192-stud corridor (a thief hugging a wall is followed there, never past it)", function()
+	H.eq(Config.CORRIDOR_WIDTH, 192)
+	local halfW = Config.CORRIDOR_WIDTH / 2
+	for _, s in { -1, 1 } do
+		local k = 4
+		local home = Vector3.new(Config.nestX(k) + Config.GUARD_HOME_OFFSET, 0, 0)
+		local brain = awakeBrain(k, home)
+		GuardBrain.alert(brain, 0)
+		local guardPos = home
+		local thief = Vector3.new(Config.nestX(k) - 30, 0, s * (halfW - 3)) -- against the wall, standing still
+		local caught, widest, t = false, 0, 0
+		while t < 20 and not caught do
+			local cmd = GuardBrain.step(brain, t, guardPos, { { id = "p", pos = thief, safe = false } })
+			caught = cmd.caughtId == "p"
+			if cmd.moveTo then
+				H.ok(math.abs(cmd.moveTo.Z) <= halfW - 4, `the guard aims inside the walls ({cmd.moveTo.Z})`)
+				widest = math.max(widest, math.abs(cmd.moveTo.Z))
+				local d = cmd.moveTo - guardPos
+				local step = math.min(d.Magnitude, cmd.walkSpeed * DT)
+				guardPos += if d.Magnitude > 1e-3 then d.Unit * step else Vector3.zero
+			end
+			t += DT
+		end
+		H.ok(caught, "the thief by the wall is caught")
+		H.ok(widest > 64, `the chase reaches past the old 64-stud corridor ({widest})`)
+	end
+end)
+
 H.test("guard: catch uses distance < CATCH_DISTANCE, then walks home and sleeps", function()
 	local home = Vector3.new(100, 0, 0)
 	local brain = awakeBrain(3, home)
