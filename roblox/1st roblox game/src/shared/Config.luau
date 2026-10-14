@@ -123,7 +123,7 @@ Config.ZONES = {
 		floor = Color3.fromRGB(58, 168, 72), wall = Color3.fromRGB(60, 108, 60), ui = Color3.fromRGB(35, 140, 75),
 		guard = "Giant Snake", guardColor = Color3.fromRGB(70, 150, 70),
 		seed = "Fernosaur", seedColor = Color3.fromRGB(40, 200, 120), baseWeight = 9_500 },
-	{ id = "Lava", name = "Lava Fields", req = 2e6, length = Config.zoneLength(4), icon = "🌋", active = "day", wakeDelay = 0.1,
+	{ id = "Lava", name = "Lava Fields", req = 2.5e6, length = Config.zoneLength(4), icon = "🌋", active = "day", wakeDelay = 0.1,
 		floor = Color3.fromRGB(92, 58, 66), wall = Color3.fromRGB(56, 42, 50), ui = Color3.fromRGB(225, 85, 30),
 		guard = "Volcano Gorilla", guardColor = Color3.fromRGB(240, 100, 30),
 		seed = "Magmabloom", seedColor = Color3.fromRGB(255, 120, 40), baseWeight = 180_000 },
@@ -276,7 +276,7 @@ Config.LEGENDARY = #Config.RARITIES -- rarity index of Legendary
 
 -- Deeper zones and luck (night) tilt Common..Epic toward the rare end.
 Config.ZONE_RARITY_BONUS = 0.08
-Config.NIGHT_LUCK = 2 -- pods roll with this luck at night
+Config.NIGHT_LUCK = 1.5 -- pods roll with this luck at night (owner: x1.5)
 
 -- Legendary is a trophy: a fixed chance per pod roll by zone (day), times the luck (x2 at night).
 -- Unlike the other rarities it gets RARER further down the corridor, and is extremely rare in the last
@@ -752,7 +752,7 @@ end
 -- their dirt.
 -- Rolls live in Shared/SeedPacks, purchase rules in Server/Shop.
 ----------------------------------------------------------------------------------------------------
-Config.PACK_LUCK = Config.NIGHT_LUCK -- packs roll Common..Epic like a night pod in their zone...
+Config.PACK_LUCK = 2 -- packs roll Common..Epic with double luck (night pods are x1.5).
 Config.PACK_LEGENDARY_CHANCE = 0.015 -- ...but Legendary stays a rare event (1 in ~67)...
 Config.PACK_MUTATION_MULT = 2 -- ...with twice the Gold/Rainbow chances (Night never rolls from packs)...
 Config.PACK_EXCLUSIVE = "Celestial" -- ...plus the pack-only mutation, which pods never roll
