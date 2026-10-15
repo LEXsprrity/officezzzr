@@ -7,7 +7,8 @@
 --   * an invisible part named "Belt": the running surface (footprint and top). Assets.fitUnder fits the
 --     game's hidden TreadmillBelt to it, so the Speed check, the lock, the "+X/s" text and the board follow
 --     whichever tier is shown;
---   * the console screen renamed "ConsoleScreen" (the tests find the console by name);
+--   * the console screen renamed "ConsoleScreen" (the tests find the console by name), see-through on the
+--     tiers with `glass` (see TIERS);
 --   * attributes Yaw = 180 (the models' console is at their +Z end; the game's front is -Z), KeepScale =
 --     true (already scaled here), Tier and Source (the Tool it came from).
 -- The meshes keep the seller's mesh asset ids. Run from the game folder:
@@ -23,16 +24,25 @@ local BELT_WIDTH = 4.5 -- studs: every tier's running surface is this wide (the 
 local MAX_SIZE = Vector3.new(12, 9.8, 14.5) -- and the whole model never bigger than this (width, height, length)
 
 -- Tier order, most basic first. `belt` is the part that is the running surface (its width and where it
--- starts); the surface ends at the console. `top` is the surface's height above the model's bottom, read
--- off the seller's belt Beam (the scrolling texture drawn on it), in the source's studs.
+-- starts); the surface ends at the console (its screen), or where the seller's belt texture ends if that
+-- comes first (tier 4: the texture stops 0.85 studs short of the screen, and the belt part runs on under the
+-- console: the old surface reached in there, so the lock centre sat that much nearer the screen than the
+-- middle of the belt you see). `top` is the surface's height above the model's bottom, read off the seller's
+-- belt Beam (the scrolling texture drawn on it), in the source's studs.
+-- `glass` (optional): the Transparency of the kit's screen and the panel behind it. Every kit screen stands
+-- at the console end in front of the runner, from its shins to over its head, and the game turns the console
+-- toward the walkway, so from there you see the back of the screen with the runner behind it. Tier 4's back
+-- is a glowing opaque cyan slab and its belt is raised: all you saw was a fist beside a block of light (owner
+-- screenshot 2026-10-15). Tiers 6 (cyan) and 7 (yellow) have the same opaque Neon back, taller than the
+-- runner's head. See-through, the runner shows behind it.
 local TIERS = {
 	{ tool = "Treadmill", belt = "Cube.056", top = 0.89 },
 	{ tool = "Lucky BlockTreadmill", belt = "Belt.001", top = 0.45 },
 	{ tool = "HackerTreadmill", belt = "Belt.001", top = 0.35 },
-	{ tool = "Sci-FiTreadmill", belt = "scifi treadmil fix", top = 3.07 },
+	{ tool = "Sci-FiTreadmill", belt = "scifi treadmil fix", top = 3.07, glass = 0.75 },
 	{ tool = "The FreezeTreadmill", belt = "the fire treadmil test.004", top = 0.85 },
-	{ tool = "FlameTreadmill", belt = "Cube.038", top = 0.80 },
-	{ tool = "GoldenTreadmill", belt = "Vip Treadmil fix.005", top = 1.66 },
+	{ tool = "FlameTreadmill", belt = "Cube.038", top = 0.80, glass = 0.75 },
+	{ tool = "GoldenTreadmill", belt = "Vip Treadmil fix.005", top = 1.66, glass = 0.75 },
 	{ tool = "CelebrityTreadmill", belt = "Cube.017", top = 1.38 },
 	{ tool = "DemonicTreadmill", belt = "Belt.001", top = 0.35 },
 	{ tool = "AngelicTreadmill", belt = "Belt.002", top = 0.42 },
@@ -107,13 +117,25 @@ local function export(spec: any, tier: number, tool: any): (any, string)
 	-- the models run along +Z with the console at the +Z end
 	assert(size.Z > size.X and select(1, box(screen)).Z > (lo.Z + hi.Z) / 2, `{spec.tool}: not along +Z`)
 
-	-- The running surface: the belt part's width, from its back end to the console.
+	-- The running surface: the belt part's width, from its back end to the console (or to where the belt's
+	-- scrolling texture ends, if sooner: a Beam over the belt part, along it, at the surface's height).
 	local blo, bhi = box(belt)
 	local surface = {
 		x0 = blo.X, x1 = bhi.X,
 		z0 = blo.Z, z1 = math.min(bhi.Z, select(1, box(screen)).Z),
 		top = lo.Y + spec.top,
 	}
+	for _, d in model:GetDescendants() do
+		local a0, a1 = if d:IsA("Beam") then d.Attachment0 else nil, if d:IsA("Beam") then d.Attachment1 else nil
+		if a0 and a1 and a0.Parent:IsA("BasePart") and a1.Parent:IsA("BasePart") then
+			local p0, p1 = (a0.Parent.CFrame * a0.CFrame).Position, (a1.Parent.CFrame * a1.CFrame).Position
+			local over = p0.X > blo.X and p0.X < bhi.X and p1.X > blo.X and p1.X < bhi.X
+			local along = math.abs(p1.Z - p0.Z) > (bhi.Z - blo.Z) / 2
+			if over and along and math.abs(p0.Y - surface.top) < 0.2 then
+				surface.z1 = math.min(surface.z1, math.max(p0.Z, p1.Z))
+			end
+		end
+	end
 	local s = math.min(BELT_WIDTH / (surface.x1 - surface.x0), MAX_SIZE.X / size.X, MAX_SIZE.Y / size.Y, MAX_SIZE.Z / size.Z)
 
 	-- Scale about the bottom centre and move it to the origin, keeping every rotation.
@@ -139,6 +161,14 @@ local function export(spec: any, tier: number, tool: any): (any, string)
 		end
 	end
 	screen.Name = "ConsoleScreen"
+	if spec.glass then
+		for _, p in (screen.Parent :: any):GetChildren() do
+			if p:IsA("BasePart") and p.Transparency < 1 then
+				p.Transparency = spec.glass
+				p.CastShadow = false
+			end
+		end
+	end
 
 	local marker = roblox.Instance.new("Part")
 	marker.Name = "Belt"
