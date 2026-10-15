@@ -1,6 +1,7 @@
 -- Local-only effects: "+$1.2M" income popups, event sounds, camera shake, the treadmill belt scroll,
 -- rainbow mutations, hiding other players' plot prompts, the Upgrade boards' button pops, and the treadmill
--- lock, sprint and Speed popups and the invisible walls that keep you off other players' treadmills.
+-- lock, sprint and Speed popups, keeping you off other players' treadmills, a pod's pop when it gets a new
+-- seed, and the "Lucky!" over a seed that 2x Luck raised.
 -- Nothing here affects game state.
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -113,10 +114,65 @@ local SOUND_FOR = {
 	Bat = "Bat", Bought = "Buy", End = "Pickup", PackRoll = "Buy", Announce = "Pickup", SoldPlants = "Buy",
 }
 
+-- 2x Luck raised a seed as it was stolen (the server's Pickup says what the pod showed: `shown`): "Lucky!
+-- Rare > Epic" rises over the thief's head in relief text (no toast box), so a Rare pod giving an Epic reads
+-- as the pass working, not a wrong label.
+local function luckyPopup(shown: number, rarity: number)
+	local char = player.Character
+	local head = char and char:FindFirstChild("Head")
+	local from, to = Config.RARITIES[shown], Config.RARITIES[rarity]
+	if not (head and head:IsA("BasePart") and from and to) then
+		return
+	end
+	local gui = Instance.new("BillboardGui")
+	gui.Name = "LuckyPopup"
+	gui.Size = UDim2.fromOffset(300, 64)
+	gui.StudsOffset = Vector3.new(0, 2.6, 0)
+	gui.AlwaysOnTop = true
+	gui.LightInfluence = 0
+	gui.Adornee = head
+	local function line(text: string, color: Color3, y: number, h: number): TextLabel
+		local l = Instance.new("TextLabel")
+		l.BackgroundTransparency = 1
+		l.Font = Enum.Font.FredokaOne
+		l.TextScaled = true
+		l.Text = text
+		l.TextColor3 = color
+		l.Size = UDim2.new(1, 0, 0, h)
+		l.Position = UDim2.fromOffset(0, y)
+		l.Parent = gui
+		UiFx.relief(l, 3, 3)
+		return l
+	end
+	line("Lucky!", Color3.fromRGB(255, 214, 50), 0, 32)
+	line(`{from.id} > {to.id}`, to.color, 32, 30) -- (plain text: the relief's dark copy mirrors it)
+	gui.Parent = player:WaitForChild("PlayerGui")
+	local scale = Instance.new("UIScale")
+	scale.Scale = 0.3
+	for _, l in gui:GetChildren() do
+		if l:IsA("TextLabel") then
+			scale:Clone().Parent = l
+		end
+	end
+	for _, s in gui:GetDescendants() do
+		if s:IsA("UIScale") then
+			TweenService:Create(s, TweenInfo.new(0.4, Enum.EasingStyle.Back, Enum.EasingDirection.Out), { Scale = 1 }):Play()
+		end
+	end
+	TweenService:Create(gui, TweenInfo.new(2.2, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), { StudsOffset = Vector3.new(0, 4.2, 0) }):Play()
+	task.delay(2.2, function()
+		gui:Destroy()
+	end)
+end
+
 LootEvent.OnClientEvent:Connect(function(kind: string, data: any)
 	local sound = SOUND_FOR[kind]
 	if sound then
 		play(sound)
+	end
+	if kind == "Pickup" and type(data) == "table" and type(data.shown) == "number" and type(data.rarity) == "number"
+		and data.rarity > data.shown then
+		luckyPopup(data.shown, data.rarity)
 	end
 	if kind == "Caught" then
 		shake(0.6, 6)
@@ -137,40 +193,24 @@ local belts: { [BasePart]: boolean? } = {} -- every plot's treadmill belt (Role 
 local myPlot: number? = nil
 local rainbows: { [BasePart]: boolean? } = {}
 
--- Other players' treadmills: an invisible solid box over each belt that isn't ours (Treadmill.blockBox), made
--- on this client only, so we can't step onto it. Our own belt stays open. It rides inside its belt, so it
--- streams out with it.
-local blocks: { [BasePart]: BasePart } = {}
-local function syncBlock(belt: BasePart)
-	local block = blocks[belt] or belt:FindFirstChild("TreadmillBlock") :: BasePart? -- or a belt that streamed back in
-	if not belt.Parent or (myPlot ~= nil and belt:GetAttribute("PlotIndex") == myPlot) then
-		if block then
-			block:Destroy()
-		end
-		blocks[belt] = nil
-		return
-	end
-	local wall: BasePart = block or Instance.new("Part")
-	wall.Name = "TreadmillBlock"
-	wall.Anchored = true
-	wall.CanCollide = true
-	wall.CanTouch = false
-	wall.CastShadow = false
-	wall.Transparency = 1
-	local cf, size = Treadmill.blockBox(belt.CFrame, belt.Size)
-	wall.Size = size
-	wall.CFrame = cf
-	wall.Parent = belt
-	blocks[belt] = wall
+-- Other players' treadmills: we can't step onto them, but nothing solid stands over them (an invisible solid
+-- box was a floor people jumped onto and stood on, floating: owner playtest). Every frame, our own character
+-- is put back out of any belt that isn't ours (Treadmill.pushOut, in the Heartbeat below); our own belt
+-- stays open. Each client does it for its own character only, so everyone is kept off, and nobody floats.
+local function setMyPlot(index: number?)
+	myPlot = index
 end
 
-local function setMyPlot(index: number?)
-	if index == myPlot then
-		return
-	end
-	myPlot = index
+local function keepOffOthersBelts(root: BasePart)
 	for belt in belts do
-		syncBlock(belt)
+		if belt.Parent and not (myPlot ~= nil and belt:GetAttribute("PlotIndex") == myPlot) then
+			local out = Treadmill.pushOut(belt.CFrame, belt.Size, root.Position)
+			if out then
+				root.CFrame = CFrame.new(out) * root.CFrame.Rotation
+				local v = root.AssemblyLinearVelocity
+				root.AssemblyLinearVelocity = Vector3.new(0, v.Y, 0) -- (falling keeps going: no hovering)
+			end
+		end
 	end
 end
 
@@ -310,6 +350,41 @@ local function watchClick(detector: ClickDetector)
 	end)
 end
 
+-- A pod's new seed springs up from half its size, and its name tag pops (local only).
+local POD_POP = TweenInfo.new(0.4, Enum.EasingStyle.Back, Enum.EasingDirection.Out)
+local function popPod(pod: BasePart)
+	local model = pod:FindFirstChild("SeedModel")
+	if model and model:IsA("Model") then
+		local ok, base = pcall(function()
+			return model:GetScale()
+		end)
+		if ok and type(base) == "number" and base > 0 and pcall(model.ScaleTo, model, base * 0.5) then
+			local size = Instance.new("NumberValue")
+			size.Value = base * 0.5
+			size.Changed:Connect(function(x: number)
+				if model.Parent then
+					pcall(model.ScaleTo, model, x)
+				end
+			end)
+			local grow = TweenService:Create(size, POD_POP, { Value = base })
+			grow.Completed:Connect(function()
+				size:Destroy()
+			end)
+			grow:Play()
+		end
+	end
+	local tag = pod:FindFirstChild("SeedLabel")
+	for _, l in if tag then tag:GetChildren() else {} do
+		if l:IsA("TextLabel") then
+			local scale = l:FindFirstChild("Pop") or Instance.new("UIScale")
+			scale.Name = "Pop"
+			scale.Scale = 1.5
+			scale.Parent = l
+			TweenService:Create(scale, POD_POP, { Scale = 1 }):Play()
+		end
+	end
+end
+
 local function consider(inst: Instance)
 	if inst:IsA("Texture") and inst.Name == "Stripes" then
 		stripes[inst] = true
@@ -319,14 +394,6 @@ local function consider(inst: Instance)
 		watchClick(inst)
 	elseif inst:IsA("BasePart") and inst:GetAttribute("Role") == "TreadmillBelt" then
 		belts[inst] = true
-		syncBlock(inst)
-		for _, property in { "CFrame", "Size" } do
-			inst:GetPropertyChangedSignal(property):Connect(function()
-				if belts[inst] then
-					syncBlock(inst)
-				end
-			end)
-		end
 	elseif inst:IsA("Model") and inst:GetAttribute("Role") == "Plot" then
 		local function owner()
 			local index = inst:GetAttribute("PlotIndex")
@@ -362,6 +429,10 @@ local function consider(inst: Instance)
 		inst:GetAttributeChangedSignal("Mutation"):Connect(function()
 			rainbows[inst] = if inst:GetAttribute("Mutation") == "Rainbow" then true else nil
 		end)
+		-- a new seed in the pod (it re-rolled after Config.POD_REFRESH, regrew or came back): a little pop
+		inst:GetAttributeChangedSignal("Roll"):Connect(function()
+			task.defer(popPod, inst)
+		end)
 	end
 end
 
@@ -374,10 +445,7 @@ workspace.DescendantRemoving:Connect(function(inst)
 		stripes[inst] = nil
 	elseif inst:IsA("BasePart") then
 		rainbows[inst] = nil
-		if belts[inst] then
-			belts[inst] = nil
-			blocks[inst] = nil -- its wall goes with it
-		end
+		belts[inst] = nil
 		local c = inst.Parent and creatures[inst.Parent :: Model]
 		if c then
 			c.dirty = true
@@ -542,11 +610,14 @@ local lockedRoot: BasePart? = nil
 local lockedHumanoid: Humanoid? = nil -- its AutoRotate is off and its WalkSpeed 0 (locally) while locked
 local lockedWalkSpeed = 16 -- the server's WalkSpeed for it, put back when it leaves
 local walkSpeedHook: RBXScriptConnection? = nil -- keeps it 0 when the server sends a new WalkSpeed
-local lockedLift = 0 -- how high the root stood over the belt's top when it was locked
 local jumpQueued = false
 
-local function beltTop(belt: BasePart): number
-	return (belt.CFrame * CFrame.new(0, belt.Size.Y / 2, 0)).Position.Y
+-- How high the root stands over the belt's top (Treadmill.lockCFrame holds it there, on the belt).
+local function standLift(humanoid: Humanoid?, root: BasePart): number
+	if not humanoid then
+		return Treadmill.STAND_LIFT
+	end
+	return Treadmill.standLift(humanoid.RigType == Enum.HumanoidRigType.R6, humanoid.HipHeight, root.Size.Y)
 end
 local nextPopup = 0
 -- What the Speed popups need from the stats (StatsUpdate sends partial tables).
@@ -715,14 +786,14 @@ RunService.Heartbeat:Connect(function()
 		end
 		-- (unanchored, so this move and every frame's hold replicate: the server must see it on the belt)
 		root.AssemblyLinearVelocity = Vector3.zero
-		root.CFrame = Treadmill.lockCFrame(belt.CFrame, belt.Size, root.Position)
-		lockedLift = root.Position.Y - beltTop(belt)
+		-- standing ON the belt's top, wherever the root was when it got over the belt (climbing onto a
+		-- raised belt, or mid-jump)
+		root.CFrame = Treadmill.lockCFrame(belt.CFrame, belt.Size, root.Position, standLift(humanoid, root))
 		nextPopup = now + 0.5
 	elseif lock.mode == "locked" and root and belt and root == lockedRoot then
-		-- Still locked: keep it facing the console (nothing may turn it while it runs), centred and at the
-		-- height it stood over the belt (a new tier's model moves the belt: PlotService swaps it on an upgrade).
-		local held = Treadmill.lockCFrame(belt.CFrame, belt.Size, root.Position)
-		held += Vector3.new(0, beltTop(belt) + lockedLift - root.Position.Y, 0)
+		-- Still locked: keep it facing the console (nothing may turn it while it runs), centred and standing
+		-- on the belt's top (a new tier's model moves the belt: PlotService swaps it on an upgrade).
+		local held = Treadmill.lockCFrame(belt.CFrame, belt.Size, root.Position, standLift(humanoid, root))
 		if root.CFrame.LookVector:Dot(held.LookVector) < 0.999 or (held.Position - root.Position).Magnitude > 0.05 then
 			root.CFrame = held
 			root.AssemblyLinearVelocity = Vector3.zero
@@ -736,6 +807,10 @@ RunService.Heartbeat:Connect(function()
 		end
 	elseif action == "unlock" or action == "exit" then
 		release()
+	end
+	-- Everybody else's treadmill: kept off it (nothing solid over it to stand on).
+	if root and alive and lock.mode ~= "locked" then
+		keepOffOthersBelts(root)
 	end
 
 	-- Sprint in place while locked.

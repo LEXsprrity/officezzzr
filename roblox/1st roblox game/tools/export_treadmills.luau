@@ -63,8 +63,10 @@ local function export(spec: any, tier: number, tool: any): (any, string)
 	assert(folder, `{spec.tool} has no Model folder`)
 	local model = roblox.Instance.new("Model")
 	model.Name = `Treadmill_T{tier}`
-	for _, child in folder:GetChildren() do
-		child:Clone().Parent = model
+	-- (the folder is cloned whole: a clone keeps only references inside itself, and the belt's scrolling
+	-- Beam lives in "Beam Holder" with its Attachment1 in "Beam Part", so child by child it lost its end)
+	for _, child in folder:Clone():GetChildren() do
+		child.Parent = model
 	end
 
 	-- Drop the kit's leftovers: welds (to the old Root), its invisible screen-swap buttons, any code.

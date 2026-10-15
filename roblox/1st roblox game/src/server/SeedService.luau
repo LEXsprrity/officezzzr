@@ -31,7 +31,9 @@ type Pod = {
 	mutation: string?,
 	gene: number,
 	luck: number, -- the luck its seed was rolled with (night or day), for the 2x Luck pass at steal time
-	regrowToken: number,
+	regrowToken: number, -- bumped by every change (shown, stolen, back), so an older timer finds itself stale
+	labelLift: number, -- extra height for its tag when a neighbour pod is close (their tags don't overlap)
+	spot: Attachment, -- where its tag hangs: just over its seed
 }
 type Nest = { info: WorldBuilder.NestInfo, pods: { Pod } }
 
@@ -40,7 +42,14 @@ local rng = Random.new()
 
 SeedService.POD_SIZE = 3 -- studs: the pod's ball (and the box an assets/Seed model is fitted in)
 SeedService.CARRY_SIZE = 2.4
-SeedService.LABEL_HEIGHTS = { 3, 4.1, 3.55, 4.65 } -- studs over a pod, by pod number, so neighbours' labels don't overlap
+-- A pod's tag hangs LABEL_GAP studs over the top of its own seed. It used to float 3-4.65 studs over the
+-- pod's centre, about the camera's height: with the camera looking down at the pods, those tags showed up
+-- near the horizon, piled over the scenery far away (AlwaysOnTop), and the nearest pod's went off the top
+-- of the screen: "3 Common Seed labels together, the pod in front has none" (owner playtest). A pod with a
+-- neighbour closer than LABEL_CLOSE studs whose tag is low gets its tag LABEL_STAGGER higher.
+SeedService.LABEL_GAP = 0.6
+SeedService.LABEL_CLOSE = 7
+SeedService.LABEL_STAGGER = 0.9
 
 -- Set by Main: GuardService.alert
 SeedService.onStolen = nil :: ((zone: number, player: Player) -> ())?
@@ -161,21 +170,40 @@ local function setLabel(label: TextLabel, text: string, color: Color3)
 end
 
 -- A seed's name tag: relief text that is never hidden behind the boss, a wall or another pod (AlwaysOnTop:
--- a depth-tested tag behind geometry is how a pod showed without its name).
-local function nameTag(host: BasePart, height: number, size: UDim2, maxDistance: number): (TextLabel, BillboardGui)
+-- a depth-tested tag behind geometry is how a pod showed without its name). With `spot`, it hangs on that
+-- attachment (in `host`) instead of `height` studs over the host's centre.
+local function nameTag(host: BasePart, height: number, size: UDim2, maxDistance: number, spot: Attachment?): (TextLabel, BillboardGui)
 	local label = WorldBuilder.billboard(host, "", size, Vector3.new(0, height, 0), maxDistance)
 	local gui = label.Parent :: BillboardGui
 	gui.Name = "SeedLabel"
 	gui.AlwaysOnTop = true
+	if spot then
+		gui.Adornee = spot
+		gui.StudsOffsetWorldSpace = Vector3.zero
+	end
 	relief(label)
 	return label, gui
+end
+
+-- The top of a pod's seed over the pod's centre: its seed model's top (the design is fitted in the pod's
+-- ball, but a design may be shorter), or the ball's.
+local function seedTop(pod: Pod): number
+	local model = pod.part:FindFirstChild("SeedModel")
+	if model then
+		local _, hi = Assets.bounds(model, pod.part.CFrame)
+		if hi then
+			return hi.Y
+		end
+	end
+	return pod.part.Size.Y / 2
 end
 
 ----------------------------------------------------------------------------------------------------
 -- Pods
 ----------------------------------------------------------------------------------------------------
 -- The one place a pod is shown or hidden: shown, it has its seed's look, an enabled prompt and an enabled
--- name tag with the seed's name; hidden, none of them.
+-- name tag with the seed's name (one name: the prompt's and the tag's are the same string), the tag just
+-- over this seed; hidden, none of them.
 local function setPod(pod: Pod, zone: number, shown: boolean)
 	pod.available = shown
 	pod.prompt.Enabled = shown
@@ -185,6 +213,8 @@ local function setPod(pod: Pod, zone: number, shown: boolean)
 		pod.prompt.ObjectText = name
 		setLabel(pod.label, name, Config.RARITIES[pod.rarity].color)
 		SeedService.seedLook(pod.part, zone, pod.rarity, pod.mutation, pod.gene)
+		pod.spot.CFrame = CFrame.new(0, seedTop(pod) + SeedService.LABEL_GAP + pod.labelLift, 0)
+		pod.part:SetAttribute("Roll", (pod.part:GetAttribute("Roll") or 0) + 1) -- (the client pops a new seed)
 	else
 		local model = pod.part:FindFirstChild("SeedModel")
 		if model then
@@ -194,11 +224,38 @@ local function setPod(pod: Pod, zone: number, shown: boolean)
 	end
 end
 
-local function regrow(pod: Pod, zone: number)
+-- Runs `fn` in `seconds` unless the pod changed meanwhile (every call bumps its token: the newest timer
+-- is the only live one, so a regrow and a refresh, or a refresh and a steal, never race).
+local function after(pod: Pod, seconds: number, fn: () -> ())
+	pod.regrowToken += 1
+	local token = pod.regrowToken
+	task.delay(seconds, function()
+		if pod.regrowToken == token then
+			fn()
+		end
+	end)
+end
+
+local regrow: (Pod, number) -> ()
+
+-- Shows the pod's seed and starts its own clock: untouched for Config.POD_REFRESH seconds, it re-rolls
+-- (a fresh rarity, mutation, gene and design), so the corridor keeps offering new seeds. Each pod's clock
+-- starts when its seed appears, so they don't all flip at once. A stolen pod's clock stops (steal bumps
+-- the token); it starts again when the seed comes back or the pod regrows.
+local function show(pod: Pod, zone: number)
+	setPod(pod, zone, true)
+	after(pod, Config.POD_REFRESH, function()
+		if pod.available then
+			regrow(pod, zone)
+		end
+	end)
+end
+
+function regrow(pod: Pod, zone: number)
 	pod.luck = if isNight() then Config.NIGHT_LUCK else 1
 	pod.rarity, pod.mutation = Config.rollSeed(zone, pod.luck, isNight(), roll)
 	pod.gene = Config.rollGene(roll)
-	setPod(pod, zone, true)
+	show(pod, zone)
 end
 
 -- Zone `zone`'s pods (tests read them; nothing outside changes them).
@@ -282,13 +339,16 @@ local function steal(player: Player, zone: number, podIndex: number)
 		return SeedService.luckRoll(pod.gene, player.UserId)
 	end)
 	local mutation = pod.mutation
+	pod.regrowToken += 1 -- (its refresh clock stops while the seed is away)
 	setPod(pod, zone, false)
 	local carry = SeedService.newCarry(zone, podIndex, rarity, mutation, pod.gene)
 	carry.shown = pod.rarity
 	carry.model = makeCarryModel(char, carry)
 	s.carry = carry
 	Sessions.pushCarry(s)
-	Net.LootEvent:FireClient(player, "Pickup", { zone = zone, rarity = rarity, mutation = mutation, name = SeedService.seedName(zone, rarity, mutation) })
+	-- `shown`: what the pod said; above it, the thief's 2x Luck raised it (Effects.client: "Lucky! Rare > Epic")
+	Net.LootEvent:FireClient(player, "Pickup", { zone = zone, rarity = rarity, shown = pod.rarity, mutation = mutation,
+		name = SeedService.seedName(zone, rarity, mutation) })
 	if SeedService.onStolen then
 		SeedService.onStolen(zone, player)
 	end
@@ -342,12 +402,24 @@ function SeedService.buildPods(nestInfos: { WorldBuilder.NestInfo })
 			prompt.RequiresLineOfSight = false
 			prompt.KeyboardKeyCode = Enum.KeyCode.E
 			prompt.Parent = part
-			local heights = SeedService.LABEL_HEIGHTS
-			local label, gui = nameTag(part, heights[(i - 1) % #heights + 1], UDim2.fromOffset(190, 28), 45)
+			local spot = Instance.new("Attachment")
+			spot.Name = "LabelSpot"
+			spot.Parent = part
+			local label, gui = nameTag(part, 0, UDim2.fromOffset(190, 28), 45, spot)
 			part.Parent = info.model
+			-- a neighbour this close with a low tag: this one a little higher (they'd overlap)
+			local lift = 0
+			for j = 1, i - 1 do
+				local other = nest.pods[j]
+				local d = other.cframe.Position - cf.Position
+				if Vector3.new(d.X, 0, d.Z).Magnitude < SeedService.LABEL_CLOSE and other.labelLift == 0 then
+					lift = SeedService.LABEL_STAGGER
+				end
+			end
 			local pod: Pod = {
 				cframe = cf, part = part, prompt = prompt, label = label, gui = gui,
 				available = false, rarity = 1, mutation = nil, gene = 1, luck = 1, regrowToken = 0,
+				labelLift = lift, spot = spot,
 			}
 			nest.pods[i] = pod
 			regrow(pod, k)
@@ -391,9 +463,8 @@ function SeedService.returnCarry(player: Player)
 		return
 	end
 	local pod = nests[carry.zone].pods[carry.pod]
-	pod.regrowToken += 1
 	pod.rarity, pod.mutation, pod.gene = carry.shown or carry.rarity, carry.mutation, carry.gene or Config.rollGene(roll)
-	setPod(pod, carry.zone, true)
+	show(pod, carry.zone) -- (a pending regrow goes stale; its refresh clock starts again)
 end
 
 -- A stolen seed goes into the seed bag by itself as soon as its thief crosses from the corridor into the
@@ -442,10 +513,8 @@ function SeedService.consumeCarry(player: Player): Sessions.Carry?
 	local nest = nests[carry.zone]
 	local pod = nest and nest.pods[carry.pod]
 	if pod then -- (always, unless the nest's pods were never set up)
-		pod.regrowToken += 1
-		local token = pod.regrowToken
-		task.delay(Config.POD_REGROW, function()
-			if pod.regrowToken == token and not pod.available then
+		after(pod, Config.POD_REGROW, function()
+			if not pod.available then
 				regrow(pod, carry.zone)
 			end
 		end)

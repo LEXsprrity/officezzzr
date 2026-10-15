@@ -264,6 +264,7 @@ local Net = H.stubServer("Net", { StatsUpdate = { FireClient = function() end },
 Net.announce = Net.announce or function() end
 local Sessions = H.server("Sessions")
 local SeedService = H.server("SeedService")
+local Assets = H.server("Assets")
 local SpeedLogic = H.server("SpeedLogic")
 
 -- Puts the thief's root at `at`, where the server's movement check has seen it (SpeedService.trustedRoot):
@@ -324,6 +325,27 @@ local function checkPods(label: string)
 				H.ok(pod.label.Text ~= "" and pod.label.Text == SeedService.seedName(k, pod.rarity, pod.mutation), `{where}: says "{pod.label.Text}"`)
 				H.ok(pod.gui.AlwaysOnTop, `{where}: never hidden behind the boss or another pod`)
 				H.ok(pod.label.Parent:FindFirstChild("Shadow") ~= nil and pod.label.Parent.Shadow.Text == pod.label.Text, `{where}: relief text`)
+				H.eq(pod.label.Text, pod.prompt.ObjectText, `{where}: the tag says what the prompt says`)
+				-- exactly one tag on the pod (its seed model brings none), hanging on the pod's own spot, just
+				-- over the top of this pod's own seed
+				local guis = {}
+				for _, d in pod.part:GetDescendants() do
+					if d:IsA("BillboardGui") then
+						table.insert(guis, d)
+					end
+				end
+				H.ok(#guis == 1 and guis[1] == pod.gui and pod.gui.Enabled, `{where}: one enabled tag ({#guis})`)
+				local spot = pod.gui.Adornee
+				H.ok(spot ~= nil and spot:IsA("Attachment") and spot.Parent == pod.part, `{where}: hung on its own pod`)
+				local model = pod.part:FindFirstChild("SeedModel")
+				H.ok(model ~= nil, `{where}: shows its Seed_ model`)
+				local _, hi = Assets.bounds(model, pod.part.CFrame)
+				local top = hi.Y
+				local over = spot.CFrame.Position.Y - top
+				H.ok(math.abs(spot.CFrame.Position.X) < 1e-4 and math.abs(spot.CFrame.Position.Z) < 1e-4 and pod.gui.StudsOffsetWorldSpace.Magnitude < 1e-4,
+					`{where}: straight over its seed`)
+				H.ok(over >= SeedService.LABEL_GAP - 1e-4 and over <= SeedService.LABEL_GAP + SeedService.LABEL_STAGGER + 1e-4,
+					`{where}: just over its seed's top ({over} studs)`)
 			end
 			H.ok(pod.part.Material ~= Enum.Material.Neon and pod.part:FindFirstChildWhichIsA("Light") == nil, `{where}: no glow`)
 			if pod.available then
@@ -340,16 +362,27 @@ end
 H.test("pods: every visible pod has its name tag, from the start and after every path", function()
 	SeedService.buildPods(nestInfos())
 	checkPods("at start")
-	-- neighbours' tags at different heights (they don't overlap)
-	local heights = {}
-	for _, pod in SeedService.pods(1) do
-		heights[pod.gui.StudsOffsetWorldSpace.Y] = true
+	-- Owner playtest: 3 "Common Seed" tags floated together far up while the pod in front (its prompt
+	-- "Epic Seed") had none: the tags hung 3-4.65 studs over the pods' centres, at about the camera's height,
+	-- so they drew near the horizon over the far scenery. Now each hangs low, over its own seed, and no two
+	-- pods' tags are in the same spot. (With the owner's seed models: assets/Seed_<Zone>.)
+	for k in Config.ZONES do
+		H.ok(SeedService.designCount(k) > 0, `zone {k} uses its Seed_ models`)
+		local pods = SeedService.pods(k)
+		for i, pod in pods do
+			local at = (pod.part.CFrame * pod.gui.Adornee.CFrame).Position
+			H.ok(at.Y - pod.part.CFrame.Position.Y <= pod.part.Size.Y / 2 + SeedService.LABEL_GAP + SeedService.LABEL_STAGGER + 1e-4,
+				`zone {k} pod {i}: its tag is low, just over the seed`)
+			for j = i + 1, #pods do
+				local other = (pods[j].part.CFrame * pods[j].gui.Adornee.CFrame).Position
+				H.ok((other - at).Magnitude > 1, `zone {k}: pods {i} and {j} have their tags apart`)
+				local d = pods[j].part.CFrame.Position - pod.part.CFrame.Position
+				if Vector3.new(d.X, 0, d.Z).Magnitude < 4 then
+					H.ok(math.abs(other.Y - at.Y) >= SeedService.LABEL_STAGGER - 1e-4, `zone {k}: pods {i} and {j} are close: their tags at different heights`)
+				end
+			end
+		end
 	end
-	local n = 0
-	for _ in heights do
-		n += 1
-	end
-	H.eq(n, Config.PODS_PER_NEST, "every pod's tag at its own height")
 
 	local function stealFrom(zone: number, i: number): (any, any, any)
 		local pod = SeedService.pods(zone)[i]
@@ -416,6 +449,85 @@ H.test("pods: every visible pod has its name tag, from the start and after every
 	H.runDelayed()
 	H.ok(not pod.available, "a stale regrow does nothing")
 	Sessions.remove(player)
+end)
+
+-- Runs only the queued task.delay callbacks of exactly `seconds` (the others stay queued).
+local function runTimers(seconds: number): number
+	local keep, run = {}, {}
+	for _, d in H.delayed do
+		table.insert(if d.seconds == seconds then run else keep, d)
+	end
+	H.delayed = keep
+	for _, d in run do
+		d.fn(table.unpack(d.args, 1, d.args.n))
+	end
+	return #run
+end
+
+H.test("pods: an untouched pod re-rolls after POD_REFRESH (each on its own clock); a stolen one doesn't", function()
+	H.ok(Config.POD_REFRESH == 180, "3 minutes")
+	H.delayed = {}
+	SeedService.buildPods(nestInfos())
+	local pods = SeedService.pods(1)
+	H.eq(runTimers(Config.POD_REFRESH), #Config.ZONES * Config.PODS_PER_NEST, "one clock per pod, started when its seed appeared")
+	-- (every pod re-rolled once: its seed is new and its next clock is running)
+	checkPods("refreshed")
+	for i, pod in pods do
+		H.eq(pod.part:GetAttribute("Roll"), 2, `pod {i}: re-rolled once (the client pops it)`)
+		H.eq(pod.label.Text, pod.prompt.ObjectText, `pod {i}: tag and prompt changed together`)
+	end
+	-- a fresh roll really is fresh: over a few refreshes the genes change
+	local genes = {}
+	for _ = 1, 4 do
+		for _, pod in pods do
+			genes[pod.gene] = true
+		end
+		runTimers(Config.POD_REFRESH)
+	end
+	local n = 0
+	for _ in genes do
+		n += 1
+	end
+	H.ok(n > Config.PODS_PER_NEST, "new seeds (genes) after refreshes")
+
+	-- stolen: its clock stops; nothing changes while it is carried
+	local pod = pods[2]
+	local player, s = thief(pod.part.CFrame.Position + Vector3.new(2, 0, 0))
+	SeedService.steal(player, 1, 2)
+	H.ok(s.carry ~= nil and not pod.available, "stolen")
+	local roll = pod.part:GetAttribute("Roll")
+	runTimers(Config.POD_REFRESH)
+	H.ok(not pod.available and pod.part:GetAttribute("Roll") == roll, "a stolen pod doesn't re-roll")
+	-- back (caught): the same seed, its clock starts again
+	local gene = s.carry.gene
+	SeedService.returnCarry(player)
+	H.ok(pod.available and pod.gene == gene, "back with its seed")
+	H.eq(pod.label.Text, pod.prompt.ObjectText)
+	runTimers(Config.POD_REFRESH)
+	H.ok(pod.available and pod.part:GetAttribute("Roll") == roll + 2, "then re-rolls on its own clock")
+	Sessions.remove(player)
+
+	-- planted: only the regrow runs (no stale refresh flips it early), then its clock starts
+	player, s = thief(pod.part.CFrame.Position + Vector3.new(2, 0, 0))
+	SeedService.steal(player, 1, 2)
+	SeedService.consumeCarry(player)
+	runTimers(Config.POD_REFRESH)
+	H.ok(not pod.available, "an old refresh clock never regrows a planted pod early")
+	H.ok(runTimers(Config.POD_REGROW) == 1, "its regrow")
+	H.ok(pod.available, "regrown")
+	H.eq(pod.label.Text, pod.prompt.ObjectText)
+	Sessions.remove(player)
+	H.delayed = {}
+end)
+
+H.test("2x Luck: the pickup says when the thief's luck raised the seed (the client shows Lucky! Rare > Epic)", function()
+	local source = fs.readFile("src/server/SeedService.luau")
+	H.ok(string.find(source, "shown = pod.rarity", 1, true) ~= nil, "the Pickup event carries what the pod showed")
+	local effects = fs.readFile("src/client/Effects.client.luau")
+	H.ok(string.find(effects, "data.shown", 1, true) ~= nil and string.find(effects, "Lucky!", 1, true) ~= nil,
+		"Effects.client shows Lucky! when the seed came out rarer than its pod said")
+	-- the draw is fixed per (seed gene, thief)
+	H.eq(SeedService.luckRoll(77, 4242), SeedService.luckRoll(77, 4242))
 end)
 
 -- The bought seeds each zone uses (tools/export_seeds.luau's list): "Apple Seed", ...

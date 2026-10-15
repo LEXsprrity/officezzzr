@@ -1,60 +1,36 @@
 -- The VIP gamepass's looks (its x1.25 money and Speed are in Config.passMoneyMult / passSpeedMult): a gold
--- relief "VIP" tag over the owner's head, and the player's VIP attribute, which VipChat.client reads to put
--- a gold [VIP] tag in front of their chat messages. Both are set only here, on the server, from
--- Sessions.passes (ShopService: UserOwnsGamePassAsync / PromptGamePassPurchaseFinished).
+-- relief "VIP" badge just over the owner's head (Shared/VipBadge, the same badge the owner sees by their
+-- Speed and money: VipHudBadge.client), and the player's VIP attribute, which VipChat.client reads to put a
+-- gold [VIP] tag in front of their chat messages and VipHudBadge.client to show the HUD badge. Both are set
+-- only here, on the server, from Sessions.passes (ShopService: UserOwnsGamePassAsync /
+-- PromptGamePassPurchaseFinished).
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local Shared = ReplicatedStorage:WaitForChild("Shared")
+local VipBadge = require(Shared:WaitForChild("VipBadge"))
+
 local VipService = {}
 
 VipService.TAG = "VipTag" -- the BillboardGui's name, under the character's Head
 VipService.ATTRIBUTE = "VIP" -- on the Player
-VipService.GOLD = Color3.fromRGB(255, 206, 40)
-local INK = Color3.fromRGB(70, 38, 0) -- the outline and the dropped copy: a deep brown, so the gold glows
+VipService.GOLD = VipBadge.GOLD
+-- Sized in studs (the BillboardGui's Size in scale), so it shrinks with distance like the head under it,
+-- and only seen up close: owner playtest, "it floats too high and looks huge".
+VipService.SIZE = Vector2.new(2.3, 2.3 / VipBadge.ASPECT)
+VipService.OFFSET = 1.45 -- studs from the Head's centre: its bottom just clears the top of the head
+VipService.MAX_DISTANCE = 60
 
--- A relief label: a thick round outline, a bevel (light top, darker gold foot) and a dark copy dropped
--- behind it, like the world's other signs.
-local function reliefLabel(parent: Instance, text: string): TextLabel
-	local function label(name: string, color: Color3, offset: UDim2, z: number): TextLabel
-		local l = Instance.new("TextLabel")
-		l.Name = name
-		l.BackgroundTransparency = 1
-		l.Size = UDim2.fromScale(1, 1)
-		l.Position = offset
-		l.Font = Enum.Font.FredokaOne
-		l.TextScaled = true
-		l.Text = text
-		l.TextColor3 = color
-		l.ZIndex = z
-		local stroke = Instance.new("UIStroke")
-		stroke.Thickness = 3
-		stroke.LineJoinMode = Enum.LineJoinMode.Round
-		stroke.Color = INK
-		stroke.Parent = l
-		l.Parent = parent
-		return l
-	end
-	label("Shadow", INK, UDim2.fromOffset(2, 4), 1)
-	local main = label("Label", VipService.GOLD, UDim2.new(), 2)
-	local bevel = Instance.new("UIGradient")
-	bevel.Rotation = 90
-	bevel.Color = ColorSequence.new({
-		ColorSequenceKeypoint.new(0, Color3.new(1, 1, 1)),
-		ColorSequenceKeypoint.new(0.5, Color3.new(1, 1, 1)),
-		ColorSequenceKeypoint.new(1, Color3.fromRGB(215, 140, 20)),
-	})
-	bevel.Parent = main
-	return main
-end
-
--- The tag over a head: sized in studs (it shrinks with distance like the head), above the Roblox name.
+-- The tag over a head: like a name tag, just above it.
 function VipService.buildTag(head: BasePart): BillboardGui
 	local gui = Instance.new("BillboardGui")
 	gui.Name = VipService.TAG
-	gui.Size = UDim2.fromScale(3.6, 1.3)
-	gui.StudsOffset = Vector3.new(0, 3.1, 0)
+	gui.Size = UDim2.fromScale(VipService.SIZE.X, VipService.SIZE.Y)
+	gui.StudsOffset = Vector3.new(0, VipService.OFFSET, 0)
 	gui.LightInfluence = 0
-	gui.MaxDistance = 120
+	gui.MaxDistance = VipService.MAX_DISTANCE
+	gui.ClipsDescendants = false -- (the outline and the dropped copy reach a little past it)
 	gui.ResetOnSpawn = false
 	gui.Adornee = head
-	reliefLabel(gui, "VIP")
+	VipBadge.build(gui)
 	gui.Parent = head
 	return gui
 end

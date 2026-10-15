@@ -123,33 +123,44 @@ H.test("treadmill: Effects.client locks, sprints and pops Speed with the shared 
 		local text = fs.readFile(file)
 		H.ok(string.find(text, "isn't your treadmill", 1, true) == nil, `{file} has no "isn't your treadmill" toast`)
 	end
-	H.ok(string.find(source, "Treadmill.blockBox(belt.CFrame, belt.Size)", 1, true) ~= nil and string.find(source, "CanCollide = true", 1, true) ~= nil,
-		"Effects.client puts a solid invisible wall over the other belts")
-	H.ok(string.find(source, "belt:GetAttribute(\"PlotIndex\") == myPlot", 1, true) ~= nil, "...but not over its own")
 	H.ok(string.find(source, "AutoRotate = false", 1, true) ~= nil, "a locked runner isn't turned by the walking keys")
 end)
 
-H.test("treadmill wall: someone else's belt is walled off; a runner on it would be inside the wall", function()
-	local b = belt(3, Vector3.new(-40, 1.5, 30))
-	b.Size = Vector3.new(4.5, 1, 9)
-	local cf, size = Treadmill.blockBox(b.CFrame, b.Size)
-	local rel = b.CFrame:PointToObjectSpace(cf.Position)
-	H.ok(math.abs(rel.X) < 1e-4 and math.abs(rel.Z) < 1e-4, "centred over the belt")
-	H.ok(size.X >= b.Size.X and size.Z >= b.Size.Z, "covers its whole footprint")
-	local bottom = rel.Y - size.Y / 2
-	H.ok(bottom >= b.Size.Y / 2 and bottom <= b.Size.Y / 2 + 0.2, `starts just above the belt ({bottom})`)
-	H.ok(size.Y >= 8, "too tall to jump onto")
-	-- every spot the belt check counts as on the belt is inside the wall
-	for _, x in { -2.2, 0, 2.2 } do
-		for _, z in { -4.4, 0, 4.4 } do
-			local pos = (b.CFrame * CFrame.new(x, b.Size.Y / 2 + 3, z)).Position
-			H.ok(Treadmill.onBelt(b.CFrame, b.Size, pos), "on the belt")
-			local p = cf:PointToObjectSpace(pos)
-			H.ok(math.abs(p.X) < size.X / 2 and math.abs(p.Y) < size.Y / 2 and math.abs(p.Z) < size.Z / 2, `({x}, {z}) inside the wall`)
+H.test("treadmill keep-out: nobody can use someone else's belt, and nothing over it can be stood on (no floating)", function()
+	-- Owner playtest: another player stood in mid-air over a treadmill, on top of the invisible solid wall
+	-- Effects.client used to put over belts that weren't the viewer's. Now nothing solid is made at all.
+	local source = fs.readFile("src/client/Effects.client.luau")
+	H.ok(string.find(source, "CanCollide = true", 1, true) == nil and string.find(source, "TreadmillBlock", 1, true) == nil,
+		"Effects.client makes no solid part (no invisible wall with a top to stand on)")
+	H.ok(string.find(source, "Treadmill.pushOut(belt.CFrame, belt.Size, root.Position)", 1, true) ~= nil
+		and string.find(source, "belt:GetAttribute(\"PlotIndex\") == myPlot", 1, true) ~= nil, "it keeps its own character off the other belts, not its own")
+	H.eq((Treadmill :: any).blockBox, nil, "the solid box is gone")
+	for _, size in { Vector3.new(4.5, 1, 9), Vector3.new(4.4, 2.84, 7.8) } do
+		local b = belt(3, Vector3.new(-40, size.Y / 2, 30))
+		b.Size = size
+		local top = size.Y / 2
+		-- every spot over the belt, standing, jumping or landing from the board beside it: put back outside
+		for _, x in { -2.2, -0.5, 0, 1.9 } do
+			for _, z in { -size.Z / 2 + 0.1, -1, 0, 2.5, size.Z / 2 - 0.1 } do
+				for _, y in { top + 0.2, top + 3, top + 7, top + Treadmill.BLOCK_HEIGHT - 0.1 } do
+					local pos = (b.CFrame * CFrame.new(x, y, z)).Position
+					local out = Treadmill.pushOut(b.CFrame, b.Size, pos)
+					H.ok(out ~= nil, `({x}, {y}, {z}) is kept out`)
+					local rel = b.CFrame:PointToObjectSpace(out)
+					H.ok(not Treadmill.onBelt(b.CFrame, b.Size, out), "off the belt")
+					H.eq(Treadmill.pushOut(b.CFrame, b.Size, out), nil, "and stays out (no ping-pong)")
+					H.near(rel.Y, y, 1e-4, "sideways only: never lifted (nothing to stand on), a fall keeps falling")
+					H.ok((out - pos).Magnitude <= math.max(size.X, size.Z) / 2 + Treadmill.KEEP_OUT_PAD + 0.1, "out the nearest side")
+				end
+			end
 		end
+		-- beside it on the ground, or far over it: left alone
+		H.eq(Treadmill.pushOut(b.CFrame, b.Size, (b.CFrame * CFrame.new(size.X / 2 + 1.5, top + 3, 0)).Position), nil, "walking past beside it")
+		H.eq(Treadmill.pushOut(b.CFrame, b.Size, (b.CFrame * CFrame.new(0, top + Treadmill.BLOCK_HEIGHT + 1, 0)).Position), nil, "high above it")
+		b:Destroy()
 	end
-	b:Destroy()
 end)
+
 
 ----------------------------------------------------------------------------------------------------
 -- Tiers
@@ -841,6 +852,80 @@ H.test("treadmill tiers: PlotService shows the owner's tier (an empty plot tier 
 	end
 end)
 
+-- The heights of the belt's scrolling texture (a Beam drawn on the running surface, end to end along it) at
+-- the point `at`, in the belt's space: one per such Beam. It is what the player sees as the belt.
+local function textureHeights(model: any, b: any, at: Vector3): { number }
+	local out = {}
+	for _, d in model:GetDescendants() do
+		if d:IsA("Beam") then
+			local ok, a0, a1 = pcall(function()
+				return d.Attachment0, d.Attachment1
+			end)
+			if ok and a0 and a1 and a0.Parent:IsA("BasePart") and a1.Parent:IsA("BasePart") then
+				local p0 = b.CFrame:PointToObjectSpace((a0.Parent.CFrame * a0.CFrame).Position)
+				local p1 = b.CFrame:PointToObjectSpace((a1.Parent.CFrame * a1.CFrame).Position)
+				local inside = math.abs(p0.X) < b.Size.X / 2 and math.abs(p1.X) < b.Size.X / 2
+				if inside and math.abs(p1.Z - p0.Z) > b.Size.Z / 2 then -- along the belt, not a side glow
+					local t = (at.Z - p0.Z) / (p1.Z - p0.Z)
+					table.insert(out, p0.Y + (p1.Y - p0.Y) * t)
+				end
+			end
+		end
+	end
+	return out
+end
+
+H.test("treadmill tiers: on every tier the runner stands ON the visible belt, and nothing of the model is inside them", function()
+	local world = MapTool.load(MapTool.PATH)
+	local plots = WorldBuilder.adopt(world)
+	Assets.refresh(world)
+	local plot = plots[1]
+	local board = TreadmillBoard.build(plot.model, plot.belt, plot.center)
+	local ground = Assets.pivotOf(plot.model:FindFirstChild("Treadmill")).Position.Y
+	for tier = 1, Config.TREADMILL_MAX do
+		TreadmillBoard.showTier(board, tier)
+		local tm = plot.model:FindFirstChild("Treadmill")
+		H.eq(tm:GetAttribute("Asset"), Assets.treadmillSlot(tier), `tier {tier}'s model`)
+		local b = plot.belt
+		local top = b.Size.Y / 2 -- in the belt's space
+		H.ok(b.CFrame:PointToWorldSpace(Vector3.new(0, -b.Size.Y / 2, 0)).Y <= ground + 0.05,
+			`tier {tier}: the hidden belt is solid down to the ground (no gap under a raised belt to walk into)`)
+		-- stepping on from the ground beside it, climbing it, or landing from a jump: the feet end on the belt
+		for _, y in { 0.01, top + 1, top + 6 } do
+			local held = Treadmill.lockCFrame(b.CFrame, b.Size, b.CFrame:PointToWorldSpace(Vector3.new(1, y, 2)))
+			local feet = b.CFrame:PointToObjectSpace(held.Position) - Vector3.new(0, Treadmill.STAND_LIFT, 0)
+			H.near(feet.Y, top, 0.01, `tier {tier}: touched at {y}, the feet are held on the belt's top`)
+			H.ok(Treadmill.onBelt(b.CFrame, b.Size, held.Position), `tier {tier}: held on the belt`)
+		end
+		local held = Treadmill.lockCFrame(b.CFrame, b.Size, b.CFrame.Position)
+		local feet = b.CFrame:PointToObjectSpace(held.Position) - Vector3.new(0, Treadmill.STAND_LIFT, 0)
+		local marker = tm:FindFirstChild("Belt", true)
+		local _, mhi = Assets.bounds(marker, b.CFrame, true)
+		H.near(feet.Y, mhi.Y, 0.01, `tier {tier}: feet at the model's Belt top`)
+		-- ...and that is where the belt is drawn (its scrolling texture), under the feet
+		local seen = textureHeights(tm, b, feet)
+		H.ok(#seen > 0, `tier {tier}: its belt texture runs along the belt (both Beam ends kept)`)
+		for _, y in seen do
+			H.near(feet.Y, y, 0.15, `tier {tier}: feet on the visible belt (texture at {y}, feet at {feet.Y})`)
+		end
+		-- The runner's body over the belt (2 wide, 1 deep, 5 tall, knee height up): no part of the model may
+		-- be in it. Left out: the belt and the rails and trims at its sides (below the knee), and the frames,
+		-- arches and handlebars that reach past BOTH sides of the belt (a box can't see the hole a mesh
+		-- leaves in the middle; those are for the eye in Studio).
+		local blo, bhi = Vector3.new(-1, top + 1.5, feet.Z - 0.5), Vector3.new(1, top + 5, feet.Z + 0.5)
+		for _, p in tm:GetDescendants() do
+			if p:IsA("BasePart") and p ~= marker and p.Transparency < 1 then
+				local lo, hi = Assets.bounds(p, b.CFrame)
+				local wraps = lo.X < -b.Size.X / 2 and hi.X > b.Size.X / 2
+				if not wraps then
+					H.ok(not overlaps(lo, hi, blo, bhi, 0), `tier {tier}: {p.Name} ({lo}..{hi}) is inside the runner ({blo}..{bhi})`)
+				end
+			end
+		end
+	end
+	TreadmillBoard.showTier(board, 1)
+end)
+
 ----------------------------------------------------------------------------------------------------
 -- The lock: on your own belt you stay on it until you jump
 ----------------------------------------------------------------------------------------------------
@@ -898,7 +983,7 @@ H.test("treadmill lock: held at the CENTRE of the belt (wherever you stepped on)
 		held = Treadmill.lockCFrame(b.CFrame, b.Size, onIt)
 		local rel = b.CFrame:PointToObjectSpace(held.Position)
 		H.ok(math.abs(rel.X) < 1e-4 and math.abs(rel.Z) < 1e-4, `centred on the belt from {contact} ({rel})`)
-		H.ok(math.abs(rel.Y - 3.5) < 1e-4, "at its own height")
+		H.ok(math.abs(rel.Y - (b.Size.Y / 2 + Treadmill.STAND_LIFT)) < 1e-4, "standing on the belt's top")
 		H.ok(Treadmill.onBelt(b.CFrame, b.Size, held.Position), "still on the belt")
 		local front = b.CFrame:VectorToWorldSpace(Vector3.new(0, 0, Treadmill.FRONT))
 		H.ok(held.LookVector:Dot(front) > 0.999, "facing the front")
@@ -915,8 +1000,32 @@ H.test("treadmill lock: held at the CENTRE of the belt (wherever you stepped on)
 	H.ok(Treadmill.exitPosition(b.CFrame, b.Size, held.Position, nil) ~= nil, "no plot centre yet: still leaves")
 	-- Effects.client holds the character with this (not where it touched the belt)
 	local effects = fs.readFile("src/client/Effects.client.luau")
-	H.ok(string.find(effects, "Treadmill.lockCFrame(belt.CFrame, belt.Size, root.Position)", 1, true) ~= nil, "Effects.client uses the shared lock spot")
+	local _, uses = string.gsub(effects, "Treadmill.lockCFrame%(belt.CFrame, belt.Size, root.Position, standLift%(humanoid, root%)%)", "")
+	H.eq(uses, 2, "Effects.client locks and holds with the shared lock spot, standing on the belt (its own stand lift)")
+	H.ok(string.find(effects, "lockedLift", 1, true) == nil, "...never at the height the root touched the belt")
 	b:Destroy()
+end)
+
+H.test("treadmill lock: held standing ON the belt, however the root got over it (climbing a raised belt, mid-jump, from under it)", function()
+	-- Owner playtest (tier 4, the Sci-Fi model's belt 2.8 studs up): the lock fired the first frame the root
+	-- was over the belt, still at ground height, and held it there: the runner stood inside the model, legs
+	-- under the belt.
+	for _, size in { Vector3.new(4.5, 1, 9), Vector3.new(4.4, 2.84, 7.8) } do
+		local b = belt(1, Vector3.new(40, size.Y / 2, -20))
+		b.Size = size
+		local top = b.CFrame.Position.Y + size.Y / 2
+		for _, y in { 0.01, size.Y / 2 + 0.2, size.Y / 2 + 1.5, size.Y / 2 + 6.5 } do
+			local held = Treadmill.lockCFrame(b.CFrame, b.Size, (b.CFrame * CFrame.new(0.4, y, -1)).Position)
+			H.near(held.Position.Y - Treadmill.STAND_LIFT, top, 1e-4, `belt {size.Y} studs, touched {y} over its centre: feet on its top`)
+			H.ok(Treadmill.onBelt(b.CFrame, b.Size, held.Position), "and still on the belt (the lock holds)")
+			local big = Treadmill.lockCFrame(b.CFrame, b.Size, held.Position, Treadmill.standLift(false, 4.5, 2))
+			H.ok(Treadmill.onBelt(b.CFrame, b.Size, big.Position), "a tall avatar held over it stays on it too")
+		end
+		b:Destroy()
+	end
+	H.eq(Treadmill.standLift(false, 2, 2), 3, "R15: HipHeight + half the root")
+	H.eq(Treadmill.standLift(true, 0, 2), 3, "R6: its 2-stud legs + half the root")
+	H.eq(Treadmill.standLift(false, 0 / 0, 2), Treadmill.STAND_LIFT, "a broken HipHeight: the standard avatar's")
 end)
 
 ----------------------------------------------------------------------------------------------------

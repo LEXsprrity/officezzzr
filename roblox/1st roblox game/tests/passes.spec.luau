@@ -413,9 +413,21 @@ H.test("passes: ownership is checked on the server (join and purchase); the clie
 		local head = joined.player.Character:FindFirstChild("Head")
 		local tag = head:FindFirstChild(VipService.TAG)
 		H.ok(tag ~= nil and tag:IsA("BillboardGui"), "VIP: the tag over the head")
-		local label = tag:FindFirstChild("Label")
-		H.ok(label.Text == "VIP" and label.TextColor3 == VipService.GOLD and tag:FindFirstChild("Shadow") ~= nil
-			and label:FindFirstChildOfClass("UIStroke") ~= nil, "gold relief text")
+		local label = tag:FindFirstChild("Label", true)
+		local gold = label and label:FindFirstChildOfClass("UIGradient")
+		local outlines = 0
+		for _, d in tag:GetDescendants() do
+			outlines += if d.Name == "Outline" and d:IsA("TextLabel") and d.Text == "VIP" then 1 else 0
+		end
+		H.ok(label.Text == "VIP" and gold ~= nil and gold.Color.Keypoints[2].Value == VipService.GOLD
+			and tag:FindFirstChild("Shadow", true) ~= nil and outlines == 8, "gold relief text: gold gradient, a thick outline, a dropped copy")
+		-- owner playtest: it floated too high and looked huge far away
+		H.ok(tag.StudsOffset.Y > 0.6 and tag.StudsOffset.Y < 2, `just over the head, like a name tag ({tag.StudsOffset})`)
+		H.ok(tag.Size.X.Offset == 0 and tag.Size.Y.Offset == 0 and tag.Size.Y.Scale <= 1.2, "sized in studs: it shrinks with distance")
+		H.ok(tag.MaxDistance > 0 and tag.MaxDistance <= 60, "seen only up close")
+		for _, d in tag:GetDescendants() do
+			H.ok(not d:IsA("UIStroke"), "no pixel-thick stroke (it swamps the letters far away)")
+		end
 		owned = {}
 		local nobody = session()
 		ShopService.checkPasses(nobody)
@@ -453,6 +465,11 @@ H.test("passes: ownership is checked on the server (join and purchase); the clie
 		"the [VIP] chat tag comes from the server's VIP attribute")
 	local main = fs.readFile("src/server/Main.server.luau")
 	H.ok(string.find(main, "VipService.dress(char, true)", 1, true) ~= nil, "a respawned VIP gets the tag again")
+	-- the HUD badge (its own script, the same gold badge) shows from the server's attribute only
+	local hud = fs.readFile("src/client/VipHudBadge.client.luau")
+	H.ok(string.find(hud, "GetAttributeChangedSignal(\"VIP\")", 1, true) ~= nil and string.find(hud, "VipBadge.build(badge)", 1, true) ~= nil,
+		"the HUD's VIP badge follows the server's VIP attribute")
+	H.ok(string.find(fs.readFile("src/server/VipService.luau"), "VipBadge.build(gui)", 1, true) ~= nil, "...and looks like the head tag")
 end)
 
 ----------------------------------------------------------------------------------------------------
