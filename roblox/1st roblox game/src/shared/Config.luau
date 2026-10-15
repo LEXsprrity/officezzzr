@@ -42,10 +42,13 @@ Config.PLOT_PATH_WIDTH = 20 -- the grass path between the beds
 Config.BED_FENCE_GAP = 1.5 -- from a bed's outer edges to the fence line
 Config.BED_HEIGHT = 0.4 -- the beds' depth: their tops are level with the plot's grass (owner: level ground); plants stand on top
 Config.SLOT_SPACING = 8 -- the default planting grid (old saves, auto-placing); creature sizes are budgeted against it
--- Spacing (owner 2026-10-15: "gardens look sparse"): plants may stand right next to each other, their leaves
--- overlapping, but never on top of each other: only their stems / cores (PLANT_CORE_SHARE of their full-grown
--- reach, Planting.coreRadius) may not overlap. The server and the planting preview share the rule (Shared/Planting).
-Config.PLANT_CORE_SHARE = 0.45 -- a plant's core: this share of its full-grown reach (Planting.radius)
+-- Spacing (owner 2026-10-15: "gardens look sparse", then "let them touch and nearly stack"): plants may touch,
+-- their leaves overlapping freely; a spot is refused only when it would all but hide a neighbour's centre:
+-- centre to centre at least PLANT_SPACING_SHARE x (reachA + reachB), never under PLANT_MIN_GAP
+-- (Planting.minDistance; two Commons ~1.4 studs apart). The server and the preview share it (Shared/Planting).
+Config.PLANT_SPACING_SHARE = 0.2 -- the tiny core two plants may not share: this share of their full-grown reaches
+Config.PLANT_MIN_GAP = 0.8 -- ...but never closer than this (studs, centre to centre)
+Config.PLANT_CORE_SHARE = 0.45 -- a plant's core (kept on the dirt, Planting.bedMargin): this share of its full-grown reach
 Config.PLANT_BED_MARGIN = 1 -- a plant's centre stays at least this far inside its bed (its core, if bigger)
 Config.PLANT_FENCE_OVERHANG = 2.5 -- a big full-grown plant may reach this far past its bed's fence gap (Planting.bedMargin)
 Config.PLANT_YAW_STEP = 15 -- the planting ghost turns this many degrees a wheel notch / button press (Planting.client)
@@ -831,9 +834,9 @@ Config.RECEIPT_HISTORY = 100 -- processed Robux PurchaseIds kept per profile, so
 -- "coming soon"). `robux`
 -- is only the placeholder shown while the real price can't be fetched: the real price is set on the
 -- Dashboard and read with MarketplaceService:GetProductInfo. `kind` says what a receipt grants:
---   Pack      one seed of `zone` into the seed bag
+--   Pack      `count` seeds (default 1; the x10 packs: 10) of `zone` into the seed bag
 --   Speed     + `amount` Speed
---   Money     max(`amount`, `minutes` of the buyer's current income), so late-game packs stay useful
+--   Money     a fixed `amount` of money (owner 2026-10-15: no share of the buyer's income any more)
 --   TreadmillUpgrade  one treadmill tier, from the tier the player has when the receipt arrives (`tier`:
 --             the range of tiers it is sold for, Config.treadmillUpgradeProduct); a maxed treadmill gets
 --             money instead
@@ -849,15 +852,18 @@ export type DevProduct = {
 	label: string,
 	robux: number,
 	zone: number?,
+	count: number?, -- Pack: seeds per purchase (default 1)
 	amount: number?,
-	minutes: number?,
 	tier: number?, -- PlotUpgrade / TreadmillUpgrade: its price tier
 	trail: string?,
 	upTo: number?, -- GrowNow: the most seconds of sprouting left it is sold for (math.huge: any)
 }
 Config.DEVELOPER_PRODUCTS = {
-	PackSpace = { kind = "Pack", label = "Starpetal Pack", robux = 2000, zone = 6 },
-	PackSpirit = { kind = "Pack", label = "Lotus Wyrm Pack", robux = 3000, zone = 7 },
+	-- Seed packs, x1 and x10 (owner 2026-10-15: 200 / 1,500 and 300 / 2,299 R$): the Shop shows both on the pack's card.
+	PackSpace = { kind = "Pack", label = "Starpetal Pack", robux = 200, zone = 6 },
+	PackSpace10 = { kind = "Pack", label = "Starpetal Pack x10", robux = 1500, zone = 6, count = 10 },
+	PackSpirit = { kind = "Pack", label = "Lotus Wyrm Pack", robux = 300, zone = 7 },
+	PackSpirit10 = { kind = "Pack", label = "Lotus Wyrm Pack x10", robux = 2299, zone = 7, count = 10 },
 
 	-- Speed packs: the Shop's blue SPEED cards. Sized against the zones' recommended Speed (v7 scale):
 	-- +25K is the Desert, +750K a bit past the Jungle, +3M past the Lava Fields, +10M past the Snow
@@ -871,11 +877,11 @@ Config.DEVELOPER_PRODUCTS = {
 	Speed25M = { kind = "Speed", label = "+25M Speed", robux = 1600, amount = 25e6 },
 	Speed50M = { kind = "Speed", label = "+50M Speed", robux = 2400, amount = 50e6 },
 
-	Money24K = { kind = "Money", label = "Pocket Cash", robux = 40, amount = 24e3, minutes = 10 },
-	Money200K = { kind = "Money", label = "Cash Bag", robux = 80, amount = 200e3, minutes = 30 },
-	Money800K = { kind = "Money", label = "Cash Stack", robux = 200, amount = 800e3, minutes = 60 },
-	Money4M = { kind = "Money", label = "Cash Crate", robux = 400, amount = 4e6, minutes = 180 },
-	Money8M = { kind = "Money", label = "Cash Vault", robux = 640, amount = 8e6, minutes = 360 },
+	Money24K = { kind = "Money", label = "Pocket Cash", robux = 40, amount = 24e3 },
+	Money200K = { kind = "Money", label = "Cash Bag", robux = 80, amount = 200e3 },
+	Money800K = { kind = "Money", label = "Cash Stack", robux = 200, amount = 800e3 },
+	Money4M = { kind = "Money", label = "Cash Crate", robux = 400, amount = 4e6 },
+	Money8M = { kind = "Money", label = "Cash Vault", robux = 640, amount = 8e6 },
 
 	-- One treadmill tier each: the treadmill's F prompt and the Shop's R$ button. A product's price is
 	-- fixed, so the 9 upgrades are split into tiers that cost more as the treadmill grows
@@ -1024,10 +1030,10 @@ function Config.productById(productId: number): (string?, DevProduct?)
 	return nil, nil
 end
 
--- What a Money product pays a player earning `income` $/s (with all multipliers): its fixed amount, or
--- `minutes` of that income if more. The Shop card shows the same number.
-function Config.moneyPackAmount(product: DevProduct, income: number): number
-	return math.floor(math.max(product.amount or 0, math.max(0, income) * (product.minutes or 0) * 60))
+-- What a Money product pays: its fixed amount, whatever the buyer earns (owner 2026-10-15: Pocket Cash is
+-- always $24K, ..., Cash Vault $8M). The Shop card shows the same number.
+function Config.moneyPackAmount(product: DevProduct): number
+	return math.floor(product.amount or 0)
 end
 
 -- What the shop needs to know about a player (profile or client stats snapshot).

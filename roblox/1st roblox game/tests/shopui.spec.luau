@@ -276,7 +276,7 @@ H.test("Shop SEED PACKS: one wide gold-outlined card per pack, a red New! tag, s
 	H.ok(string.find(shop, "outline(if featured then 5 else 2, if featured then WHITE else FRAME_INK)", 1, true) ~= nil, "square tiles, thin dark outlines")
 	H.ok(string.find(shop, "TextXAlignment = Enum.TextXAlignment.Right", 1, true) and string.find(shop, "AnchorPoint = Vector2.new(0, 1)", 1, true),
 		"the % at the bottom right")
-	H.ok(string.find(shop, "buttonRow(c, PACK_W, L.PACK_H, L.bottomY(L.PACK_H, true), { buy })", 1, true) ~= nil, "gift + R$ on the art")
+	H.ok(string.find(shop, "buttonRow(c, PACK_W, L.PACK_H, L.bottomY(L.PACK_H, true), buys)", 1, true) ~= nil, "gift + R$ on the art (x1 and x10)")
 	H.ok(not string.find(HUD, "Name = \"Tray\"", 1, true) and not string.find(HUD, "TRAY_GREY", 1, true), "no grey tray any more")
 	H.ok(not string.find(shop, "lootTable", 1, true), "the old loot-table bars are gone")
 	-- the Shop re-renders once the 3D previews or the flower catalog arrive
@@ -291,7 +291,7 @@ H.test("Shop look: yellow / cyan relief section titles, vivid square cards with 
 	for label, colour in string.gmatch(renderShop, "section%(\"([%u ]+)\", nextOrder%(%), (HEADING_%u+)%)") do
 		table.insert(colours, `{label}={colour}`)
 	end
-	H.eq(table.concat(colours, ","), "SEED PACKS=HEADING_GOLD,PASSES=HEADING_CYAN,SPEED=HEADING_GOLD,MONEY=HEADING_CYAN,UPGRADES=HEADING_GOLD", "alternating")
+	H.eq(table.concat(colours, ","), "FEATURED=HEADING_GOLD,PASSES=HEADING_CYAN,SPEED=HEADING_GOLD,MONEY=HEADING_CYAN,UPGRADES=HEADING_GOLD", "alternating")
 	H.ok(string.find(renderShop, "banner(nextOrder(), \"DoubleSpeed\", \"SPEED\"", 1, true) ~= nil, "a DOUBLE Your SPEED banner")
 	local cardFrame = block(SHOP, "local function cardFrame(", "\n\tend\n")
 	H.ok(string.find(cardFrame, "outline(L.CARD_STROKE, color:Lerp(WHITE, 0.6))", 1, true) ~= nil, "a thin bright outline")
@@ -453,7 +453,8 @@ H.test("Shop buttons: the HUD builds every row with ShopLayout / ShopUi; ShopUi.
 	H.eq(buy.Position, roblox.UDim2.fromOffset(placed[2].x, placed[2].y))
 	H.eq(buy.Size, roblox.UDim2.fromOffset(placed[2].w, placed[2].h))
 	H.ok(buy:FindFirstChildOfClass("UIStroke") and not buy:FindFirstChildOfClass("UICorner"), "square, outlined")
-	H.ok(buy:FindFirstChild("BevelTop") and buy:FindFirstChild("BevelEdge"), "a lighter top half, a darker bottom edge")
+	H.ok(buy:FindFirstChild("BevelTop") ~= nil, "a lighter top half")
+	H.eq(buy:FindFirstChild("BevelEdge"), nil, "no dark bottom band (owner 2026-10-15: studs everywhere now)")
 	H.ok(gift:FindFirstChild("GiftIcon") ~= nil, "the drawn white gift")
 	H.ok(ShopUi.caption(card, placed[2], 7) ~= nil, "the caption")
 	local still = ShopUi.button(card, { kind = "buy", x = 0, y = 0, w = 10, h = 10, pop = 1 } :: any, roblox.Color3.new(), 1)
@@ -584,7 +585,7 @@ H.test("HUD left column: wide Shop / Index buttons (icon left, word right in rel
 	w, h = tonumber(w), tonumber(h)
 	H.ok(w and h and w / h >= 2.4 and w / h <= 2.8, "about 2.6:1")
 	local side = block(HUD, "local function sideButton(", "\nend\n")
-	H.ok(string.find(side, "deco(4, 4)", 1, true) and string.find(side, "ShopUi.bevel(b)", 1, true), "square-ish, thick outline, lit top, dark edge")
+	H.ok(string.find(side, "deco(4, 4)", 1, true) and string.find(side, "ShopUi.bevel(b)", 1, true), "square-ish, thick outline, lit top")
 	H.ok(string.find(side, "BackgroundColor3 = color", 1, true) ~= nil and not string.find(side, "UIGradient", 1, true), "a flat vivid colour")
 	H.ok(string.find(side, "AnchorPoint = Vector2.new(0, 0.5), Position = UDim2.new(0, 8, 0.5, -1)", 1, true) ~= nil, "the icon on the left")
 	H.ok(string.find(side, "UiFx.relief(bold(b, 4, { Text = label", 1, true) and string.find(side, "TextXAlignment = Enum.TextXAlignment.Left", 1, true), "the word on its right, in relief")
@@ -601,7 +602,8 @@ H.test("HUD left column: wide Shop / Index buttons (icon left, word right in rel
 end)
 
 H.test("Shop SEED PACKS: the owner's pictures as the pack cards' backgrounds once uploaded (the zone colours until then)", function()
-	for _, entry in Config.products("Pack") do
+	for _, offer in SeedPacks.offers() do -- (one card per pack: its x1 product names the picture)
+		local entry = offer.single
 		local key = entry.name .. "Bg"
 		H.ok(Config.ICONS[key] ~= nil, `icons/ids.json has {key}`)
 		H.ok(fs.isFile(`icons/{key}.png`), `icons/{key}.png (uploaded by tools/upload_icons.luau)`)

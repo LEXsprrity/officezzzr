@@ -144,8 +144,8 @@ H.test("creatures: the biggest creatures fit the planting spacing and the plot",
 	end
 	local L = #Config.RARITIES
 	H.ok(math.abs(Planting.radius(L) - Config.creatureFootprint(L) * Config.CREATURE_MAX_SCALE / 2) < 0.2, "the biggest reach is about the max scale")
-	-- neighbours may stand close (their leaves overlapping), but their cores never overlap
-	H.ok(math.abs(Planting.minDistance(L, L) - 2 * Planting.coreRadius(L)) < 1e-9, "Legendaries: core to core")
+	-- neighbours may touch (their leaves overlapping freely); only a tiny core stays apart
+	H.ok(math.abs(Planting.minDistance(L, L) - math.max(Config.PLANT_MIN_GAP, 2 * Config.PLANT_SPACING_SHARE * Planting.radius(L))) < 1e-9, "Legendaries: a tiny core")
 	H.ok(Planting.minDistance(L, L) < Planting.radius(L), "Legendaries: much closer than their full reach")
 	-- Common..Rare (the base footprint) fit the default grid, and every default spot keeps them inside the fence
 	local small = 0

@@ -291,22 +291,27 @@ local Inventory = H.server("Inventory")
 local roblox = require("@lune/roblox")
 local CFrame, Enum = roblox.CFrame, roblox.Enum
 
-H.test("planting: plants may stand right next to each other (their cores apart), much closer than before", function()
+H.test("planting: plants may touch and nearly stack; only a spot over a neighbour's centre is refused", function()
 	local L = #Config.RARITIES
 	for a = 1, L do
 		H.ok(Planting.coreRadius(a) < Planting.radius(a) * 0.5, `rarity {a}: its core is well inside its leaves`)
 		for b = 1, L do
 			local d = Planting.minDistance(a, b)
-			H.ok(math.abs(d - (Planting.radius(a) + Planting.radius(b)) * Config.PLANT_CORE_SHARE) < 1e-9, `{a}/{b}: (radiusA + radiusB) x the core share`)
+			local want = math.max(Config.PLANT_MIN_GAP, (Planting.radius(a) + Planting.radius(b)) * Config.PLANT_SPACING_SHARE)
+			H.ok(math.abs(d - want) < 1e-9, `{a}/{b}: max(PLANT_MIN_GAP, (radiusA + radiusB) x the spacing share)`)
 			H.eq(d, Planting.minDistance(b, a), "symmetric")
-			-- the old rule was the full reaches minus a stud: now about half of that
-			H.ok(d <= (Planting.radius(a) + Planting.radius(b) - 1) * 0.6, `{a}/{b}: much closer than before ({d})`)
-			-- not on top of each other
-			H.ok(d >= 3 - 1e-9, `{a}/{b}: never on top of each other`)
+			-- owner 2026-10-15 (round 2): "they must be able to TOUCH": far closer than their leaves' reach, so
+			-- leaves overlap freely (the round-1 rule was the cores side by side, (radiusA + radiusB) x 0.45)
+			H.ok(d <= (Planting.radius(a) + Planting.radius(b)) * 0.25, `{a}/{b}: leaves overlap freely ({d})`)
+			H.ok(d < Planting.coreRadius(a) + Planting.coreRadius(b), `{a}/{b}: closer than the round-1 cores`)
+			-- but never right on top of each other
+			H.ok(d >= Config.PLANT_MIN_GAP - 1e-9, `{a}/{b}: never on top of each other`)
 		end
 	end
-	H.ok(Config.PLANT_CORE_SHARE >= 0.4 and Config.PLANT_CORE_SHARE <= 0.5, "about 0.45")
-	H.ok(Planting.minDistance(1, 1) <= 3.2, "two Commons ~3 studs apart (they used to need ~6)")
+	H.ok(Config.PLANT_MIN_GAP >= 0.5 and Config.PLANT_MIN_GAP <= 1, "a tiny floor (~0.8 studs)")
+	H.ok(Config.PLANT_SPACING_SHARE >= 0.15 and Config.PLANT_SPACING_SHARE <= 0.25, "about 0.2")
+	local commons = Planting.minDistance(1, 1)
+	H.ok(commons >= 1 and commons <= 1.6, `two Commons ~1.5 studs apart ({commons}; round 1 needed ~3, before that ~6)`)
 	-- the beds' margin is smaller too: a plant's core stays on the dirt, a big one's leaves at most
 	-- PLANT_FENCE_OVERHANG past the fence gap
 	H.ok(Config.PLANT_BED_MARGIN <= 1, "a smaller bed margin")

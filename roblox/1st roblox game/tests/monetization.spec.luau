@@ -22,11 +22,11 @@ local function count(t: { [any]: any }): number
 	return n
 end
 
--- Products added since the owner last ran tools/create_monetization.mjs: 0 in ids.json until then (the
--- Shop says "coming soon"), a real id once created.
-local NOT_CREATED_YET = { GrowNow10 = true, GrowNow30 = true }
-
 local STUB = serde.decode("json", fs.readFile("tests/fixtures/monetization_stub.json")) -- what the other specs run with
+
+-- Products added since the owner last ran tools/create_monetization.mjs: 0 in ids.json until they do (the Shop
+-- says "coming soon" for them meanwhile). Owner 2026-10-15: the x10 seed packs, then the Grow Now products.
+local PENDING = { PackSpace10 = true, PackSpirit10 = true, GrowNow10 = true, GrowNow30 = true }
 
 H.test("monetization: ids.json has every pass and product created (a real id each), and Config reads it", function()
 	local raw = serde.decode("json", fs.readFile("monetization/ids.json"))
@@ -39,9 +39,16 @@ H.test("monetization: ids.json has every pass and product created (a real id eac
 		for key, item in list :: { [string]: any } do
 			local id = ids[key]
 			H.eq(type(id), "number", `ids.json {section}.{key}`)
-			H.ok((id > 0 or (id == 0 and NOT_CREATED_YET[key])) and id == math.floor(id), `ids.json {section}.{key} is a real id (created on Roblox)`)
+			if PENDING[key] and id == 0 then
+				H.eq(item.id, 0, `{key}: not created yet (coming soon)`)
+				continue
+			end
+			H.ok(id > 0 and id == math.floor(id), `ids.json {section}.{key} is a real id (created on Roblox)`)
 			H.eq(item.id, id, `Config {section}.{key}.id`)
 		end
+	end
+	for key in PENDING do
+		H.ok(Config.DEVELOPER_PRODUCTS[key] ~= nil and raw.products[key] ~= nil, `{key} has its ids.json slot`)
 	end
 	H.eq(Catalog.encodeIds(raw), readText("monetization/ids.json"), "ids.json is in the tool's format")
 	Config.applyMonetizationIds(STUB)
@@ -96,7 +103,7 @@ H.test("monetization: catalog.json is up to date and covers every pass and produ
 	end
 	H.eq(count(seen.pass), count(Config.GAMEPASSES), "every pass")
 	H.eq(count(seen.product), count(Config.DEVELOPER_PRODUCTS), "every product")
-	H.eq(#list, 38)
+	H.eq(#list, 40, "6 passes + 34 products (the x10 packs, the Grow Now products: owner 2026-10-15)")
 	-- The passes without a placeholder price get the agreed ones.
 	for _, e in list do
 		if e.key == "DoubleMoney" then

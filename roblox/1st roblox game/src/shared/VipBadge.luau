@@ -1,7 +1,6 @@
 --!strict
 -- The VIP gamepass's gold badge: a star and a chunky gold "VIP" in relief (a gold gradient, a thick dark
--- outline and a dark copy dropped behind it). One look for the tag over a VIP's head (Server/VipService) and
--- the badge by the local VIP's Speed and money (VipHudBadge.client).
+-- outline and a dark copy dropped behind it): the tag over a VIP's head (Server/VipService).
 -- Everything is sized in scale, the outline too (eight dark copies nudged around the text, not a UIStroke,
 -- whose thickness is in pixels): the tag over a head is sized in studs, so far away it shrinks and keeps
 -- its shape instead of turning into a blob of outline.

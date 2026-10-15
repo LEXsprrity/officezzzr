@@ -59,8 +59,9 @@ end
 
 folder.Parent = ReplicatedStorage
 
-function Net.toast(player: Player, text: string, color: string?)
-	Net.LootEvent:FireClient(player, "Toast", { text = text, color = color })
+-- `icon`: what it is about (an Icons key, Shared/Toast.ICONS); nil for the colour's own (red: the lock).
+function Net.toast(player: Player, text: string, color: string?, icon: string?)
+	Net.LootEvent:FireClient(player, "Toast", { text = text, color = color, icon = icon })
 end
 
 -- A message for the whole server (every client shows it), e.g. a Legendary from the last zones.

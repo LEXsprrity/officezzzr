@@ -1,7 +1,7 @@
 --!strict
 -- The windows' building blocks (client; owner references 2026-10-15, round 2: "premium, square, no
 -- edges"). Everything is square (no rounded corners), with a thick dark outline:
---   * ShopUi.bevel: a button's 3D look: a lighter top half and a darker bottom edge;
+--   * ShopUi.bevel: a button's 3D look: a lighter top half (no dark bottom band);
 --   * ShopUi.button: a square bevelled button at a ShopLayout rect, popping only as much as its rect allows;
 --   * ShopUi.giftIcon / ShopUi.price: what goes on the gift and R$ buttons (a white gift drawn from frames;
 --     the white Robux icon with a dark outline before the price, bold white text);
@@ -45,16 +45,13 @@ function ShopUi.label(parent: Instance, stroke: number, props: { [string]: any }
 	return l
 end
 
--- The 3D look over a square button (or any frame): its top half lighter, a darker strip along its bottom,
--- a thin light line at its very top. Overlays only, so the button's colour may change later (disabled, ...).
+-- The 3D look over a square button (or any frame): its top half lighter, a thin light line at its very top.
+-- No dark strip along its bottom any more (owner 2026-10-15: with the studs everywhere, the bottom shadow
+-- band goes). Overlays only, so the button's colour may change later (disabled, ...).
 function ShopUi.bevel(f: GuiObject, z: number?)
 	local zi = z or f.ZIndex
 	new("Frame", { Name = "BevelTop", Size = UDim2.fromScale(1, 0.5), BackgroundColor3 = WHITE, BackgroundTransparency = 0.74, BorderSizePixel = 0, ZIndex = zi, Parent = f })
 	new("Frame", { Name = "BevelLine", Size = UDim2.new(1, 0, 0, 2), BackgroundColor3 = WHITE, BackgroundTransparency = 0.45, BorderSizePixel = 0, ZIndex = zi, Parent = f })
-	new("Frame", {
-		Name = "BevelEdge", AnchorPoint = Vector2.new(0, 1), Position = UDim2.fromScale(0, 1), Size = UDim2.new(1, 0, 0.16, 0),
-		BackgroundColor3 = BLACK, BackgroundTransparency = 0.62, BorderSizePixel = 0, ZIndex = zi, Parent = f,
-	})
 end
 
 -- A square bevelled button at `p` (a ShopLayout rect) on `parent`. It pops on hover as much as `p.pop`. The

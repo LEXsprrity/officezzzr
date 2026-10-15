@@ -235,7 +235,7 @@ do
 	local ALLOWED: { [string]: { string } } = {
 		["src/client/HUD.client.luau"] = {
 			"^%s*iconLabel%(statsFrame", "^sideButton%(", "button%(hotbar", "Icons%.set%(sideTitle", "^for _, tab in", "Icons%.set%(modalSubtitle",
-			"chunky%(parent, \"🎁\"", "Text = \"🏃\"", "^button%(rightTabs, \"🪴\"",
+			"chunky%(parent, \"🎁\"", "Text = \"🏃\"", "^button%(rightTabs, \"🪴\"", "iconLabel%(art, \"%a+\"",
 		},
 		["src/client/Rewards.client.luau"] = { "iconLabel%(" },
 		["src/client/ZoneBanner.client.luau"] = { "face = \"" }, -- the zone banner's faces (owner-approved design)
@@ -488,5 +488,40 @@ do
 		H.eq(tweens[2].info.style, roblox.Enum.EasingStyle.Elastic)
 	end)
 end
+
+H.test("Shop scroll: an unchanged re-sent stat never rebuilds the open window (owner: \"why does the shop money menu go up\")", function()
+	local StatsDiff = H.shared("StatsDiff")
+	local stats: { [string]: any } = { money = 0, slots = 10, items = { Bat = 1 }, seedBag = {}, passes = {}, trails = { Grey = true } }
+	-- the 1 s payout: money only
+	local changed = StatsDiff.apply(stats, { money = 25, speed = 0, walkSpeed = 16, income = 25 })
+	H.eq(changed.money, 25)
+	H.eq(stats.money, 25, "copied into the client's stats")
+	-- the plants push every PLANTS_PUSH_EVERY payouts re-sends `slots` (unchanged): that used to rebuild the Shop
+	changed = StatsDiff.apply(stats, { plants = {}, inventory = {}, slots = 10 })
+	H.eq(changed.slots, nil, "same slots: not a change")
+	-- a full push with nothing new
+	changed = StatsDiff.apply(stats, { slots = 10, items = { Bat = 1 }, seedBag = {}, passes = {}, trails = { Grey = true } })
+	H.eq(next(changed), nil, "nothing changed")
+	-- real changes still count, also inside tables and to false
+	changed = StatsDiff.apply(stats, { items = { Bat = 2 }, trails = { Grey = true, Red = true }, slots = 11 })
+	H.ok(changed.items and changed.trails and changed.slots == 11, "real changes")
+	stats.carrying = { zone = 1 }
+	changed = StatsDiff.apply(stats, { carrying = false })
+	H.ok(changed.carrying == false and stats.carrying == false, "a change to false")
+	H.ok(StatsDiff.same({ a = { b = 1 } }, { a = { b = 1 } }) and not StatsDiff.same({ a = 1 }, { a = 1, b = 2 }), "deep equality")
+	-- the HUD diffs every StatsUpdate before deciding what to rebuild; money ticks only update in place
+	local hud = string.gsub(fs.readFile("src/client/HUD.client.luau"), "\r", "")
+	H.ok(string.find(hud, "refresh(StatsDiff.apply(stats, partial))", 1, true) ~= nil, "StatsUpdate goes through StatsDiff")
+	local refresh = string.match(hud, "local function refresh%(changed.-\nend\n") or ""
+	local rebuild = string.match(refresh, "elseif modal.Visible and %((.-)%) then\n\t\trenderModal%(%)") or ""
+	H.ok(#rebuild > 0 and not string.find(rebuild, "changed.money", 1, true) and not string.find(rebuild, "changed.income", 1, true)
+		and not string.find(rebuild, "changed.speed", 1, true), "money / income / Speed never rebuild the window")
+	H.ok(string.find(refresh, "for _, update in moneyWatchers do", 1, true) ~= nil, "they update the buy buttons in place")
+	-- a real rebuild (a purchase) restores the scroll until the new canvas is sized, never past it
+	H.ok(string.find(hud, "if modalBody.CanvasPosition.Y < keep.Y then\n\t\t\t\t\tmodalBody.CanvasPosition = keep", 1, true) ~= nil, "a rebuild keeps the scroll")
+	-- and the window doesn't move: fitModal places it at one fixed spot
+	local fit = string.match(hud, "local function fitModal%(%).-\nend\n") or ""
+	H.ok(string.find(fit, "modal.Position = UDim2.new(0.5, 0, 0.5, (TOP - BOTTOM) / 2)", 1, true) ~= nil, "a fixed window spot")
+end)
 
 return nil

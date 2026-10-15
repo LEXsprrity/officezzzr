@@ -18,8 +18,9 @@ const CATALOG = [
 	entry("TrailRed", "product", "Red Trail", 100),
 ];
 
-// A fake Open Cloud: lists in pages of 2, creates with increasing ids, optional 429s, records every call.
-function fakeRoblox({ products = [], passes = [], rateLimits = 0, failNames = [] } = {}) {
+// A fake Open Cloud: lists in pages of 2 (with each item's priceInformation when it has a price), creates with
+// increasing ids, PATCHes prices (204), optional 429s, records every call.
+function fakeRoblox({ products = [], passes = [], rateLimits = 0, failNames = [], failPatchIds = [] } = {}) {
 	const state = { products: [...products], passes: [...passes], calls: [], nextId: 9000, rateLimits };
 	const reply = (status, body, headers = {}) => ({
 		status,
@@ -42,9 +43,25 @@ function fakeRoblox({ products = [], passes = [], rateLimits = 0, failNames = []
 		if (init.method === "GET") {
 			assert.ok(u.pathname.endsWith("/creator"));
 			const start = Number(u.searchParams.get("pageToken") || 0);
-			const page = list.slice(start, start + 2).map((x) => ({ [idField]: x.id, name: x.name }));
+			const page = list.slice(start, start + 2).map((x) => ({
+				[idField]: x.id,
+				name: x.name,
+				...(x.price !== undefined ? { priceInformation: { defaultPriceInRobux: x.price, enabledFeatures: [] } } : {}),
+			}));
 			const next = start + 2 < list.length ? String(start + 2) : "";
 			return reply(200, { [isPass ? "gamePasses" : "developerProducts"]: page, nextPageToken: next });
+		}
+		if (init.method === "PATCH") {
+			const id = Number(u.pathname.split("/").pop());
+			const form = init.body;
+			assert.ok(form instanceof FormData, "multipart");
+			assert.deepEqual([...form.keys()], ["price"], "only the price is sent");
+			const item = list.find((x) => x.id === id);
+			if (!item) return reply(404, "not found");
+			if (failPatchIds.includes(id)) return reply(400, `bad price, key was ${KEY}`);
+			item.price = Number(form.get("price"));
+			state.patched = [...(state.patched ?? []), { id, price: item.price, pass: isPass }];
+			return reply(204, "");
 		}
 		const form = init.body;
 		assert.ok(form instanceof FormData);
@@ -85,7 +102,8 @@ const startFiles = (ids) => ({
 const idsOf = (d) => JSON.parse(d.files[M.IDS_FILE]);
 
 test("parseArgs: universe from flag or env, never a key argument", () => {
-	assert.deepEqual(M.parseArgs(["--universe", "12"], {}), { dryRun: false, universe: "12", help: false });
+	assert.deepEqual(M.parseArgs(["--universe", "12"], {}), { dryRun: false, universe: "12", help: false, updatePrices: false });
+	assert.equal(M.parseArgs(["--universe", "12", "--update-prices"], {}).updatePrices, true);
 	assert.equal(M.parseArgs([], { ROBLOX_UNIVERSE_ID: "34" }).universe, "34");
 	assert.equal(M.parseArgs(["--dry-run"], {}).dryRun, true);
 	assert.match(M.parseArgs([], {}).error, /--universe/);
@@ -199,4 +217,63 @@ test("run: dry run needs no key and makes no calls; no key = refuse", async () =
 	const nokey = deps(roblox, startFiles(null));
 	assert.equal(await M.run(["--universe", UNIVERSE], {}, nokey), 2);
 	assert.equal(roblox.calls.length, 0);
+});
+
+test("listedPrice: priceInformation.defaultPriceInRobux, else unknown", () => {
+	assert.equal(M.listedPrice({ priceInformation: { defaultPriceInRobux: 200 } }), 200);
+	assert.equal(M.listedPrice({ priceInformation: null }), null);
+	assert.equal(M.listedPrice({ priceInformation: { defaultPriceInRobux: "200" } }), null);
+	assert.equal(M.listedPrice({}), null);
+});
+
+test("--update-prices: PATCHes only existing items whose price differs (or is unknown); new ones are created at the catalog price", async () => {
+	const roblox = fakeRoblox({
+		passes: [{ id: 2, name: "VIP", price: 399 }, { id: 3, name: "2x Luck", price: 100 }],
+		products: [{ id: 50, name: "Pocket Cash", price: 40 }, { id: 51, name: "+25K Speed" }],
+	});
+	const d = deps(roblox, startFiles({ passes: { VIP: 2 }, products: {} }));
+	const code = await M.run(["--universe", UNIVERSE, "--update-prices"], { ROBLOX_API_KEY: KEY }, d);
+	assert.equal(code, 0, d.out.join("\n"));
+	const patched = Object.fromEntries((roblox.patched ?? []).map((p) => [p.id, p.price]));
+	assert.deepEqual(patched, { 3: 249, 51: 9 }, "2x Luck 100 -> 249, +25K Speed (price unknown) -> 9; VIP and Pocket Cash already right");
+	const patches = roblox.calls.filter((c) => c.method === "PATCH");
+	assert.equal(patches.length, 2);
+	assert.ok(patches.some((c) => c.url === `https://apis.roblox.com/game-passes/v1/universes/${UNIVERSE}/game-passes/3`), "the game pass endpoint");
+	assert.ok(
+		patches.some((c) => c.url === `https://apis.roblox.com/developer-products/v2/universes/${UNIVERSE}/developer-products/51`),
+		"the developer product endpoint"
+	);
+	assert.equal(roblox.calls.filter((c) => c.method === "POST").length, 1, "Red Trail is created (at its catalog price), not patched");
+	const out = d.out.join("\n");
+	assert.match(out, /Prices: 2 updated, 2 already right, 0 failed\./);
+	assert.ok(!out.includes(KEY));
+
+	// again: everything is right now, nothing is sent
+	roblox.calls.length = 0;
+	const again = deps(roblox, { ...d.files });
+	assert.equal(await M.run(["--universe", UNIVERSE, "--update-prices"], { ROBLOX_API_KEY: KEY }, again), 0);
+	assert.equal(roblox.calls.filter((c) => c.method !== "GET").length, 0);
+	assert.match(again.out.join("\n"), /Prices: 0 updated, 5 already right, 0 failed\./);
+});
+
+test("--update-prices: without the flag no price is touched; a failed PATCH is reported (redacted) and exits 1", async () => {
+	const roblox = fakeRoblox({ passes: [{ id: 3, name: "2x Luck", price: 100 }], products: [{ id: 50, name: "Pocket Cash", price: 1 }], failPatchIds: [50] });
+	const plain = deps(roblox, startFiles(null));
+	await M.run(["--universe", UNIVERSE], { ROBLOX_API_KEY: KEY }, plain);
+	assert.equal(roblox.calls.filter((c) => c.method === "PATCH").length, 0, "no flag, no PATCH");
+	const d = deps(roblox, { ...plain.files });
+	const code = await M.run(["--universe", UNIVERSE, "--update-prices"], { ROBLOX_API_KEY: KEY }, d);
+	assert.equal(code, 1);
+	const out = d.out.join("\n");
+	assert.match(out, /FAILED price product Money24K: price update failed: HTTP 400/);
+	assert.ok(!out.includes(KEY), "the key is redacted");
+	assert.equal(roblox.passes.find((x) => x.id === 3).price, 249, "the others still went through");
+});
+
+test("--update-prices --dry-run: says what would change, sends nothing, needs no key", async () => {
+	const roblox = fakeRoblox();
+	const d = deps(roblox, startFiles({ passes: { VIP: 8 } }));
+	assert.equal(await M.run(["--dry-run", "--update-prices"], {}, d), 0);
+	assert.equal(roblox.calls.length, 0);
+	assert.match(d.out.join("\n"), /price would be set to R\$ 399/);
 });
