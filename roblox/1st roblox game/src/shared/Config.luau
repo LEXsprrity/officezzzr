@@ -857,13 +857,19 @@ export type DevProduct = {
 	tier: number?, -- PlotUpgrade / TreadmillUpgrade: its price tier
 	trail: string?,
 	upTo: number?, -- GrowNow: the most seconds of sprouting left it is sold for (math.huge: any)
+	-- No longer sold (an owner decision): not in the Shop (Config.forSale), never prompted (Shop.canPrompt),
+	-- off sale on Roblox (monetization/catalog.json isForSale = false), but kept here so a purchase already
+	-- in flight or a pending receipt still grants and is never lost. Remove the flag to sell it again.
+	retired: boolean?,
 }
 Config.DEVELOPER_PRODUCTS = {
 	-- Seed packs, x1 and x10 (owner 2026-10-15: 200 / 1,500 and 300 / 2,299 R$): the Shop shows both on the pack's card.
 	PackSpace = { kind = "Pack", label = "Starpetal Pack", robux = 200, zone = 6 },
 	PackSpace10 = { kind = "Pack", label = "Starpetal Pack x10", robux = 1500, zone = 6, count = 10 },
-	PackSpirit = { kind = "Pack", label = "Lotus Wyrm Pack", robux = 300, zone = 7 },
-	PackSpirit10 = { kind = "Pack", label = "Lotus Wyrm Pack x10", robux = 2299, zone = 7, count = 10 },
+	-- Lotus Wyrm (Spirit Garden) retired (owner 2026-10-15): new players shouldn't skip the game by buying the
+	-- last zone's seeds. Only the Starpetal pack is in FEATURED; these stay for receipts (see `retired`).
+	PackSpirit = { kind = "Pack", label = "Lotus Wyrm Pack", robux = 300, zone = 7, retired = true },
+	PackSpirit10 = { kind = "Pack", label = "Lotus Wyrm Pack x10", robux = 2299, zone = 7, count = 10, retired = true },
 
 	-- Speed packs: the Shop's blue SPEED cards. Sized against the zones' recommended Speed (v7 scale):
 	-- +25K is the Desert, +750K a bit past the Jungle, +3M past the Lava Fields, +10M past the Snow
@@ -1014,6 +1020,17 @@ function Config.products(kind: string): { { name: string, product: DevProduct } 
 		end
 		return a.name < b.name
 	end)
+	return list
+end
+
+-- The products of `kind` still sold (not `retired`), cheapest first: what the Shop shows.
+function Config.forSale(kind: string): { { name: string, product: DevProduct } }
+	local list = {}
+	for _, entry in Config.products(kind) do
+		if not entry.product.retired then
+			table.insert(list, entry)
+		end
+	end
 	return list
 end
 

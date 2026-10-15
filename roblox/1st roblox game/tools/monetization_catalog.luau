@@ -11,6 +11,7 @@ export type Entry = {
 	name: string,
 	description: string,
 	price: number, -- Robux
+	isForSale: boolean, -- false for a retired product (Config `retired`): kept, but off sale on Roblox
 	image: string, -- PNG under icons/, uploaded as the item's icon
 }
 
@@ -85,7 +86,8 @@ local function productDescription(Config: any, Format: any, product: any): strin
 	error(`no description for product kind {kind}`)
 end
 
--- Every pass (Shop order) then every product (by kind, cheapest first).
+-- Every pass (Shop order) then every product (by kind, cheapest first), retired ones too (isForSale false:
+-- tools/create_monetization.mjs --update-prices takes them off sale).
 function Catalog.build(Config: any, Format: any): { Entry }
 	local list: { Entry } = {}
 	for _, key in Config.passNames() do
@@ -96,6 +98,7 @@ function Catalog.build(Config: any, Format: any): { Entry }
 			name = pass.label,
 			description = assert(Catalog.PASS_DESCRIPTIONS[key], `no description for pass {key}`),
 			price = if pass.robux > 0 then pass.robux else assert(Catalog.PASS_PRICES[key], `no price for pass {key}`),
+			isForSale = true,
 			image = `icons/{pass.icon or Catalog.PASS_ICON}.png`,
 		})
 	end
@@ -107,6 +110,7 @@ function Catalog.build(Config: any, Format: any): { Entry }
 				name = item.product.label,
 				description = productDescription(Config, Format, item.product),
 				price = item.product.robux,
+				isForSale = not item.product.retired,
 				image = `icons/{Catalog.KIND_ICONS[kind]}.png`,
 			})
 		end
@@ -131,6 +135,7 @@ function Catalog.encode(list: { Entry }): string
 			`    "name": {jsonString(e.name)},`,
 			`    "description": {jsonString(e.description)},`,
 			`    "price": {string.format("%d", e.price)},`,
+			`    "isForSale": {if e.isForSale then "true" else "false"},`,
 			`    "image": {jsonString(e.image)}`,
 			"  }",
 		}, "\n"))

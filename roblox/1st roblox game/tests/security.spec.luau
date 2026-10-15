@@ -943,4 +943,108 @@ H.test("security: no loadstring, no fenv, no require by asset id, no HTTP; Inser
 	end
 end)
 
+----------------------------------------------------------------------------------------------------
+-- Sell spammed (owner bug report 2026-10-15): the real SellPlants handler (ShopService's onSell ->
+-- PlotService.sellPlants -> Selling.sell), 10 times in a row for the same thing, pays it once.
+----------------------------------------------------------------------------------------------------
+H.test("security: Sell spammed 10 times in a row (the real SellPlants handler) pays once; the seed bag never goes negative", function()
+	local onSell = Net.SellPlants.OnServerEvent.fn
+	H.ok(type(onSell) == "function", "SellPlants is wired")
+	local stallAt = Vector3.new(500, 3, 500)
+	PlotService.init({}, { { Position = stallAt, Parent = true } } :: any) -- one SELL stall, no plots
+	local ok, err = pcall(function()
+		-- A rich player standing at the stall, seen there by the movement check
+		local function atStall(): any
+			local s = richSession()
+			local char = body(stallAt + Vector3.new(3, 0, 0))
+			s.player.Character = char
+			seen(s, stallAt + Vector3.new(3, 0, 0))
+			return s
+		end
+		local sold = 0 -- SoldPlants events (one per sale that paid)
+		local function spam(s: any, paced: boolean, slots: any, ids: any, seeds: any): { number }
+			local paid = {}
+			for _ = 1, 10 do
+				if paced then
+					s.requests = {} -- (each one under the rate limit, so every one reaches PlotService.sellPlants)
+				end
+				local before = s.profile.money
+				onSell(s.player, slots, ids, seeds)
+				table.insert(paid, s.profile.money - before)
+				for _, count in s.profile.seedBag do
+					H.ok(count > 0, "no empty or negative seed-bag entry")
+				end
+			end
+			return paid
+		end
+		local function onlyFirst(paid: { number }, what: string)
+			H.ok(paid[1] > 0, `{what}: the first sale pays`)
+			for i = 2, #paid do
+				H.eq(paid[i], 0, `{what}: request {i} pays nothing`)
+			end
+		end
+		with({ { Net.LootEvent, "FireClient", function(_, _, kind: string)
+			if kind == "SoldPlants" then
+				sold += 1
+			end
+		end } }, function()
+			for _, paced in { false, true } do
+				local how = if paced then "paced under the rate limit" else "back to back"
+				-- one planted plant
+				local s = atStall()
+				local want = Selling.price(s.profile.plants[1], os.time(), Sessions.moneyMult(s), Sessions.growMult(s))
+				sold = 0
+				local paid = spam(s, paced, { 1 }, nil, nil)
+				onlyFirst(paid, `plant ({how})`)
+				H.near(paid[1], want, want * 0.01, "its price")
+				H.eq(sold, 1, "one SoldPlants")
+				H.eq(#s.profile.plants, 1, "only that plant went")
+				-- one inventory plant
+				s = atStall()
+				sold = 0
+				onlyFirst(spam(s, paced, {}, { 1 }, nil), `inventory plant ({how})`)
+				H.eq(#s.profile.inventory, 0)
+				H.eq(sold, 1)
+				-- all the seeds of a label (the bag holds 2 of "1:1")
+				s = atStall()
+				local label, held = nil, 0
+				for key, count in s.profile.seedBag do
+					label = SeedPacks.labelKey(key)
+					held += count
+				end
+				H.eq(held, 2, "(two seeds)")
+				local seedPrice = Config.seedSellPrice(1, 1, nil, Sessions.moneyMult(s))
+				sold = 0
+				paid = spam(s, paced, {}, nil, { [label :: string] = held })
+				onlyFirst(paid, `seeds ({how})`)
+				H.near(paid[1], held * seedPrice, 1e-6, "both seeds, once")
+				H.eq(SeedPacks.bagCount(s.profile.seedBag), 0, "the bag is empty, not negative")
+				H.eq(sold, 1)
+				-- "Sell 1" spammed: each request sells one more seed, only while there is one: never more than held
+				s = atStall()
+				local start = s.profile.money
+				paid = spam(s, paced, {}, nil, { [label :: string] = 1 })
+				local total = 0
+				for _, p in paid do
+					total += p
+				end
+				H.near(total, held * seedPrice, 1e-6, `Sell 1 x10 ({how}): paid for the 2 seeds there were, no more`)
+				H.near(s.profile.money - start, total, 1e-6)
+				H.eq(SeedPacks.bagCount(s.profile.seedBag), 0)
+				-- everything at once, ten times
+				s = atStall()
+				sold = 0
+				paid = spam(s, paced, { 1, 2 }, { 1 }, { [label :: string] = 99 })
+				onlyFirst(paid, `everything ({how})`)
+				H.eq(#s.profile.plants + #s.profile.inventory + SeedPacks.bagCount(s.profile.seedBag), 0, "all sold")
+				H.eq(sold, 1, "one sale")
+			end
+		end)
+	end)
+	PlotService.init({}, nil) -- (no stall again, as before)
+	if not ok then
+		error(err, 0)
+	end
+end)
+
 return nil

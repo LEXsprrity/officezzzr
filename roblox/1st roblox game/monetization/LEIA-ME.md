@@ -47,7 +47,7 @@ node tools/create_monetization.mjs --dry-run
 # Agora de verdade
 node tools/create_monetization.mjs --universe 1234567890
 
-# Cria o que falta E acerta os preços dos que já existem (ex.: os packs x1 agora custam 200 / 300 R$)
+# Cria o que falta E acerta os preços dos que já existem, e tira da venda os aposentados (o Lotus Wyrm)
 node tools/create_monetization.mjs --universe 1234567890 --update-prices
 ```
 
@@ -67,6 +67,7 @@ Depois de rodar, volte em **Open Cloud → API Keys** e **apague** a chave (ou d
 
 ### Dúvidas comuns
 
+- **O pack Lotus Wyrm (sakura) foi aposentado.** No `catalog.json` ele tem `"isForSale": false`. Com `--update-prices` o script tira `PackSpirit` e `PackSpirit10` da venda no Roblox (não apaga: quem já comprou recebe). Um item aposentado que ainda não existe nunca é criado. Para voltar a vender: tirar o `retired` do Config, gerar o catálogo de novo e rodar `--update-prices` (ele põe de volta à venda).
 - **Quero mudar um preço.** Mude direto no Creator Dashboard (Monetization), ou deixe o script fazer: com `--update-prices` ele também acerta o preço dos itens que **já existem** para o preço do `catalog.json` (só onde está diferente). O jogo lê o preço real do Roblox.
 - **Os ícones aparecem cinza.** O Roblox ainda está revisando as imagens. Espere alguns minutos.
 - **Apareceu "is not a ... of this universe".** O `ids.json` tem um id de outra experiência. Confira o `--universe`. Se for isso mesmo que você quer, troque aquele id por `0` e rode de novo.
