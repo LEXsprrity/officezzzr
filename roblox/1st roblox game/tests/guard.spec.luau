@@ -1,11 +1,12 @@
--- Soft gates: the guard wakes after Config.wakeDelay (a GUARD_HEAD_START-stud head start at the recommended Speed plus
--- its zone's wakeDelay slack), then chases at walkSpeedFor(zone.req) * GUARD_SPEED_FACTOR (1)
+-- Soft gates: the guard wakes after Config.wakeDelay (WAKE_REACTION for the thief to notice, then a GUARD_HEAD_START-stud
+-- head start at the recommended Speed plus its zone's wakeDelay slack), then chases at walkSpeedFor(zone.req) * GUARD_SPEED_FACTOR (1)
 -- and catches within CATCH_DISTANCE of the path it walked since its last tick.
 local H = require("./harness")
 local Vector3 = H.Vector3
 
 local Config = H.shared("Config")
 local GuardBrain = H.server("GuardBrain")
+local Flow = require("./steal_flow")
 
 local DT = 1 / Config.GUARD_HZ
 
@@ -82,21 +83,6 @@ local function simulate(k: number, speedStat: number, opts: SimOpts?): (string, 
 	return "timeout", t - 1000, playerPos.X, closest
 end
 
--- Lowest Speed stat (as a share of the zone's recommended Speed) that still escapes, by bisection.
-local function escapeShare(k: number): number
-	local req = Config.ZONES[k].req
-	local lo, hi = 0, 1
-	for _ = 1, 30 do
-		local mid = (lo + hi) / 2
-		if simulate(k, req * mid) == "escaped" then
-			hi = mid
-		else
-			lo = mid
-		end
-	end
-	return hi
-end
-
 -- Slack: the longest a thief at exactly the recommended Speed can stand still after the steal (reaction
 -- time, lag) and still get home, by bisection. The sim ticks at GUARD_HZ, so this moves in 0.1 s steps.
 local function slackOf(k: number): number
@@ -120,13 +106,14 @@ H.test("guard: chase speed is walkSpeedFor(req) * 1.0 for every zone", function(
 	end
 end)
 
-H.test("guard: every guard wakes after a 28-stud head start at the recommended Speed, plus its zone's slack", function()
+H.test("guard: every guard wakes after the thief's reaction time, then a 28-stud head start at the recommended Speed", function()
 	H.eq(Config.GUARD_HEAD_START, 28)
-	local want = { Meadow = 0.5, Desert = 0, Jungle = 0.1, Lava = 0.1, Snow = 0.1, Space = 0.1, Spirit = 0.1 }
+	H.eq(Config.WAKE_REACTION, 0.5)
 	for k, zone in Config.ZONES do
-		H.eq(zone.wakeDelay, want[zone.id], zone.id)
+		H.eq(zone.wakeDelay, 0, zone.id)
 		local delay = Config.wakeDelay(k)
-		H.near((delay - zone.wakeDelay) * Config.walkSpeedFor(zone.req), Config.GUARD_HEAD_START, 1e-6, `{zone.id}: the head start in studs`)
+		H.near((delay - Config.WAKE_REACTION) * Config.walkSpeedFor(zone.req), Config.GUARD_HEAD_START, 1e-6, `{zone.id}: the head start in studs`)
+		H.ok(delay >= 0.65, `{zone.id}: wakes after {delay}s, not before a human can react (it was 0.26 s in the Spirit Garden)`)
 		H.eq(GuardBrain.new(k, Vector3.new(0, 0, 0)).wakeDelay, delay, zone.id)
 	end
 end)
@@ -180,20 +167,46 @@ H.test("guard: a player AT the recommended speed who runs at once reaches the ba
 	end
 end)
 
-H.test("guard: the lowest Speed that escapes is at least 45% of the recommended Speed (zones 3-7; Desert 30%)", function()
-	-- Short zones (Config.zoneLength) mean short runs home, where a slower thief loses little ground: with
-	-- 0.3 s of slack the Desert's 264-stud run can only hold ~30%, the Jungle's 640 ~47%.
-	local lines = {}
+----------------------------------------------------------------------------------------------------
+-- The steal as the live game runs it (tests/steal_flow): the thief stands anywhere in the prompt's reach of
+-- a pod, starts running a human reaction after the steal, the server sees them 0.1 s late through the
+-- movement tracker (SpeedService.seenPosition), and the guard loop ticks at 10 Hz at any phase.
+----------------------------------------------------------------------------------------------------
+H.test("guard flow: the Studio report: 100M in the Spirit Garden, running 0.3 s after the steal, gets away", function()
+	-- Owner playtest: caught "as soon as I take the seed". The guard used to wake after 0.26 s, while the
+	-- thief still stood by the pod, 10-16 studs from its root: a 17-stud tick or two and it had them, whatever
+	-- their Speed. (Pinned here with the old wake-up.)
+	local old = Config.GUARD_HEAD_START / Config.guardChaseSpeed(7) + 0.1
+	local outcome, t = Flow.steal(7, { speed = 100e6, reaction = 0.3, wakeDelay = old })
+	H.eq(outcome, "caught", "with the old 0.26 s wake-up")
+	H.ok(t < old + 0.2, `within its first chase ticks ({t}s)`)
+	H.eq((Flow.steal(7, { speed = 1e12, reaction = 0.3, wakeDelay = old })), "caught", "...at any Speed (the WalkSpeed cap): it was the wake-up")
+	for _, speed in { 100e6, 75e6 } do
+		local result, at, where = Flow.steal(7, { speed = speed, reaction = 0.3 })
+		H.eq(result, "escaped", `{speed}: caught at {at}s ({where})`)
+	end
+end)
+
+H.test("guard flow: at the recommended Speed or more you escape if you start running within 0.45 s, from any pod and stance, in every zone", function()
 	for k = 2, #Config.ZONES do
 		local zone = Config.ZONES[k]
-		local share = escapeShare(k)
-		local need = if zone.id == "Desert" then 0.3 else 0.45
-		H.ok(share >= need, `{zone.id}: escapes from {math.floor(share * 1000) / 10}% of the recommended Speed`)
-		H.ok(share < 1, `{zone.id}: the recommended Speed itself escapes`)
-		table.insert(lines, string.format("%s: wakes after %.2fs, escape from Speed %.3g (%.1f%% of rec, WalkSpeed %.1f vs guard %.1f), slack %.1fs",
-			zone.id, Config.wakeDelay(k), zone.req * share, 100 * share, Config.walkSpeedFor(zone.req * share), Config.guardChaseSpeed(k), slackOf(k)))
+		for _, share in { 1, 4 / 3 } do
+			local result, at, where = Flow.steal(k, { speed = zone.req * share, reaction = 0.45 })
+			H.eq(result, "escaped", `{zone.id} at {share}x the sign: caught at {at}s ({where})`)
+		end
 	end
-	print("        escape thresholds  " .. table.concat(lines, "\n                           "))
+end)
+
+H.test("guard flow: below the recommended Speed you get caught, even reacting at once (zones 2-7)", function()
+	-- A quick thief (0.2 s) escapes from ~47-70% of the sign: the run home is short, and WalkSpeed is
+	-- logarithmic in Speed (README "Soft gates").
+	for k = 2, #Config.ZONES do
+		local zone = Config.ZONES[k]
+		H.eq((Flow.steal(k, { speed = Config.ZONES[k - 1].req, reaction = 0 })), "caught", `{zone.id} at the previous zone's sign`)
+		local share = if zone.id == "Desert" then 0.4 else 0.5
+		H.eq((Flow.steal(k, { speed = zone.req * share, reaction = 0.2 })), "caught", `{zone.id} at {share * 100}% of the sign`)
+		H.eq((Flow.steal(k, { speed = zone.req, standStill = true })), "caught", `{zone.id}: standing by the pod`)
+	end
 end)
 
 H.test("guard: at the recommended Speed there is >= 0.3 s of slack to start running, in every zone", function()
@@ -313,7 +326,7 @@ end)
 H.test("guard: the slowest chase still fits in CHASE_TIMEOUT (a recommended-Speed run home from any nest)", function()
 	for k, zone in Config.ZONES do
 		local runHome = (Config.nestX(k) - Config.CORRIDOR_START_X) / Config.walkSpeedFor(zone.req)
-		H.ok(runHome + zone.wakeDelay < Config.CHASE_TIMEOUT, `{zone.id}: {runHome}s`)
+		H.ok(runHome + Config.wakeDelay(k) < Config.CHASE_TIMEOUT, `{zone.id}: {runHome}s`)
 	end
 end)
 

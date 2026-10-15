@@ -118,7 +118,7 @@ export type Zone = {
 }
 
 Config.ZONES = {
-	{ id = "Meadow", name = "Meadow", req = 0, length = Config.zoneLength(1), icon = "🌼", active = "day", wakeDelay = 0.5,
+	{ id = "Meadow", name = "Meadow", req = 0, length = Config.zoneLength(1), icon = "🌼", active = "day", wakeDelay = 0,
 		floor = Color3.fromRGB(106, 196, 50), wall = Color3.fromRGB(196, 128, 80), ui = Color3.fromRGB(70, 180, 70),
 		guard = "Giant Turtle", guardColor = Color3.fromRGB(90, 170, 80),
 		seed = "Sproutling", seedColor = Color3.fromRGB(120, 230, 90), baseWeight = 12 },
@@ -126,23 +126,23 @@ Config.ZONES = {
 		floor = Color3.fromRGB(240, 210, 140), wall = Color3.fromRGB(210, 164, 94), ui = Color3.fromRGB(225, 145, 55),
 		guard = "Red Mole", guardColor = Color3.fromRGB(190, 60, 50),
 		seed = "Cactopod", seedColor = Color3.fromRGB(60, 170, 90), baseWeight = 340 },
-	{ id = "Jungle", name = "Jungle", req = 500e3, length = Config.zoneLength(3), icon = "🦖", active = "night", wakeDelay = 0.1,
+	{ id = "Jungle", name = "Jungle", req = 500e3, length = Config.zoneLength(3), icon = "🦖", active = "night", wakeDelay = 0,
 		floor = Color3.fromRGB(58, 168, 72), wall = Color3.fromRGB(60, 108, 60), ui = Color3.fromRGB(35, 140, 75),
 		guard = "Giant Snake", guardColor = Color3.fromRGB(70, 150, 70),
 		seed = "Fernosaur", seedColor = Color3.fromRGB(40, 200, 120), baseWeight = 9_500 },
-	{ id = "Lava", name = "Lava Fields", req = 2.5e6, length = Config.zoneLength(4), icon = "🌋", active = "day", wakeDelay = 0.1,
+	{ id = "Lava", name = "Lava Fields", req = 2.5e6, length = Config.zoneLength(4), icon = "🌋", active = "day", wakeDelay = 0,
 		floor = Color3.fromRGB(92, 58, 66), wall = Color3.fromRGB(56, 42, 50), ui = Color3.fromRGB(225, 85, 30),
 		guard = "Volcano Gorilla", guardColor = Color3.fromRGB(240, 100, 30),
 		seed = "Magmabloom", seedColor = Color3.fromRGB(255, 120, 40), baseWeight = 180_000 },
-	{ id = "Snow", name = "Snow Peaks", req = 7.5e6, length = Config.zoneLength(5), icon = "❄️", active = "night", wakeDelay = 0.1,
+	{ id = "Snow", name = "Snow Peaks", req = 7.5e6, length = Config.zoneLength(5), icon = "❄️", active = "night", wakeDelay = 0,
 		floor = Color3.fromRGB(232, 242, 255), wall = Color3.fromRGB(150, 184, 212), ui = Color3.fromRGB(65, 150, 225),
 		guard = "Ice Shark", guardColor = Color3.fromRGB(160, 210, 240),
 		seed = "Frostbulb", seedColor = Color3.fromRGB(120, 200, 255), baseWeight = 2_000_000 },
-	{ id = "Space", name = "Deep Space", req = 25e6, length = Config.zoneLength(6), icon = "👽", active = "night", wakeDelay = 0.1,
+	{ id = "Space", name = "Deep Space", req = 25e6, length = Config.zoneLength(6), icon = "👽", active = "night", wakeDelay = 0,
 		floor = Color3.fromRGB(64, 48, 134), wall = Color3.fromRGB(40, 30, 92), ui = Color3.fromRGB(115, 75, 225),
 		guard = "Void Dragon", guardColor = Color3.fromRGB(120, 60, 200),
 		seed = "Starpetal", seedColor = Color3.fromRGB(200, 120, 255), baseWeight = 45_000_000 },
-	{ id = "Spirit", name = "Spirit Garden", req = 75e6, length = Config.zoneLength(7), icon = "⛩️", active = "day", wakeDelay = 0.1,
+	{ id = "Spirit", name = "Spirit Garden", req = 75e6, length = Config.zoneLength(7), icon = "⛩️", active = "day", wakeDelay = 0,
 		floor = Color3.fromRGB(112, 200, 98), wall = Color3.fromRGB(140, 140, 210), ui = Color3.fromRGB(225, 75, 130),
 		guard = "Lumistag", guardColor = Color3.fromRGB(140, 220, 255),
 		seed = "Lotus Wyrm", seedColor = Color3.fromRGB(255, 150, 200), baseWeight = 900_000_000 },
@@ -227,14 +227,18 @@ end
 -- Guards (soft gates)
 ----------------------------------------------------------------------------------------------------
 -- The guard runs exactly as fast as a player at the zone's recommended Speed, so that player escapes on
--- the head start alone. The pods lie right by the sleeping guard, so the head start is its wake-up (the
--- "❗"): it lasts while a recommended-Speed thief runs GUARD_HEAD_START studs (the ~28 studs the pods used
--- to lie ahead of it), the same distance in every zone, so the same balance as when it was a distance.
--- The zone's wakeDelay adds slack for reaction time and lag, but it also lets slower players escape, and
--- both trade against the run home: the shorter it is, the less a slower thief loses on the way. With the
--- zone lengths above, every zone gets 0.4-0.6 s of slack, and the lowest escaping Speed lands at ~50-70%
--- of the sign (tests/guard.spec prints the table; the recommended Speeds are only ~3-4x apart from the
--- Lava Fields on, so a thief can't be far below the sign). The Meadow (req 0) is the tutorial.
+-- the head start alone. The pods lie right by the sleeping guard (10-16 studs from its root), so the head
+-- start is its wake-up (the "❗"), and it has to cover the thief NOTICING the steal first: the Pickup
+-- reaching their client, a human's reaction, and the server seeing their first steps (their position
+-- replicates late). Until then they stand by the pod, within a tick of the guard's reach, so a wake-up
+-- shorter than that catches them on its first tick whatever their Speed (owner playtest: 100M in the Spirit
+-- Garden, caught "as soon as I take the seed" when it woke after 0.26 s). So it lasts WAKE_REACTION, then
+-- as long as a recommended-Speed thief takes to run GUARD_HEAD_START studs, plus the zone's wakeDelay.
+-- Slack also lets slower players escape: the shorter the run home, the less a slower thief loses on the
+-- way. With the zone lengths above a recommended-Speed thief may start running 0.55-0.75 s after the
+-- steal (with 0.1 s of server lag on top), and a quick one (0.2 s) escapes from ~47-70% of the sign
+-- (tests/guard.spec, tests/steal_flow; the recommended Speeds are only ~3-4x apart from the Lava Fields
+-- on, so a thief can't be far below the sign). The Meadow (req 0) is the tutorial.
 Config.GUARD_SPEED_FACTOR = 1 -- chase WalkSpeed = walkSpeedFor(zone.req) * this
 Config.GUARD_RETURN_FACTOR = 0.6 -- walking home is slower than chasing
 Config.CATCH_DISTANCE = 6 -- horizontal studs, root to root
@@ -243,15 +247,17 @@ Config.GUARD_SCALE = 3 -- body size multiplier ("giant")
 Config.KNOCKBACK_STUDS = 30
 Config.CATCH_STUN = 1 -- seconds the caught player can't move
 Config.GUARD_HEAD_START = 28 -- studs a recommended-Speed thief runs while the guard wakes up (Config.wakeDelay)
+Config.WAKE_REACTION = 0.5 -- s of every wake-up for the thief to notice the steal and start running (see above)
 
 function Config.guardChaseSpeed(k: number): number
 	return Config.walkSpeedFor(Config.ZONES[k].req) * Config.GUARD_SPEED_FACTOR
 end
 
--- Seconds between a steal and zone k's guard's chase (its "❗" state): the time a thief at the recommended
--- Speed takes to run GUARD_HEAD_START studs, plus the zone's wakeDelay slack.
+-- Seconds between a steal and zone k's guard's chase (its "❗" state): WAKE_REACTION, then the time a thief
+-- at the recommended Speed takes to run GUARD_HEAD_START studs, plus the zone's wakeDelay slack. At least
+-- 0.66 s (the Spirit Garden), about as long as the boss's wake-up hop (BossRigs.WAKE_TIME).
 function Config.wakeDelay(k: number): number
-	return Config.GUARD_HEAD_START / Config.guardChaseSpeed(k) + Config.ZONES[k].wakeDelay
+	return Config.WAKE_REACTION + Config.GUARD_HEAD_START / Config.guardChaseSpeed(k) + Config.ZONES[k].wakeDelay
 end
 
 -- The "👟 700M recommended" plank by each nest (WorldBuilder) reads GREEN when your Speed reaches the
