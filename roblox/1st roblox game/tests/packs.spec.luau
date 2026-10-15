@@ -85,7 +85,7 @@ end)
 ----------------------------------------------------------------------------------------------------
 -- Developer products
 ----------------------------------------------------------------------------------------------------
-H.test("products: two packs, Deep Space and Spirit Garden, each sold as x1 and x10, id = 0 stubs", function()
+H.test("products: two packs, Deep Space and Spirit Garden, each x1 and x10, id = 0 stubs; only Starpetal in the Shop", function()
 	local names = {}
 	for _, entry in Config.products("Pack") do
 		local name, product = entry.name, entry.product
@@ -110,16 +110,15 @@ H.test("products: two packs, Deep Space and Spirit Garden, each sold as x1 and x
 	end
 	H.eq(Format.robux(P.PackSpace.robux), "R$ 200")
 	H.eq(Format.robux(P.PackSpirit10.robux), "R$ 2,299")
-	-- the Shop: one card per pack, by zone, with its x1 and x10
+	-- the Shop: one card per pack still sold (the Lotus Wyrm one is retired), with its x1 and x10
 	local offers = SeedPacks.offers()
-	H.eq(#offers, 2)
-	H.eq(offers[1].pack.zone, SPACE, "Shop order: by zone")
+	H.eq(#offers, 1, "only the Starpetal card")
+	H.eq(offers[1].pack.zone, SPACE)
 	H.eq(offers[1].single.name, "PackSpace")
 	H.eq(offers[1].ten and offers[1].ten.name, "PackSpace10")
-	H.eq(offers[2].single.name, "PackSpirit")
-	H.eq(offers[2].ten and offers[2].ten.name, "PackSpirit10")
-	-- the reveal's lookup still finds both packs
+	-- the reveal's lookup still finds both packs (a Lotus Wyrm receipt in flight still reveals)
 	H.eq((SeedPacks.lookup("Pack:" .. Config.ZONES[SPACE].id) :: any).zone, SPACE)
+	H.eq((SeedPacks.lookup("Pack:" .. Config.ZONES[SPIRIT].id) :: any).zone, SPIRIT)
 end)
 
 H.test("products: lookup by developer product id", function()
@@ -293,10 +292,10 @@ H.test("prompt: unknown products are refused and id = 0 stubs say coming soon", 
 	local product, why = Shop.canPrompt(p, "Nope")
 	H.eq(product, nil)
 	H.ok(why ~= nil)
-	for name in Config.DEVELOPER_PRODUCTS do
+	for name, item in Config.DEVELOPER_PRODUCTS do
 		product, why = Shop.canPrompt(p, name)
 		H.eq(product, nil, name .. ": no prompt without a real id")
-		H.ok(why and string.find(why, "coming soon"), why)
+		H.ok(why and string.find(why, if item.retired then "isn't sold any more" else "coming soon", 1, true), why) -- (retired: never)
 	end
 	-- removed products are unknown, even with an id-shaped name
 	for _, old in { "PackMeadow", "PackBundle1" } do
@@ -306,11 +305,12 @@ H.test("prompt: unknown products are refused and id = 0 stubs say coming soon", 
 	end
 end)
 
-H.test("prompt: no Speed gate, both packs open to a brand-new player", function()
+H.test("prompt: no Speed gate, the packs on sale open to a brand-new player", function()
 	withIds(ALL_IDS, function()
 		local p = ProfileStore.defaultProfile()
 		H.eq(p.speed, 0)
-		for _, entry in Config.products("Pack") do
+		H.eq(#Config.forSale("Pack"), 2, "the Starpetal x1 and x10")
+		for _, entry in Config.forSale("Pack") do
 			local name, product = entry.name, entry.product
 			local got, why = Shop.canPrompt(p, name)
 			H.eq(got, product, name .. " open at 0 Speed")
@@ -484,7 +484,7 @@ H.test("x10: only prompted with 10 free spaces in the bag (a clear message other
 		H.ok(why and string.find(why, "10 free spaces", 1, true) and string.find(why, "you have 9", 1, true), why)
 		H.ok((Shop.canPrompt(p, "PackSpace")), "...but a x1 still fits")
 		p.seedBag["1:1"] = Config.SEED_BAG_MAX
-		product, why = Shop.canPrompt(p, "PackSpirit10")
+		product, why = Shop.canPrompt(p, "PackSpace10")
 		H.eq(product, nil)
 		H.ok(why and string.find(why, "full"), why)
 		-- a receipt that arrives anyway (bought on another server) still grants all 10, past the soft cap
@@ -750,4 +750,61 @@ H.test("data: receipt history keeps the newest RECEIPT_HISTORY ids as grants add
 	H.eq(#p.receipts, Config.RECEIPT_HISTORY)
 	H.eq(p.receipts[1], "h6")
 	H.eq((Shop.grantProduct(p, "PackSpace", "h" .. (Config.RECEIPT_HISTORY + 5), 0, seeded(1))), "duplicate")
+end)
+
+----------------------------------------------------------------------------------------------------
+-- Retired: the Lotus Wyrm pack (owner 2026-10-15: new players shouldn't skip the game by buying the last
+-- zone's seeds). Hidden and never prompted, but kept so a purchase in flight or a pending receipt grants.
+----------------------------------------------------------------------------------------------------
+H.test("retired: the Lotus Wyrm pack (x1 and x10) has no Shop card and is never prompted, but its receipts still grant", function()
+	local P = Config.DEVELOPER_PRODUCTS
+	for name, product in P do
+		H.eq(product.retired == true, name == "PackSpirit" or name == "PackSpirit10", `{name}: retired only if Lotus Wyrm`)
+	end
+	-- no card, no buttons: neither in the Shop's offers nor its for-sale lists
+	for _, offer in SeedPacks.offers() do
+		H.ok(offer.pack.zone ~= SPIRIT, "no Lotus Wyrm card")
+		H.ok(not offer.single.product.retired and not (offer.ten and offer.ten.product.retired), "no retired button")
+	end
+	for _, kind in { "Pack", "Speed", "Money", "Trail", "GrowNow", "PlotUpgrade", "TreadmillUpgrade" } do
+		for _, entry in Config.forSale(kind) do
+			H.ok(not entry.product.retired, `{entry.name} for sale`)
+		end
+	end
+	H.eq(#Config.products("Pack"), 4, "kept in Config (receipts, catalog)")
+	-- the HUD's Shop lists what is for sale (packs through SeedPacks.offers, Speed / Money through Config.forSale)
+	local hud = string.gsub(fs.readFile("src/client/HUD.client.luau"), "\r", "")
+	H.ok(string.find(hud, "local speeds = Config.forSale(\"Speed\")", 1, true) and string.find(hud, "local monies = Config.forSale(\"Money\")", 1, true), "Speed / Money cards")
+	H.ok(not string.find(hud, "PackSpirit\"", 1, true) and not string.find(hud, "\"Product:PackSpirit", 1, true), "no Lotus Wyrm shortcut in the HUD")
+	-- never prompted, even with a real id and an empty bag
+	withIds(ALL_IDS, function()
+		local p = ProfileStore.defaultProfile()
+		for _, name in { "PackSpirit", "PackSpirit10" } do
+			local product, why = Shop.canPrompt(p, name)
+			H.eq(product, nil, `{name}: no prompt`)
+			H.ok(why and string.find(why, "Lotus Wyrm Pack", 1, true) and string.find(why, "isn't sold any more", 1, true), why)
+		end
+		H.ok((Shop.canPrompt(p, "PackSpace")), "the Starpetal pack still is")
+		H.ok((Shop.canPrompt(p, "PackSpace10")))
+		-- a receipt that arrives anyway (bought before, still pending) grants, once
+		local yes = function()
+			return true
+		end
+		local confirm, status, grant = Shop.processReceipt(p, "PackSpirit", "retired-1", 0, seeded(8), yes)
+		H.eq(confirm, true)
+		H.eq(status, "granted")
+		H.eq(#grant.rolls, 1)
+		H.eq(grant.rolls[1].zone, SPIRIT, "a Spirit Garden seed")
+		confirm, status = Shop.processReceipt(p, "PackSpirit", "retired-1", 0, seeded(8), yes)
+		H.eq(confirm, true)
+		H.eq(SeedPacks.bagCount(p.seedBag), 1, "granted once")
+		local _, _, ten = Shop.processReceipt(p, "PackSpirit10", "retired-10", 0, seeded(9), yes)
+		H.eq(#ten.rolls, 10, "the x10 too")
+		H.eq(SeedPacks.bagCount(p.seedBag), 11)
+		-- the receipt finds it by its id (ProcessReceipt's lookup), as before
+		H.eq((Config.productById(ALL_IDS.PackSpirit10)), "PackSpirit10")
+	end)
+	-- the server's RequestBuy path asks Shop.canPrompt (so "Product:PackSpirit" from a client is refused)
+	local service = string.gsub(fs.readFile("src/server/ShopService.luau"), "\r", "")
+	H.ok(string.find(service, "local product, why = Shop.canPrompt(s.profile, name)\n\t\tif not product then", 1, true) ~= nil, "RequestBuy goes through canPrompt")
 end)

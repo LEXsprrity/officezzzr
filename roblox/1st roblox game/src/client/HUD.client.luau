@@ -1773,7 +1773,7 @@ do
 		shopSections.Speed = section("SPEED", nextOrder(), HEADING_GOLD)
 		banner(nextOrder(), "DoubleSpeed", "SPEED", CARD_COLORS.Speed, "Speed")
 		local grid = cardGrid(nextOrder())
-		local speeds = Config.products("Speed")
+		local speeds = Config.forSale("Speed")
 		for i, entry in speeds do
 			local level = ShopArt.level(i, #speeds)
 			local amount, rest = string.match(string.upper(entry.product.label), "^(%S+)%s+(.+)$")
@@ -1786,7 +1786,7 @@ do
 		shopSections.Money = section("MONEY", nextOrder(), HEADING_CYAN) -- (the Shop's Money tab scrolls here)
 		banner(nextOrder(), "DoubleMoney", "MONEY", CARD_COLORS.Money, "Money")
 		grid = cardGrid(nextOrder())
-		local monies = Config.products("Money")
+		local monies = Config.forSale("Money")
 		for i, entry in monies do
 			productCard(grid, i, entry.name, entry.product, CARD_COLORS.Money,
 				`<font color="{NUMBER_GREEN}">+{Format.money(Config.moneyPackAmount(entry.product))}</font> CASH`, ShopArt.level(i, #monies), "Money")

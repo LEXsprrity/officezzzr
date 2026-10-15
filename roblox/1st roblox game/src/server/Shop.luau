@@ -105,12 +105,15 @@ end
 -- under SEED_BAG_MAX (a x10 needs 10 free spaces), trails the player already has aren't prompted at all, a plot or treadmill
 -- upgrade only through the price tier of the plot's level / treadmill's tier (never once maxed), and Grow
 -- Now only for `target`: one of the player's own plants that is still sprouting, with the product its time
--- left calls for (Config.growNowProduct). Only the *prompt* is gated: a receipt that arrives is always
--- granted (Shop.grantProduct).
+-- left calls for (Config.growNowProduct). A `retired` product is never prompted. Only the *prompt* is gated:
+-- a receipt that arrives is always granted (Shop.grantProduct), a retired product's too.
 function Shop.canPrompt(p: Profile, productName: string, target: GrowNowTarget?): (Config.DevProduct?, string?)
 	local product = Config.DEVELOPER_PRODUCTS[productName]
 	if not product then
 		return nil, "Unknown product"
+	end
+	if product.retired then
+		return nil, `The {product.label} isn't sold any more.`
 	end
 	if product.id == 0 then
 		return nil, `{product.label}: coming soon!`

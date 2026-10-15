@@ -1,7 +1,7 @@
 --!strict
--- Seed packs ("eggs with odds"): the two premium packs, their visible odds table, rolls, the
--- developer products that sell them (Robux only) and the seed-bag key format. Pure and shared, so the
--- Shop UI shows exactly the odds the server rolls with.
+-- Seed packs ("eggs with odds"): the premium packs (the Starpetal one; the Lotus Wyrm one is retired,
+-- Config `retired`), their visible odds table, rolls, the developer products that sell them (Robux only)
+-- and the seed-bag key format. Pure and shared, so the Shop UI shows exactly the odds the server rolls with.
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Config = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("Config"))
 
@@ -58,7 +58,7 @@ export type Offer = { pack: Pack, single: { name: string, product: Config.DevPro
 function SeedPacks.offers(): { Offer }
 	local byZone: { [number]: Offer } = {}
 	local list: { Offer } = {}
-	for _, entry in Config.products("Pack") do
+	for _, entry in Config.forSale("Pack") do -- (a retired pack has no card)
 		local zone = entry.product.zone :: number
 		local offer = byZone[zone]
 		if not offer then
@@ -90,7 +90,7 @@ function SeedPacks.better(a: { rarity: number, mutation: string? }, b: { rarity:
 	return (if ma then ma.income else 0) > (if mb then mb.income else 0)
 end
 
--- A sold pack by its reveal id ("Pack:Space"), or nil.
+-- A sold pack by its reveal id ("Pack:Space"), or nil. Retired ones too: a receipt for one still reveals.
 function SeedPacks.lookup(id: string): Pack?
 	for _, entry in Config.products("Pack") do
 		local pack = SeedPacks.packForProduct(entry.product)
