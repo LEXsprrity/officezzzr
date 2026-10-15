@@ -18,6 +18,7 @@ local Treadmill = require(Shared:WaitForChild("Treadmill"))
 local UiFx = require(Shared:WaitForChild("UiFx"))
 local ShopLayout = require(Shared:WaitForChild("ShopLayout"))
 local ShopUi = require(Shared:WaitForChild("ShopUi"))
+local Toast = require(Shared:WaitForChild("Toast"))
 
 local player = Players.LocalPlayer
 local remotes = ReplicatedStorage:WaitForChild("Remotes")
@@ -106,6 +107,7 @@ local function button(parent: Instance, label: string, color: Color3, size: UDim
 		AutoButtonColor = true,
 		Parent = parent,
 	}, deco(10))
+	ShopUi.studs(b, color) -- studded plastic, under the words
 	local l = text(b, { Name = "Label", Text = label, Size = UDim2.new(1, -10, 1, -6), Position = UDim2.fromOffset(5, 3) })
 	if icon then
 		Icons.set(l, icon, label, iconSize or ICON.medium)
@@ -130,8 +132,8 @@ end
 local TOAST_TOP, TOAST_UNDER_BANNER = 8, 160 -- design pixels; ZoneBanner.client's strip spans 70..154
 local toastHolder = new("Frame", {
 	BackgroundTransparency = 1, AnchorPoint = Vector2.new(0.5, 0), Position = UDim2.new(0.5, 0, 0, TOAST_TOP),
-	Size = UDim2.fromOffset(560, 300), ZIndex = 12, Parent = gui, -- above the shop windows
-}, { new("UIListLayout", { HorizontalAlignment = Enum.HorizontalAlignment.Center, Padding = UDim.new(0, 6) }) })
+	Size = UDim2.fromOffset(720, 420), ZIndex = 12, Parent = gui, -- above the shop windows
+}, { new("UIListLayout", { HorizontalAlignment = Enum.HorizontalAlignment.Center, Padding = UDim.new(0, 0), SortOrder = Enum.SortOrder.LayoutOrder }) })
 task.spawn(function()
 	local banner = player:WaitForChild("PlayerGui"):WaitForChild("ZoneBanner", 60)
 	local strip = banner and banner:WaitForChild("Strip", 10)
@@ -144,8 +146,10 @@ task.spawn(function()
 	end
 end)
 
-local TOAST_COLORS = { red = COLORS.red, gold = COLORS.gold, green = COLORS.money, blue = COLORS.speed }
-local function toast(message: string, color: string?, seconds: number?)
+-- Each one in the shared announcement look (Shared/Toast: a studded plate in its colour, an icon, chunky relief
+-- words; it pops in and fades out). `icon`: an Icons key, "Sun" / "Moon", or nil for the colour's own;
+-- `big`: a server-wide announcement (bigger, a rainbow frame).
+local function toast(message: string, color: string?, seconds: number?, icon: string?, big: boolean?)
 	-- Words only: server texts (Net.toast, announcements) may still carry emoji. The lock stays.
 	local ok, plain = pcall(string.gsub, message, utf8.charpattern, function(ch: string)
 		local c = utf8.codepoint(ch)
@@ -156,20 +160,9 @@ local function toast(message: string, color: string?, seconds: number?)
 	if ok then
 		message = string.match(string.gsub(plain, "%s+", " "), "^%s*(.-)%s*$") or message
 	end
-	local frame = new("Frame", {
-		Size = UDim2.fromOffset(500, 36), BackgroundColor3 = TOAST_COLORS[color or ""] or Color3.fromRGB(60, 60, 80),
-		Parent = toastHolder,
-	}, deco(10))
-	local label = text(frame, { Text = message, Size = UDim2.new(1, -16, 1, -8), Position = UDim2.fromOffset(8, 4) })
-	task.delay(seconds or 3, function()
-		local info = TweenInfo.new(0.4)
-		TweenService:Create(frame, info, { BackgroundTransparency = 1 }):Play()
-		TweenService:Create(label, info, { TextTransparency = 1 }):Play()
-		task.wait(0.45)
-		frame:Destroy()
-	end)
+	Toast.show(toastHolder, message, { color = color, seconds = seconds, icon = icon, big = big })
 	local children = toastHolder:GetChildren()
-	if #children > 6 then
+	if #children > 5 then
 		for _, c in children do
 			if c:IsA("Frame") then
 				c:Destroy()
@@ -191,7 +184,7 @@ local SPEED_PINK = Color3.fromRGB(255, 70, 150)
 local MONEY_GREEN = Color3.fromRGB(85, 240, 70)
 local LEFT_GAP = 18 -- between Shop, Index and Slow Mode
 local SIDE_W, SIDE_H = 176, 68 -- the Shop / Index buttons (wide, like the reference)
-local STATS_H, LEFT_H = 100, SIDE_H * 2 + 30 + 2 * LEFT_GAP -- LEFT_H: 2 side buttons + Slow Mode
+local STATS_H, LEFT_H = 176, SIDE_H * 2 + 30 + 2 * LEFT_GAP -- LEFT_H: 2 side buttons + Slow Mode
 local STATS_BOTTOM = 10
 
 local openModal: (name: string) -> ()
@@ -219,30 +212,35 @@ local function bold(parent: Instance, thickness: number, props: { [string]: any 
 	return label
 end
 
--- Speed and money
+-- Speed and money, big like the reference HUD (owner 2026-10-15: "about 2x bigger"): huge chunky italic
+-- numbers with a thick dark outline, the icons left of them. Named "Stats": VipHudBadge.client puts the VIP
+-- badge on top of it. Its "Fit" scale keeps it left of the hotbar on narrow screens (fitLeftColumn).
 local statsFrame = new("Frame", {
-	BackgroundTransparency = 1, AnchorPoint = Vector2.new(0, 1), Position = UDim2.new(0, 14, 1, -STATS_BOTTOM),
-	Size = UDim2.fromOffset(360, STATS_H), Parent = gui,
+	Name = "Stats", BackgroundTransparency = 1, AnchorPoint = Vector2.new(0, 1), Position = UDim2.new(0, 14, 1, -STATS_BOTTOM),
+	Size = UDim2.fromOffset(470, STATS_H), Parent = gui,
+}, { new("UIScale", { Name = "Fit" }) })
+iconLabel(statsFrame, "Speed", "⚡", { Size = UDim2.fromOffset(84, 84) })
+local speedValue = bold(statsFrame, 6, {
+	Text = "0", Size = UDim2.new(1, -100, 0, 80), Position = UDim2.fromOffset(98, 2), TextXAlignment = Enum.TextXAlignment.Left, TextColor3 = SPEED_PINK,
+	FontFace = Font.new("rbxasset://fonts/families/Montserrat.json", Enum.FontWeight.Heavy, Enum.FontStyle.Italic),
 })
-iconLabel(statsFrame, "Speed", "⚡", { Size = UDim2.fromOffset(48, 48) })
-local speedValue = bold(statsFrame, 4, {
-	Text = "0", Size = UDim2.new(1, -62, 0, 44), Position = UDim2.fromOffset(62, 2), TextXAlignment = Enum.TextXAlignment.Left, TextColor3 = SPEED_PINK,
+iconLabel(statsFrame, "Money", "💰", { Size = UDim2.fromOffset(84, 84), Position = UDim2.fromOffset(0, 92) })
+local moneyValue = bold(statsFrame, 6, {
+	Text = "$0", Size = UDim2.new(1, -100, 0, 80), Position = UDim2.fromOffset(98, 94), TextXAlignment = Enum.TextXAlignment.Left, TextColor3 = MONEY_GREEN,
+	FontFace = Font.new("rbxasset://fonts/families/Montserrat.json", Enum.FontWeight.Heavy, Enum.FontStyle.Italic),
 })
-iconLabel(statsFrame, "Money", "💰", { Size = UDim2.fromOffset(48, 48), Position = UDim2.fromOffset(0, 52) })
-local moneyValue = bold(statsFrame, 4, {
-	Text = "$0", Size = UDim2.new(1, -62, 0, 44), Position = UDim2.fromOffset(62, 54), TextXAlignment = Enum.TextXAlignment.Left, TextColor3 = MONEY_GREEN,
-})
-UiFx.relief(speedValue, 4, 4) -- raised, not flat: a dropped dark copy behind, a bevel, a thick outline
-UiFx.relief(moneyValue, 4, 4)
+UiFx.relief(speedValue, 6, 6) -- raised, not flat: a dropped dark copy behind, a bevel, a thick outline
+UiFx.relief(moneyValue, 6, 6)
 -- The Speed icon and its yellow "+" badge both open the Shop on the Speed section.
-new("TextButton", { BackgroundTransparency = 1, Text = "", Size = UDim2.fromOffset(48, 48), Parent = statsFrame }).Activated:Connect(function()
+new("TextButton", { BackgroundTransparency = 1, Text = "", Size = UDim2.fromOffset(84, 84), Parent = statsFrame }).Activated:Connect(function()
 	openShopAt("Speed")
 end)
 local plusBadge = new("TextButton", {
-	Size = UDim2.fromOffset(24, 24), Position = UDim2.fromOffset(32, 28), BackgroundColor3 = Color3.fromRGB(255, 210, 40), Text = "",
+	Size = UDim2.fromOffset(40, 40), Position = UDim2.fromOffset(54, 50), BackgroundColor3 = Color3.fromRGB(255, 210, 40), Text = "",
 	AutoButtonColor = true, Parent = statsFrame,
-}, deco(7, 3))
-bold(plusBadge, 3, { Text = "+", Size = UDim2.new(1, -4, 1, -2), Position = UDim2.fromOffset(2, 0) })
+}, deco(4, 4))
+ShopUi.studs(plusBadge, Color3.fromRGB(255, 210, 40))
+UiFx.relief(bold(plusBadge, 4, { Text = "+", Size = UDim2.new(1, -6, 1, -6), Position = UDim2.fromOffset(3, 1) }), 2, 4)
 plusBadge.Activated:Connect(function()
 	openShopAt("Speed")
 end)
@@ -266,6 +264,7 @@ local function sideButton(order: number, label: string, icon: string, emoji: str
 		Name = "Button", AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.5), Size = UDim2.fromScale(1, 1),
 		BackgroundColor3 = color, Text = "", AutoButtonColor = true, Parent = holder,
 	}, deco(4, 4))
+	ShopUi.studs(b, color) -- the reference's studded plastic, under the bevel and the words
 	ShopUi.bevel(b)
 	iconLabel(b, icon, emoji, { Size = UDim2.fromOffset(54, 54), AnchorPoint = Vector2.new(0, 0.5), Position = UDim2.new(0, 8, 0.5, -1) })
 	UiFx.relief(bold(b, 4, { Text = label, Size = UDim2.new(1, -78, 0, 42), Position = UDim2.new(0, 68, 0.5, -23), TextXAlignment = Enum.TextXAlignment.Left }), 3, 4)
@@ -286,6 +285,7 @@ local slowRow = new("TextButton", { Name = "SlowMode", Size = UDim2.new(1, 0, 0,
 local slowTrack = new("Frame", {
 	Size = UDim2.fromOffset(54, 28), Position = UDim2.fromOffset(2, 1), BackgroundColor3 = Color3.fromRGB(150, 165, 215), Parent = slowRow,
 }, deco(4, 4))
+ShopUi.studs(slowTrack, nil) -- white-tinted: the track's colour changes with the switch
 local slowKnob = new("Frame", {
 	Size = UDim2.fromOffset(22, 22), Position = UDim2.fromOffset(3, 3), BackgroundColor3 = WHITE, Parent = slowTrack,
 }, deco(3, 2))
@@ -329,31 +329,58 @@ end
 -- Short screens (phones): shrink the centred button column so its bottom stays above the Speed and money.
 local function fitLeftColumn()
 	local height = gui.AbsoluteSize.Y / uiScale.Scale
-	local room = height / 2 - STATS_BOTTOM - STATS_H - 10 -- from the middle of the screen down to the readout
+	-- the readout first: left of the hotbar (centred, under 200 wide), never over it
+	local fit = statsFrame:FindFirstChild("Fit") :: UIScale
+	fit.Scale = math.clamp((gui.AbsoluteSize.X / uiScale.Scale / 2 - 110 - 14) / 470, 0.5, 1)
+	-- from the middle of the screen down to the readout and the VIP badge over it (VipHudBadge.client, 64)
+	local room = height / 2 - STATS_BOTTOM - STATS_H * fit.Scale - 64 * fit.Scale - 10
 	leftScale.Scale = math.clamp(room / (LEFT_H / 2), 0.5, 1)
 end
 
 ----------------------------------------------------------------------------------------------------
--- Hotbar (bottom centre): Bat (1); Planting.client adds the seed slot (2) to it
+-- Hotbar (bottom centre): Bat (1); Planting.client adds the seed slot (2) to it. Slots like the reference
+-- (ShopUi.slot): small dark see-through squares, the number top-left, the item drawn filling the slot.
 ----------------------------------------------------------------------------------------------------
 local hotbar = new("Frame", {
 	Name = "Hotbar", BackgroundTransparency = 1, AnchorPoint = Vector2.new(0.5, 1), Position = UDim2.new(0.5, 0, 1, -14),
-	Size = UDim2.fromOffset(200, 84), Parent = gui,
+	Size = UDim2.fromOffset(2 * ShopUi.SLOT + 8, ShopUi.SLOT), Parent = gui,
 }, { new("UIListLayout", { FillDirection = Enum.FillDirection.Horizontal, HorizontalAlignment = Enum.HorizontalAlignment.Center,
-	SortOrder = Enum.SortOrder.LayoutOrder, Padding = UDim.new(0, 10) }) })
+	SortOrder = Enum.SortOrder.LayoutOrder, Padding = UDim.new(0, 8) }) })
 local batCooldownUntil = 0
 local function useBat()
 	if os.clock() >= batCooldownUntil then
 		RequestUseItem:FireServer("Bat")
 	end
 end
-local batSlot = button(hotbar, "🏏\nBat", Color3.fromRGB(200, 140, 80), UDim2.fromOffset(84, 84), useBat, "Bat")
+local batSlot = new("TextButton", { Name = "BatSlot", Parent = hotbar })
 batSlot.LayoutOrder = 1
-text(batSlot, { Text = "1", Size = UDim2.fromOffset(18, 18), Position = UDim2.fromOffset(4, 2), TextColor3 = COLORS.gold })
+ShopUi.slot(batSlot, "1")
+batSlot.Activated:Connect(useBat)
+do
+	-- A wooden baseball bat, drawn from frames, lying diagonally across the slot: a round barrel tapering
+	-- into a thin handle with a knob, warm wood with a light side, a thin dark brown outline.
+	local WOOD = ColorSequence.new(Color3.fromRGB(236, 172, 100), Color3.fromRGB(160, 92, 42))
+	local BARK = Color3.fromRGB(70, 36, 14)
+	local bat = new("Frame", {
+		Name = "Bat", BackgroundTransparency = 1, AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.52, 0.52),
+		Size = UDim2.fromScale(0.2, 1.02), Rotation = 42, ZIndex = 2, Parent = batSlot,
+	})
+	-- { width, top, height } as shares of the bat's frame, handle end first so the barrel overlaps it
+	for _, part in { { 0.36, 0.52, 0.42 }, { 0.62, 0.9, 0.08 }, { 0.6, 0.38, 0.22 }, { 0.92, 0.02, 0.5 } } do
+		new("Frame", {
+			AnchorPoint = Vector2.new(0.5, 0), Position = UDim2.fromScale(0.5, part[2]), Size = UDim2.fromScale(part[1], part[3]),
+			BackgroundColor3 = WHITE, BorderSizePixel = 0, ZIndex = 2, Parent = bat,
+		}, {
+			new("UICorner", { CornerRadius = UDim.new(0.5, 0) }), -- round wood (art)
+			new("UIGradient", { Color = WOOD }),
+			new("UIStroke", { Thickness = 1.5, Color = BARK }),
+		})
+	end
+end
 local batShade = new("Frame", {
 	BackgroundColor3 = Color3.new(0, 0, 0), BackgroundTransparency = 0.45, Size = UDim2.fromScale(1, 0),
-	AnchorPoint = Vector2.new(0, 1), Position = UDim2.fromScale(0, 1), Parent = batSlot,
-}, { new("UICorner", { CornerRadius = UDim.new(0, 10) }) })
+	AnchorPoint = Vector2.new(0, 1), Position = UDim2.fromScale(0, 1), ZIndex = 3, Parent = batSlot,
+})
 
 UserInputService.InputBegan:Connect(function(input, processed)
 	if processed then
@@ -375,7 +402,8 @@ local rightTabs = new("Frame", {
 local sidePanel = new("Frame", {
 	AnchorPoint = Vector2.new(1, 0.5), Position = UDim2.new(1, -96, 0.45, 0), Size = UDim2.fromOffset(380, 440),
 	BackgroundColor3 = COLORS.panel, Visible = false, Parent = gui,
-}, deco(14))
+}, deco(4, 4))
+ShopUi.studs(sidePanel, COLORS.panel) -- studded like every HUD element (under its title, tabs and list)
 local sideTitle = text(sidePanel, { Text = "", Size = UDim2.new(1, -20, 0, 36), Position = UDim2.fromOffset(10, 8), TextColor3 = INK })
 sideTitle:FindFirstChildOfClass("UIStroke"):Destroy()
 local sideList = new("ScrollingFrame", {
@@ -388,7 +416,9 @@ local sideTab: string? = nil -- "Plants" or "Inventory" (the Plants panel's tabs
 local renderSide: () -> ()
 
 local function card(order: number, color: Color3, height: number?): Frame
-	return new("Frame", { Size = UDim2.new(1, -8, 0, height or 54), BackgroundColor3 = color, LayoutOrder = order, Parent = sideList }, deco(10, 2))
+	local f = new("Frame", { Size = UDim2.new(1, -8, 0, height or 54), BackgroundColor3 = color, LayoutOrder = order, Parent = sideList }, deco(4, 2))
+	ShopUi.studs(f, color)
+	return f
 end
 
 local function clearSide()
@@ -504,6 +534,7 @@ end
 -- outlined caption (with `icon` key(s) in place of emoji/"R$").
 local function chunky(parent: Instance, label: string, color: Color3, size: UDim2, onClick: () -> (), icon: (string | { string })?, iconSize: number?): TextButton
 	local b = new("TextButton", { Size = size, BackgroundColor3 = color, BorderSizePixel = 0, Text = "", AutoButtonColor = true, Parent = parent }, { outline() })
+	ShopUi.studs(b, nil) -- white-tinted: these buttons change colour (tabs, Remove / Sure?)
 	ShopUi.bevel(b)
 	local l = bold(b, 3, { Name = "Label", Text = label, Size = UDim2.new(1, -12, 1, -12), Position = UDim2.fromOffset(6, 6) })
 	if icon then
@@ -519,17 +550,17 @@ local modal = new("Frame", {
 }, { outline(4) })
 local modalScale = new("UIScale", { Parent = modal })
 
--- Faint studs over the body, like the reference's plate
+-- Studs over the body, like the reference's plate: the title bar's studs exactly, tinted charcoal
 local studs = new("Frame", {
 	BackgroundTransparency = 1, Position = UDim2.fromOffset(0, TITLE_H), Size = UDim2.new(1, 0, 1, -TITLE_H), ClipsDescendants = true, Parent = modal,
 })
-ShopUi.studs(studs, 32, 0.86, 1, MODAL_W, MODAL_H - TITLE_H)
+ShopUi.studs(studs, WINDOW_BODY, nil, 1) -- the same studs as the title bar (ShopUi.STUD_CELL), tinted charcoal
 
 -- Title bar: one flat colour (openModal), studs, three light diagonal bands on its right half, a shine
 local titleBar = new("Frame", {
 	Size = UDim2.new(1, 0, 0, TITLE_H), BackgroundColor3 = WHITE, BorderSizePixel = 0, ClipsDescendants = true, ZIndex = 2, Parent = modal,
 })
-ShopUi.studs(titleBar, 18, 0.8, 2, MODAL_W, TITLE_H)
+ShopUi.studs(titleBar, nil, nil, 2) -- tinted to the window's bar colour by openModal (ShopUi.paintStuds)
 -- Diagonal bands: a square (so the gradient's 45° is a true 45°) seen through the bar, clipped to it
 local stripeKeys = { NumberSequenceKeypoint.new(0, 1) }
 for _, band in { { 0.6, 0.645 }, { 0.665, 0.68 }, { 0.705, 0.76 } } do
@@ -685,10 +716,11 @@ do
 		local mut = Config.mutationById(p.mutation)
 		local accent = if mut then mut.color else rarity.color
 		local f = new("Frame", { Name = "Plant_" .. p.slot, Size = UDim2.new(1, -8, 0, CARD_H), BackgroundColor3 = WHITE, LayoutOrder = order, Parent = sideList }, {
-			new("UICorner", { CornerRadius = UDim.new(0, 12) }),
+			new("UICorner", { CornerRadius = UDim.new(0, 4) }),
 			new("UIStroke", { Thickness = 2, Color = accent:Lerp(INK, 0.3), ApplyStrokeMode = Enum.ApplyStrokeMode.Border }),
 			new("UIGradient", { Rotation = 90, Color = ColorSequence.new(WHITE, accent:Lerp(WHITE, 0.8)) }),
 		})
+		ShopUi.studs(f, accent) -- studded, under the strip, the 3D view and the words
 		new("Frame", { Size = UDim2.new(0, 8, 1, -14), Position = UDim2.fromOffset(7, 7), BackgroundColor3 = accent, BorderSizePixel = 0, Parent = f },
 			{ new("UICorner", { CornerRadius = UDim.new(1, 0) }) })
 		FlowerView.show(f, FlowerView.flower(p.zone, p.rarity, p.flower), {
@@ -748,10 +780,11 @@ do
 		local mut = Config.mutationById(mutation)
 		local accent = if mut then mut.color else rarity.color
 		local f = new("Frame", { Name = "Item_" .. key, Size = UDim2.new(1, -8, 0, CARD_H), BackgroundColor3 = WHITE, LayoutOrder = order, Parent = sideList }, {
-			new("UICorner", { CornerRadius = UDim.new(0, 12) }),
+			new("UICorner", { CornerRadius = UDim.new(0, 4) }),
 			new("UIStroke", { Thickness = 2, Color = accent:Lerp(INK, 0.3), ApplyStrokeMode = Enum.ApplyStrokeMode.Border }),
 			new("UIGradient", { Rotation = 90, Color = ColorSequence.new(WHITE, accent:Lerp(WHITE, 0.8)) }),
 		})
+		ShopUi.studs(f, accent) -- studded, under the strip, the 3D view and the words
 		new("Frame", { Size = UDim2.new(0, 8, 1, -14), Position = UDim2.fromOffset(7, 7), BackgroundColor3 = accent, BorderSizePixel = 0, Parent = f },
 			{ new("UICorner", { CornerRadius = UDim.new(1, 0) }) })
 		FlowerView.show(f, look, { size = UDim2.fromOffset(VIEW, VIEW), position = UDim2.new(0, 20, 0.5, 0), anchor = Vector2.new(0, 0.5), spin = true })
@@ -947,6 +980,7 @@ openModal = function(name: string)
 	modal.Size = UDim2.fromOffset(w, h)
 	fitModal()
 	titleBar.BackgroundColor3 = window.bar
+	ShopUi.paintStuds(titleBar, window.bar)
 	modalTitle.Text = window.title -- words only, in relief
 	Icons.set(modalSubtitle, {}, "") -- the window's render may fill it
 	modal.Visible = true
@@ -1158,6 +1192,7 @@ do
 			(c :: any)[k] = v
 		end
 		paint(c, color, rainbow)
+		ShopUi.studs(c, if rainbow then nil else color, nil, 1) -- fine raised studs over the paint, under the art
 		cardSeed += 1
 		ShopUi.speckles(c, cardSeed, 12, 1)
 		return c
@@ -1290,6 +1325,8 @@ do
 					NumberSequenceKeypoint.new(1, 0.15),
 				}) }),
 			})
+			local studLayer = c:FindFirstChild("Studs") :: GuiObject
+			studLayer.ZIndex = 2 -- the studs over the picture too
 		else
 			sunburst(c, 0.86, 0.42, 560)
 			sunburst(c, 0.3, 0.55, 560)
@@ -1428,9 +1465,30 @@ do
 			new("UIGradient", { Rotation = 90, Color = ColorSequence.new(WHITE:Lerp(view.color, 0.15), view.color:Lerp(Color3.new(0, 0, 0), 0.2)) }),
 		})
 		ShopUi.bevel(badge)
-		if view.icon then
+		if view.icon and view.coin then -- 2x Money: the cash on a gold coin, an "x2" stamped on it
+			local coin = new("Frame", {
+				Name = "Coin", AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.5), Size = UDim2.fromOffset(96, 96),
+				BackgroundColor3 = WHITE, ZIndex = 3, Parent = badge,
+			}, {
+				new("UICorner", { CornerRadius = UDim.new(1, 0) }), -- round: a coin (art)
+				new("UIStroke", { Thickness = 4, Color = Color3.fromRGB(150, 85, 0) }),
+				new("UIGradient", { Rotation = 45, Color = ColorSequence.new(Color3.fromRGB(255, 236, 120), Color3.fromRGB(235, 150, 10)) }),
+			})
+			new("Frame", {
+				AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.5), Size = UDim2.fromScale(0.78, 0.78), BackgroundTransparency = 1, ZIndex = 3,
+				Parent = coin,
+			}, {
+				new("UICorner", { CornerRadius = UDim.new(1, 0) }), -- round: the coin's inner ring (art)
+				new("UIStroke", { Thickness = 3, Color = Color3.fromRGB(255, 250, 200), Transparency = 0.3 }),
+			})
+			bigIcon(coin, view.icon, { Size = UDim2.fromOffset(70, 70), AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.new(0.5, -4, 0.5, -6), ZIndex = 4 })
+			UiFx.relief(bold(coin, 4, {
+				Name = "Stamp", Text = view.coin, TextColor3 = Color3.fromRGB(255, 214, 40), AnchorPoint = Vector2.new(1, 1), Position = UDim2.new(1, 6, 1, 4),
+				Size = UDim2.fromOffset(58, 40), ZIndex = 5,
+			}), 3, 4)
+		elseif view.icon then
 			bigIcon(badge, view.icon, { Size = UDim2.fromOffset(88, 88), AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.5), ZIndex = 3 })
-		else -- VIP: a gold relief badge where the icon goes
+		else -- no icon: a gold relief "VIP" badge where the icon goes
 			UiFx.relief(bold(badge, 5, {
 				Text = "VIP", TextColor3 = Color3.fromRGB(255, 206, 40), AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.5),
 				Size = UDim2.fromOffset(96, 58), ZIndex = 3,
@@ -1470,7 +1528,7 @@ do
 			TextXAlignment = Enum.TextXAlignment.Left, ZIndex = 3,
 		})
 		local buy = if owned
-			then { text = "Owned", color = COLORS.disabled, robux = false, gift = false, still = true, onClick = function() end } :: Buy
+			then { text = "Owned", color = PassCards.OWNED, robux = false, gift = false, still = true, onClick = function() end } :: Buy
 			else robuxBuy(robuxPrice(pass, Enum.InfoType.GamePass), pass.id, "Pass:" .. passName, "Forever")
 		buttonRow(c, PACK_W, L.BANNER_H, math.floor((L.BANNER_H - L.BUTTON_H - L.CAPTION_H) / 2), { buy }, PACK_W - 420, PACK_W - 16)
 	end
@@ -1504,7 +1562,7 @@ do
 				local pass = Config.GAMEPASSES[view.name]
 				local buy: Buy = {
 					text = if view.caption == "Owned" or view.caption == "Buy" then view.caption else Format.commas(robuxPrice(pass, Enum.InfoType.GamePass)),
-					color = if view.owned then COLORS.disabled else robuxColor(pass.id, ROBUX_GREEN), robux = not view.owned and view.caption ~= "Buy",
+					color = if view.owned then PassCards.OWNED else robuxColor(pass.id, ROBUX_GREEN), robux = not view.owned and view.caption ~= "Buy",
 					gift = not view.owned, caption = if view.owned then nil else "Forever", still = view.owned, onClick = onClick,
 				}
 				return buttonRow(c, L.WIDE_W, L.WIDE_H, L.bottomY(L.WIDE_H, true), { buy }, 142, L.WIDE_W - L.MARGIN)[1]
@@ -1532,7 +1590,7 @@ do
 
 		-- Money (Robux), gold: the card shows what you'd get right now (fixed, or minutes of your income)
 		section("MONEY", nextOrder(), HEADING_CYAN)
-		banner(nextOrder(), "DoubleMoney", "MONEY", CARD_COLORS.Money, "DoubleMoney")
+		banner(nextOrder(), "DoubleMoney", "MONEY", CARD_COLORS.Money, "Money")
 		grid = cardGrid(nextOrder())
 		local monies = Config.products("Money")
 		for i, entry in monies do
@@ -1607,6 +1665,7 @@ do
 				Parent = c,
 			})
 		end
+		ShopUi.studs(c, if t.rainbow then nil else t.color)
 		shine(c)
 		bold(c, 4, { Text = t.name, Size = UDim2.new(1, -16, 0, 42), Position = UDim2.fromOffset(8, 12) })
 		bold(c, 3, { Text = t.rarity, Size = UDim2.new(1, -16, 0, 24), Position = UDim2.fromOffset(8, 54) })
@@ -1725,6 +1784,7 @@ local function renderIndex()
 			new("UIStroke", { Thickness = 4, Color = FRAME_INK, ApplyStrokeMode = Enum.ApplyStrokeMode.Border }),
 		})
 		shade(row, zone.ui, 0.25, 0.3)
+		ShopUi.studs(row, zone.ui)
 		shine(row)
 		-- The zone's name, then the mutations found there in their colours
 		local title = zone.name
@@ -1749,6 +1809,7 @@ local function renderIndex()
 				if got then
 					shade(cell, rarity.color, 0.3, 0.2)
 				end
+				ShopUi.studs(cell, if got then rarity.color else zone.ui)
 				FlowerView.show(cell, FlowerView.flower(k, r, c.model), {
 					size = UDim2.new(1, -8, 1, -(NAME_H + 8)), position = UDim2.fromOffset(4, 4), spin = got, silhouette = not got,
 				})
@@ -1880,9 +1941,11 @@ do
 		local c = new("Frame", { BackgroundColor3 = SELL_CARD, LayoutOrder = order, Parent = grid }, {
 			new("UIStroke", { Thickness = 4, Color = if mut then mut.color else FRAME_INK, ApplyStrokeMode = Enum.ApplyStrokeMode.Border }),
 		})
+		ShopUi.studs(c, SELL_CARD)
 		-- The rarity band: the plant's name and rarity
 		local band = new("Frame", { Size = UDim2.new(1, 0, 0, 70), BorderSizePixel = 0, Parent = c })
 		shade(band, rarity.color, 0.25, 0.25)
+		ShopUi.studs(band, rarity.color)
 		shine(band)
 		bold(band, 3, { Text = p.name or SeedPacks.seedName(p.zone, p.rarity, p.mutation), Size = UDim2.new(1, -14, 0, 32), Position = UDim2.fromOffset(7, 6) })
 		bold(band, 3, { Text = rarity.id, Size = UDim2.new(1, -14, 0, 24), Position = UDim2.fromOffset(7, 40) })
@@ -2088,10 +2151,11 @@ do
 		Name = "Panel", AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.5), Size = UDim2.fromOffset(PANEL_W, PANEL_H),
 		BackgroundColor3 = WHITE, ClipsDescendants = true, Parent = revealGui,
 	}, {
-		new("UICorner", { CornerRadius = UDim.new(0, 20) }),
+		new("UICorner", { CornerRadius = UDim.new(0, 4) }),
 		new("UIStroke", { Thickness = 6, Color = COLORS.gold, ApplyStrokeMode = Enum.ApplyStrokeMode.Border }),
 		new("UIGradient", { Rotation = 90, Color = ColorSequence.new(Color3.fromRGB(75, 40, 140), Color3.fromRGB(22, 16, 46)) }),
 	})
+	ShopUi.studs(panel, Color3.fromRGB(75, 40, 140), nil, 1)
 	local panelScale = new("UIScale", { Parent = panel })
 	local burst = new("Frame", { -- the rays and confetti, behind the reel, clipped by the panel
 		Name = "Burst", AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromOffset(PANEL_W / 2, REEL_Y + REEL_H / 2), Size = UDim2.fromOffset(0, 0),
@@ -2155,6 +2219,7 @@ do
 		local mut = Config.mutationById(mutation)
 		local f = new("Frame", { Size = UDim2.fromOffset(CARD_W, CARD_H), BackgroundColor3 = WHITE, ZIndex = 3, Parent = parent }, deco(12, 3))
 		new("UIGradient", { Rotation = 90, Color = ColorSequence.new(r.color:Lerp(WHITE, 0.25), r.color:Lerp(Color3.new(0, 0, 0), 0.35)), Parent = f })
+		ShopUi.studs(f, r.color, nil, 3)
 		local inner = new("Frame", { Name = "Inner", BackgroundTransparency = 1, Size = UDim2.fromScale(1, 1), ZIndex = 3, Parent = f }, {
 			new("UIPadding", { PaddingLeft = UDim.new(0, 10), PaddingRight = UDim.new(0, 10), PaddingTop = UDim.new(0, 8), PaddingBottom = UDim.new(0, 10) }),
 		})
@@ -2385,18 +2450,19 @@ LootEvent.OnClientEvent:Connect(function(kind: string, data: any)
 	elseif kind == "Bat" then
 		batCooldownUntil = os.clock() + (data.cooldown or Config.BAT_COOLDOWN)
 	elseif kind == "Offline" then
-		toast(`While you were away ({Format.clock(data.seconds)}): +{Format.money(data.amount)}`, "gold", 6)
+		toast(`While you were away ({Format.clock(data.seconds)}): +{Format.money(data.amount)}`, "gold", 6, "Money")
 	elseif kind == "PackRoll" then
 		queueReveal(data)
 	elseif kind == "DayNight" then
-		toast(if data.night then "Night falls: rarer seeds and Night mutations!" else "The sun is up.", "blue", 4)
+		toast(if data.night then "Night falls: rarer seeds and Night mutations!" else "The sun is up.", if data.night then "purple" else "blue", 4,
+			if data.night then "Moon" else "Sun")
 	end
 end)
 
 -- Server-wide announcements (Net.announce), e.g. "Alex got a LEGENDARY Starpetal!"
 LootEvent.OnClientEvent:Connect(function(kind: string, data: any)
 	if kind == "Announce" and data then
-		toast(data.text, data.color, 6)
+		toast(data.text, data.color, 6, "Star", true)
 	end
 end)
 

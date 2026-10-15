@@ -172,24 +172,100 @@ function ShopUi.speckles(card: GuiObject, seed: number, count: number, z: number
 	end
 end
 
--- Studs over `f` (`cell` px apart, `transparency` faint): the tiled Studs texture once it is uploaded
--- (Config.ICONS.Studs), square studs from frames until then (`w` x `h`: how much to cover).
-function ShopUi.studs(f: GuiObject, cell: number, transparency: number, z: number, w: number, h: number): GuiObject
+-- Studs over `f`: the classic Roblox studded plastic every HUD element wears (owner 2026-10-15: "one
+-- consistent stud size everywhere"). One style for all: the uploaded Studs texture (Config.ICONS.Studs: one
+-- grey stud with a light rim and a dark lower edge on a clear tile) tiled STUD_CELL px apart at STUD_FADE,
+-- tinted a light shade of `color` (the frame's own colour; white when it changes later, see paintStuds) so
+-- the studs read as raised bumps of the same plastic. While the texture's id is 0, small square studs drawn
+-- from frames instead. The studs take `f`'s rounded corners (a UICorner of the same radius) and sit at `z`
+-- (default `f`'s ZIndex): make them before the frame's words so they stay under them. `fade` (default
+-- STUD_FADE): fainter, only behind small words that need it.
+ShopUi.STUD_CELL = 18 -- px between studs (the windows' title bar size), everywhere
+ShopUi.STUD_FADE = 0.62 -- the texture's transparency
+ShopUi.STUD_TINT = 0.55 -- how far the studs' tint is lightened from the frame's colour toward white
+
+function ShopUi.studTint(color: Color3?): Color3
+	return if color then color:Lerp(WHITE, ShopUi.STUD_TINT) else WHITE
+end
+
+function ShopUi.studs(f: GuiObject, color: Color3?, fade: number?, z: number?): GuiObject
+	local cell = ShopUi.STUD_CELL
+	local transparency = fade or ShopUi.STUD_FADE
+	local zi = z or f.ZIndex
+	local tint = ShopUi.studTint(color)
+	local corner = f:FindFirstChildOfClass("UICorner")
 	local image = Icons.image("Studs")
+	local layer: GuiObject
 	if image then
-		return new("ImageLabel", {
+		layer = new("ImageLabel", {
 			Name = "Studs", BackgroundTransparency = 1, Size = UDim2.fromScale(1, 1), Image = image, ImageTransparency = transparency,
-			ScaleType = Enum.ScaleType.Tile, TileSize = UDim2.fromOffset(cell, cell), ZIndex = z, Parent = f,
+			ImageColor3 = tint, ScaleType = Enum.ScaleType.Tile, TileSize = UDim2.fromOffset(cell, cell), ZIndex = zi, Parent = f,
 		})
+	else
+		-- enough squares for the frame's design size: its offsets, or (sized by scale) its size on screen
+		-- once it has one, else the biggest window's
+		local ok, abs = pcall(function()
+			return f.AbsoluteSize
+		end)
+		local w = math.max(f.Size.X.Offset, if ok then abs.X else 0, if f.Size.X.Scale > 0 then ShopLayout.MAX_W else 0, cell)
+		local h = math.max(f.Size.Y.Offset, if ok then abs.Y else 0, if f.Size.Y.Scale > 0 then ShopLayout.MAX_H else 0, cell)
+		layer = new("Frame", { Name = "Studs", BackgroundTransparency = 1, Size = UDim2.fromScale(1, 1), ClipsDescendants = true, ZIndex = zi, Parent = f }, {
+			new("UIGridLayout", { CellSize = UDim2.fromOffset(cell * 0.5, cell * 0.5), CellPadding = UDim2.fromOffset(cell * 0.5, cell * 0.5) }),
+			new("UIPadding", { PaddingLeft = UDim.new(0, cell * 0.25), PaddingTop = UDim.new(0, cell * 0.25) }),
+		})
+		for _ = 1, math.min(math.ceil(w / cell) * math.ceil(h / cell), 2500) do
+			new("Frame", { BackgroundColor3 = tint, BackgroundTransparency = 1 - (1 - transparency) * 0.45, BorderSizePixel = 0, ZIndex = zi, Parent = layer })
+		end
 	end
-	local grid = new("Frame", { Name = "Studs", BackgroundTransparency = 1, Size = UDim2.fromScale(1, 1), ClipsDescendants = true, ZIndex = z, Parent = f }, {
-		new("UIGridLayout", { CellSize = UDim2.fromOffset(cell * 0.5, cell * 0.5), CellPadding = UDim2.fromOffset(cell * 0.5, cell * 0.5) }),
-		new("UIPadding", { PaddingLeft = UDim.new(0, cell * 0.25), PaddingTop = UDim.new(0, cell * 0.25) }),
-	})
-	for _ = 1, math.ceil(w / cell) * math.ceil(h / cell) do
-		new("Frame", { BackgroundColor3 = WHITE, BackgroundTransparency = 1 - (1 - transparency) * 0.6, BorderSizePixel = 0, ZIndex = z, Parent = grid })
+	if corner then
+		corner:Clone().Parent = layer -- the frame's own rounding (ShopUi itself makes nothing round)
 	end
-	return grid
+	return layer
+end
+
+-- The hotbar's slots (owner reference 2026-10-15): small square dark see-through slots with a thin darker
+-- outline, the slot's number small and white in the top-left corner, the item drawn as a clean picture
+-- filling the slot (no name, no coloured background); the selected slot gets a white outline. The HUD's
+-- Bat (slot 1) and Planting.client's seed slot (2) both use it. Returns the number label.
+ShopUi.SLOT = 72 -- px, square
+ShopUi.SLOT_COLOR = Color3.fromRGB(18, 20, 28)
+ShopUi.SLOT_FADE = 0.4
+
+function ShopUi.slot(b: GuiButton, number: string): TextLabel
+	b.Size = UDim2.fromOffset(ShopUi.SLOT, ShopUi.SLOT)
+	b.BackgroundColor3 = ShopUi.SLOT_COLOR
+	b.BackgroundTransparency = ShopUi.SLOT_FADE
+	b.BorderSizePixel = 0
+	b.AutoButtonColor = false
+	if b:IsA("TextButton") then
+		b.Text = ""
+	end
+	new("UIStroke", { Name = "Outline", Thickness = 2, Color = BLACK, Transparency = 0.3, ApplyStrokeMode = Enum.ApplyStrokeMode.Border, Parent = b })
+	return ShopUi.label(b, 2, { Name = "Key", Text = number, Size = UDim2.fromOffset(16, 18), Position = UDim2.fromOffset(5, 3), ZIndex = 4 })
+end
+
+-- Paints slot `b` (ShopUi.slot) selected (a white outline) or not.
+function ShopUi.selectSlot(b: GuiObject, selected: boolean)
+	local stroke = b:FindFirstChild("Outline") :: UIStroke?
+	if stroke then
+		stroke.Color = if selected then WHITE else BLACK
+		stroke.Thickness = if selected then 3 else 2
+		stroke.Transparency = if selected then 0 else 0.3
+	end
+end
+
+-- Re-tints `f`'s studs (ShopUi.studs) when the frame's colour changes (the windows' title bar, a toggle).
+function ShopUi.paintStuds(f: GuiObject, color: Color3?)
+	local layer = f:FindFirstChild("Studs")
+	if layer and layer:IsA("ImageLabel") then
+		layer.ImageColor3 = ShopUi.studTint(color)
+	elseif layer then
+		for _, s in layer:GetChildren() do
+			if s:IsA("Frame") then
+				s.BackgroundColor3 = ShopUi.studTint(color)
+			end
+		end
+	end
 end
 
 return ShopUi

@@ -18,6 +18,7 @@ local Format = require(Shared:WaitForChild("Format"))
 local Icons = require(Shared:WaitForChild("Icons"))
 local GiftLayout = require(Shared:WaitForChild("GiftLayout"))
 local UiFx = require(Shared:WaitForChild("UiFx"))
+local ShopUi = require(Shared:WaitForChild("ShopUi"))
 
 local player = Players.LocalPlayer
 local remotes = ReplicatedStorage:WaitForChild("Remotes")
@@ -88,8 +89,9 @@ local function iconLabel(parent: Instance, key: string, emoji: string, props: { 
 end
 
 local function chunky(parent: Instance, label: string, color: Color3, size: UDim2, pos: UDim2, onClick: () -> ()): TextButton
-	local b = new("TextButton", { Size = size, Position = pos, BackgroundColor3 = color, Text = "", AutoButtonColor = true, ZIndex = 3, Parent = parent }, deco(10, 3))
+	local b = new("TextButton", { Size = size, Position = pos, BackgroundColor3 = color, Text = "", AutoButtonColor = true, ZIndex = 3, Parent = parent }, deco(4, 3))
 	new("UIGradient", { Rotation = 90, Color = ColorSequence.new(WHITE, Color3.fromRGB(200, 200, 200)), Parent = b })
+	ShopUi.studs(b, nil, nil, 3) -- studded like every HUD button (white-tinted: its colour may change)
 	bold(b, 3, { Name = "Label", Text = label, Size = UDim2.new(1, -12, 1, -10), Position = UDim2.fromOffset(6, 5), ZIndex = 3 })
 	b.Activated:Connect(onClick)
 	return b
@@ -111,29 +113,25 @@ local window = new("Frame", {
 	Name = "FreeGift", AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.5), Size = UDim2.fromOffset(W, H),
 	BackgroundColor3 = BODY_COLOR, Active = true, Visible = false, ZIndex = 11, Parent = hud, -- above the HUD's windows, under its toasts
 }, {
-	new("UICorner", { CornerRadius = UDim.new(0, 18) }),
+	new("UICorner", { CornerRadius = UDim.new(0, 4) }),
 	new("UIStroke", { Thickness = 6, Color = FRAME_INK, ApplyStrokeMode = Enum.ApplyStrokeMode.Border }),
 	new("UIGradient", { Rotation = 90, Color = ColorSequence.new(WHITE, Color3.fromRGB(215, 218, 232)) }),
 })
 local windowScale = new("UIScale", { Parent = window })
 
--- Faint studs over the body
+-- Studs over the body: the HUD's one studs style (ShopUi.studs), like the HUD's windows
 local studs = new("Frame", {
 	BackgroundTransparency = 1, Position = UDim2.fromOffset(0, TITLE_H), Size = UDim2.new(1, 0, 1, -TITLE_H), ClipsDescendants = true, Parent = window,
-}, {
-	new("UIGridLayout", { CellSize = UDim2.fromOffset(20, 20), CellPadding = UDim2.fromOffset(16, 16) }),
-	new("UIPadding", { PaddingLeft = UDim.new(0, 14), PaddingTop = UDim.new(0, 16) }),
 })
-for _ = 1, math.ceil(W / 36) * math.ceil((H - TITLE_H) / 36) do
-	new("Frame", { BackgroundColor3 = WHITE, BackgroundTransparency = 0.955, Parent = studs }, { new("UICorner", { CornerRadius = UDim.new(0, 5) }) })
-end
+ShopUi.studs(studs, BODY_COLOR, nil, 1)
 
 -- Cyan title bar: square bottom corners, light diagonal stripes, a shine, the dark line under it
 local CYAN_FROM, CYAN_TO = Color3.fromRGB(70, 235, 255), Color3.fromRGB(30, 160, 245)
 local titleBar = new("Frame", { Size = UDim2.new(1, 0, 0, TITLE_H), BackgroundColor3 = WHITE, BorderSizePixel = 0, ZIndex = 2, Parent = window }, {
-	new("UICorner", { CornerRadius = UDim.new(0, 18) }),
+	new("UICorner", { CornerRadius = UDim.new(0, 4) }),
 	new("UIGradient", { Color = ColorSequence.new(CYAN_FROM, CYAN_TO) }),
 })
+ShopUi.studs(titleBar, CYAN_TO, nil, 2) -- the same studs as the HUD windows' title bars
 new("Frame", { Position = UDim2.fromScale(0, 0.5), Size = UDim2.fromScale(1, 0.5), BackgroundColor3 = WHITE, BorderSizePixel = 0, ZIndex = 1, Parent = titleBar }, {
 	new("UIGradient", { Color = ColorSequence.new(CYAN_FROM, CYAN_TO) }),
 })
@@ -151,7 +149,7 @@ new("Frame", {
 	Parent = stripeClip,
 }, { new("UIGradient", { Rotation = 45, Transparency = NumberSequence.new(stripeKeys) }) })
 new("Frame", { Size = UDim2.fromScale(1, 1), BackgroundColor3 = WHITE, BorderSizePixel = 0, ZIndex = 2, Parent = titleBar }, {
-	new("UICorner", { CornerRadius = UDim.new(0, 18) }),
+	new("UICorner", { CornerRadius = UDim.new(0, 4) }),
 	new("UIGradient", { Rotation = 90, Transparency = NumberSequence.new({
 		NumberSequenceKeypoint.new(0, 0.7), NumberSequenceKeypoint.new(0.5, 1), NumberSequenceKeypoint.new(1, 1),
 	}) }),

@@ -270,7 +270,7 @@ H.test("world: plots are compact and share one clean fence (no double fences, ga
 		H.ok(math.abs(p.Z - entrance.Z) < 2.5 and side * (entrance.Z - p.Z) > 0, `plot {i} sign on the fence, just outside it`)
 		H.ok(math.abs(p.X - entrance.X) > 8 and math.abs(p.X - entrance.X) < 25 and p.Y > 1.5 and p.Y < 6, `plot {i} sign beside the opening, fence high`)
 		H.ok(sign.CFrame.LookVector.Z * -side > 0.999, `plot {i} sign faces the walkway`)
-		H.eq(plot.signLabel.Text, "🏠 Empty Plot")
+		H.eq(plot.signLabel.Text, "Empty Plot", "the name only, no plot icon (owner)")
 		-- no dark panel (owner playtest): a light wooden plank with the name straight on it, nothing in front
 		local h, s, v = sign.Color:ToHSV()
 		H.ok(v > 0.7 and s < 0.7, `plot {i} sign is light wood ({sign.Color}, {h})`)

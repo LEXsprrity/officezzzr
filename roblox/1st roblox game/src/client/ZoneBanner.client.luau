@@ -10,6 +10,7 @@ local RunService = game:GetService("RunService")
 local TweenService = game:GetService("TweenService")
 
 local Config = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("Config"))
+local ShopUi = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("ShopUi"))
 
 local player = Players.LocalPlayer
 
@@ -62,15 +63,18 @@ local group = new("CanvasGroup", {
 	Name = "Strip", AnchorPoint = Vector2.new(0.5, 0), Position = UDim2.new(0.5, 0, 0, TOP - 16), Size = UDim2.fromOffset(STRIP_W, STRIP_H),
 	BackgroundTransparency = 1, GroupTransparency = 1, Visible = false, Parent = gui,
 })
--- The dark strip: see-through, and fully clear at both ends
-new("Frame", { Size = UDim2.fromScale(1, 1), BackgroundColor3 = INK, BorderSizePixel = 0, Parent = group }, {
-	new("UIGradient", { Transparency = NumberSequence.new({
-		NumberSequenceKeypoint.new(0, 1),
-		NumberSequenceKeypoint.new(0.28, 0.5),
-		NumberSequenceKeypoint.new(0.72, 0.5),
-		NumberSequenceKeypoint.new(1, 1),
-	}) }),
+-- The dark strip: see-through, and fully clear at both ends, with the HUD's studs (ShopUi.studs) fading
+-- out with it
+local FADE = NumberSequence.new({
+	NumberSequenceKeypoint.new(0, 1),
+	NumberSequenceKeypoint.new(0.28, 0.5),
+	NumberSequenceKeypoint.new(0.72, 0.5),
+	NumberSequenceKeypoint.new(1, 1),
 })
+local dark = new("Frame", { Size = UDim2.fromScale(1, 1), BackgroundColor3 = INK, BorderSizePixel = 0, Parent = group }, {
+	new("UIGradient", { Transparency = FADE }),
+})
+new("UIGradient", { Transparency = FADE, Parent = ShopUi.studs(dark, Color3.fromRGB(70, 76, 100)) })
 -- The name and the face side by side, centred
 local row = new("Frame", { BackgroundTransparency = 1, Size = UDim2.fromScale(1, 1), Parent = group }, {
 	new("UIListLayout", {

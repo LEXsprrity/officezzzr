@@ -231,7 +231,8 @@ H.test("Shop windows are square: no rounded corners in the window frame, the Sho
 		end
 	end
 	local SHOP_UI = string.gsub(fs.readFile("src/shared/ShopUi.luau"), "\r", "")
-	H.ok(not string.find(SHOP_UI, "UICorner", 1, true), "ShopUi's buttons, tags and studs are square")
+	H.ok(not string.find(SHOP_UI, "new(\"UICorner\"", 1, true) and not string.find(SHOP_UI, "Instance.new(\"UICorner\")", 1, true),
+		"ShopUi's buttons, tags and studs are square (the studs only copy a rounded frame's own corner)")
 	local chunky = block(HUD, "local function chunky(", "\nend\n")
 	H.ok(string.find(chunky, "{ outline() }", 1, true) and string.find(chunky, "ShopUi.bevel(b)", 1, true), "chunky buttons: square, bevelled")
 	H.ok(not string.find(chunky, "UICorner", 1, true) and not string.find(chunky, "deco(", 1, true), "no rounded chunky buttons")
@@ -240,8 +241,10 @@ end)
 H.test("Shop window frame: flat green bar with studs and three light bands, big relief title, square red X, charcoal studded body, no money", function()
 	H.ok(string.find(WINDOW_KIT, "Shop = { title = \"Shop\", bar = Color3.fromRGB(59, 227, 59) }", 1, true) ~= nil, "the Shop's flat bright green bar")
 	H.ok(string.find(HUD, "titleBar.BackgroundColor3 = window.bar", 1, true) ~= nil, "one flat colour per window")
-	H.ok(string.find(WINDOW_KIT, "ShopUi.studs(titleBar, 18,", 1, true) ~= nil, "studs over the bar")
-	H.ok(string.find(WINDOW_KIT, "ShopUi.studs(studs, 32,", 1, true) ~= nil, "studs over the body")
+	-- one studs style for the bar and the body (owner: the body's studs must match the bar's), the bar's tinted per window
+	H.ok(string.find(WINDOW_KIT, "ShopUi.studs(titleBar, nil, nil, 2)", 1, true) ~= nil, "studs over the bar")
+	H.ok(string.find(WINDOW_KIT, "ShopUi.studs(studs, WINDOW_BODY, nil, 1)", 1, true) ~= nil, "the same studs over the body, tinted charcoal")
+	H.ok(string.find(HUD, "ShopUi.paintStuds(titleBar, window.bar)", 1, true) ~= nil, "the bar's studs take the window's colour")
 	local bands = string.match(WINDOW_KIT, "for _, band in (%b{}) do")
 	local n = 0
 	for a in string.gmatch(bands or "", "{ ([%d%.]+), [%d%.]+ }") do

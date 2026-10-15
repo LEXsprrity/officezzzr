@@ -12,8 +12,8 @@ local Icons = H.shared("Icons")
 local WorldBuilder = H.server("WorldBuilder")
 
 local KEYS = {
-	"Bag", "Bat", "Close", "DoubleMoney", "ExtraSlots", "Gift", "Home", "Index", "Leaderboard", "Lock", "Money", "PackSpaceBg", "PackSpiritBg",
-	"Plants", "PlotUpgrade", "Robux", "SeedPack", "Seeds", "Shop", "Speed", "Star", "Studs", "TrailShop", "Treadmill",
+	"Bag", "Bat", "Close", "ExtraSlots", "Gift", "Home", "Index", "Leaderboard", "Lock", "Money", "PackSpaceBg", "PackSpiritBg",
+	"Plants", "PlotUpgrade", "Robux", "SeedPack", "Seeds", "Shop", "Speed", "Star", "Studs", "TrailShop", "Treadmill", "Vip",
 }
 
 -- Runs fn with only these icon ids set (every other id 0), then puts Config.ICONS back.
@@ -207,7 +207,7 @@ H.test("icons: Icons.set lays out ImageLabels (Fit, square) and styled text, and
 	end)
 end)
 
-H.test("icons: world signs get their icons at runtime (stalls, Upgrade boards, plot signs)", function()
+H.test("icons: world signs get their icons at runtime (stalls, Upgrade boards); plot signs show only the name", function()
 	local all = {}
 	for _, key in KEYS do
 		all[key] = 1000 + #key
@@ -215,7 +215,7 @@ H.test("icons: world signs get their icons at runtime (stalls, Upgrade boards, p
 	withIds(all, function()
 		local world = roblox.deserializeModel(fs.readFile("map/World.rbxm"))[1]
 		local count = WorldBuilder.applyIcons(world)
-		H.ok(count >= 3 + Config.MAX_PLAYERS, `{count} signs got icons`) -- (no treadmill sign any more)
+		H.eq(count, 3, "the three stalls") -- (no treadmill sign any more; the plot signs have no icon)
 		-- The Upgrade boards are written by PlotService (WorldBuilder.setUpgradeBoard): the PlotUpgrade icon
 		-- on the red button, the Robux icon on the purple one.
 		local plots = WorldBuilder.adopt(world)
@@ -233,7 +233,10 @@ H.test("icons: world signs get their icons at runtime (stalls, Upgrade boards, p
 		H.eq(seen.Index, 1, "INDEX stall")
 		H.eq(seen.PlotUpgrade, Config.MAX_PLAYERS, "Upgrade boards: red button")
 		H.eq(seen.Robux, Config.MAX_PLAYERS, "Upgrade boards: purple button")
-		H.eq(seen.Home, Config.MAX_PLAYERS, "plot signs")
+		H.eq(seen.Home, nil, "no plot icon on the owner signs (owner: \"remove it completely\")")
+		for _, plot in plots do
+			H.eq(plot.signLabel.Text, WorldBuilder.EMPTY_PLOT, "the map's old \"🏠 Empty Plot\" is rewritten to the name only")
+		end
 		H.eq(seen.Treadmill, nil, "no treadmill sign (owner playtest: removed)")
 	end)
 end)
