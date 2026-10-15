@@ -997,6 +997,85 @@ H.test("treadmill tiers: on every tier the runner stands ON the visible belt, an
 	TreadmillBoard.showTier(board, 1)
 end)
 
+-- The seller's part that is each tier's running surface (tools/export_treadmills.luau TIERS `belt`).
+local DECK_PART = {
+	"Cube.056", "Belt.001", "Belt.001", "scifi treadmil fix", "the fire treadmil test.004",
+	"Cube.038", "Vip Treadmil fix.005", "Cube.017", "Belt.001", "Belt.002",
+}
+-- Tiers whose console screen is see-through (TIERS `glass`): tier 4's is a glowing opaque cyan slab from the
+-- runner's shins to over its head, between it and the walkway (owner screenshot 2026-10-15).
+local GLASS_SCREEN = { [4] = true }
+-- How far (studs, along the belt) the locked runner's body stays from the console screen and its panel.
+local SCREEN_CLEAR = 2.75
+
+-- The span along the belt (belt space Z) of its scrolling texture: the Beams over the belt, along it.
+local function textureSpan(model: any, b: any): (number?, number?)
+	local z0, z1 = nil, nil
+	for _, d in model:GetDescendants() do
+		if d:IsA("Beam") and d.Attachment0 and d.Attachment1 then
+			local a0, a1 = d.Attachment0, d.Attachment1
+			local p0 = b.CFrame:PointToObjectSpace((a0.Parent.CFrame * a0.CFrame).Position)
+			local p1 = b.CFrame:PointToObjectSpace((a1.Parent.CFrame * a1.CFrame).Position)
+			if math.abs(p0.X) < b.Size.X / 2 and math.abs(p1.X) < b.Size.X / 2 and math.abs(p1.Z - p0.Z) > b.Size.Z / 2 then
+				z0 = math.min(z0 or math.huge, p0.Z, p1.Z)
+				z1 = math.max(z1 or -math.huge, p0.Z, p1.Z)
+			end
+		end
+	end
+	return z0, z1
+end
+
+H.test("treadmill tiers: the runner is locked over the middle of the belt you see, between its rails, clear of the console screen", function()
+	-- the table above is the export's
+	local export = fs.readFile("tools/export_treadmills.luau")
+	local names = {}
+	for name in string.gmatch(export, "{ tool = \"[^\"]+\", belt = \"([^\"]+)\"") do
+		table.insert(names, name)
+	end
+	H.eq(#names, Config.TREADMILL_MAX, "one TIERS row per tier")
+	for tier, name in names do
+		H.eq(DECK_PART[tier], name, `tier {tier}'s running surface part`)
+	end
+	H.ok(string.find(export, "belt = \"scifi treadmil fix\", top = 3.07, glass = ", 1, true) ~= nil, "tier 4's screen is glass")
+
+	local world = MapTool.load(MapTool.PATH)
+	local plots = WorldBuilder.adopt(world)
+	Assets.refresh(world)
+	local plot = plots[1]
+	local board = TreadmillBoard.build(plot.model, plot.belt, plot.center)
+	for tier = 1, Config.TREADMILL_MAX do
+		TreadmillBoard.showTier(board, tier)
+		local tm = plot.model:FindFirstChild("Treadmill")
+		local b = plot.belt
+		local held = b.CFrame:PointToObjectSpace(Treadmill.lockCFrame(b.CFrame, b.Size, b.CFrame:PointToWorldSpace(Vector3.new(1.5, 2, -2))).Position)
+		-- over the deck part, the runner's 2-stud body between its sides (the rails are outside them)
+		local deck = tm:FindFirstChild(DECK_PART[tier], true)
+		H.ok(deck ~= nil and deck:IsA("BasePart") and deck.Transparency < 1, `tier {tier}: its deck part {DECK_PART[tier]} is shown`)
+		local dlo, dhi = Assets.bounds(deck, b.CFrame, true)
+		H.ok(held.X - 1 >= dlo.X - 0.01 and held.X + 1 <= dhi.X + 0.01 and held.Z > dlo.Z and held.Z < dhi.Z,
+			`tier {tier}: locked over the deck ({held}, deck {dlo}..{dhi})`)
+		-- the Belt runs no further than the belt texture (tier 4's ran 0.85 studs on under the console), and the
+		-- runner is in the middle of what is drawn
+		local t0, t1 = textureSpan(tm, b)
+		H.ok(t0 ~= nil and t1 ~= nil, `tier {tier}: its belt texture`)
+		H.ok(b.Size.Z / 2 <= t1 + 0.05, `tier {tier}: the belt ends where its texture does at the console end ({b.Size.Z / 2} > {t1})`)
+		H.ok(held.Z - t0 >= 2.5 and t1 - held.Z >= 2.5, `tier {tier}: the runner stands well inside the drawn belt ({t0}..{t1}, at {held.Z})`)
+		-- clear of the console screen and the panel behind it (they stand at the console end, +Z)
+		local screen = tm:FindFirstChild("ConsoleScreen", true)
+		for _, p in screen.Parent:GetChildren() do
+			if p:IsA("BasePart") and p.Transparency < 1 then
+				local lo = Assets.bounds(p, b.CFrame, true)
+				H.ok(lo.Z - (held.Z + 0.5) >= SCREEN_CLEAR,
+					`tier {tier}: the runner's body is {lo.Z - (held.Z + 0.5)} studs from {p.Name} (at least {SCREEN_CLEAR})`)
+				if GLASS_SCREEN[tier] then
+					H.ok(p.Transparency >= 0.5, `tier {tier}: {p.Name} is see-through, the runner shows from the walkway`)
+				end
+			end
+		end
+	end
+	TreadmillBoard.showTier(board, 1)
+end)
+
 ----------------------------------------------------------------------------------------------------
 -- The lock: on your own belt you stay on it until you jump
 ----------------------------------------------------------------------------------------------------
