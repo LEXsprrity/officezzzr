@@ -148,7 +148,7 @@ Every developer product ships as an `id = 0` stub with a placeholder price: clic
 | Section | Products | What a receipt grants |
 |---|---|---|
 | -- SPEED -- | `Speed25K` 9 R$, `Speed150K` 36, `Speed250K` 64, `Speed750K` 76, `Speed3M` 560, `Speed10M` 1,200, `Speed25M` 1,600, `Speed50M` 2,400 | adds to your Speed stat: +25K is the Desert, +750K past the Jungle, +3M past the Lava Fields, +10M past the Snow Peaks, +25M the Deep Space, +50M two thirds of the way to the Spirit Garden (75M) |
-| -- MONEY -- | `Money24K` 40 R$, `Money200K` 80, `Money800K` 200, `Money4M` 400, `Money8M` 640 | **max(fixed amount, N minutes of your current income)**: $24K / 10 min, $200K / 30 min, $800K / 60 min, $4M / 180 min, $8M / 360 min. Fixed amounts go worthless late, so late players get the income share. The card shows what you'd get right now. |
+| -- MONEY -- | `Money24K` 40 R$, `Money200K` 80, `Money800K` 200, `Money4M` 400, `Money8M` 640 | **A fixed amount** (owner 2026-10-15: no share of your income any more): Pocket Cash $24K, Cash Bag $200K, Cash Stack $800K, Cash Crate $4M, Cash Vault $8M. The card shows that amount. |
 | -- TREADMILL -- and the treadmill's F prompt | `TreadmillT1` 19 R$, `T2` 39, `T3` 79 | one treadmill tier (only your tier's band is prompted; a maxed treadmill gets $100T instead; see Treadmill upgrades) |
 | trails | `TrailGreen` … `TrailRainbow` | owns and equips the trail (owned trails aren't prompted) |
 | the Upgrade board's purple button | `PlotUpgradeT1` 25 R$, `T2` 49, `T3` 99, `T4` 199, `T5` 399, `T6` 799 | one plot level (only your level's tier is prompted; a maxed plot gets $310T instead; see Plot upgrades) |

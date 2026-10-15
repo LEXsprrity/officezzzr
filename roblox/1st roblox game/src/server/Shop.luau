@@ -150,7 +150,7 @@ local function apply(p: Profile, name: string, product: Config.DevProduct, incom
 	elseif kind == "Speed" then
 		p.speed += product.amount :: number
 	elseif kind == "Money" then
-		grant.compensation = Config.moneyPackAmount(product, income)
+		grant.compensation = Config.moneyPackAmount(product) -- a fixed amount
 		p.money += grant.compensation
 		grant.label = `{product.label}: +{Format.money(grant.compensation)}`
 	elseif kind == "TreadmillUpgrade" then

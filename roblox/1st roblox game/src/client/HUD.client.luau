@@ -1666,16 +1666,14 @@ do
 				if amount then `<font color="{number}">{amount}</font> {rest}` else string.upper(entry.product.label), level, "Speed")
 		end
 
-		-- Money (Robux), gold: the card shows what you'd get right now (fixed, or minutes of your income)
+		-- Money (Robux), gold: each card's fixed amount (owner 2026-10-15: $24K ... $8M, whatever you earn)
 		shopSections.Money = section("MONEY", nextOrder(), HEADING_CYAN) -- (the right edge's Money shortcut opens it here)
 		banner(nextOrder(), "DoubleMoney", "MONEY", CARD_COLORS.Money, "Money")
 		grid = cardGrid(nextOrder())
 		local monies = Config.products("Money")
 		for i, entry in monies do
-			local _, amountLabel = productCard(grid, i, entry.name, entry.product, CARD_COLORS.Money, "", ShopArt.level(i, #monies), "Money")
-			watchMoney(function()
-				amountLabel.Text = `<font color="{NUMBER_GREEN}">+{Format.money(Config.moneyPackAmount(entry.product, stats.income or 0))}</font> CASH`
-			end)
+			productCard(grid, i, entry.name, entry.product, CARD_COLORS.Money,
+				`<font color="{NUMBER_GREEN}">+{Format.money(Config.moneyPackAmount(entry.product))}</font> CASH`, ShopArt.level(i, #monies), "Money")
 		end
 
 		-- Upgrades: the plot (also on the board at your plot's gate) and the treadmill's next tier (also on the

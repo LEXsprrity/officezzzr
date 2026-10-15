@@ -203,8 +203,8 @@ local function processReceipt(receiptInfo: { [string]: any }): Enum.ProductPurch
 		warn(`[ShopService] receipt for unknown developer product {receiptInfo.ProductId}`)
 	end
 	local s = waitForSession(receiptInfo.PlayerId, 15)
-	-- The income the HUD shows (live, with day/night, plot level and 2x Money): Money products pay
-	-- minutes of it, and a pack that can't fit the bag pays seconds of it.
+	-- The income the HUD shows (live, with day/night, plot level and 2x Money): a pack that can't fit the bag
+	-- pays seconds of it (Money products pay a fixed amount).
 	local income = if s then s.income * Sessions.moneyMult(s) else 0
 	local confirm, status, grant = Shop.processReceipt(if s then s.profile else nil, name, tostring(receiptInfo.PurchaseId), income, roll01, function()
 		local save = ShopService.save

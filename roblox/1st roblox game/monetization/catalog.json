@@ -131,7 +131,7 @@
     "key": "Money24K",
     "kind": "product",
     "name": "Pocket Cash",
-    "description": "Gives you $24K, or 10 minutes of your current income if that's more.",
+    "description": "Gives you $24K right away.",
     "price": 40,
     "image": "icons/Money.png"
   },
@@ -139,7 +139,7 @@
     "key": "Money200K",
     "kind": "product",
     "name": "Cash Bag",
-    "description": "Gives you $200K, or 30 minutes of your current income if that's more.",
+    "description": "Gives you $200K right away.",
     "price": 80,
     "image": "icons/Money.png"
   },
@@ -147,7 +147,7 @@
     "key": "Money800K",
     "kind": "product",
     "name": "Cash Stack",
-    "description": "Gives you $800K, or 1 hour of your current income if that's more.",
+    "description": "Gives you $800K right away.",
     "price": 200,
     "image": "icons/Money.png"
   },
@@ -155,7 +155,7 @@
     "key": "Money4M",
     "kind": "product",
     "name": "Cash Crate",
-    "description": "Gives you $4M, or 3 hours of your current income if that's more.",
+    "description": "Gives you $4M right away.",
     "price": 400,
     "image": "icons/Money.png"
   },
@@ -163,7 +163,7 @@
     "key": "Money8M",
     "kind": "product",
     "name": "Cash Vault",
-    "description": "Gives you $8M, or 6 hours of your current income if that's more.",
+    "description": "Gives you $8M right away.",
     "price": 640,
     "image": "icons/Money.png"
   },

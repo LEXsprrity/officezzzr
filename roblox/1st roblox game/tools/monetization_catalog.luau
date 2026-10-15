@@ -43,14 +43,6 @@ local function mult(x: number): string
 	return (string.gsub(string.format("%.2f", x), "%.?0+$", "")) .. "x"
 end
 
-local function duration(minutes: number): string
-	if minutes < 60 then
-		return `{minutes} minutes`
-	end
-	local hours = minutes / 60
-	return if hours == 1 then "1 hour" else `{mult(hours):sub(1, -2)} hours`
-end
-
 -- "Treadmill Upgrade (Lv 2-4)" -> "levels 2 to 4"
 local function levels(label: string): string
 	local a, b = string.match(label, "Lv (%d+)%-(%d+)")
@@ -66,7 +58,7 @@ local function productDescription(Config: any, Format: any, product: any): strin
 	elseif kind == "Speed" then
 		return `Adds {Format.commas(product.amount)} Speed right away, so you can reach farther zones.`
 	elseif kind == "Money" then
-		return `Gives you {Format.money(product.amount)}, or {duration(product.minutes)} of your current income if that's more.`
+		return `Gives you {Format.money(product.amount)} right away.`
 	elseif kind == "TreadmillUpgrade" then
 		return `Upgrades your treadmill by one level. This one covers {levels(product.label)}.`
 	elseif kind == "Trail" then
