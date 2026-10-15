@@ -74,13 +74,14 @@ export type Grant = {
 	product: Config.DevProduct,
 	label: string, -- what the player got, for the toast
 	pack: SeedPacks.Pack?, -- Pack products:
-	roll: Roll?, -- the seed that went into the bag, or nil if it didn't fit (bag at SEED_BAG_HARD_MAX)...
+	roll: Roll?, -- the seed that went into the bag (a x10: the best one), or nil if none fit (bag at SEED_BAG_HARD_MAX)...
+	rolls: { Roll }, -- every seed that went into the bag (1, or 10 for a x10 pack)
 	compensation: number, -- ...and the money paid instead (also what a Money product paid)
 }
 
 -- Whether the server may open the Robux prompt for `productName`. Returns (product, nil) or
--- (nil, message). A product without an id is "coming soon"; packs aren't prompted once the bag holds
--- SEED_BAG_MAX seeds, trails the player already has aren't prompted at all, and a plot or treadmill
+-- (nil, message). A product without an id is "coming soon"; packs aren't prompted unless all their seeds fit
+-- under SEED_BAG_MAX (a x10 needs 10 free spaces), trails the player already has aren't prompted at all, and a plot or treadmill
 -- upgrade only through the price tier of the plot's level / treadmill's tier (never once maxed). Only the
 -- *prompt* is gated: a receipt that arrives is always granted (Shop.grantProduct).
 function Shop.canPrompt(p: Profile, productName: string): (Config.DevProduct?, string?)
@@ -91,7 +92,12 @@ function Shop.canPrompt(p: Profile, productName: string): (Config.DevProduct?, s
 	if product.id == 0 then
 		return nil, `{product.label}: coming soon!`
 	end
-	if product.kind == "Pack" and SeedPacks.bagCount(p.seedBag) >= Config.SEED_BAG_MAX then
+	local free = Config.SEED_BAG_MAX - SeedPacks.bagCount(p.seedBag)
+	if product.kind == "Pack" and SeedPacks.count(product) > free then
+		local count = SeedPacks.count(product)
+		if count > 1 and free > 0 then
+			return nil, `A x{count} pack needs {count} free spaces in your seed bag (you have {free}). Plant some seeds first!`
+		end
 		return nil, "Your seed bag is full! Plant some seeds first."
 	elseif product.kind == "Trail" and p.trails[product.trail :: string] then
 		return nil, `You already own the {product.label}.`
@@ -131,21 +137,29 @@ end
 
 -- Applies one product to the profile. `income` = the player's $/s with all multipliers.
 local function apply(p: Profile, name: string, product: Config.DevProduct, income: number, rng: () -> number): Grant
-	local grant: Grant = { name = name, product = product, label = product.label, pack = nil, roll = nil, compensation = 0 }
+	local grant: Grant = { name = name, product = product, label = product.label, pack = nil, roll = nil, rolls = {}, compensation = 0 }
 	local kind = product.kind
 	if kind == "Pack" then
-		-- The seed may push the bag past SEED_BAG_MAX up to SEED_BAG_HARD_MAX; if it can't fit, the pack
-		-- pays Shop.fullBagCompensation instead.
+		-- `count` seeds (a x10 pack: all 10, in this one grant). They may push the bag past SEED_BAG_MAX up to
+		-- SEED_BAG_HARD_MAX; a seed that can't fit pays Shop.fullBagCompensation instead, so a paid pack always
+		-- grants all of it.
 		local pack = SeedPacks.packForProduct(product)
 		grant.pack = pack
-		if SeedPacks.bagCount(p.seedBag) < Config.SEED_BAG_HARD_MAX then
-			local rarity, mutation = SeedPacks.roll(pack, rng)
-			local gene = Config.rollGene(rng)
-			SeedPacks.addToBag(p.seedBag, pack.zone, rarity, mutation, gene) -- (its hidden flower and size)
-			grant.roll = { zone = pack.zone, rarity = rarity, mutation = mutation, name = SeedPacks.seedName(pack.zone, rarity, mutation), gene = gene }
-		else
-			grant.compensation = Shop.fullBagCompensation(pack, income)
-			p.money += grant.compensation
+		for _ = 1, SeedPacks.count(product) do
+			if SeedPacks.bagCount(p.seedBag) < Config.SEED_BAG_HARD_MAX then
+				local rarity, mutation = SeedPacks.roll(pack, rng)
+				local gene = Config.rollGene(rng)
+				SeedPacks.addToBag(p.seedBag, pack.zone, rarity, mutation, gene) -- (its hidden flower and size)
+				local roll = { zone = pack.zone, rarity = rarity, mutation = mutation, name = SeedPacks.seedName(pack.zone, rarity, mutation), gene = gene }
+				table.insert(grant.rolls, roll)
+				if SeedPacks.better(roll, grant.roll) then
+					grant.roll = roll
+				end
+			else
+				local pay = Shop.fullBagCompensation(pack, income)
+				grant.compensation += pay
+				p.money += pay
+			end
 		end
 	elseif kind == "Speed" then
 		p.speed += product.amount :: number

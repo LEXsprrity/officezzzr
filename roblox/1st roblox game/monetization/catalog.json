@@ -52,7 +52,7 @@
     "kind": "product",
     "name": "Starpetal Pack",
     "description": "One Deep Space seed for your seed bag, rolled with double luck. It has a small chance of the pack-only Celestial mutation.",
-    "price": 2000,
+    "price": 200,
     "image": "icons/SeedPack.png"
   },
   {
@@ -60,7 +60,23 @@
     "kind": "product",
     "name": "Lotus Wyrm Pack",
     "description": "One Spirit Garden seed for your seed bag, rolled with double luck. It has a small chance of the pack-only Celestial mutation.",
-    "price": 3000,
+    "price": 300,
+    "image": "icons/SeedPack.png"
+  },
+  {
+    "key": "PackSpace10",
+    "kind": "product",
+    "name": "Starpetal Pack x10",
+    "description": "10 Deep Space seeds for your seed bag at once, each rolled with double luck. Each has a small chance of the pack-only Celestial mutation. Needs 10 free spaces in your bag.",
+    "price": 1500,
+    "image": "icons/SeedPack.png"
+  },
+  {
+    "key": "PackSpirit10",
+    "kind": "product",
+    "name": "Lotus Wyrm Pack x10",
+    "description": "10 Spirit Garden seeds for your seed bag at once, each rolled with double luck. Each has a small chance of the pack-only Celestial mutation. Needs 10 free spaces in your bag.",
+    "price": 2299,
     "image": "icons/SeedPack.png"
   },
   {

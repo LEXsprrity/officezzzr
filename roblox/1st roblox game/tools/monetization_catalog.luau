@@ -54,6 +54,10 @@ local function productDescription(Config: any, Format: any, product: any): strin
 	local kind = product.kind
 	if kind == "Pack" then
 		local zone = Config.ZONES[product.zone]
+		local count = product.count or 1
+		if count > 1 then
+			return `{count} {zone.name} seeds for your seed bag at once, each rolled with double luck. Each has a small chance of the pack-only {Config.PACK_EXCLUSIVE} mutation. Needs {count} free spaces in your bag.`
+		end
 		return `One {zone.name} seed for your seed bag, rolled with double luck. It has a small chance of the pack-only {Config.PACK_EXCLUSIVE} mutation.`
 	elseif kind == "Speed" then
 		return `Adds {Format.commas(product.amount)} Speed right away, so you can reach farther zones.`

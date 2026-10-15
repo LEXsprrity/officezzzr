@@ -40,11 +40,54 @@ function SeedPacks.zonePack(k: number): Pack
 end
 
 ----------------------------------------------------------------------------------------------------
--- Developer products (Robux): the Config.DEVELOPER_PRODUCTS of kind "Pack" ({ id, label, robux, zone })
+-- Developer products (Robux): the Config.DEVELOPER_PRODUCTS of kind "Pack" ({ id, label, robux, zone, count })
 ----------------------------------------------------------------------------------------------------
 -- The pack a "Pack" product opens.
 function SeedPacks.packForProduct(product: Config.DevProduct): Pack
 	return SeedPacks.zonePack(product.zone :: number)
+end
+
+-- How many seeds a "Pack" product rolls (the x10 packs: 10).
+function SeedPacks.count(product: Config.DevProduct): number
+	return math.max(1, math.floor(product.count or 1))
+end
+
+export type Offer = { pack: Pack, single: { name: string, product: Config.DevProduct }, ten: { name: string, product: Config.DevProduct }? }
+-- One Shop card per pack, by zone: its x1 product and its x10 one (if any) (owner 2026-10-15: "1 Seed" /
+-- "10 Seeds" buttons, like the reference's "1 Egg" / "10 Eggs").
+function SeedPacks.offers(): { Offer }
+	local byZone: { [number]: Offer } = {}
+	local list: { Offer } = {}
+	for _, entry in Config.products("Pack") do
+		local zone = entry.product.zone :: number
+		local offer = byZone[zone]
+		if not offer then
+			offer = { pack = SeedPacks.packForProduct(entry.product), single = entry }
+			byZone[zone] = offer
+			table.insert(list, offer)
+		end
+		if SeedPacks.count(entry.product) > 1 then
+			offer.ten = entry
+		else
+			offer.single = entry
+		end
+	end
+	table.sort(list, function(a, b)
+		return a.pack.zone < b.pack.zone
+	end)
+	return list
+end
+
+-- Whether a roll is better than another (the x10 reveal's highlighted seed): the rarer rarity, then the
+-- better-paying mutation (none last).
+function SeedPacks.better(a: { rarity: number, mutation: string? }, b: { rarity: number, mutation: string? }?): boolean
+	if not b then
+		return true
+	elseif a.rarity ~= b.rarity then
+		return a.rarity > b.rarity
+	end
+	local ma, mb = Config.mutationById(a.mutation), Config.mutationById(b.mutation)
+	return (if ma then ma.income else 0) > (if mb then mb.income else 0)
 end
 
 -- A sold pack by its reveal id ("Pack:Space"), or nil.

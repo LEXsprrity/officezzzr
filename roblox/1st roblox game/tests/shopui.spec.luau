@@ -276,7 +276,7 @@ H.test("Shop SEED PACKS: one wide gold-outlined card per pack, a red New! tag, s
 	H.ok(string.find(shop, "outline(if featured then 5 else 2, if featured then WHITE else FRAME_INK)", 1, true) ~= nil, "square tiles, thin dark outlines")
 	H.ok(string.find(shop, "TextXAlignment = Enum.TextXAlignment.Right", 1, true) and string.find(shop, "AnchorPoint = Vector2.new(0, 1)", 1, true),
 		"the % at the bottom right")
-	H.ok(string.find(shop, "buttonRow(c, PACK_W, L.PACK_H, L.bottomY(L.PACK_H, true), { buy })", 1, true) ~= nil, "gift + R$ on the art")
+	H.ok(string.find(shop, "buttonRow(c, PACK_W, L.PACK_H, L.bottomY(L.PACK_H, true), buys)", 1, true) ~= nil, "gift + R$ on the art (x1 and x10)")
 	H.ok(not string.find(HUD, "Name = \"Tray\"", 1, true) and not string.find(HUD, "TRAY_GREY", 1, true), "no grey tray any more")
 	H.ok(not string.find(shop, "lootTable", 1, true), "the old loot-table bars are gone")
 	-- the Shop re-renders once the 3D previews or the flower catalog arrive
@@ -602,7 +602,8 @@ H.test("HUD left column: wide Shop / Index buttons (icon left, word right in rel
 end)
 
 H.test("Shop SEED PACKS: the owner's pictures as the pack cards' backgrounds once uploaded (the zone colours until then)", function()
-	for _, entry in Config.products("Pack") do
+	for _, offer in SeedPacks.offers() do -- (one card per pack: its x1 product names the picture)
+		local entry = offer.single
 		local key = entry.name .. "Bg"
 		H.ok(Config.ICONS[key] ~= nil, `icons/ids.json has {key}`)
 		H.ok(fs.isFile(`icons/{key}.png`), `icons/{key}.png (uploaded by tools/upload_icons.luau)`)

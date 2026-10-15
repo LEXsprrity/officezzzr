@@ -785,7 +785,7 @@ Config.RECEIPT_HISTORY = 100 -- processed Robux PurchaseIds kept per profile, so
 -- "coming soon"). `robux`
 -- is only the placeholder shown while the real price can't be fetched: the real price is set on the
 -- Dashboard and read with MarketplaceService:GetProductInfo. `kind` says what a receipt grants:
---   Pack      one seed of `zone` into the seed bag
+--   Pack      `count` seeds (default 1; the x10 packs: 10) of `zone` into the seed bag
 --   Speed     + `amount` Speed
 --   Money     a fixed `amount` of money (owner 2026-10-15: no share of the buyer's income any more)
 --   TreadmillUpgrade  one treadmill tier, from the tier the player has when the receipt arrives (`tier`:
@@ -801,13 +801,17 @@ export type DevProduct = {
 	label: string,
 	robux: number,
 	zone: number?,
+	count: number?, -- Pack: seeds per purchase (default 1)
 	amount: number?,
 	tier: number?, -- PlotUpgrade / TreadmillUpgrade: its price tier
 	trail: string?,
 }
 Config.DEVELOPER_PRODUCTS = {
-	PackSpace = { kind = "Pack", label = "Starpetal Pack", robux = 2000, zone = 6 },
-	PackSpirit = { kind = "Pack", label = "Lotus Wyrm Pack", robux = 3000, zone = 7 },
+	-- Seed packs, x1 and x10 (owner 2026-10-15: 200 / 1,500 and 300 / 2,299 R$): the Shop shows both on the pack's card.
+	PackSpace = { kind = "Pack", label = "Starpetal Pack", robux = 200, zone = 6 },
+	PackSpace10 = { kind = "Pack", label = "Starpetal Pack x10", robux = 1500, zone = 6, count = 10 },
+	PackSpirit = { kind = "Pack", label = "Lotus Wyrm Pack", robux = 300, zone = 7 },
+	PackSpirit10 = { kind = "Pack", label = "Lotus Wyrm Pack x10", robux = 2299, zone = 7, count = 10 },
 
 	-- Speed packs: the Shop's blue SPEED cards. Sized against the zones' recommended Speed (v7 scale):
 	-- +25K is the Desert, +750K a bit past the Jungle, +3M past the Lava Fields, +10M past the Snow

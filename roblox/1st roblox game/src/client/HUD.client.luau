@@ -1380,9 +1380,11 @@ do
 		}), 3, 3)
 	end
 
-	-- One wide card per pack, spanning the Shop. No Speed gate: anyone can buy them.
-	local function packCard(order: number, productName: string, product: Config.DevProduct, bagFull: boolean)
-		local pack = SeedPacks.packForProduct(product)
+	-- One wide card per pack, spanning the Shop, with its x1 and x10 buttons (SeedPacks.offers). No Speed
+	-- gate: anyone can buy them. `free`: the seed bag's free spaces (a pack is only prompted if it all fits).
+	local function packCard(order: number, offer: SeedPacks.Offer, free: number)
+		local productName = offer.single.name
+		local pack = offer.pack
 		local zone = Config.ZONES[pack.zone]
 		local c = cardFrame(modalBody, order, zone.ui, { Name = "Pack_" .. productName, Size = UDim2.new(1, -8, 0, L.PACK_H) })
 		local stroke = c:FindFirstChildOfClass("UIStroke") :: UIStroke
@@ -1455,11 +1457,20 @@ do
 				.. (if exclusive then ` · {exclusive.id} x{exclusive.income} income, only from packs` else ""),
 			Size = UDim2.new(1, -36, 0, 20), Position = UDim2.fromOffset(18, bottom + 32), TextColor3 = Color3.fromRGB(255, 245, 210), ZIndex = 3,
 		})
-		local buy = robuxBuy(robuxPrice(product), product.id, "Product:" .. productName, if bagFull then "Bag full!" else "1 Seed")
-		if bagFull then
-			buy.color = COLORS.disabled
+		-- "1 Seed" and "10 Seeds" (owner 2026-10-15, like the reference's "1 Egg" / "10 Eggs"), each a gift + R$
+		-- button; grey with "Bag full!" / "Need 10 free" when its seeds can't all fit (the server won't prompt it)
+		local buys: { Buy } = {}
+		for _, entry in { offer.single, offer.ten } do
+			local count = SeedPacks.count(entry.product)
+			local fits = count <= free
+			local caption = if fits then (if count > 1 then `{count} Seeds` else "1 Seed") elseif count > 1 and free > 0 then `Need {count} free` else "Bag full!"
+			local buy = robuxBuy(robuxPrice(entry.product), entry.product.id, "Product:" .. entry.name, caption)
+			if not fits then
+				buy.color = COLORS.disabled
+			end
+			table.insert(buys, buy)
 		end
-		buttonRow(c, PACK_W, L.PACK_H, L.bottomY(L.PACK_H, true), { buy })
+		buttonRow(c, PACK_W, L.PACK_H, L.bottomY(L.PACK_H, true), buys)
 	end
 
 	----------------------------------------------------------------------------------------------------
@@ -1626,8 +1637,8 @@ do
 		shopSections.Featured = section("FEATURED", nextOrder(), HEADING_GOLD)
 		local bagCount = SeedPacks.bagCount(stats.seedBag or {})
 		local bagFull = bagCount >= Config.SEED_BAG_MAX
-		for _, entry in Config.products("Pack") do
-			packCard(nextOrder(), entry.name, entry.product, bagFull)
+		for _, offer in SeedPacks.offers() do
+			packCard(nextOrder(), offer, Config.SEED_BAG_MAX - bagCount)
 		end
 		note(`Seed bag {bagCount}/{Config.SEED_BAG_MAX}{if bagFull then " (full: plant some first!)" else ""} · plant them from the Inventory in the Plants panel`, nextOrder())
 
@@ -2288,6 +2299,27 @@ do
 		Name = "Continue", Text = "Click to continue", Size = UDim2.new(1, -40, 0, 30), Position = UDim2.new(0, 20, 1, -42),
 		TextColor3 = Color3.fromRGB(220, 220, 235), ZIndex = 5,
 	})
+	-- A x10 pack's results (owner 2026-10-15): a 2x5 grid of its seeds where the reel was, the best one lit
+	local GRID_GAP = 12
+	local grid = new("Frame", {
+		Name = "Grid", Position = UDim2.fromOffset(REEL_X, REEL_Y), Size = UDim2.fromOffset(REEL_W, 2 * CARD_H + GRID_GAP), BackgroundTransparency = 1,
+		Visible = false, ZIndex = 4, Parent = panel,
+	})
+	local gridNote = bold(panel, 3, {
+		Name = "GridNote", Text = "", Size = UDim2.new(1, -40, 0, 34), Position = UDim2.fromOffset(20, REEL_Y + 2 * CARD_H + GRID_GAP + 10),
+		TextColor3 = Color3.fromRGB(255, 245, 210), Visible = false, ZIndex = 5,
+	})
+	UiFx.relief(gridNote, 3, 3)
+	local function showGrid(on: boolean)
+		grid:ClearAllChildren()
+		grid.Visible, gridNote.Visible = on, false
+		reel.Visible = not on
+		for _, c in panel:GetChildren() do
+			if c.Name == "Pointer" then
+				(c :: GuiObject).Visible = not on
+			end
+		end
+	end
 	local closeButton = new("TextButton", { Size = UDim2.fromScale(1, 1), BackgroundTransparency = 1, Text = "", ZIndex = 30, Visible = false, Parent = revealGui })
 	closeButton:SetAttribute("NoPop", true) -- the whole screen: "Click to continue"
 
@@ -2299,7 +2331,8 @@ do
 
 	-- A reel card: a seed icon, the rarity on its own line, the mutation (if any) on a pill under it. All
 	-- text is scaled inside the card's padding, so "Uncommon" or "Celestial" always fits.
-	local function seedCard(parent: Instance, rarity: number, mutation: string?): Frame
+	-- `look`: the seed's zone and gene: its 3D seed look (FlowerView) instead of the Seeds icon (the x10 grid).
+	local function seedCard(parent: Instance, rarity: number, mutation: string?, look: { zone: number, gene: number? }?): Frame
 		local r = Config.RARITIES[rarity]
 		local mut = Config.mutationById(mutation)
 		local f = new("Frame", { Size = UDim2.fromOffset(CARD_W, CARD_H), BackgroundColor3 = WHITE, ZIndex = 3, Parent = parent }, deco(12, 3))
@@ -2308,8 +2341,17 @@ do
 		local inner = new("Frame", { Name = "Inner", BackgroundTransparency = 1, Size = UDim2.fromScale(1, 1), ZIndex = 3, Parent = f }, {
 			new("UIPadding", { PaddingLeft = UDim.new(0, 10), PaddingRight = UDim.new(0, 10), PaddingTop = UDim.new(0, 8), PaddingBottom = UDim.new(0, 10) }),
 		})
-		bigIcon(inner, "Seeds", { Size = UDim2.fromScale(0.5, 0.32), AnchorPoint = Vector2.new(0.5, 0),
-			Position = UDim2.fromScale(0.5, 0), ZIndex = 3 })
+		local seedModel = look and FlowerView.seed(look.zone, look.gene)
+		if seedModel then
+			local view = new("Frame", {
+				Name = "Seed3D", BackgroundTransparency = 1, Size = UDim2.fromScale(0.8, 0.36), AnchorPoint = Vector2.new(0.5, 0),
+				Position = UDim2.fromScale(0.5, 0), ZIndex = 4, Parent = inner,
+			})
+			FlowerView.show(view, seedModel, { zindex = 4, spin = true, zoom = 1.2 })
+		else
+			bigIcon(inner, "Seeds", { Size = UDim2.fromScale(0.5, 0.32), AnchorPoint = Vector2.new(0.5, 0),
+				Position = UDim2.fromScale(0.5, 0), ZIndex = 3 })
+		end
 		local name = bold(inner, 3, { Name = "Rarity", Text = r.id, Size = UDim2.fromScale(1, 0.24), Position = UDim2.fromScale(0, 0.38), ZIndex = 4 })
 		new("UITextSizeConstraint", { MaxTextSize = 30, Parent = name })
 		if mut then
@@ -2355,6 +2397,17 @@ do
 		if not pack or type(best) ~= "table" or not Config.RARITIES[best.rarity] or not Config.ZONES[best.zone] then
 			return
 		end
+		-- A x10 pack: all its seeds (the reel still lands on the best, then the grid shows them all)
+		local results = {}
+		if type(data.results) == "table" then
+			for _, r in data.results do
+				if #results < 10 and type(r) == "table" and Config.RARITIES[r.rarity] and Config.ZONES[r.zone] then
+					table.insert(results, r)
+				end
+			end
+		end
+		local multi = #results > 1
+		showGrid(false)
 
 		revealTitle.Text = `Opening {data.name}...`
 		resultLabel.Visible, resultSub.Visible, continueHint.Visible, closeButton.Visible, viewHolder.Visible = false, false, false, false, false
@@ -2387,7 +2440,7 @@ do
 		revealGui.Visible = true
 
 		local finalX = REEL_W / 2 - ((REEL_TARGET - 1) * step + CARD_W / 2) + (math.random() - 0.5) * CARD_W * 0.6
-		local tween = TweenService:Create(strip, TweenInfo.new(if fast then 1.3 else 3.6, Enum.EasingStyle.Quint, Enum.EasingDirection.Out), {
+		local tween = TweenService:Create(strip, TweenInfo.new(if fast or multi then 1.3 else 3.6, Enum.EasingStyle.Quint, Enum.EasingDirection.Out), {
 			Position = UDim2.fromOffset(finalX, y),
 		})
 		local lastIndex = -1
@@ -2419,15 +2472,48 @@ do
 		end
 		burstAt(color, best.rarity >= 4 or mut ~= nil)
 		landSound:Play()
-		viewHolder.BackgroundColor3 = color
-		viewHolder.Visible = true
-		FlowerView.show(viewHolder, FlowerView.seed(best.zone, tonumber(best.gene)), { zindex = 5, spin = true, zoom = 1.3 })
-		resultLabel.Text = `{if mut then string.upper(mut.id) .. " " else ""}{string.upper(rarity.id)}!`
-		resultLabel.TextColor3 = color
-		resultLabel.Visible = true
-		local exclusive = best.mutation ~= nil and best.mutation == pack.exclusive
-		resultSub.Text = `{if exclusive then "PACK EXCLUSIVE! " else ""}{SeedPacks.seedName(best.zone, best.rarity, best.mutation)} → your Inventory`
-		resultSub.Visible = true
+		if multi then
+			task.wait(0.7)
+			local bestIndex = 1
+			for i, r in results do
+				if SeedPacks.better(r, results[bestIndex]) then
+					bestIndex = i
+				end
+			end
+			revealTitle.Text = `{data.name}: {#results} seeds!`
+			showGrid(true)
+			for i, r in results do
+				local col, row = (i - 1) % 5, (i - 1) // 5
+				local gridCard = seedCard(grid, r.rarity, r.mutation, { zone = r.zone, gene = tonumber(r.gene) })
+				gridCard.Name = "Seed" .. i
+				gridCard.AnchorPoint = Vector2.new(0.5, 0.5)
+				gridCard.Position = UDim2.fromOffset(col * (CARD_W + (REEL_W - 5 * CARD_W) / 4) + CARD_W / 2, row * (CARD_H + GRID_GAP) + CARD_H / 2)
+				local pop = new("UIScale", { Scale = 0.3, Parent = gridCard })
+				TweenService:Create(pop, TweenInfo.new(0.25, Enum.EasingStyle.Back, Enum.EasingDirection.Out), { Scale = if i == bestIndex then 1.06 else 1 }):Play()
+				if i == bestIndex then -- the best one: a thick gold frame and a BEST! tag
+					local s = gridCard:FindFirstChildOfClass("UIStroke")
+					if s then
+						s.Color, s.Thickness = COLORS.gold, 6
+					end
+					gridCard.ZIndex = 5
+					UiFx.relief(ShopUi.tag(gridCard, "BEST!", UDim2.new(0.5, -40, 0, -14), UDim2.fromOffset(80, 28), 8), 2, 3)
+				end
+				tickSound:Play()
+				task.wait(0.06)
+			end
+			gridNote.Text = `Best: {SeedPacks.seedName(results[bestIndex].zone, results[bestIndex].rarity, results[bestIndex].mutation)} · all {#results} → your Inventory`
+			gridNote.Visible = true
+		else
+			viewHolder.BackgroundColor3 = color
+			viewHolder.Visible = true
+			FlowerView.show(viewHolder, FlowerView.seed(best.zone, tonumber(best.gene)), { zindex = 5, spin = true, zoom = 1.3 })
+			resultLabel.Text = `{if mut then string.upper(mut.id) .. " " else ""}{string.upper(rarity.id)}!`
+			resultLabel.TextColor3 = color
+			resultLabel.Visible = true
+			local exclusive = best.mutation ~= nil and best.mutation == pack.exclusive
+			resultSub.Text = `{if exclusive then "PACK EXCLUSIVE! " else ""}{SeedPacks.seedName(best.zone, best.rarity, best.mutation)} → your Inventory`
+			resultSub.Visible = true
+		end
 
 		continueHint.Visible = true
 		closeButton.Visible = true
@@ -2435,7 +2521,7 @@ do
 		local conn = closeButton.Activated:Connect(function()
 			closed = true
 		end)
-		local deadline = os.clock() + (if fast then 1.6 else 5)
+		local deadline = os.clock() + (if fast then (if multi then 3 else 1.6) elseif multi then 12 else 5)
 		while not closed and os.clock() < deadline do
 			task.wait(0.05)
 		end

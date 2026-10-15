@@ -224,12 +224,20 @@ local function processReceipt(receiptInfo: { [string]: any }): Enum.ProductPurch
 		Sessions.pushFull(s)
 		local pack = grant.pack
 		if pack and grant.roll then
-			Net.LootEvent:FireClient(s.player, "PackRoll", { packId = pack.id, name = pack.name, zone = pack.zone, result = grant.roll })
-			local roll, player = grant.roll, s.player
-			if Config.announcesLegendary(roll.zone, roll.rarity, true) then
-				task.delay(Config.PACK_ANNOUNCE_DELAY, function() -- once the buyer's reveal reel has landed
-					Net.announce(Config.legendaryAnnouncement(player.DisplayName, roll.zone, roll.mutation), "gold")
-				end)
+			-- `result`: the seed the reel lands on (a x10: the best); `results`: all of a x10's seeds (its 2x5 grid)
+			Net.LootEvent:FireClient(s.player, "PackRoll", {
+				packId = pack.id, name = pack.name, zone = pack.zone, result = grant.roll, results = if #grant.rolls > 1 then grant.rolls else nil,
+			})
+			local player = s.player
+			for _, roll in grant.rolls do
+				if Config.announcesLegendary(roll.zone, roll.rarity, true) then
+					task.delay(Config.PACK_ANNOUNCE_DELAY, function() -- once the buyer's reveal reel has landed
+						Net.announce(Config.legendaryAnnouncement(player.DisplayName, roll.zone, roll.mutation), "gold")
+					end)
+				end
+			end
+			if grant.compensation > 0 then -- (a x10 that only partly fit the bag)
+				Net.toast(s.player, `Your seed bag filled up, so the rest of your {pack.name} paid {Format.money(grant.compensation)}.`, "gold", "Money")
 			end
 		elseif pack then
 			Net.toast(s.player, `Your seed bag is full, so your {pack.name} paid {Format.money(grant.compensation)} instead.`, "gold", "Money")

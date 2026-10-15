@@ -1,5 +1,6 @@
 -- Seed packs: two premium late-game packs, Robux only. Products, odds, rolls, the Celestial rules,
 -- the prompt gates (no Speed gate), idempotent receipt grants, the bag caps and the bag's save format.
+local fs = require("@lune/fs")
 local serde = require("@lune/serde")
 local H = require("./harness")
 
@@ -37,7 +38,7 @@ local function withIds(ids: { [string]: number }, fn: () -> ())
 	end
 end
 
-local ALL_IDS = { PackSpace = 106, PackSpirit = 107 }
+local ALL_IDS = { PackSpace = 106, PackSpirit = 107, PackSpace10 = 108, PackSpirit10 = 109 }
 local SPACE, SPIRIT = 6, 7
 
 local function packs(): { any }
@@ -84,31 +85,41 @@ end)
 ----------------------------------------------------------------------------------------------------
 -- Developer products
 ----------------------------------------------------------------------------------------------------
-H.test("products: exactly two packs, Deep Space and Spirit Garden, id = 0 stubs with premium placeholders", function()
+H.test("products: two packs, Deep Space and Spirit Garden, each sold as x1 and x10, id = 0 stubs", function()
 	local names = {}
 	for _, entry in Config.products("Pack") do
 		local name, product = entry.name, entry.product
 		table.insert(names, name)
 		H.eq(product.id, 0, name .. " ships as a stub")
-		H.eq((product :: any).packs, nil, name .. ": one pack per product, no bundles")
+		H.eq((product :: any).packs, nil, name .. ": no bundles field (a x10 is `count`)")
 	end
-	H.eq(#names, 2, "two pack products")
+	H.eq(#names, 4, "four pack products: x1 and x10 of two packs")
 	local P = Config.DEVELOPER_PRODUCTS
-	H.eq(P.PackSpace.zone, SPACE)
-	H.eq(P.PackSpace.label, "Starpetal Pack")
-	H.eq(P.PackSpace.robux, 2000)
-	H.eq(P.PackSpirit.zone, SPIRIT)
-	H.eq(P.PackSpirit.label, "Lotus Wyrm Pack")
-	H.eq(P.PackSpirit.robux, 3000)
-	for _, entry in Config.products("Pack") do
-		H.eq(entry.product.label, SeedPacks.packForProduct(entry.product).name, entry.name .. " label matches the pack")
+	-- owner 2026-10-15: Starpetal 200 / 1,500 R$, Lotus Wyrm 300 / 2,299 R$
+	for name, want in {
+		PackSpace = { SPACE, "Starpetal Pack", 200, 1 }, PackSpace10 = { SPACE, "Starpetal Pack x10", 1500, 10 },
+		PackSpirit = { SPIRIT, "Lotus Wyrm Pack", 300, 1 }, PackSpirit10 = { SPIRIT, "Lotus Wyrm Pack x10", 2299, 10 },
+	} do
+		local product = P[name]
+		H.eq(product.kind, "Pack", name)
+		H.eq(product.zone, want[1], name)
+		H.eq(product.label, want[2], name)
+		H.eq(product.robux, want[3], name)
+		H.eq(SeedPacks.count(product), want[4], name)
+		H.ok(string.find(product.label, SeedPacks.packForProduct(product).name, 1, true) == 1, name .. " label starts with the pack's name")
 	end
-	local list = Config.products("Pack")
-	H.eq(#list, 2)
-	H.eq(list[1].name, "PackSpace", "Shop order: by zone")
-	H.eq(list[2].name, "PackSpirit")
-	H.eq(Format.robux(P.PackSpace.robux), "R$ 2,000")
-	H.eq(Format.robux(P.PackSpirit.robux), "R$ 3,000")
+	H.eq(Format.robux(P.PackSpace.robux), "R$ 200")
+	H.eq(Format.robux(P.PackSpirit10.robux), "R$ 2,299")
+	-- the Shop: one card per pack, by zone, with its x1 and x10
+	local offers = SeedPacks.offers()
+	H.eq(#offers, 2)
+	H.eq(offers[1].pack.zone, SPACE, "Shop order: by zone")
+	H.eq(offers[1].single.name, "PackSpace")
+	H.eq(offers[1].ten and offers[1].ten.name, "PackSpace10")
+	H.eq(offers[2].single.name, "PackSpirit")
+	H.eq(offers[2].ten and offers[2].ten.name, "PackSpirit10")
+	-- the reveal's lookup still finds both packs
+	H.eq((SeedPacks.lookup("Pack:" .. Config.ZONES[SPACE].id) :: any).zone, SPACE)
 end)
 
 H.test("products: lookup by developer product id", function()
@@ -410,6 +421,135 @@ H.test("receipts: a failed save is not confirmed and the retries don't grant twi
 	H.eq(confirm, true)
 	H.eq(status, "duplicate")
 	H.eq(SeedPacks.bagCount(p.seedBag), 1)
+end)
+
+----------------------------------------------------------------------------------------------------
+-- x10 packs (owner 2026-10-15)
+----------------------------------------------------------------------------------------------------
+H.test("x10: a receipt rolls 10 seeds of its zone into the bag, once per PurchaseId", function()
+	for name, zone in { PackSpace10 = SPACE, PackSpirit10 = SPIRIT } do
+		local p = ProfileStore.defaultProfile()
+		p.money = 500
+		local saves = 0
+		local function save()
+			saves += 1
+			return true
+		end
+		local i = 0
+		local function rng(): number -- a spread of rolls, so the 10 seeds differ
+			i += 1
+			return (i * 0.6180339887) % 1
+		end
+		local confirm, status, grant = Shop.processReceipt(p, name, "ten-" .. name, 0, rng, save)
+		H.eq(confirm, true)
+		H.eq(status, "granted")
+		H.eq(#grant.rolls, 10, "all 10 seeds")
+		H.eq(SeedPacks.bagCount(p.seedBag), 10, "all 10 in the bag")
+		H.eq(grant.compensation, 0)
+		H.eq(p.money, 500, "Robux packs never touch money")
+		for _, roll in grant.rolls do
+			H.eq(roll.zone, zone)
+			H.eq(roll.name, SeedPacks.seedName(zone, roll.rarity, roll.mutation))
+			H.ok(not SeedPacks.better(roll, grant.roll), "grant.roll is the best of them (the reel lands on it)")
+		end
+		-- the same PurchaseId again (Roblox retrying): nothing more
+		for _ = 1, 3 do
+			confirm, status = Shop.processReceipt(p, name, "ten-" .. name, 0, rng, save)
+			H.eq(confirm, true)
+			H.eq(status, "duplicate")
+		end
+		H.eq(SeedPacks.bagCount(p.seedBag), 10, "never 20")
+		H.eq(saves, 4)
+	end
+	-- a failed save isn't confirmed, and its retry doesn't grant again
+	local p = ProfileStore.defaultProfile()
+	local confirm = Shop.processReceipt(p, "PackSpace10", "ten-fail", 0, seeded(3), function()
+		return false
+	end)
+	H.eq(confirm, false)
+	H.eq(SeedPacks.bagCount(p.seedBag), 10)
+	confirm = Shop.processReceipt(p, "PackSpace10", "ten-fail", 0, seeded(3), yes)
+	H.eq(confirm, true)
+	H.eq(SeedPacks.bagCount(p.seedBag), 10, "granted once")
+end)
+
+H.test("x10: only prompted with 10 free spaces in the bag (a clear message otherwise); a paid one always grants all 10", function()
+	withIds(ALL_IDS, function()
+		local p = ProfileStore.defaultProfile()
+		p.seedBag["1:1"] = Config.SEED_BAG_MAX - 10
+		H.ok((Shop.canPrompt(p, "PackSpace10")), "exactly 10 free: ok")
+		p.seedBag["1:1"] = Config.SEED_BAG_MAX - 9
+		local product, why = Shop.canPrompt(p, "PackSpace10")
+		H.eq(product, nil, "9 free: refused")
+		H.ok(why and string.find(why, "10 free spaces", 1, true) and string.find(why, "you have 9", 1, true), why)
+		H.ok((Shop.canPrompt(p, "PackSpace")), "...but a x1 still fits")
+		p.seedBag["1:1"] = Config.SEED_BAG_MAX
+		product, why = Shop.canPrompt(p, "PackSpirit10")
+		H.eq(product, nil)
+		H.ok(why and string.find(why, "full"), why)
+		-- a receipt that arrives anyway (bought on another server) still grants all 10, past the soft cap
+		local _, status, grant = Shop.processReceipt(p, "PackSpirit10", "ten-full", 0, seeded(4), yes)
+		H.eq(status, "granted")
+		H.eq(#grant.rolls, 10)
+		H.eq(SeedPacks.bagCount(p.seedBag), Config.SEED_BAG_MAX + 10)
+		-- at the hard cap, the seeds that can't fit are paid in money instead (never Robux for nothing)
+		p.seedBag = { ["1:1"] = Config.SEED_BAG_HARD_MAX - 3 }
+		p.money = 0
+		_, status, grant = Shop.processReceipt(p, "PackSpirit10", "ten-hard", 0, seeded(4), yes)
+		H.eq(status, "granted")
+		H.eq(#grant.rolls, 3, "3 seeds fit")
+		H.eq(grant.compensation, 7 * Shop.fullBagCompensation(grant.pack, 0), "7 paid in money")
+		H.eq(p.money, grant.compensation)
+	end)
+end)
+
+H.test("x10: the server sends all 10 results and announces every Legendary; the reveal shows a 2x5 grid", function()
+	local service = string.gsub(fs.readFile("src/server/ShopService.luau"), "\r", "")
+	H.ok(string.find(service, "result = grant.roll, results = if #grant.rolls > 1 then grant.rolls else nil,", 1, true) ~= nil, "PackRoll carries all 10")
+	H.ok(string.find(service, "for _, roll in grant.rolls do\n\t\t\t\tif Config.announcesLegendary(roll.zone, roll.rarity, true) then", 1, true) ~= nil,
+		"each Legendary announced")
+	local hud = string.gsub(fs.readFile("src/client/HUD.client.luau"), "\r", "")
+	local reveal = string.match(hud, "local function playReveal%(.-\n\tend\n") or ""
+	H.ok(string.find(reveal, "local multi = #results > 1", 1, true) ~= nil, "a x10 is told apart")
+	H.ok(string.find(reveal, "if fast or multi then 1.3 else 3.6", 1, true) ~= nil, "a fast reel first")
+	H.ok(string.find(reveal, "local col, row = (i - 1) % 5, (i - 1) // 5", 1, true) ~= nil, "then a 2x5 grid")
+	H.ok(string.find(reveal, "seedCard(grid, r.rarity, r.mutation, { zone = r.zone, gene = tonumber(r.gene) })", 1, true) ~= nil,
+		"rarity-coloured cards with the seeds' 3D looks")
+	H.ok(string.find(reveal, "SeedPacks.better(r, results[bestIndex])", 1, true) and string.find(reveal, "ShopUi.tag(gridCard, \"BEST!\"", 1, true), "the best one lit")
+	H.ok(string.find(hud, "Text = \"Click to continue\"", 1, true) ~= nil, "Click to continue")
+	-- SeedPacks.better: rarity first, then the better-paying mutation
+	H.ok(SeedPacks.better({ rarity = 5 }, { rarity = 4, mutation = "Celestial" }))
+	H.ok(SeedPacks.better({ rarity = 2, mutation = "Rainbow" }, { rarity = 2, mutation = "Gold" }))
+	H.ok(not SeedPacks.better({ rarity = 2 }, { rarity = 2, mutation = "Gold" }))
+	H.ok(SeedPacks.better({ rarity = 1 }, nil))
+end)
+
+H.test("x10: the pack card has a 1 Seed and a 10 Seeds button, each a gift + R$", function()
+	local hud = string.gsub(fs.readFile("src/client/HUD.client.luau"), "\r", "")
+	local card = string.match(hud, "local function packCard%(.-\n\tend\n") or ""
+	H.ok(string.find(card, "for _, entry in { offer.single, offer.ten } do", 1, true) ~= nil, "both products on one card")
+	H.ok(string.find(card, "if count > 1 then `{count} Seeds` else \"1 Seed\"", 1, true) ~= nil, "captions 1 Seed / 10 Seeds")
+	H.ok(string.find(card, "robuxBuy(robuxPrice(entry.product), entry.product.id, \"Product:\" .. entry.name, caption)", 1, true) ~= nil, "gift + R$ each")
+	H.ok(string.find(card, "`Need {count} free`", 1, true) and string.find(card, "buy.color = COLORS.disabled", 1, true), "greyed when they can't fit")
+	H.ok(string.find(hud, "for _, offer in SeedPacks.offers() do\n\t\t\tpackCard(nextOrder(), offer, Config.SEED_BAG_MAX - bagCount)", 1, true) ~= nil,
+		"one card per pack")
+	-- the buttons' layout fits the card (ShopLayout.row: two gift + R$ pairs)
+	local ShopLayout = H.shared("ShopLayout")
+	local specs = {}
+	for _, text in { "200", "1,500" } do
+		table.insert(specs, { kind = "gift" })
+		table.insert(specs, { kind = "buy", text = text, icon = true, caption = "10 Seeds" })
+	end
+	local placed = ShopLayout.row(specs, ShopLayout.CONTENT_W, ShopLayout.PACK_H, ShopLayout.bottomY(ShopLayout.PACK_H, true))
+	H.eq(#placed, 4)
+	for i, p in placed do
+		local r = ShopLayout.popped(p)
+		H.ok(r.x >= 0 and r.x + r.w <= ShopLayout.CONTENT_W and r.y + r.h <= ShopLayout.PACK_H, `button {i} on the card`)
+		if i > 1 then
+			local q = ShopLayout.popped(placed[i - 1])
+			H.ok(r.x >= q.x + q.w - 1e-6, `button {i} clear of the one before`)
+		end
+	end
 end)
 
 local function jsonStore(failTimes: number?)
