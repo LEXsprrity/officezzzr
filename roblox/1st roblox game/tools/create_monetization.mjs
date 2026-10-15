@@ -5,6 +5,8 @@
 //
 //   node tools/create_monetization.mjs --dry-run                 # what would be created; no key, no network
 //   node tools/create_monetization.mjs --universe <universeId>   # creates the missing ones
+//   node tools/create_monetization.mjs --universe <universeId> --update-prices
+//       # also sets the price of every EXISTING item to its catalog price (PATCH, only where it differs)
 //
 // The API key is read ONLY from the environment variable ROBLOX_API_KEY (Open Cloud key with Developer
 // Products read + write and Game Passes read + write for this experience). It is never printed, written or
@@ -37,15 +39,16 @@ export const KINDS = {
 	},
 };
 
-const USAGE = "usage: node tools/create_monetization.mjs [--dry-run] [--universe <universeId>]";
+const USAGE = "usage: node tools/create_monetization.mjs [--dry-run] [--update-prices] [--universe <universeId>]";
 
-// Command line -> { dryRun, universe } or { error }. Unknown arguments are refused without echoing them
-// (one could be a pasted key).
+// Command line -> { dryRun, universe, help, updatePrices } or { error }. Unknown arguments are refused
+// without echoing them (one could be a pasted key).
 export function parseArgs(argv, env) {
-	const opts = { dryRun: false, universe: env.ROBLOX_UNIVERSE_ID || null, help: false };
+	const opts = { dryRun: false, universe: env.ROBLOX_UNIVERSE_ID || null, help: false, updatePrices: false };
 	for (let i = 0; i < argv.length; i++) {
 		const a = argv[i];
 		if (a === "--dry-run") opts.dryRun = true;
+		else if (a === "--update-prices") opts.updatePrices = true;
 		else if (a === "--help" || a === "-h") opts.help = true;
 		else if (a === "--universe") {
 			opts.universe = argv[++i] ?? "";
@@ -185,7 +188,15 @@ export async function call(deps, url, init, attempts = 6) {
 	}
 }
 
-// Everything of one kind in the universe: [{ id, name }].
+// The price a listed item has now, or null when the listing doesn't say (the docs type `priceInformation`
+// loosely: { defaultPriceInRobux } in practice). Unknown prices are always patched by --update-prices.
+export function listedPrice(item) {
+	const info = item?.priceInformation;
+	const p = info && typeof info === "object" ? info.defaultPriceInRobux : undefined;
+	return Number.isSafeInteger(p) && p >= 0 ? p : null;
+}
+
+// Everything of one kind in the universe: [{ id, name, price }].
 export async function listAll(deps, kindName, universe, apiKey) {
 	const kind = KINDS[kindName];
 	const out = [];
@@ -195,7 +206,7 @@ export async function listAll(deps, kindName, universe, apiKey) {
 		const body = await call(deps, url, { method: "GET", headers: { "x-api-key": apiKey } });
 		for (const item of body[kind.listField] ?? []) {
 			const id = validId(Number(item[kind.idField]));
-			if (id) out.push({ id, name: item.name });
+			if (id) out.push({ id, name: item.name, price: listedPrice(item) });
 		}
 		token = body.nextPageToken;
 		if (!token) return out;
@@ -222,6 +233,44 @@ export async function create(deps, entry, universe, apiKey) {
 	return id;
 }
 
+// Sets an existing item's price (Open Cloud: PATCH <collection>/<id>, multipart, only `price`; 204 No Content).
+export async function updatePrice(deps, kindName, id, price, universe, apiKey) {
+	const kind = KINDS[kindName];
+	const body = () => {
+		const form = new FormData();
+		form.append("price", String(price));
+		return form;
+	};
+	await call(deps, `${kind.base(universe)}/${id}`, { method: "PATCH", headers: { "x-api-key": apiKey }, body });
+}
+
+// --update-prices: every existing row whose price on Roblox isn't the catalog's (or isn't known) is patched.
+// Rows get `price` = "ok" | "updated" | "failed" (and a note on failure).
+async function updatePrices(deps, rows, existing, universe, apiKey) {
+	const priceOf = {};
+	for (const kind of Object.keys(KINDS)) {
+		priceOf[kind] = new Map((existing[kind] ?? []).map((item) => [item.id, item.price]));
+	}
+	for (const r of rows) {
+		if (r.status !== "existing" || !validId(r.id)) continue;
+		const now = priceOf[r.entry.kind].get(r.id);
+		if (now === r.entry.price) {
+			r.price = "ok";
+			continue;
+		}
+		try {
+			await updatePrice(deps, r.entry.kind, r.id, r.entry.price, universe, apiKey);
+			r.price = "updated";
+			r.note = `price ${now ?? "?"} -> ${r.entry.price}`;
+			deps.print(`price ${r.entry.kind} ${r.entry.key}: R$ ${now ?? "?"} -> R$ ${r.entry.price}`);
+		} catch (err) {
+			r.price = "failed";
+			r.note = `price update failed: ${redact(err.message, apiKey)}`;
+			deps.print(`FAILED price ${r.entry.kind} ${r.entry.key}: ${r.note}`);
+		}
+	}
+}
+
 export async function run(argv, env, deps) {
 	const opts = parseArgs(argv, env);
 	if (opts.error || opts.help) {
@@ -240,6 +289,9 @@ export async function run(argv, env, deps) {
 	if (opts.dryRun) {
 		const rows = plan(catalog, ids, null);
 		for (const r of rows) if (r.status === "create") r.note = "would be created (unless one with this name exists)";
+		if (opts.updatePrices) {
+			for (const r of rows) if (r.status === "existing") r.note = `price would be set to R$ ${r.entry.price} (where it differs)`;
+		}
 		deps.print(`DRY RUN: nothing is sent to Roblox. ${rows.filter((r) => r.status === "create").length} of ${rows.length} items have no id in ${IDS_FILE} yet.\n`);
 		deps.print(table(rows));
 		return 0;
@@ -253,9 +305,10 @@ export async function run(argv, env, deps) {
 	const save = async () => deps.writeFile(IDS_FILE, encodeIds(ids));
 
 	let rows;
+	let existing;
 	try {
 		deps.print(`Universe ${opts.universe}: reading the existing developer products and gamepasses...`);
-		const existing = {
+		existing = {
 			product: await listAll(deps, "product", opts.universe, apiKey),
 			pass: await listAll(deps, "pass", opts.universe, apiKey),
 		};
@@ -283,10 +336,16 @@ export async function run(argv, env, deps) {
 		}
 	}
 
+	if (opts.updatePrices) {
+		await updatePrices(deps, rows, existing, opts.universe, apiKey);
+	}
+
 	deps.print("\n" + table(rows));
 	const count = (s) => rows.filter((r) => r.status === s).length;
 	deps.print(`\n${count("created")} created, ${count("existing")} existing, ${count("failed")} failed. Ids written to ${IDS_FILE}.`);
-	return count("failed") > 0 ? 1 : 0;
+	const prices = (s) => rows.filter((r) => r.price === s).length;
+	if (opts.updatePrices) deps.print(`Prices: ${prices("updated")} updated, ${prices("ok")} already right, ${prices("failed")} failed.`);
+	return count("failed") > 0 || prices("failed") > 0 ? 1 : 0;
 }
 
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {

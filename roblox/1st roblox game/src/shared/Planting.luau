@@ -42,10 +42,11 @@ function Planting.bedMargin(rarity: number): number
 	return math.max(Config.PLANT_BED_MARGIN, Planting.coreRadius(rarity), Planting.radius(rarity) - Config.BED_FENCE_GAP - Config.PLANT_FENCE_OVERHANG)
 end
 
--- The closest two plants may stand (centre to centre): their cores side by side, (radiusA + radiusB) x
--- PLANT_CORE_SHARE. Their leaves may overlap (owner: "right next to each other, not on top of each other").
+-- The closest two plants may stand (centre to centre): a tiny core, PLANT_SPACING_SHARE x (radiusA + radiusB),
+-- at least PLANT_MIN_GAP. They may touch and their leaves overlap freely; only a spot that would all but hide
+-- the other's centre is refused (owner 2026-10-15: "they must be able to touch and nearly stack").
 function Planting.minDistance(rarityA: number, rarityB: number): number
-	return Planting.coreRadius(rarityA) + Planting.coreRadius(rarityB)
+	return math.max(Config.PLANT_MIN_GAP, Config.PLANT_SPACING_SHARE * (Planting.radius(rarityA) + Planting.radius(rarityB)))
 end
 
 -- Which way a plant faces: `yaw` degrees (turned by the player while placing it, Planting.client) from the

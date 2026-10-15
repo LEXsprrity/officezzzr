@@ -52,7 +52,7 @@
     "kind": "product",
     "name": "Starpetal Pack",
     "description": "One Deep Space seed for your seed bag, rolled with double luck. It has a small chance of the pack-only Celestial mutation.",
-    "price": 2000,
+    "price": 200,
     "image": "icons/SeedPack.png"
   },
   {
@@ -60,7 +60,23 @@
     "kind": "product",
     "name": "Lotus Wyrm Pack",
     "description": "One Spirit Garden seed for your seed bag, rolled with double luck. It has a small chance of the pack-only Celestial mutation.",
-    "price": 3000,
+    "price": 300,
+    "image": "icons/SeedPack.png"
+  },
+  {
+    "key": "PackSpace10",
+    "kind": "product",
+    "name": "Starpetal Pack x10",
+    "description": "10 Deep Space seeds for your seed bag at once, each rolled with double luck. Each has a small chance of the pack-only Celestial mutation. Needs 10 free spaces in your bag.",
+    "price": 1500,
+    "image": "icons/SeedPack.png"
+  },
+  {
+    "key": "PackSpirit10",
+    "kind": "product",
+    "name": "Lotus Wyrm Pack x10",
+    "description": "10 Spirit Garden seeds for your seed bag at once, each rolled with double luck. Each has a small chance of the pack-only Celestial mutation. Needs 10 free spaces in your bag.",
+    "price": 2299,
     "image": "icons/SeedPack.png"
   },
   {
@@ -131,7 +147,7 @@
     "key": "Money24K",
     "kind": "product",
     "name": "Pocket Cash",
-    "description": "Gives you $24K, or 10 minutes of your current income if that's more.",
+    "description": "Gives you $24K right away.",
     "price": 40,
     "image": "icons/Money.png"
   },
@@ -139,7 +155,7 @@
     "key": "Money200K",
     "kind": "product",
     "name": "Cash Bag",
-    "description": "Gives you $200K, or 30 minutes of your current income if that's more.",
+    "description": "Gives you $200K right away.",
     "price": 80,
     "image": "icons/Money.png"
   },
@@ -147,7 +163,7 @@
     "key": "Money800K",
     "kind": "product",
     "name": "Cash Stack",
-    "description": "Gives you $800K, or 1 hour of your current income if that's more.",
+    "description": "Gives you $800K right away.",
     "price": 200,
     "image": "icons/Money.png"
   },
@@ -155,7 +171,7 @@
     "key": "Money4M",
     "kind": "product",
     "name": "Cash Crate",
-    "description": "Gives you $4M, or 3 hours of your current income if that's more.",
+    "description": "Gives you $4M right away.",
     "price": 400,
     "image": "icons/Money.png"
   },
@@ -163,7 +179,7 @@
     "key": "Money8M",
     "kind": "product",
     "name": "Cash Vault",
-    "description": "Gives you $8M, or 6 hours of your current income if that's more.",
+    "description": "Gives you $8M right away.",
     "price": 640,
     "image": "icons/Money.png"
   },

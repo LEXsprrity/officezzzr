@@ -84,8 +84,8 @@ local function claimGift(player: Player)
 		SpeedService.refresh(s)
 		Sessions.pushFull(s)
 	end
-	local text, color = Rewards.giftMessage(result)
-	Net.toast(player, text, color)
+	local text, color, icon = Rewards.giftMessage(result)
+	Net.toast(player, text, color, icon)
 	Net.LootEvent:FireClient(player, "FreeGift", { result = result, claimed = s.profile.freeGift })
 end
 

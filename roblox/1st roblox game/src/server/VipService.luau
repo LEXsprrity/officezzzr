@@ -1,7 +1,7 @@
 -- The VIP gamepass's looks (its x1.25 money and Speed are in Config.passMoneyMult / passSpeedMult): a gold
--- relief "VIP" badge just over the owner's head (Shared/VipBadge, the same badge the owner sees by their
--- Speed and money: VipHudBadge.client), and the player's VIP attribute, which VipChat.client reads to put a
--- gold [VIP] tag in front of their chat messages and VipHudBadge.client to show the HUD badge. Both are set
+-- relief "VIP" badge just over the owner's head (Shared/VipBadge; the HUD has no VIP badge any more, owner
+-- 2026-10-15), and the player's VIP attribute, which VipChat.client reads to put a
+-- gold [VIP] tag in front of their chat messages. Both are set
 -- only here, on the server, from Sessions.passes (ShopService: UserOwnsGamePassAsync /
 -- PromptGamePassPurchaseFinished).
 local ReplicatedStorage = game:GetService("ReplicatedStorage")

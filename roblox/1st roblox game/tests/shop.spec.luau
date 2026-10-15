@@ -342,7 +342,6 @@ H.test("robux: the agreed Speed, Money and Treadmill products, all id = 0 stubs;
 	end
 	H.eq(amounts("Speed", "amount"), "25000/9 150000/36 250000/64 750000/76 3000000/560 10000000/1200 25000000/1600 50000000/2400")
 	H.eq(amounts("Money", "amount"), "24000/40 200000/80 800000/200 4000000/400 8000000/640")
-	H.eq(amounts("Money", "minutes"), "10/40 30/80 60/200 180/400 360/640")
 	H.eq(amounts("TreadmillUpgrade", "tier"), "1/19 2/39 3/79")
 	H.eq(#Config.products("Treadmill"), 0, "the old direct x3/x5 products were replaced by one-tier upgrades")
 	H.eq(#Config.products("Dust"), 0, "Sleep Dust was removed")
@@ -444,39 +443,30 @@ H.test("robux: a failed save isn't confirmed and its retry doesn't grant twice",
 	H.eq(p.speed, 10e6)
 end)
 
-H.test("robux: Money packs pay max(fixed amount, N minutes of current income), once", function()
-	local P = Config.DEVELOPER_PRODUCTS
-	-- a new player gets the fixed amounts
+H.test("robux: Money packs pay a fixed amount, whatever you earn (owner 2026-10-15), once", function()
+	local want = { Money24K = 24e3, Money200K = 200e3, Money800K = 800e3, Money4M = 4e6, Money8M = 8e6 }
+	local labels = { Money24K = "Pocket Cash", Money200K = "Cash Bag", Money800K = "Cash Stack", Money4M = "Cash Crate", Money8M = "Cash Vault" }
 	for _, e in Config.products("Money") do
-		H.eq(Config.moneyPackAmount(e.product, 0), e.product.amount, e.name)
-		H.eq(Config.moneyPackAmount(e.product, -5), e.product.amount, "negative income is ignored")
+		H.eq(e.product.label, labels[e.name], e.name)
+		H.eq((e.product :: any).minutes, nil, `{e.name}: no minutes-of-income share any more`)
+		H.eq(Config.moneyPackAmount(e.product), want[e.name], e.name)
 	end
-	-- a late-game player gets minutes of income instead
+	-- a late-game player gets the same fixed amount
 	local income = 1e9
-	H.eq(Config.moneyPackAmount(P.Money24K, income), 10 * 60 * income)
-	H.eq(Config.moneyPackAmount(P.Money8M, income), 360 * 60 * income)
-	-- the crossover: exactly where N minutes of income beat the fixed amount
-	local cross = P.Money200K.amount / (P.Money200K.minutes * 60)
-	H.eq(Config.moneyPackAmount(P.Money200K, cross * 0.5), 200e3)
-	H.eq(Config.moneyPackAmount(P.Money200K, cross * 2), 400e3)
-	-- bigger packs are always worth more
-	for _, inc in { 0, 10, 1e4, 1e8, 1e12 } do
-		local last = 0
-		for _, e in Config.products("Money") do
-			local amount = Config.moneyPackAmount(e.product, inc)
-			H.ok(amount > last, `{e.name} at income {inc}`)
-			last = amount
-		end
-	end
-	-- the receipt pays what the card showed (the same income), once
 	local p = ProfileStore.defaultProfile()
 	local _, status, grant = Shop.processReceipt(p, "Money4M", "m-1", income, never, yes)
 	H.eq(status, "granted")
-	H.eq(grant.compensation, 180 * 60 * income)
-	H.eq(p.money, 180 * 60 * income)
+	H.eq(grant.compensation, 4e6)
+	H.eq(p.money, 4e6)
 	Shop.processReceipt(p, "Money4M", "m-1", income, never, yes)
-	H.eq(p.money, 180 * 60 * income, "paid once")
+	H.eq(p.money, 4e6, "paid once")
 	H.ok(string.find(grant.label, "Cash Crate"), grant.label)
+	_, _, grant = Shop.processReceipt(p, "Money24K", "m-2", 1e12, never, yes)
+	H.eq(grant.compensation, 24e3, "Pocket Cash is always $24K")
+	-- the Shop card shows the fixed amount, set once (no income watcher)
+	local hud = string.gsub(require("@lune/fs").readFile("src/client/HUD.client.luau"), "\r", "")
+	H.ok(string.find(hud, "+{Format.money(Config.moneyPackAmount(entry.product))}</font> CASH`", 1, true) ~= nil, "the card's amount")
+	H.ok(not string.find(hud, "moneyPackAmount(entry.product, stats.income", 1, true), "never scaled by income")
 end)
 
 ----------------------------------------------------------------------------------------------------

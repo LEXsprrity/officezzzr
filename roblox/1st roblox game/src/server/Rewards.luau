@@ -57,18 +57,19 @@ function Rewards.claimGift(p: Profile, groupId: number, isMember: () -> boolean?
 	return "granted"
 end
 
--- What the player is told after a claim.
-function Rewards.giftMessage(result: GiftResult): (string, string)
+-- What the player is told after a claim: the words, the toast's colour and its icon (Shared/Toast.ICONS; nil:
+-- the colour's own, red's lock). The Speed it grants shows the sneaker, not the cash.
+function Rewards.giftMessage(result: GiftResult): (string, string, string?)
 	if result == "granted" then
-		return `🎁 +{Format.commas(Config.FREE_GIFT_SPEED)} Speed! Thanks for joining the community!`, "gold"
+		return `+{Format.commas(Config.FREE_GIFT_SPEED)} Speed! Thanks for joining the community!`, "gold", "Speed"
 	elseif result == "soon" then
-		return "🎁 The Free Gift is coming soon!", "blue"
+		return "The Free Gift is coming soon!", "blue", "Gift"
 	elseif result == "claimed" then
-		return "🎁 You already claimed the Free Gift.", "blue"
+		return "You already claimed the Free Gift.", "blue", "Gift"
 	elseif result == "notMember" then
-		return `Join the {Config.COMMUNITY_NAME} community on the game page first, then press CLAIM! (Just joined? Give it a minute.)`, "red"
+		return `Join the {Config.COMMUNITY_NAME} community on the game page first, then press CLAIM! (Just joined? Give it a minute.)`, "red", nil
 	end
-	return "Couldn't check the community right now. Try again in a moment.", "red"
+	return "Couldn't check the community right now. Try again in a moment.", "red", nil
 end
 
 -- Whether the window should open by itself now (once per account, only while there is something to

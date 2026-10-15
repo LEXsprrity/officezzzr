@@ -213,15 +213,16 @@ local function bold(parent: Instance, thickness: number, props: { [string]: any 
 end
 
 -- Speed and money, big like the reference HUD (owner 2026-10-15: "about 2x bigger"): huge chunky italic
--- numbers with a thick dark outline, the icons left of them. Named "Stats": VipHudBadge.client puts the VIP
--- badge on top of it. Its "Fit" scale keeps it left of the hotbar on narrow screens (fitLeftColumn).
+-- numbers with a thick dark outline, the icons left of them (no VIP badge over it any more: owner 2026-10-15;
+-- the VIP tag over the head stays). Its "Fit" scale keeps it left of the hotbar on narrow screens (fitLeftColumn).
 local statsFrame = new("Frame", {
 	Name = "Stats", BackgroundTransparency = 1, AnchorPoint = Vector2.new(0, 1), Position = UDim2.new(0, 14, 1, -STATS_BOTTOM),
 	Size = UDim2.fromOffset(470, STATS_H), Parent = gui,
 }, { new("UIScale", { Name = "Fit" }) })
 iconLabel(statsFrame, "Speed", "⚡", { Size = UDim2.fromOffset(84, 84) })
 local speedValue = bold(statsFrame, 6, {
-	Text = "0", Size = UDim2.new(1, -100, 0, 80), Position = UDim2.fromOffset(98, 2), TextXAlignment = Enum.TextXAlignment.Left, TextColor3 = SPEED_PINK,
+	-- (narrower than the money: its "+" badge rides at its right end, inside the readout)
+	Text = "0", Size = UDim2.new(1, -152, 0, 80), Position = UDim2.fromOffset(98, 2), TextXAlignment = Enum.TextXAlignment.Left, TextColor3 = SPEED_PINK,
 	FontFace = Font.new("rbxasset://fonts/families/Montserrat.json", Enum.FontWeight.Heavy, Enum.FontStyle.Italic),
 })
 iconLabel(statsFrame, "Money", "💰", { Size = UDim2.fromOffset(84, 84), Position = UDim2.fromOffset(0, 92) })
@@ -231,16 +232,29 @@ local moneyValue = bold(statsFrame, 6, {
 })
 UiFx.relief(speedValue, 6, 6) -- raised, not flat: a dropped dark copy behind, a bevel, a thick outline
 UiFx.relief(moneyValue, 6, 6)
--- The Speed icon and its yellow "+" badge both open the Shop on the Speed section.
+-- The Speed icon and its yellow "+" badge both open the Shop on the Speed section. The "+" sits just past the
+-- Speed number's right end (owner 2026-10-15: on the sneaker's corner it covered the digits), following it as
+-- the number grows; the number is 52 narrower than the money (1, -152) so the badge always fits beside it.
 new("TextButton", { BackgroundTransparency = 1, Text = "", Size = UDim2.fromOffset(84, 84), Parent = statsFrame }).Activated:Connect(function()
 	openShopAt("Speed")
 end)
 local plusBadge = new("TextButton", {
-	Size = UDim2.fromOffset(40, 40), Position = UDim2.fromOffset(54, 50), BackgroundColor3 = Color3.fromRGB(255, 210, 40), Text = "",
-	AutoButtonColor = true, Parent = statsFrame,
+	Name = "Plus", Size = UDim2.fromOffset(44, 44), AnchorPoint = Vector2.new(0, 0.5), Position = UDim2.fromOffset(98 + 10, 42),
+	BackgroundColor3 = Color3.fromRGB(255, 210, 40), Text = "", AutoButtonColor = true, Parent = statsFrame,
 }, deco(4, 4))
 ShopUi.studs(plusBadge, Color3.fromRGB(255, 210, 40))
 UiFx.relief(bold(plusBadge, 4, { Text = "+", Size = UDim2.new(1, -6, 1, -6), Position = UDim2.fromOffset(3, 1) }), 2, 4)
+do
+	-- TextBounds are on-screen pixels: back to the readout's design pixels (its "Fit" and the HUD's scale)
+	local function placePlus()
+		local shown = speedValue.AbsoluteSize.Y
+		local wide = if shown > 0 then speedValue.TextBounds.X * 80 / shown else 0
+		plusBadge.Position = UDim2.fromOffset(math.min(98 + wide + 10, 470 - 44), 42)
+	end
+	speedValue:GetPropertyChangedSignal("TextBounds"):Connect(placePlus)
+	speedValue:GetPropertyChangedSignal("AbsoluteSize"):Connect(placePlus)
+	placePlus()
+end
 plusBadge.Activated:Connect(function()
 	openShopAt("Speed")
 end)
@@ -255,7 +269,7 @@ local leftColumn = new("Frame", {
 local leftScale = new("UIScale", { Parent = leftColumn })
 
 -- Wide vivid buttons (owner reference 2026-10-15): about 2.6:1, near-square corners, a thick dark outline,
--- a flat colour with a lighter top and a darker bottom edge (ShopUi.bevel), the icon on the left and the
+-- a flat colour, studded, with a lighter top (ShopUi.bevel; no dark bottom band), the icon on the left and the
 -- word in big white relief on its right.
 local function sideButton(order: number, label: string, icon: string, emoji: string, color: Color3, onClick: () -> ())
 	-- The column lays out the holder; the button sits centred in it so its hover pop grows from the middle.
@@ -332,8 +346,8 @@ local function fitLeftColumn()
 	-- the readout first: left of the hotbar (centred, under 200 wide), never over it
 	local fit = statsFrame:FindFirstChild("Fit") :: UIScale
 	fit.Scale = math.clamp((gui.AbsoluteSize.X / uiScale.Scale / 2 - 110 - 14) / 470, 0.5, 1)
-	-- from the middle of the screen down to the readout and the VIP badge over it (VipHudBadge.client, 64)
-	local room = height / 2 - STATS_BOTTOM - STATS_H * fit.Scale - 64 * fit.Scale - 10
+	-- from the middle of the screen down to the readout
+	local room = height / 2 - STATS_BOTTOM - STATS_H * fit.Scale - 10
 	leftScale.Scale = math.clamp(room / (LEFT_H / 2), 0.5, 1)
 end
 
@@ -476,6 +490,68 @@ button(rightTabs, "🪴", Color3.fromRGB(110, 235, 80), UDim2.fromOffset(70, 70)
 	renderSide()
 end, "Plants")
 
+-- Shop shortcuts (owner reference 2026-10-15): a column of three big icons on the right edge, above the
+-- Plants button: Featured (a red price tag with a "%", drawn), Speed (the sneaker), Money (the cash), each
+-- with its word in white relief under it, no box; they pop on hover (UiFx.watch) and open the Shop at
+-- their section (openShopAt: FEATURED = the seed packs, SPEED, MONEY).
+do
+	local ICON, WORD, GAP = 66, 24, 4 -- design pixels
+	local column = new("Frame", {
+		Name = "ShopShortcuts", BackgroundTransparency = 1, AnchorPoint = Vector2.new(1, 1), Position = UDim2.new(1, -10, 0.45, -48),
+		Size = UDim2.fromOffset(96, 3 * (ICON + WORD) + 2 * GAP), Parent = gui,
+	}, { new("UIListLayout", { Padding = UDim.new(0, GAP), SortOrder = Enum.SortOrder.LayoutOrder, HorizontalAlignment = Enum.HorizontalAlignment.Center }) })
+	-- The Featured icon: a red tag tilted up, its point on the left with a white hole, a yellow "%" in relief
+	local function drawTag(parent: GuiObject)
+		local RED, DARK_RED = Color3.fromRGB(235, 45, 55), Color3.fromRGB(150, 15, 30)
+		local tag = new("Frame", {
+			Name = "Tag", AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.56, 0.5), Size = UDim2.fromOffset(44, 34), Rotation = -32,
+			BackgroundColor3 = RED, BorderSizePixel = 0, ZIndex = 3, Parent = parent,
+		}, {
+			new("UIStroke", { Thickness = 3, Color = INK, LineJoinMode = Enum.LineJoinMode.Round }),
+			new("UIGradient", { Rotation = 90, Color = ColorSequence.new(RED:Lerp(WHITE, 0.15), RED:Lerp(DARK_RED, 0.5)) }),
+		})
+		new("Frame", { -- the point: a square turned 45 degrees behind the tag's left end
+			Name = "Point", AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.new(0, 0, 0.5, 0), Size = UDim2.fromOffset(24, 24), Rotation = 45,
+			BackgroundColor3 = RED, BorderSizePixel = 0, ZIndex = 2, Parent = tag,
+		}, {
+			new("UIStroke", { Thickness = 3, Color = INK, LineJoinMode = Enum.LineJoinMode.Round }),
+			new("UIGradient", { Rotation = 45, Color = ColorSequence.new(RED:Lerp(WHITE, 0.15), RED:Lerp(DARK_RED, 0.5)) }),
+		})
+		new("Frame", { -- hides the tag's outline where the point joins it
+			Name = "Join", AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.new(0, 0, 0.5, 0), Size = UDim2.new(0, 8, 1, -4),
+			BackgroundColor3 = RED, BorderSizePixel = 0, ZIndex = 4, Parent = tag,
+		})
+		new("Frame", { -- the hole
+			Name = "Hole", AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.new(0, -2, 0.5, 0), Size = UDim2.fromOffset(9, 9),
+			BackgroundColor3 = WHITE, ZIndex = 5, Parent = tag,
+		}, { new("UICorner", { CornerRadius = UDim.new(0.5, 0) }), new("UIStroke", { Thickness = 2, Color = INK }) }) -- round: a hole (art)
+		UiFx.relief(bold(tag, 3, {
+			Name = "Percent", Text = "%", Size = UDim2.new(1, -6, 1, -2), Position = UDim2.fromOffset(6, 0), ZIndex = 6,
+			TextColor3 = Color3.fromRGB(255, 225, 60),
+		}), 2, 3)
+	end
+	local function shortcut(order: number, word: string, section: string, draw: (GuiObject) -> ())
+		local b = new("TextButton", {
+			Name = word, BackgroundTransparency = 1, Text = "", Size = UDim2.fromOffset(96, ICON + WORD), LayoutOrder = order, Parent = column,
+		})
+		local art = new("Frame", {
+			Name = "Art", BackgroundTransparency = 1, AnchorPoint = Vector2.new(0.5, 0), Position = UDim2.fromScale(0.5, 0), Size = UDim2.fromOffset(ICON, ICON), Parent = b,
+		})
+		draw(art)
+		UiFx.relief(bold(b, 4, { Name = "Word", Text = word, Size = UDim2.new(1, 0, 0, WORD + 2), Position = UDim2.fromOffset(0, ICON - 4), ZIndex = 6 }), 3, 3)
+		b.Activated:Connect(function()
+			openShopAt(section)
+		end)
+	end
+	shortcut(1, "Featured", "Featured", drawTag)
+	shortcut(2, "Speed", "Speed", function(art: GuiObject)
+		iconLabel(art, "Speed", "⚡", { Size = UDim2.fromScale(1, 1), ZIndex = 3 })
+	end)
+	shortcut(3, "Money", "Money", function(art: GuiObject)
+		iconLabel(art, "Money", "💰", { Size = UDim2.fromScale(1, 1), ZIndex = 3 })
+	end)
+end
+
 ----------------------------------------------------------------------------------------------------
 -- Modals: Shop, Trail Shop, Index and Sell share one window, like the reference (owner 2026-10-15, round
 -- 2: "premium, more squared, no edges"): nothing is rounded. A flat bright title bar in the window's
@@ -530,7 +606,7 @@ local function bigIcon(parent: Instance, key: string, props: { [string]: any }):
 	return iconLabel(parent, key, if tokens then tokens[1] else "", props)
 end
 
--- A chunky button: square, a dark outline, a lighter top and a darker bottom edge (ShopUi.bevel), an
+-- A chunky button: square, a dark outline, studs, a lighter top (ShopUi.bevel; no dark bottom band), an
 -- outlined caption (with `icon` key(s) in place of emoji/"R$").
 local function chunky(parent: Instance, label: string, color: Color3, size: UDim2, onClick: () -> (), icon: (string | { string })?, iconSize: number?): TextButton
 	local b = new("TextButton", { Size = size, BackgroundColor3 = color, BorderSizePixel = 0, Text = "", AutoButtonColor = true, Parent = parent }, { outline() })
@@ -1099,7 +1175,7 @@ end
 
 -- Gifting needs extra work (choosing a player, granting to them): the gift buttons are shown, not live yet.
 local function giftSoon()
-	toast("Gifting is coming soon!", "blue")
+	toast("Gifting is coming soon!", "blue", nil, "Gift")
 end
 
 ----------------------------------------------------------------------------------------------------
@@ -1282,30 +1358,33 @@ do
 			new("UIGradient", { Name = "Rainbow", Rotation = 35, Color = RAINBOW, Parent = stroke }) -- the rainbow frame
 			new("UIGradient", { Rotation = 90, Color = ColorSequence.new(Color3.fromRGB(150, 80, 255), Color3.fromRGB(40, 20, 110)), Parent = f })
 		else
-			new("UIGradient", { Rotation = 90, Color = ColorSequence.new(rarity.color:Lerp(WHITE, 0.1), rarity.color:Lerp(FRAME_INK, 0.55)), Parent = f })
+			-- a shade darker than before, so the rarity-coloured name and % read over it
+			new("UIGradient", { Rotation = 90, Color = ColorSequence.new(rarity.color:Lerp(FRAME_INK, 0.2), rarity.color:Lerp(FRAME_INK, 0.62)), Parent = f })
 			f.BackgroundTransparency = 0.15 -- the card's picture shows a little through
 		end
 		local top = if featured then 38 else 24
 		FlowerView.show(f, FlowerView.flower(zone, tile.rarity, tile.flower), {
 			size = UDim2.new(1, -8, 1, -(top + 4)), position = UDim2.fromOffset(4, top), zindex = 4, spin = featured, zoom = 1.25,
 		})
-		local name = bold(f, if featured then 4 else 2, {
+		-- the rarity's name and its % in the rarity's colour (owner 2026-10-15), thick dark outline, relief
+		local ink = if featured then COLORS.gold else SeedPacks.tileTextColor(tile.rarity)
+		local name = bold(f, if featured then 4 else 3, {
 			Text = if featured then "LEGENDARY" else rarity.id, Size = UDim2.new(1, -12, 0, top - 6), Position = UDim2.fromOffset(6, 4), ZIndex = 5,
-			TextColor3 = if featured then COLORS.gold else WHITE,
+			TextColor3 = ink,
 		})
-		if featured then
-			UiFx.relief(name, 3, 4)
-		end
+		UiFx.relief(name, 3, if featured then 4 else 3)
 		UiFx.relief(bold(f, 3, {
 			Text = SeedPacks.percent(tile.pct), Size = UDim2.new(1, -10, 0, if featured then 36 else 28), AnchorPoint = Vector2.new(0, 1),
 			Position = UDim2.new(0, 4, 1, -4), TextXAlignment = Enum.TextXAlignment.Right, ZIndex = 5,
-			TextColor3 = if featured then COLORS.gold else WHITE,
+			TextColor3 = ink,
 		}), 3, 3)
 	end
 
-	-- One wide card per pack, spanning the Shop. No Speed gate: anyone can buy them.
-	local function packCard(order: number, productName: string, product: Config.DevProduct, bagFull: boolean)
-		local pack = SeedPacks.packForProduct(product)
+	-- One wide card per pack, spanning the Shop, with its x1 and x10 buttons (SeedPacks.offers). No Speed
+	-- gate: anyone can buy them. `free`: the seed bag's free spaces (a pack is only prompted if it all fits).
+	local function packCard(order: number, offer: SeedPacks.Offer, free: number)
+		local productName = offer.single.name
+		local pack = offer.pack
 		local zone = Config.ZONES[pack.zone]
 		local c = cardFrame(modalBody, order, zone.ui, { Name = "Pack_" .. productName, Size = UDim2.new(1, -8, 0, L.PACK_H) })
 		local stroke = c:FindFirstChildOfClass("UIStroke") :: UIStroke
@@ -1378,11 +1457,20 @@ do
 				.. (if exclusive then ` · {exclusive.id} x{exclusive.income} income, only from packs` else ""),
 			Size = UDim2.new(1, -36, 0, 20), Position = UDim2.fromOffset(18, bottom + 32), TextColor3 = Color3.fromRGB(255, 245, 210), ZIndex = 3,
 		})
-		local buy = robuxBuy(robuxPrice(product), product.id, "Product:" .. productName, if bagFull then "Bag full!" else "1 Seed")
-		if bagFull then
-			buy.color = COLORS.disabled
+		-- "1 Seed" and "10 Seeds" (owner 2026-10-15, like the reference's "1 Egg" / "10 Eggs"), each a gift + R$
+		-- button; grey with "Bag full!" / "Need 10 free" when its seeds can't all fit (the server won't prompt it)
+		local buys: { Buy } = {}
+		for _, entry in { offer.single, offer.ten } do
+			local count = SeedPacks.count(entry.product)
+			local fits = count <= free
+			local caption = if fits then (if count > 1 then `{count} Seeds` else "1 Seed") elseif count > 1 and free > 0 then `Need {count} free` else "Bag full!"
+			local buy = robuxBuy(robuxPrice(entry.product), entry.product.id, "Product:" .. entry.name, caption)
+			if not fits then
+				buy.color = COLORS.disabled
+			end
+			table.insert(buys, buy)
 		end
-		buttonRow(c, PACK_W, L.PACK_H, L.bottomY(L.PACK_H, true), { buy })
+		buttonRow(c, PACK_W, L.PACK_H, L.bottomY(L.PACK_H, true), buys)
 	end
 
 	----------------------------------------------------------------------------------------------------
@@ -1545,11 +1633,12 @@ do
 		local shopSections: { [string]: GuiObject } = {}
 
 		-- Seed packs (Robux)
-		section("SEED PACKS", nextOrder(), HEADING_GOLD)
+		-- (the right edge's Featured shortcut opens the Shop here; owner 2026-10-15: "-- FEATURED --")
+		shopSections.Featured = section("FEATURED", nextOrder(), HEADING_GOLD)
 		local bagCount = SeedPacks.bagCount(stats.seedBag or {})
 		local bagFull = bagCount >= Config.SEED_BAG_MAX
-		for _, entry in Config.products("Pack") do
-			packCard(nextOrder(), entry.name, entry.product, bagFull)
+		for _, offer in SeedPacks.offers() do
+			packCard(nextOrder(), offer, Config.SEED_BAG_MAX - bagCount)
 		end
 		note(`Seed bag {bagCount}/{Config.SEED_BAG_MAX}{if bagFull then " (full: plant some first!)" else ""} · plant them from the Inventory in the Plants panel`, nextOrder())
 
@@ -1575,7 +1664,7 @@ do
 			end,
 		})
 
-		-- Speed (Robux), blue; the HUD's "+" on the Speed icon opens the Shop here
+		-- Speed (Robux), blue; the HUD's "+" by the Speed number and the right edge's Speed shortcut open the Shop here
 		shopSections.Speed = section("SPEED", nextOrder(), HEADING_GOLD)
 		banner(nextOrder(), "DoubleSpeed", "SPEED", CARD_COLORS.Speed, "Speed")
 		local grid = cardGrid(nextOrder())
@@ -1588,16 +1677,14 @@ do
 				if amount then `<font color="{number}">{amount}</font> {rest}` else string.upper(entry.product.label), level, "Speed")
 		end
 
-		-- Money (Robux), gold: the card shows what you'd get right now (fixed, or minutes of your income)
-		section("MONEY", nextOrder(), HEADING_CYAN)
+		-- Money (Robux), gold: each card's fixed amount (owner 2026-10-15: $24K ... $8M, whatever you earn)
+		shopSections.Money = section("MONEY", nextOrder(), HEADING_CYAN) -- (the right edge's Money shortcut opens it here)
 		banner(nextOrder(), "DoubleMoney", "MONEY", CARD_COLORS.Money, "Money")
 		grid = cardGrid(nextOrder())
 		local monies = Config.products("Money")
 		for i, entry in monies do
-			local _, amountLabel = productCard(grid, i, entry.name, entry.product, CARD_COLORS.Money, "", ShopArt.level(i, #monies), "Money")
-			watchMoney(function()
-				amountLabel.Text = `<font color="{NUMBER_GREEN}">+{Format.money(Config.moneyPackAmount(entry.product, stats.income or 0))}</font> CASH`
-			end)
+			productCard(grid, i, entry.name, entry.product, CARD_COLORS.Money,
+				`<font color="{NUMBER_GREEN}">+{Format.money(Config.moneyPackAmount(entry.product))}</font> CASH`, ShopArt.level(i, #monies), "Money")
 		end
 
 		-- Upgrades: the plot (also on the board at your plot's gate) and the treadmill's next tier (also on the
@@ -2111,9 +2198,18 @@ renderModal = function()
 	end
 	if not focused then
 		modalBody.CanvasPosition = keep
-		task.defer(function() -- again once the layout has sized the new canvas
-			if modal.Visible then
-				modalBody.CanvasPosition = keep
+		-- again once the layout has sized the new canvas (it can take a frame or two; until then Roblox clamps
+		-- the scroll up to the still-short canvas): only ever back down to where it was, never past it
+		local shownAs = modalName
+		task.spawn(function()
+			for _ = 1, 4 do
+				task.wait()
+				if not modal.Visible or modalName ~= shownAs then
+					return
+				end
+				if modalBody.CanvasPosition.Y < keep.Y then
+					modalBody.CanvasPosition = keep
+				end
 			end
 		end)
 	end
@@ -2203,6 +2299,27 @@ do
 		Name = "Continue", Text = "Click to continue", Size = UDim2.new(1, -40, 0, 30), Position = UDim2.new(0, 20, 1, -42),
 		TextColor3 = Color3.fromRGB(220, 220, 235), ZIndex = 5,
 	})
+	-- A x10 pack's results (owner 2026-10-15): a 2x5 grid of its seeds where the reel was, the best one lit
+	local GRID_GAP = 12
+	local grid = new("Frame", {
+		Name = "Grid", Position = UDim2.fromOffset(REEL_X, REEL_Y), Size = UDim2.fromOffset(REEL_W, 2 * CARD_H + GRID_GAP), BackgroundTransparency = 1,
+		Visible = false, ZIndex = 4, Parent = panel,
+	})
+	local gridNote = bold(panel, 3, {
+		Name = "GridNote", Text = "", Size = UDim2.new(1, -40, 0, 34), Position = UDim2.fromOffset(20, REEL_Y + 2 * CARD_H + GRID_GAP + 10),
+		TextColor3 = Color3.fromRGB(255, 245, 210), Visible = false, ZIndex = 5,
+	})
+	UiFx.relief(gridNote, 3, 3)
+	local function showGrid(on: boolean)
+		grid:ClearAllChildren()
+		grid.Visible, gridNote.Visible = on, false
+		reel.Visible = not on
+		for _, c in panel:GetChildren() do
+			if c.Name == "Pointer" then
+				(c :: GuiObject).Visible = not on
+			end
+		end
+	end
 	local closeButton = new("TextButton", { Size = UDim2.fromScale(1, 1), BackgroundTransparency = 1, Text = "", ZIndex = 30, Visible = false, Parent = revealGui })
 	closeButton:SetAttribute("NoPop", true) -- the whole screen: "Click to continue"
 
@@ -2214,7 +2331,8 @@ do
 
 	-- A reel card: a seed icon, the rarity on its own line, the mutation (if any) on a pill under it. All
 	-- text is scaled inside the card's padding, so "Uncommon" or "Celestial" always fits.
-	local function seedCard(parent: Instance, rarity: number, mutation: string?): Frame
+	-- `look`: the seed's zone and gene: its 3D seed look (FlowerView) instead of the Seeds icon (the x10 grid).
+	local function seedCard(parent: Instance, rarity: number, mutation: string?, look: { zone: number, gene: number? }?): Frame
 		local r = Config.RARITIES[rarity]
 		local mut = Config.mutationById(mutation)
 		local f = new("Frame", { Size = UDim2.fromOffset(CARD_W, CARD_H), BackgroundColor3 = WHITE, ZIndex = 3, Parent = parent }, deco(12, 3))
@@ -2223,8 +2341,17 @@ do
 		local inner = new("Frame", { Name = "Inner", BackgroundTransparency = 1, Size = UDim2.fromScale(1, 1), ZIndex = 3, Parent = f }, {
 			new("UIPadding", { PaddingLeft = UDim.new(0, 10), PaddingRight = UDim.new(0, 10), PaddingTop = UDim.new(0, 8), PaddingBottom = UDim.new(0, 10) }),
 		})
-		bigIcon(inner, "Seeds", { Size = UDim2.fromScale(0.5, 0.32), AnchorPoint = Vector2.new(0.5, 0),
-			Position = UDim2.fromScale(0.5, 0), ZIndex = 3 })
+		local seedModel = look and FlowerView.seed(look.zone, look.gene)
+		if seedModel then
+			local view = new("Frame", {
+				Name = "Seed3D", BackgroundTransparency = 1, Size = UDim2.fromScale(0.8, 0.36), AnchorPoint = Vector2.new(0.5, 0),
+				Position = UDim2.fromScale(0.5, 0), ZIndex = 4, Parent = inner,
+			})
+			FlowerView.show(view, seedModel, { zindex = 4, spin = true, zoom = 1.2 })
+		else
+			bigIcon(inner, "Seeds", { Size = UDim2.fromScale(0.5, 0.32), AnchorPoint = Vector2.new(0.5, 0),
+				Position = UDim2.fromScale(0.5, 0), ZIndex = 3 })
+		end
 		local name = bold(inner, 3, { Name = "Rarity", Text = r.id, Size = UDim2.fromScale(1, 0.24), Position = UDim2.fromScale(0, 0.38), ZIndex = 4 })
 		new("UITextSizeConstraint", { MaxTextSize = 30, Parent = name })
 		if mut then
@@ -2270,6 +2397,17 @@ do
 		if not pack or type(best) ~= "table" or not Config.RARITIES[best.rarity] or not Config.ZONES[best.zone] then
 			return
 		end
+		-- A x10 pack: all its seeds (the reel still lands on the best, then the grid shows them all)
+		local results = {}
+		if type(data.results) == "table" then
+			for _, r in data.results do
+				if #results < 10 and type(r) == "table" and Config.RARITIES[r.rarity] and Config.ZONES[r.zone] then
+					table.insert(results, r)
+				end
+			end
+		end
+		local multi = #results > 1
+		showGrid(false)
 
 		revealTitle.Text = `Opening {data.name}...`
 		resultLabel.Visible, resultSub.Visible, continueHint.Visible, closeButton.Visible, viewHolder.Visible = false, false, false, false, false
@@ -2302,7 +2440,7 @@ do
 		revealGui.Visible = true
 
 		local finalX = REEL_W / 2 - ((REEL_TARGET - 1) * step + CARD_W / 2) + (math.random() - 0.5) * CARD_W * 0.6
-		local tween = TweenService:Create(strip, TweenInfo.new(if fast then 1.3 else 3.6, Enum.EasingStyle.Quint, Enum.EasingDirection.Out), {
+		local tween = TweenService:Create(strip, TweenInfo.new(if fast or multi then 1.3 else 3.6, Enum.EasingStyle.Quint, Enum.EasingDirection.Out), {
 			Position = UDim2.fromOffset(finalX, y),
 		})
 		local lastIndex = -1
@@ -2334,15 +2472,48 @@ do
 		end
 		burstAt(color, best.rarity >= 4 or mut ~= nil)
 		landSound:Play()
-		viewHolder.BackgroundColor3 = color
-		viewHolder.Visible = true
-		FlowerView.show(viewHolder, FlowerView.seed(best.zone, tonumber(best.gene)), { zindex = 5, spin = true, zoom = 1.3 })
-		resultLabel.Text = `{if mut then string.upper(mut.id) .. " " else ""}{string.upper(rarity.id)}!`
-		resultLabel.TextColor3 = color
-		resultLabel.Visible = true
-		local exclusive = best.mutation ~= nil and best.mutation == pack.exclusive
-		resultSub.Text = `{if exclusive then "PACK EXCLUSIVE! " else ""}{SeedPacks.seedName(best.zone, best.rarity, best.mutation)} → your Inventory`
-		resultSub.Visible = true
+		if multi then
+			task.wait(0.7)
+			local bestIndex = 1
+			for i, r in results do
+				if SeedPacks.better(r, results[bestIndex]) then
+					bestIndex = i
+				end
+			end
+			revealTitle.Text = `{data.name}: {#results} seeds!`
+			showGrid(true)
+			for i, r in results do
+				local col, row = (i - 1) % 5, (i - 1) // 5
+				local gridCard = seedCard(grid, r.rarity, r.mutation, { zone = r.zone, gene = tonumber(r.gene) })
+				gridCard.Name = "Seed" .. i
+				gridCard.AnchorPoint = Vector2.new(0.5, 0.5)
+				gridCard.Position = UDim2.fromOffset(col * (CARD_W + (REEL_W - 5 * CARD_W) / 4) + CARD_W / 2, row * (CARD_H + GRID_GAP) + CARD_H / 2)
+				local pop = new("UIScale", { Scale = 0.3, Parent = gridCard })
+				TweenService:Create(pop, TweenInfo.new(0.25, Enum.EasingStyle.Back, Enum.EasingDirection.Out), { Scale = if i == bestIndex then 1.06 else 1 }):Play()
+				if i == bestIndex then -- the best one: a thick gold frame and a BEST! tag
+					local s = gridCard:FindFirstChildOfClass("UIStroke")
+					if s then
+						s.Color, s.Thickness = COLORS.gold, 6
+					end
+					gridCard.ZIndex = 5
+					UiFx.relief(ShopUi.tag(gridCard, "BEST!", UDim2.new(0.5, -40, 0, -14), UDim2.fromOffset(80, 28), 8), 2, 3)
+				end
+				tickSound:Play()
+				task.wait(0.06)
+			end
+			gridNote.Text = `Best: {SeedPacks.seedName(results[bestIndex].zone, results[bestIndex].rarity, results[bestIndex].mutation)} · all {#results} → your Inventory`
+			gridNote.Visible = true
+		else
+			viewHolder.BackgroundColor3 = color
+			viewHolder.Visible = true
+			FlowerView.show(viewHolder, FlowerView.seed(best.zone, tonumber(best.gene)), { zindex = 5, spin = true, zoom = 1.3 })
+			resultLabel.Text = `{if mut then string.upper(mut.id) .. " " else ""}{string.upper(rarity.id)}!`
+			resultLabel.TextColor3 = color
+			resultLabel.Visible = true
+			local exclusive = best.mutation ~= nil and best.mutation == pack.exclusive
+			resultSub.Text = `{if exclusive then "PACK EXCLUSIVE! " else ""}{SeedPacks.seedName(best.zone, best.rarity, best.mutation)} → your Inventory`
+			resultSub.Visible = true
+		end
 
 		continueHint.Visible = true
 		closeButton.Visible = true
@@ -2350,7 +2521,7 @@ do
 		local conn = closeButton.Activated:Connect(function()
 			closed = true
 		end)
-		local deadline = os.clock() + (if fast then 1.6 else 5)
+		local deadline = os.clock() + (if fast then (if multi then 3 else 1.6) elseif multi then 12 else 5)
 		while not closed and os.clock() < deadline do
 			task.wait(0.05)
 		end
@@ -2429,12 +2600,14 @@ local function refresh(changed: { [string]: any })
 	end
 end
 
-StatsUpdate.OnClientEvent:Connect(function(partial: { [string]: any })
-	for k, v in partial do
-		stats[k] = v
-	end
-	refresh(partial)
-end)
+do
+	-- Only what really changed (Shared/StatsDiff): the server re-sends unchanged values (the plants push's
+	-- `slots` every few seconds), which used to rebuild the open Shop and throw its scroll back up.
+	local StatsDiff = require(Shared:WaitForChild("StatsDiff"))
+	StatsUpdate.OnClientEvent:Connect(function(partial: { [string]: any })
+		refresh(StatsDiff.apply(stats, partial))
+	end)
+end
 
 ----------------------------------------------------------------------------------------------------
 -- Loot events -> toasts. Only what the player needs told: the server's messages (mostly why something
@@ -2444,7 +2617,7 @@ end)
 LootEvent.OnClientEvent:Connect(function(kind: string, data: any)
 	data = data or {}
 	if kind == "Toast" then
-		toast(data.text, data.color)
+		toast(data.text, data.color, nil, data.icon)
 	elseif kind == "Caught" then
 		toast(`The {data.guard} caught you! The seed went back to its nest.`, "red", 4)
 	elseif kind == "Bat" then

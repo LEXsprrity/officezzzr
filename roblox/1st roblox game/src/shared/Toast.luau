@@ -5,8 +5,10 @@
 --   * a square plate with a thick dark outline, in the toast's vivid colour (Toast.STYLES: red, gold, green,
 --     blue, purple) with the HUD's studs over it (ShopUi.studs), a lighter top band (ShopUi.bevel) and a soft
 --     shine sweeping across;
---   * a small icon on the left that says what it is about (Icons: the lock for errors, money for money, the
---     star for a Legendary; a drawn sun or moon for day and night);
+--   * a small icon on the left that says what it is about, chosen per message (Toast.ICONS: the sneaker for
+--     Speed, cash for money, the gift for the Free Gift, the lock for errors, the star for a Legendary, a drawn
+--     sun or moon for day and night), never guessed from the colour (owner 2026-10-15: "+25,000 Speed!" showed
+--     the cash). Only red (errors: the lock) and purple (luck: the star) bring an icon by default;
 --   * the words in big chunky white relief (UiFx.relief, a thick black outline);
 --   * Toast.show pops and slides it in, holds, then fades it out (a CanvasGroup fades it all as one).
 -- Server-wide announcements are `big`: taller, in gold, with a rainbow frame.
@@ -24,14 +26,25 @@ local BLACK = Color3.new(0, 0, 0)
 local new = ShopUi.new
 
 export type Style = { color: Color3, icon: string? }
--- Per colour name (what the server sends: Net.toast / Net.announce): the plate's colour and its default icon.
+-- Per colour name (what the server sends: Net.toast / Net.announce): the plate's colour and its default icon
+-- (none for gold, green and blue: a reward or news names its own icon, Toast.ICONS).
 Toast.STYLES = {
 	red = { color = Color3.fromRGB(235, 50, 60), icon = "Lock" }, -- refusals and errors
-	gold = { color = Color3.fromRGB(255, 180, 20), icon = "Money" }, -- money (offline earnings)
-	green = { color = Color3.fromRGB(60, 200, 70), icon = "Money" },
-	blue = { color = Color3.fromRGB(40, 150, 255), icon = nil }, -- news (day and night bring their own icon)
+	gold = { color = Color3.fromRGB(255, 180, 20), icon = nil }, -- rewards (money, Speed, the gift)
+	green = { color = Color3.fromRGB(60, 200, 70), icon = nil },
+	blue = { color = Color3.fromRGB(40, 150, 255), icon = nil }, -- news
 	purple = { color = Color3.fromRGB(160, 75, 255), icon = "Star" }, -- luck
 } :: { [string]: Style }
+-- The icon per kind of message (what senders pass as `icon`): Icons keys, or "Sun" / "Moon" (drawn).
+Toast.ICONS = {
+	speed = "Speed", -- Speed gains (the Free Gift's +Speed, a speed item equipped)
+	money = "Money", -- money (offline earnings, a pack paid out in cash)
+	gift = "Gift", -- the Free Gift, gifting
+	error = "Lock", -- refusals and errors
+	legendary = "Star", -- server-wide Legendary announcements, luck
+	day = "Sun",
+	night = "Moon",
+}
 Toast.DEFAULT = "blue"
 Toast.W, Toast.H = 540, 58 -- design pixels
 Toast.BIG_W, Toast.BIG_H = 680, 78 -- server-wide announcements
@@ -43,7 +56,7 @@ Toast.RAINBOW = ColorSequence.new({
 
 export type Options = {
 	color: string?, -- a Toast.STYLES name (default blue)
-	icon: string?, -- an Icons key, "Sun" or "Moon" (drawn); default: the style's; "" = none
+	icon: string?, -- an Icons key (Toast.ICONS), "Sun" or "Moon" (drawn); default: the style's; "" = none
 	big: boolean?, -- a server-wide announcement: bigger, a rainbow frame
 	seconds: number?, -- how long it holds (Toast.show; default 3)
 }
