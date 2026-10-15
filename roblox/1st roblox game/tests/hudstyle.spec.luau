@@ -123,8 +123,8 @@ H.test("studs: on every HUD element (left column, Plants panel, readout, windows
 	has(HUD, "local function trailCard(", "\n\tend\n", "ShopUi.studs(c, if t.rainbow then nil else t.color)", "Trail cards")
 	has(HUD, "local function renderIndex()", "\nend\n", "ShopUi.studs(row, zone.ui)", "Index rows")
 	has(HUD, "local function renderIndex()", "\nend\n", "ShopUi.studs(cell, if got then rarity.color else zone.ui)", "Index cells")
-	has(HUD, "local function sellCard(", "\n\tend\n", "ShopUi.studs(c, SELL_CARD)", "Sell cards")
-	has(HUD, "local function sellCard(", "\n\tend\n", "ShopUi.studs(band, rarity.color)", "Sell cards' bands")
+	has(HUD, "local function cardBase(", "\n\tend\n", "ShopUi.studs(c, body)", "Sell cards (their rarity's colour)")
+	has(HUD, "local function cardBase(", "\n\tend\n", "ShopUi.studs(band, rarity.color)", "Sell cards' bands")
 	H.ok(string.find(HUD, "ShopUi.studs(panel, Color3.fromRGB(75, 40, 140), nil, 1)", 1, true) ~= nil, "the pack reveal's panel")
 	H.ok(string.find(HUD, "ShopUi.studs(f, r.color, nil, 3)", 1, true) ~= nil, "the reveal's seed cards")
 	-- the Free Gift window: body and title bar in the same studs, its buttons too

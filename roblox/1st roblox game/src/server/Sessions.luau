@@ -35,6 +35,7 @@ export type Session = {
 	passes: { [string]: boolean },
 	cooldowns: { [string]: number },
 	requests: { number },
+	growNow: { [string]: number }, -- Grow Now product -> the plant id its last prompt was for (ProcessReceipt finishes that one)
 }
 
 local byPlayer: { [Player]: Session } = {}
@@ -53,6 +54,7 @@ function Sessions.create(player: Player, profile: ProfileStore.Profile, canSave:
 		passes = {},
 		cooldowns = {},
 		requests = {},
+		growNow = {},
 	}
 	byPlayer[player] = s
 	return s

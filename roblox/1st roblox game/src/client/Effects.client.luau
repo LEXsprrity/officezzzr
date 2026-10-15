@@ -26,10 +26,11 @@ local IncomePopup = remotes:WaitForChild("IncomePopup") :: RemoteEvent
 local StatsUpdate = remotes:WaitForChild("StatsUpdate") :: RemoteEvent
 
 ----------------------------------------------------------------------------------------------------
--- Income popups
+-- Money popups: "+$X" over the SELL stall after a sale. Plants earn silently (owner 2026-10-15: no popups
+-- over them; the server no longer sends any).
 ----------------------------------------------------------------------------------------------------
 local MAX_POPUPS = 40
-local POPUP_RANGE = 70 -- studs from the camera: plants pay every second, so only the ones near you pop
+local POPUP_RANGE = 70 -- studs from the camera
 local livePopups = 0
 
 IncomePopup.OnClientEvent:Connect(function(amount: number, position: Vector3)

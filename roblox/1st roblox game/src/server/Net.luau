@@ -4,8 +4,11 @@
 --       (developer products, Robux), "Pass:<name>" (gamepasses)
 --     RequestUseItem ids: "Bat", "Seed:<bagKey>" (plant from the seed bag), "Seed:inv:<id>" (plant a plant
 --       from the inventory again), "Equip:<trailId>"
---   client -> server: SellPlants(slots, ids?) (plant slots and inventory ids, sold at the SELL stall;
---     PlotService checks)
+--   client -> server: SellPlants(slots, ids?, seeds?) (plant slots, inventory ids and seed-bag seeds as
+--     { ["zone:rarity[:Mutation]"]: count }, sold at the SELL stall; PlotService and Selling check)
+--   RequestBuy "GrowNow:<plant id>": the Robux prompt that finishes one of your seedlings (PlotService
+--     .promptGrowNow); server -> client LootEvent "Sprouted" { slot, name, pos } when a seedling pops into
+--     its flower
 --   client -> server: RemovePlant(slot) (the HUD Plants panel's Remove button: one of your own plants, from
 --     anywhere, into your inventory, for no money; PlotService.removePlant rate-limits it, Inventory.take
 --     checks it)

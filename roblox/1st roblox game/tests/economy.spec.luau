@@ -228,9 +228,9 @@ H.test("day/night plants: offline income uses the time-weighted average multipli
 end)
 
 ----------------------------------------------------------------------------------------------------
--- Payouts every second: each plant's "+$X" popup is the $/s on its billboard
+-- Payouts every second, silently: no "+$X" popups over the plants (owner 2026-10-15)
 ----------------------------------------------------------------------------------------------------
-H.test("payout: every second, so a plant's income popup equals its billboard's $/s", function()
+H.test("payout: every second, one second of the billboard's $/s, with no popup over the plant", function()
 	H.eq(Config.PAYOUT_INTERVAL, 1)
 	local fs = require("@lune/fs")
 	local plot = fs.readFile("src/server/PlotService.luau")
@@ -238,10 +238,10 @@ H.test("payout: every second, so a plant's income popup equals its billboard's $
 	local b = string.find(plot, "function PlotService.start()", 1, true)
 	local body = a and b and string.sub(plot, a, b) or ""
 	H.ok(body ~= "", "the payout loop")
-	-- the popup and the label are fed the same number: earned = perSecond * PAYOUT_INTERVAL (= perSecond)
+	-- the money paid and the label are the same number: earned = perSecond * PAYOUT_INTERVAL (= perSecond)
 	H.ok(string.find(body, "local earned = perSecond * Config.PAYOUT_INTERVAL", 1, true) ~= nil, "earned per pass")
 	H.ok(string.find(body, "setIncomeLabel(incomeLabel, plant.zone, perSecond, isNight)", 1, true) ~= nil, "label shows perSecond")
-	H.ok(string.find(body, "Net.IncomePopup:FireClient(s.player, earned,", 1, true) ~= nil, "popup shows earned")
+	H.ok(not string.find(body, "IncomePopup", 1, true), "plants earn silently: no popup over them")
 	-- both go through Format.money: same text for every amount (fractional dollars round the same way)
 	for _, perSecond in { 0.4, 3.333, 5.33, 15.99, 109.5, 1234.5, 98765.4, 2.5e6 } do
 		H.eq(Format.money(perSecond * Config.PAYOUT_INTERVAL), Format.money(perSecond), `{perSecond}/s`)
@@ -257,7 +257,7 @@ H.test("payout: every second, so a plant's income popup equals its billboard's $
 	H.ok(string.find(fx, "local POPUP_RANGE = 70", 1, true) ~= nil and string.find(fx, "Magnitude > POPUP_RANGE then", 1, true) ~= nil, "near the camera only")
 	H.ok(string.find(fx, "local MAX_POPUPS = 40", 1, true) ~= nil, "a cap")
 	-- the Plants panel push (the bulkiest) keeps its old 3 s cadence
-	H.ok(string.find(body, "if payoutPass % PLANTS_PUSH_EVERY == 0 then", 1, true) ~= nil, "Plants view every 3 passes")
+	H.ok(string.find(body, "if sprouted or payoutPass % PLANTS_PUSH_EVERY == 0 then", 1, true) ~= nil, "Plants view every 3 passes (and when a seedling pops)")
 end)
 
 ----------------------------------------------------------------------------------------------------

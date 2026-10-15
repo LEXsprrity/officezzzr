@@ -108,6 +108,16 @@ local function onBuy(player: Player, itemId: any)
 		return
 	end
 
+	-- Grow now on one of your seedlings: "GrowNow:<plant id>" (PlotService.promptGrowNow picks the product
+	-- by its time left and checks it is yours and still sprouting).
+	if string.sub(itemId, 1, 8) == "GrowNow:" then
+		local slot = tonumber(string.match(itemId, "^GrowNow:(%d+)$"))
+		if slot and slot <= 1e9 then
+			PlotService.promptGrowNow(player, slot)
+		end
+		return
+	end
+
 	-- Robux: "Product:<name>". We only open the Robux prompt here; ProcessReceipt grants.
 	if string.sub(itemId, 1, 8) == "Product:" then
 		local name = string.match(itemId, "^Product:(%a%w*)$")
@@ -206,10 +216,19 @@ local function processReceipt(receiptInfo: { [string]: any }): Enum.ProductPurch
 	-- The income the HUD shows (live, with day/night, plot level and 2x Money): Money products pay
 	-- minutes of it, and a pack that can't fit the bag pays seconds of it.
 	local income = if s then s.income * Sessions.moneyMult(s) else 0
+	-- A Grow Now grows the plant its prompt was for (remembered per product in this server; none after a
+	-- rejoin: then Shop.grantGrowNow picks the seedling with the most time left).
+	local target = if s and name then { slot = s.growNow[name], now = os.time() } else nil
 	local confirm, status, grant = Shop.processReceipt(if s then s.profile else nil, name, tostring(receiptInfo.PurchaseId), income, roll01, function()
 		local save = ShopService.save
 		return s ~= nil and save ~= nil and save(s)
-	end)
+	end, target)
+	if s and name and status ~= "unavailable" then
+		s.growNow[name] = nil
+	end
+	if grant and grant.wasted then
+		warn(`[ShopService] Grow Now {receiptInfo.PurchaseId} for {receiptInfo.PlayerId}: no seedling left to grow`)
+	end
 	if s and status == "granted" and grant and s.player.Parent then
 		local kind = grant.product.kind
 		if kind == "Speed" then
@@ -220,6 +239,8 @@ local function processReceipt(receiptInfo: { [string]: any }): Enum.ProductPurch
 			PlotService.refreshSlots(s) -- the slot count and the board's next prices
 		elseif kind == "TreadmillUpgrade" then
 			PlotService.refreshTreadmill(s) -- the sign's tier and next prices
+		elseif kind == "GrowNow" then
+			PlotService.refreshSprouts(s) -- the seedling pops into its flower now
 		end
 		Sessions.pushFull(s)
 		local pack = grant.pack
@@ -240,14 +261,14 @@ local function processReceipt(receiptInfo: { [string]: any }): Enum.ProductPurch
 	return if confirm then Enum.ProductPurchaseDecision.PurchaseGranted else Enum.ProductPurchaseDecision.NotProcessedYet
 end
 
--- The Sell window at the SELL stall: a list of plant slots and one of inventory ids (PlotService.sellPlants
--- checks it all).
-local function onSell(player: Player, slots: any, ids: any)
+-- The Sell window at the SELL stall: a list of plant slots, one of inventory ids and the seed-bag seeds
+-- ({ [label]: count }; PlotService.sellPlants and Selling check it all).
+local function onSell(player: Player, slots: any, ids: any, seeds: any)
 	local s = Sessions.get(player)
 	if not s or type(slots) ~= "table" or not Sessions.allowRequest(s, REQUESTS_PER_SECOND) then
 		return
 	end
-	PlotService.sellPlants(player, slots, ids)
+	PlotService.sellPlants(player, slots, ids, seeds)
 end
 
 -- The planting preview: plant the carried seed (or bagged seed `bagKey`) at `position` (PlotService.plantAt

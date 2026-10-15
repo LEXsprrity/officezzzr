@@ -35,9 +35,10 @@ Catalog.KIND_ICONS = {
 	TreadmillUpgrade = "Treadmill",
 	Trail = "TrailShop",
 	PlotUpgrade = "PlotUpgrade",
+	GrowNow = "Seeds",
 } :: { [string]: string }
 Catalog.PASS_ICON = "Star" -- VIP has no Shop icon (a gold badge)
-Catalog.KIND_ORDER = { "Pack", "Speed", "Money", "TreadmillUpgrade", "Trail", "PlotUpgrade" }
+Catalog.KIND_ORDER = { "Pack", "Speed", "Money", "TreadmillUpgrade", "Trail", "PlotUpgrade", "GrowNow" }
 
 local function mult(x: number): string
 	return (string.gsub(string.format("%.2f", x), "%.?0+$", "")) .. "x"
@@ -78,6 +79,12 @@ local function productDescription(Config: any, Format: any, product: any): strin
 		error(`no trail {product.trail}`)
 	elseif kind == "PlotUpgrade" then
 		return `Upgrades your plot by one level. This one covers {levels(product.label)}.`
+	elseif kind == "GrowNow" then
+		local upTo = product.upTo or math.huge
+		if upTo == math.huge then
+			return "Your sprouting plant finishes growing right away and starts earning, however long it had left."
+		end
+		return `Your sprouting plant finishes growing right away and starts earning (up to {if upTo <= 60 then "1 minute" else duration(upTo // 60)} left).`
 	end
 	error(`no description for product kind {kind}`)
 end

@@ -250,7 +250,7 @@ H.test("inventory: the server wiring (Remove, plant from the inventory, sell ids
 		"local invId = inventoryId(bagKey)", -- PlantSeed with "inv:<id>"
 		"Inventory.remove(s.profile, invId)",
 		"plantSeed(player, s, state, x, z, zone, rarity, mutation, entry, gene, Planting.normalizeYaw(yaw))", -- planted again as it was (a seed: as its gene says)
-		"Selling.sell(s.profile, slots, distance, now, Sessions.moneyMult(s), ids, Sessions.growMult(s))",
+		"Selling.sell(s.profile, slots, distance, now, Sessions.moneyMult(s), ids, Sessions.growMult(s), seeds)",
 		"inventory = inventory, slots = Sessions.maxSlots(s)", -- the view
 	} do
 		H.ok(string.find(plot, needle, 1, true) ~= nil, needle)
@@ -258,12 +258,12 @@ H.test("inventory: the server wiring (Remove, plant from the inventory, sell ids
 	H.ok(not string.find(plot, "Selling.remove", 1, true) and not string.find(plot, "\"Sold\"", 1, true), "Remove pays nothing")
 	H.eq(Config.SELL_SECONDS, nil, "no refund constant left")
 	local shop = fs.readFile("src/server/ShopService.luau")
-	H.ok(string.find(shop, "PlotService.sellPlants(player, slots, ids)", 1, true) ~= nil, "SellPlants(slots, ids)")
+	H.ok(string.find(shop, "PlotService.sellPlants(player, slots, ids, seeds)", 1, true) ~= nil, "SellPlants(slots, ids, seeds)")
 	local hud = fs.readFile("src/client/HUD.client.luau")
 	H.ok(not string.find(hud, "renderSeeds", 1, true) and not string.find(hud, "{ \"Seeds\", \"🌱\" }", 1, true), "no Seeds menu")
 	H.ok(string.find(hud, "for _, name in { \"Plants\", \"Inventory\" } do", 1, true) ~= nil, "Plants / Inventory tabs")
 	H.ok(string.find(hud, "RequestUseItem:FireServer(\"Seed:\" .. key)", 1, true) ~= nil, "a Plant button per seed and inventory plant")
-	H.ok(string.find(hud, "SellPlants:FireServer(slots, ids)", 1, true) ~= nil, "the Sell window sells inventory plants too")
+	H.ok(string.find(hud, "SellPlants:FireServer(sale.slots, sale.ids, sale.seeds)", 1, true) ~= nil, "the Sell window sells inventory plants (and seeds) too")
 	H.ok(string.find(hud, "\"Seed bag full: plant or sell to make room for your seed!\"", 1, true) ~= nil, "a full bag is said in the panel")
 	H.ok(string.find(hud, "UiFx.relief(label, 3, 3)", 1, true) ~= nil, "in relief text")
 end)

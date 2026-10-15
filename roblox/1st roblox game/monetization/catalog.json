@@ -286,5 +286,21 @@
     "description": "Upgrades your plot by one level. This one covers levels 22 to 26.",
     "price": 799,
     "image": "icons/PlotUpgrade.png"
+  },
+  {
+    "key": "GrowNow10",
+    "kind": "product",
+    "name": "Grow Now (10 min)",
+    "description": "Your sprouting plant finishes growing right away and starts earning (up to 10 minutes left).",
+    "price": 9,
+    "image": "icons/Seeds.png"
+  },
+  {
+    "key": "GrowNow30",
+    "kind": "product",
+    "name": "Grow Now (30+ min)",
+    "description": "Your sprouting plant finishes growing right away and starts earning, however long it had left.",
+    "price": 29,
+    "image": "icons/Seeds.png"
   }
 ]

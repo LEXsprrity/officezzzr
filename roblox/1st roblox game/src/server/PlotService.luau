@@ -20,6 +20,7 @@ local Shop = require(script.Parent:WaitForChild("Shop"))
 local Selling = require(script.Parent:WaitForChild("Selling"))
 local Inventory = require(script.Parent:WaitForChild("Inventory"))
 local PlantGhosts = require(script.Parent:WaitForChild("PlantGhosts"))
+local Seedling = require(script.Parent:WaitForChild("Seedling"))
 local SpeedService = require(script.Parent:WaitForChild("SpeedService"))
 
 local TreadmillBoard = require(script.Parent:WaitForChild("TreadmillBoard"))
@@ -32,6 +33,7 @@ type PlotState = {
 	owner: Player?,
 	models: { [number]: Model }, -- by plant id (`slot`)
 	scales: { [number]: number },
+	sprouting: { [number]: boolean }, -- by plant id: its model is the seedling (swapped for the flower when it is done)
 	clicks: { ClickDetector }, -- the Upgrade boards' click/tap targets (both boards), owner-only
 }
 
@@ -54,10 +56,13 @@ local sellStalls: { BasePart } = {} -- the SELL stalls' prompt parts (WorldBuild
 -- Pure-ish helpers (also used for offline income)
 ----------------------------------------------------------------------------------------------------
 -- `growMult`: the owner's Fast Grow (Sessions.growMult; 1 when nil), so their plants are as big as they
--- grew, offline time included.
+-- grew, offline time included. A seedling (Config.isSprouting) earns nothing yet.
 function PlotService.plantStats(plant: ProfileStore.Plant, now: number, growMult: number?): (number, number)
 	local variance = Config.varianceOf(plant)
 	local weight = Config.plantWeight(plant.zone, plant.rarity, Config.plantAge(plant.plantedAt, now, growMult), variance)
+	if Config.isSprouting(plant, now) then
+		return weight, 0
+	end
 	return weight, Config.plantIncome(plant.zone, plant.rarity, weight, plant.mutation)
 end
 
@@ -88,6 +93,21 @@ function PlotService.offlineIncomeOf(profile: ProfileStore.Profile, now: number,
 	for _, plant in profile.plants do
 		local _, income = PlotService.plantStats(plant, now, growMult)
 		total += income * Config.averageTimeMult(plant.zone)
+	end
+	return total
+end
+
+-- What the plants earned over the last `away` seconds before `now` (before money multipliers): each one
+-- its offline $/s for the part of that time after it sprouted (sprouting goes on offline; a seedling
+-- earns nothing until it is done).
+function PlotService.offlineEarnings(profile: ProfileStore.Profile, now: number, away: number, growMult: number?): number
+	local total = 0
+	for _, plant in profile.plants do
+		local earning = math.clamp(now - (plant.sproutUntil or -math.huge), 0, away)
+		if earning > 0 then
+			local _, income = PlotService.plantStats(plant, now, growMult)
+			total += income * Config.averageTimeMult(plant.zone) * earning
+		end
 	end
 	return total
 end
@@ -127,13 +147,21 @@ function PlotService.plantName(plant: ProfileStore.Plant): string
 	return `{prefix}{Format.plantName(variant)}`
 end
 
+local SPROUTING_INK = Color3.fromRGB(200, 240, 170)
 local function buildPlantModel(state: PlotState, plant: ProfileStore.Plant, weight: number, income: number, scale: number): Model
 	local rarity = Config.RARITIES[plant.rarity]
 	local mut = Config.mutationById(plant.mutation)
 	-- The creature (with its rarity/mutation flair and "Mutation" attribute) comes from CreatureModels,
-	-- built at the origin; it is pivoted onto the slot below.
-	local model = CreatureModels.build(plant.zone, plant.rarity, plant.mutation, CreatureModels.pickOf(plant.zone, plant.rarity, plant.variant, plant.slot))
+	-- built at the origin; it is pivoted onto the slot below. While it sprouts: the seedling instead, with
+	-- its end time and owner as attributes (Client/Sprouts shows the countdown and the owner's Grow now).
+	local sprouting = Config.isSprouting(plant, os.time())
+	local model = if sprouting then Seedling.build(plant.zone, plant.rarity, plant.mutation)
+		else CreatureModels.build(plant.zone, plant.rarity, plant.mutation, CreatureModels.pickOf(plant.zone, plant.rarity, plant.variant, plant.slot))
 	model.Name = "Plant_" .. plant.slot
+	if sprouting then
+		model:SetAttribute("SproutUntil", plant.sproutUntil)
+		model:SetAttribute("OwnerUserId", if state.owner then state.owner.UserId else 0)
+	end
 	local body = model.PrimaryPart :: BasePart
 
 	-- Info billboard (text refreshed by the payout loop). It hangs on an attachment at the creature's top,
@@ -169,14 +197,25 @@ local function buildPlantModel(state: PlotState, plant: ProfileStore.Plant, weig
 	end
 	line("Name", PlotService.plantName(plant), if mut then mut.color else rarity.color, 1)
 	local isNight = Config.dayPhase(os.time())
-	setIncomeLabel(line("Income", "", INCOME_GREEN, 3), plant.zone, income * Config.timeMult(plant.zone, isNight), isNight)
+	local incomeLine = line("Income", "", INCOME_GREEN, 3)
+	if sprouting then
+		incomeLine.Name = "Sprouting" -- (the payout loop leaves it be; the countdown is the client's)
+		incomeLine.Text = "Sprouting"
+		incomeLine.TextColor3 = SPROUTING_INK
+	else
+		setIncomeLabel(incomeLine, plant.zone, income * Config.timeMult(plant.zone, isNight), isNight)
+	end
 	-- No prompt on the plant: it is removed from the HUD's Plants panel (remote RemovePlant).
 
 	-- Stand on the dirt facing the entrance. The pivot is on the dirt, so ScaleTo grows the creature from
 	-- the ground up. Scale before parenting: one replication, not two.
 	local rest = restOf(state.info, plant)
 	model:PivotTo(rest)
-	CreatureModels.applyScale(model, scale)
+	if sprouting then
+		model:SetAttribute("Scale", 1) -- (the seedling keeps its size)
+	else
+		CreatureModels.applyScale(model, scale)
+	end
 	model:SetAttribute("RestPivot", rest) -- the client's idle sway (Effects.client) animates around this
 	model.Parent = state.info.plants
 	return model
@@ -190,6 +229,7 @@ local function removePlantModel(state: PlotState, slot: number)
 	end
 	state.models[slot] = nil
 	state.scales[slot] = nil
+	state.sprouting[slot] = nil
 end
 
 local function spawnPlant(state: PlotState, plant: ProfileStore.Plant, now: number, growMult: number)
@@ -197,6 +237,7 @@ local function spawnPlant(state: PlotState, plant: ProfileStore.Plant, now: numb
 	local scale = plantScale(plant, weight)
 	state.models[plant.slot] = buildPlantModel(state, plant, weight, income, scale)
 	state.scales[plant.slot] = scale
+	state.sprouting[plant.slot] = Config.isSprouting(plant, now) or nil
 end
 
 local function clearPlants(state: PlotState)
@@ -205,6 +246,7 @@ local function clearPlants(state: PlotState)
 	end
 	state.models = {}
 	state.scales = {}
+	state.sprouting = {}
 end
 
 ----------------------------------------------------------------------------------------------------
@@ -223,6 +265,7 @@ local function pushPlants(s: Sessions.Session, now: number)
 			-- x/z: where it stands in the plot's space (the planting preview keeps new plants clear of it)
 			slot = plant.slot, zone = plant.zone, rarity = plant.rarity, mutation = plant.mutation, weight = weight, income = income,
 			x = plant.x, z = plant.z,
+			sproutUntil = if Config.isSprouting(plant, now) then plant.sproutUntil else nil, -- a seedling: when it is done (the card's countdown, Grow now)
 			name = PlotService.plantName(plant), -- "Gold Daisy": its flower model's name (the Plants panel, the Sell cards)
 			flower = CreatureModels.flowerOf(plant.zone, plant.rarity, plant.variant, plant.slot), -- its model ("Daisy"): the HUD's 3D picture
 			sell = Selling.price(plant, now, mult, grow),
@@ -234,6 +277,7 @@ local function pushPlants(s: Sessions.Session, now: number)
 		local plant = Inventory.asPlant(entry, now)
 		table.insert(inventory, {
 			id = entry.id, zone = entry.zone, rarity = entry.rarity, mutation = entry.mutation, weight = Inventory.weight(entry),
+			sprout = entry.sprout, -- seconds of sprouting it still has (planted again, it sprouts on)
 			name = PlotService.plantName(plant), sell = Selling.price(plant, now, mult),
 			flower = CreatureModels.flowerOf(plant.zone, plant.rarity, plant.variant, plant.slot),
 		})
@@ -302,6 +346,11 @@ local function plantSeed(player: Player, s: Sessions.Session, state: PlotState, 
 		else PlantGhosts.seedPlant(zone, rarity, mutation, gene, slot, now, x, z, flowerRoll)
 	if not from then
 		plant.yaw = yaw -- (nil: facing the entrance)
+		-- A fresh seed sprouts first (Config.sproutTime; Fast Grow halves it), earning nothing; its growth
+		-- starts when it is done. Its variance is fixed now, so moving plantedAt never changes its size.
+		plant.variance = Config.varianceOf(plant)
+		plant.sproutUntil = now + Config.sproutTime(zone, rarity, Sessions.growMult(s))
+		plant.plantedAt = plant.sproutUntil :: number
 	end
 	table.insert(s.profile.plants, plant)
 	spawnPlant(state, plant, now, Sessions.growMult(s))
@@ -481,10 +530,10 @@ end
 -- SELL_STALL_SECONDS of their income each (Selling). The player must stand within SELL_STALL_DISTANCE of
 -- a SELL stall (measured from where they could have walked to: SpeedService.trustedRoot). Like removePlant:
 -- frees the slots, refreshes income and the plants view (saved by the autosave).
-function PlotService.sellPlants(player: Player, slots: any, ids: any?)
+function PlotService.sellPlants(player: Player, slots: any, ids: any?, seeds: any?)
 	local s = Sessions.get(player)
-	local state = plotOf(player)
-	if not s or not state then
+	local state = plotOf(player) -- (nil: no plot, so no models to take down; the profile is what sells)
+	if not s then
 		return
 	end
 	local root = SpeedService.trustedRoot(player)
@@ -496,7 +545,7 @@ function PlotService.sellPlants(player: Player, slots: any, ids: any?)
 		end
 	end
 	local now = os.time()
-	local sale, why = Selling.sell(s.profile, slots, distance, now, Sessions.moneyMult(s), ids, Sessions.growMult(s))
+	local sale, why = Selling.sell(s.profile, slots, distance, now, Sessions.moneyMult(s), ids, Sessions.growMult(s), seeds)
 	if not sale then
 		if why == "far" then
 			Net.toast(player, "Walk up to the SELL stall in the shop plaza to sell plants.", "red")
@@ -506,12 +555,18 @@ function PlotService.sellPlants(player: Player, slots: any, ids: any?)
 		return
 	end
 	for _, slot in sale.slots do
-		removePlantModel(state, slot)
+		if state then
+			removePlantModel(state, slot)
+		end
 	end
 	refreshIncome(s, now)
 	pushPlants(s, now)
-	Sessions.pushCore(s)
-	local count = #sale.slots + #sale.ids
+	if sale.seedCount > 0 then
+		Sessions.pushFull(s) -- (the seed bag changed)
+	else
+		Sessions.pushCore(s)
+	end
+	local count = #sale.slots + #sale.ids + sale.seedCount
 	Net.LootEvent:FireClient(player, "SoldPlants", { amount = sale.total, count = count })
 	if stall then
 		Net.IncomePopup:FireClient(player, sale.total, stall.Position + Vector3.new(0, 6, 0))
@@ -860,6 +915,7 @@ function PlotService.init(infos: { WorldBuilder.PlotInfo }, stalls: { BasePart }
 			owner = nil,
 			models = {},
 			scales = {},
+			sprouting = {},
 			clicks = {},
 		}
 		-- The board and the step text follow the belt if anything moves or resizes it.
@@ -910,6 +966,10 @@ function PlotService.assign(s: Sessions.Session): WorldBuilder.PlotInfo?
 			Planting.settle(state.info.beds, state.info.origin, s.profile.plants :: any)
 			local now = os.time()
 			for _, plant in s.profile.plants do
+				if plant.sproutUntil and plant.sproutUntil > now + Config.SPROUT_MAX then -- (a broken save's endless seedling)
+					plant.sproutUntil = now + Config.SPROUT_MAX
+					plant.plantedAt = math.min(plant.plantedAt, plant.sproutUntil :: number)
+				end
 				spawnPlant(state, plant, now, Sessions.growMult(s))
 				discover(s.profile, plant) -- saves from before flower names: their plants' flowers count in the Index
 			end
@@ -947,7 +1007,8 @@ function PlotService.refreshSlots(s: Sessions.Session)
 end
 
 -- Offline earnings (capped): income of the plants as they are now, with the day/night multiplier
--- averaged over a cycle and the plot level / 2x Money multiplier, times time away.
+-- averaged over a cycle and the plot level / 2x Money multiplier, times time away (each plant only for the
+-- part of it after it sprouted: PlotService.offlineEarnings).
 function PlotService.grantOffline(s: Sessions.Session): number
 	local last = s.profile.lastSeen
 	if last <= 0 then
@@ -955,7 +1016,7 @@ function PlotService.grantOffline(s: Sessions.Session): number
 	end
 	local now = os.time()
 	local away = math.clamp(now - last, 0, Config.OFFLINE_CAP_SECONDS)
-	local amount = PlotService.offlineIncomeOf(s.profile, now, Sessions.growMult(s)) * away * Sessions.moneyMult(s)
+	local amount = PlotService.offlineEarnings(s.profile, now, away, Sessions.growMult(s)) * Sessions.moneyMult(s)
 	if amount > 0 then
 		s.profile.money += amount
 		Net.LootEvent:FireClient(s.player, "Offline", { amount = amount, seconds = away })
@@ -964,8 +1025,71 @@ function PlotService.grantOffline(s: Sessions.Session): number
 end
 
 ----------------------------------------------------------------------------------------------------
--- Payout loop: one pass over players every PAYOUT_INTERVAL (1 s, so each plant's "+$X" popup is exactly
--- the $/s on its billboard); weight comes from the formula. The Plants panel view is refreshed every
+-- Sprouting: the seedling pops into its flower when its time is up (the payout loop), or at once after a
+-- Grow Now receipt (PlotService.refreshSprouts).
+----------------------------------------------------------------------------------------------------
+-- Swaps a plant's seedling for its flower and tells the owner's client (LootEvent "Sprouted": the pop).
+function PlotService.popSprout(s: Sessions.Session, state: PlotState, plant: ProfileStore.Plant, now: number)
+	plant.sproutUntil = nil -- (done: nothing left to save)
+	removePlantModel(state, plant.slot)
+	spawnPlant(state, plant, now, Sessions.growMult(s))
+	local model = state.models[plant.slot]
+	local top = restOf(state.info, plant).Position
+	if model then
+		local cf, size = model:GetBoundingBox()
+		top = cf.Position + Vector3.new(0, size.Y / 2, 0)
+	end
+	Net.LootEvent:FireClient(s.player, "Sprouted", { slot = plant.slot, name = PlotService.plantName(plant), pos = top })
+end
+
+-- After a Grow Now receipt: every plant whose model no longer matches its sprouting is rebuilt (a finished
+-- one pops; one only shortened gets its new end time), then income and the plants view.
+function PlotService.refreshSprouts(s: Sessions.Session)
+	local state = plotOf(s.player)
+	local now = os.time()
+	for _, plant in s.profile.plants do
+		local model = if state then state.models[plant.slot] else nil
+		if state and state.sprouting[plant.slot] and not Config.isSprouting(plant, now) then
+			PlotService.popSprout(s, state, plant, now)
+		elseif state and model and state.sprouting[plant.slot] and model:GetAttribute("SproutUntil") ~= plant.sproutUntil then
+			model:SetAttribute("SproutUntil", plant.sproutUntil)
+		end
+	end
+	refreshIncome(s, now)
+	pushPlants(s, now)
+end
+
+-- "Grow now" (the hover info's and the Plants card's button; RequestBuy "GrowNow:<id>", rate-limited by
+-- ShopService): `slot` (untrusted) must be one of the player's own plants, still sprouting; the Robux
+-- prompt is the Grow Now product its time left calls for (Shop.canPrompt checks it all). The plant is
+-- remembered per product, so the receipt grows that one (Shop.grantGrowNow).
+function PlotService.promptGrowNow(player: Player, slot: any)
+	local s = Sessions.get(player)
+	if not s then
+		return
+	end
+	local now = os.time()
+	local plant = Shop.plantBySlot(s.profile, slot)
+	if not plant then
+		return -- (not one of theirs: nothing to say)
+	end
+	local name = Config.growNowProduct(Config.sproutLeft(plant, now))
+	if not name then
+		pushPlants(s, now) -- it has grown already: the card was out of date
+		return
+	end
+	local product, why = Shop.canPrompt(s.profile, name, { slot = plant.slot, now = now })
+	if not product then
+		Net.toast(player, why or "Unknown product", "red")
+		return
+	end
+	s.growNow[name] = plant.slot
+	MarketplaceService:PromptProductPurchase(player, product.id)
+end
+
+----------------------------------------------------------------------------------------------------
+-- Payout loop: one pass over players every PAYOUT_INTERVAL (1 s: each pass pays one second of every
+-- plant's $/s, silently, no popups); weight comes from the formula. The Plants panel view is refreshed every
 -- PLANTS_PUSH_EVERY passes only: it is the bulkiest push and its numbers drift slowly.
 ----------------------------------------------------------------------------------------------------
 local PLANTS_PUSH_EVERY = 3
@@ -975,7 +1099,15 @@ local function payout(s: Sessions.Session, state: PlotState, now: number)
 	local grow = Sessions.growMult(s)
 	local isNight = Config.dayPhase(now)
 	local total = 0
+	local sprouted = false
 	for _, plant in s.profile.plants do
+		if state.sprouting[plant.slot] and not Config.isSprouting(plant, now) then
+			sprouted = true
+			PlotService.popSprout(s, state, plant, now) -- done: the seedling pops into its flower
+		end
+		if state.sprouting[plant.slot] then
+			continue -- a seedling earns nothing (its countdown is the client's)
+		end
 		local weight, income = PlotService.plantStats(plant, now, grow)
 		local perSecond = income * Config.timeMult(plant.zone, isNight) * mult
 		local earned = perSecond * Config.PAYOUT_INTERVAL
@@ -994,14 +1126,14 @@ local function payout(s: Sessions.Session, state: PlotState, now: number)
 				CreatureModels.applyScale(model, scale) -- its Scale attribute makes the client re-read the rest pose
 				state.scales[plant.slot] = scale
 			end
-			Net.IncomePopup:FireClient(s.player, earned, model.PrimaryPart.Position + Vector3.new(0, 3, 0))
+			-- (no "+$X" popup over the plant: owner 2026-10-15, plants earn silently and the money counter rises)
 		end
 	end
 	s.profile.money += total
 	s.income = total / (mult * Config.PAYOUT_INTERVAL)
 	renderTreadmillSign(state)
 	Sessions.pushCore(s)
-	if payoutPass % PLANTS_PUSH_EVERY == 0 then
+	if sprouted or payoutPass % PLANTS_PUSH_EVERY == 0 then
 		pushPlants(s, now)
 	end
 end

@@ -55,6 +55,8 @@ function Inventory.take(profile: ProfileStore.Profile, slot: any, now: number, g
 				variance = Config.varianceOf(plant),
 				yaw = plant.yaw, -- planted again, it starts facing the same way
 			}
+			local sprout = Config.sproutLeft(plant, now) -- a seedling keeps the sprouting it had left
+			entry.sprout = if sprout > 0 then sprout else nil
 			table.remove(profile.plants, i)
 			table.insert(profile.inventory, entry)
 			return entry
@@ -66,11 +68,14 @@ end
 -- The plant an entry grows back into, planted at (x, z) under id `slot` at `now`: the same flower,
 -- mutation and variance, its growth going on from where it stopped (at the owner's `growMult`, Fast Grow: its
 -- plantedAt is set back by its age in real seconds at that rate; 1 when nil), facing `yaw` (the way the player
--- turned it; nil: the way it faced before).
+-- turned it; nil: the way it faced before). A seedling (`sprout` left) sprouts on for what it had left, and
+-- its growth starts when it is done.
 function Inventory.toPlant(entry: ProfileStore.InvPlant, slot: number, now: number, x: number, z: number, growMult: number?, yaw: number?): ProfileStore.Plant
+	local sproutUntil = if entry.sprout and entry.sprout > 0 then now + entry.sprout else nil
 	return {
-		slot = slot, zone = entry.zone, rarity = entry.rarity, mutation = entry.mutation, plantedAt = now - entry.age / (growMult or 1),
+		slot = slot, zone = entry.zone, rarity = entry.rarity, mutation = entry.mutation, plantedAt = (sproutUntil or now) - entry.age / (growMult or 1),
 		x = x, z = z, variant = entry.variant, variance = entry.variance, yaw = if yaw ~= nil then yaw else entry.yaw,
+		sproutUntil = sproutUntil,
 	}
 end
 
