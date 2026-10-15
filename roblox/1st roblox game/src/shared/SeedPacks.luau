@@ -109,6 +109,26 @@ function SeedPacks.roll(pack: Pack, rng: () -> number): (number, string?)
 	return rarity, nil
 end
 
+-- What the Shop's pack card shows as its rewards: one tile per rarity, Common first, with that rarity's
+-- exact chance (odds) and the zone's flower of that rarity (`catalog[zone][rarity][1]`, the server's
+-- StatsUpdate catalog; nil while it hasn't arrived or a rarity has no plant model: FlowerView's fallback).
+-- The Legendary tile is the featured one (big, in a rainbow frame).
+export type Tile = { rarity: number, id: string, pct: number, flower: string?, featured: boolean }
+function SeedPacks.showcase(pack: Pack, catalog: any): { Tile }
+	local odds = SeedPacks.odds(pack)
+	local flowers = type(catalog) == "table" and catalog[pack.zone] or nil
+	local tiles = {}
+	for i, rarity in Config.RARITIES do
+		local list = type(flowers) == "table" and flowers[i] or nil
+		local flower = type(list) == "table" and list[1] or nil
+		table.insert(tiles, {
+			rarity = i, id = rarity.id, pct = odds.rarities[i], flower = if type(flower) == "string" then flower else nil,
+			featured = i == Config.LEGENDARY,
+		})
+	end
+	return tiles
+end
+
 -- "58.3%", "4%", "0.5%", "0.04%"
 function SeedPacks.percent(pct: number): string
 	local s = if pct >= 10 then string.format("%.1f", pct) elseif pct >= 1 then string.format("%.2f", pct) else string.format("%.2g", pct)

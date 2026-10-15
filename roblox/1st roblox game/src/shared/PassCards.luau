@@ -10,14 +10,17 @@ local Format = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("Fo
 
 local PassCards = {}
 
+-- Vivid card colours, none of them green, so the green R$ button always stands out (owner reference
+-- 2026-10-15: gold for 2x Money, a rainbow for Fast Grow).
 PassCards.COLORS = {
-	DoubleMoney = Color3.fromRGB(70, 205, 30),
+	DoubleMoney = Color3.fromRGB(255, 190, 20),
 	DoubleSpeed = Color3.fromRGB(30, 165, 255),
-	DoubleLuck = Color3.fromRGB(20, 200, 170),
-	VIP = Color3.fromRGB(255, 180, 20),
-	FastGrow = Color3.fromRGB(140, 215, 20),
+	DoubleLuck = Color3.fromRGB(255, 85, 165),
+	VIP = Color3.fromRGB(225, 45, 70),
+	FastGrow = Color3.fromRGB(150, 90, 255),
 	ExtraSlots = Color3.fromRGB(255, 120, 40),
 } :: { [string]: Color3 }
+PassCards.RAINBOW = { FastGrow = true } :: { [string]: boolean } -- painted with a rainbow instead
 PassCards.DEFAULT_COLOR = Color3.fromRGB(165, 70, 255) -- a pass added to Config without a colour here
 
 export type Card = {
@@ -26,6 +29,7 @@ export type Card = {
 	about: string, -- the benefit line
 	icon: string?, -- Icons key; nil = the VIP badge
 	color: Color3,
+	rainbow: boolean, -- a rainbow card (PassCards.RAINBOW)
 	owned: boolean,
 	caption: string, -- the button: "Owned", "R$ 299", or "Buy" while there's no price at all
 }
@@ -40,6 +44,7 @@ function PassCards.view(name: string, passes: { [string]: boolean }?, price: num
 		about = pass.about,
 		icon = pass.icon,
 		color = PassCards.COLORS[name] or PassCards.DEFAULT_COLOR,
+		rainbow = PassCards.RAINBOW[name] == true,
 		owned = owned,
 		caption = if owned then "Owned" elseif price > 0 then Format.robux(price) else "Buy",
 	}

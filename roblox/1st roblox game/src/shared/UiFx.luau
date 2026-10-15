@@ -7,6 +7,8 @@
 --   * UiFx.worldPop(button, how): the same pop for a button painted on a board in the world (Effects).
 --   * UiFx.watch(root): pop() on every button already under `root` and every one added later (the Shop's
 --     cards are rebuilt on every render). A button with the attribute NoPop, or its own UIScale, is skipped.
+--     A button with the number attribute PopScale inflates to that instead of HOVER: a long button beside
+--     another one (the Shop's R$ button next to its gift button) pops less, so it never grows over it.
 --   * UiFx.relief(label): text with relief instead of flat 2D: a bevel gradient (lighter top, darker
 --     bottom), a thick round dark outline and a dark copy dropped behind it, like a raised sticker.
 local RunService = game:GetService("RunService")
@@ -123,7 +125,9 @@ function UiFx.pop(b: GuiButton)
 	end
 
 	update = function()
-		local goal = if held then UiFx.HOVER elseif pressed then UiFx.PRESS elseif hovered then UiFx.HOVER else 1
+		local own = b:GetAttribute("PopScale")
+		local hover = if type(own) == "number" and own > 1 then own else UiFx.HOVER
+		local goal = if held then hover elseif pressed then UiFx.PRESS elseif hovered then hover else 1
 		if goal == current then
 			return
 		end

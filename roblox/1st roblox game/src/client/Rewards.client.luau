@@ -16,6 +16,8 @@ local Shared = ReplicatedStorage:WaitForChild("Shared")
 local Config = require(Shared:WaitForChild("Config"))
 local Format = require(Shared:WaitForChild("Format"))
 local Icons = require(Shared:WaitForChild("Icons"))
+local GiftLayout = require(Shared:WaitForChild("GiftLayout"))
+local UiFx = require(Shared:WaitForChild("UiFx"))
 
 local player = Players.LocalPlayer
 local remotes = ReplicatedStorage:WaitForChild("Remotes")
@@ -34,10 +36,10 @@ local WHITE = Color3.new(1, 1, 1)
 local INK = Color3.fromRGB(25, 25, 35)
 local FRAME_INK = Color3.fromRGB(16, 18, 26)
 local BODY_COLOR = Color3.fromRGB(100, 210, 250) -- a bright cyan body under the cyan title bar
-local NOTE_COLOR = Color3.fromRGB(215, 222, 240)
 local GREEN = Color3.fromRGB(60, 200, 80)
 local GREY = Color3.fromRGB(150, 152, 160)
-local W, H, TITLE_H = 760, 580, 84
+local W, H, TITLE_H = GiftLayout.W, GiftLayout.H, GiftLayout.TITLE_H
+local R = GiftLayout.rects
 
 local function new(className: string, props: { [string]: any }, children: { Instance }?): any
 	local inst = Instance.new(className)
@@ -175,15 +177,19 @@ end
 
 -- One line of help under the title bar (what to do next, what happened)
 local hint = bold(window, 2, {
-	Text = "", Size = UDim2.new(1, -48, 0, 26), Position = UDim2.fromOffset(24, TITLE_H + 12), TextColor3 = NOTE_COLOR, ZIndex = 3,
+	Text = "", Position = UDim2.fromOffset(R.hint.x, R.hint.y), Size = UDim2.fromOffset(R.hint.w, R.hint.h), TextColor3 = WHITE, ZIndex = 3,
 })
+UiFx.relief(hint, 2, 3)
 local function setHint(text: string)
 	hint.Text = text
 end
 
 -- The Speed bag, like the reference's sack of shoes: light rays, a blue sack with a tied neck, the Speed
 -- icon on it and more Speed spilling out of the top.
-local art = new("Frame", { BackgroundTransparency = 1, Size = UDim2.fromOffset(280, 230), Position = UDim2.fromOffset(28, TITLE_H + 44), ZIndex = 2, Parent = window })
+local art = new("Frame", {
+	BackgroundTransparency = 1, Position = UDim2.fromOffset(R.art.x, R.art.y), Size = UDim2.fromOffset(R.art.w, R.art.h), ZIndex = 2,
+	Parent = window,
+})
 for i = 0, 5 do
 	new("Frame", {
 		AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.48), Size = UDim2.fromOffset(300, 22), Rotation = i * 30,
@@ -216,34 +222,42 @@ new("Frame", { -- the tied neck
 
 -- "~ LIMITED TIME! ~" in red, "10,000 SPEED!" in cyan to green
 local limited = bold(window, 4, {
-	Text = "~ LIMITED TIME! ~", Size = UDim2.fromOffset(410, 58), Position = UDim2.fromOffset(326, TITLE_H + 70), ZIndex = 3,
+	Text = "~ LIMITED TIME! ~", Position = UDim2.fromOffset(R.limited.x, R.limited.y), Size = UDim2.fromOffset(R.limited.w, R.limited.h), ZIndex = 3,
 })
 gradientText(limited, Color3.fromRGB(255, 120, 120), Color3.fromRGB(225, 25, 40), 90)
 local amount = bold(window, 5, {
-	Text = `{Format.commas(Config.FREE_GIFT_SPEED)} SPEED!`, Size = UDim2.fromOffset(420, 84), Position = UDim2.fromOffset(320, TITLE_H + 132), ZIndex = 3,
+	Text = `{Format.commas(Config.FREE_GIFT_SPEED)} SPEED!`, Position = UDim2.fromOffset(R.amount.x, R.amount.y), Size = UDim2.fromOffset(R.amount.w, R.amount.h), ZIndex = 3,
 })
 gradientText(amount, Color3.fromRGB(40, 200, 255), Color3.fromRGB(40, 245, 150), 0)
 
--- The three steps
-local STEP_W, STEP_H, STEP_GAP = 228, 138, 12
-local stepsTop = TITLE_H + 290
+-- The three steps, in a row under the bag (GiftLayout: nothing overlaps): bright blue cards with a lit
+-- top and a dark outline, the step's title in relief, then its button (or, for the Like, its words).
+local STEP_BLUE = Color3.fromRGB(45, 125, 240)
 local function step(i: number, title: string): Frame
+	local r = R["step" .. i]
 	local f = new("Frame", {
-		Size = UDim2.fromOffset(STEP_W, STEP_H), Position = UDim2.fromOffset((W - 3 * STEP_W - 2 * STEP_GAP) / 2 + (i - 1) * (STEP_W + STEP_GAP), stepsTop),
-		BackgroundColor3 = FRAME_INK, BackgroundTransparency = 0.5, ZIndex = 2, Parent = window,
-	}, { new("UICorner", { CornerRadius = UDim.new(0, 10) }), new("UIStroke", { Thickness = 3, Color = FRAME_INK }) })
-	bold(f, 2, { Text = `{i}. {title}`, Size = UDim2.new(1, -12, 0, 30), Position = UDim2.fromOffset(6, 6), ZIndex = 3 })
-	local screen = new("Frame", {
-		Name = "Screen", Size = UDim2.new(1, -20, 1, -50), Position = UDim2.fromOffset(10, 42), BackgroundColor3 = Color3.fromRGB(30, 32, 42), ZIndex = 3, Parent = f,
-	}, { new("UICorner", { CornerRadius = UDim.new(0, 8) }), new("UIStroke", { Thickness = 2, Color = Color3.fromRGB(110, 115, 130) }) })
-	return screen
+		Name = "Step" .. i, Position = UDim2.fromOffset(r.x, r.y), Size = UDim2.fromOffset(r.w, r.h), BackgroundColor3 = WHITE, ZIndex = 2, Parent = window,
+	}, {
+		new("UICorner", { CornerRadius = UDim.new(0, 12) }),
+		new("UIStroke", { Thickness = 4, Color = FRAME_INK, ApplyStrokeMode = Enum.ApplyStrokeMode.Border }),
+		new("UIGradient", { Rotation = 90, Color = ColorSequence.new(STEP_BLUE:Lerp(WHITE, 0.35), STEP_BLUE:Lerp(Color3.new(0, 0, 0), 0.15)) }),
+	})
+	new("Frame", { Size = UDim2.fromScale(1, 0.45), BackgroundColor3 = WHITE, BorderSizePixel = 0, ZIndex = 2, Parent = f }, { -- the lit top
+		new("UICorner", { CornerRadius = UDim.new(0, 12) }),
+		new("UIGradient", { Rotation = 90, Transparency = NumberSequence.new(0.7, 1) }),
+	})
+	local t = GiftLayout.stepTitle
+	UiFx.relief(bold(f, 3, { Text = `{i}. {title}`, Position = UDim2.fromOffset(t.x, t.y), Size = UDim2.fromOffset(t.w, t.h), ZIndex = 3 }), 3, 3)
+	return f
 end
+local stepBody = GiftLayout.stepBody
+local bodyPos, bodySize = UDim2.fromOffset(stepBody.x, stepBody.y), UDim2.fromOffset(stepBody.w, stepBody.h)
 
--- 1. Like: can't be checked or prompted in game, so it just shows where the button is.
+-- 1. Like: can't be checked or prompted in game, so it just says where the button is (words, no box).
 local like = step(1, "Like the game!")
-bold(like, 2, {
-	Text = "Tap Like on the game page", Size = UDim2.new(1, -20, 0, 52), Position = UDim2.fromOffset(10, 18), TextWrapped = true, ZIndex = 4, TextColor3 = NOTE_COLOR,
-})
+UiFx.relief(bold(like, 3, {
+	Text = "Tap Like on the game page!", Position = bodyPos, Size = bodySize, TextWrapped = true, ZIndex = 4, TextColor3 = Color3.fromRGB(255, 225, 70),
+}), 3, 3)
 
 -- 2. Favorite: Roblox's own favourite prompt (the place is an asset). If it can't open, say where it is.
 local favorite = step(2, "Favorite the game!")
@@ -254,7 +268,7 @@ local function promptFavorite()
 		setHint("Tap Favorite on the game page!")
 	end
 end
-chunky(favorite, "Favorite", Color3.fromRGB(120, 70, 220), UDim2.new(1, -20, 0, 50), UDim2.fromOffset(10, 18), promptFavorite)
+chunky(favorite, "Favorite", Color3.fromRGB(150, 80, 240), bodySize, bodyPos, promptFavorite)
 pcall(function()
 	AvatarEditorService.PromptSetFavoriteCompleted:Connect(function(result: Enum.AvatarPromptResult)
 		if result == Enum.AvatarPromptResult.Success then
@@ -268,13 +282,13 @@ local join = step(3, "Join the community!")
 local joinHelp = if groupReady
 	then `Join "{Config.COMMUNITY_NAME}": game page → Community → Join, then CLAIM!`
 	else "Our community is coming soon!"
-chunky(join, "Join Community", Color3.fromRGB(40, 110, 245), UDim2.new(1, -20, 0, 50), UDim2.fromOffset(10, 18), function()
+chunky(join, "Join Community", Color3.fromRGB(255, 150, 30), bodySize, bodyPos, function()
 	clickSound:Play()
 	setHint(joinHelp)
 end)
 
 -- CLAIM! -> CLAIMED! (grey) once done; COMING SOON while there's no community id.
-local claimButton = chunky(window, "CLAIM!", GREEN, UDim2.fromOffset(320, 64), UDim2.new(0.5, -160, 1, -82), function()
+local claimButton = chunky(window, "CLAIM!", GREEN, UDim2.fromOffset(R.claim.w, R.claim.h), UDim2.fromOffset(R.claim.x, R.claim.y), function()
 	if state.freeGift or not groupReady then
 		return
 	end
