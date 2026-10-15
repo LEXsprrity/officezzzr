@@ -22,8 +22,11 @@ local function count(t: { [any]: any }): number
 	return n
 end
 
-H.test("monetization: ids.json has exactly every pass and product, and Config reads its ids", function()
+local STUB = serde.decode("json", fs.readFile("tests/fixtures/monetization_stub.json")) -- what the other specs run with
+
+H.test("monetization: ids.json has every pass and product created (a real id each), and Config reads it", function()
 	local raw = serde.decode("json", fs.readFile("monetization/ids.json"))
+	Config.applyMonetizationIds(raw)
 	H.eq(count(raw), 2, "ids.json has only passes + products")
 	for section, list in { passes = Config.GAMEPASSES, products = Config.DEVELOPER_PRODUCTS } do
 		local ids = raw[section]
@@ -32,11 +35,12 @@ H.test("monetization: ids.json has exactly every pass and product, and Config re
 		for key, item in list :: { [string]: any } do
 			local id = ids[key]
 			H.eq(type(id), "number", `ids.json {section}.{key}`)
-			H.ok(id == 0 or (id > 0 and id == math.floor(id)), `ids.json {section}.{key} is 0 or an id`)
+			H.ok(id > 0 and id == math.floor(id), `ids.json {section}.{key} is a real id (created on Roblox)`)
 			H.eq(item.id, id, `Config {section}.{key}.id`)
 		end
 	end
 	H.eq(Catalog.encodeIds(raw), readText("monetization/ids.json"), "ids.json is in the tool's format")
+	Config.applyMonetizationIds(STUB)
 end)
 
 H.test("monetization: a missing or bad id is 0, a good one is used", function()
@@ -57,7 +61,7 @@ H.test("monetization: a missing or bad id is 0, a good one is used", function()
 		Config.applyMonetizationIds(nil)
 		H.eq(Config.DEVELOPER_PRODUCTS.Speed25K.id, 0, "no file data")
 	end)
-	Config.applyMonetizationIds(raw)
+	Config.applyMonetizationIds(STUB)
 	if not ok then
 		error(err, 0)
 	end
