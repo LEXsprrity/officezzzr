@@ -583,8 +583,12 @@ local function fitUnder(slot: string, placed: Model)
 	end
 	if lo and hi then
 		local mid = ((lo :: Vector3) + (hi :: Vector3)) / 2
-		under.Size = Vector3.new((hi :: Vector3).X - (lo :: Vector3).X, under.Size.Y, (hi :: Vector3).Z - (lo :: Vector3).Z)
-		under.CFrame = under.CFrame * CFrame.new(mid.X, (hi :: Vector3).Y - under.Size.Y / 2, mid.Z)
+		-- solid from the model's bottom up to the surface (at least 1 stud): a raised belt (tier 4's stands
+		-- 2.8 studs up) leaves no gap under it to walk into, inside the model
+		local bottom = select(1, Assets.bounds(placed, under.CFrame))
+		local thick = math.max(1, if bottom then (hi :: Vector3).Y - (bottom :: Vector3).Y else 1)
+		under.Size = Vector3.new((hi :: Vector3).X - (lo :: Vector3).X, thick, (hi :: Vector3).Z - (lo :: Vector3).Z)
+		under.CFrame = under.CFrame * CFrame.new(mid.X, (hi :: Vector3).Y - thick / 2, mid.Z)
 	end
 end
 

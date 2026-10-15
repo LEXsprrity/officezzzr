@@ -211,12 +211,23 @@ function Treadmill.stepLock(state: LockState, input: LockInput): LockAction?
 	return nil
 end
 
+-- How high a standing character's root is over what it stands on: the Humanoid's HipHeight plus half the
+-- root (R15), or the 2-stud legs plus half the root (R6, whose HipHeight is 0). A standard avatar: 3.
+Treadmill.STAND_LIFT = 3
+function Treadmill.standLift(r6: boolean, hipHeight: number, rootHeight: number): number
+	local lift = (if r6 then 2 + hipHeight else hipHeight) + rootHeight / 2
+	-- (at most 5: held higher, the root would leave the belt check's 7 studs over the belt's centre)
+	return if lift > 0 then math.min(lift, 5) else Treadmill.STAND_LIFT
+end
+
 -- Where a locked character is held: at the CENTRE of the belt (across and along it, wherever it stepped
--- on), at its own height, facing the front end.
-function Treadmill.lockCFrame(beltCF: CFrame, beltSize: Vector3, rootPos: Vector3): CFrame
+-- on), STANDING on its top (its root `lift` studs over it, default STAND_LIFT), facing the front end. Never
+-- at the height it touched the belt: the lock fires on the first frame the root is over the belt, which on
+-- a raised belt (tier 4's Sci-Fi model stands its belt 2.8 studs up) is while it is still climbing or in
+-- mid-jump, and held there the runner stood inside the model, legs under the belt (owner playtest).
+function Treadmill.lockCFrame(beltCF: CFrame, beltSize: Vector3, rootPos: Vector3, lift: number?): CFrame
 	local alongZ = axes(beltSize)
-	local rel = beltCF:PointToObjectSpace(rootPos)
-	local pos = beltCF:PointToWorldSpace(Vector3.new(0, rel.Y, 0))
+	local pos = beltCF:PointToWorldSpace(Vector3.new(0, beltSize.Y / 2 + (lift or Treadmill.STAND_LIFT), 0))
 	local front = beltCF:VectorToWorldSpace((if alongZ then Vector3.zAxis else Vector3.xAxis) * Treadmill.FRONT)
 	front = Vector3.new(front.X, 0, front.Z).Unit
 	return facingCFrame(pos, front)
