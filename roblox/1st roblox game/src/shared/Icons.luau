@@ -34,6 +34,15 @@ Icons.TOKENS = {
 	Home = { "🏠" },
 } :: { [string]: { string } }
 
+-- Images that stand in for no emoji: textures and pictures the UI draws (ShopUi.studs: the windows' studs; the
+-- seed pack cards' backgrounds, "<pack product>Bg"). Uploaded like the icons (icons/<key>.png, an id in
+-- icons/ids.json); while the id is 0 the UI draws its own fallback.
+Icons.TEXTURES = {
+	Studs = true,
+	PackSpaceBg = true, -- Starpetal Pack: a deep-space landscape, a ringed planet (owner's starpetal.jpg)
+	PackSpiritBg = true, -- Lotus Wyrm Pack: cherry blossoms, Mt Fuji, a temple (owner's sakura.jpg)
+} :: { [string]: boolean }
+
 -- "rbxassetid://<id>" for an uploaded icon, or nil while its id is 0 (not uploaded yet) or unknown.
 function Icons.image(key: string): string?
 	local id = Config.ICONS[key]

@@ -12,8 +12,8 @@ local Icons = H.shared("Icons")
 local WorldBuilder = H.server("WorldBuilder")
 
 local KEYS = {
-	"Bag", "Bat", "Close", "DoubleMoney", "ExtraSlots", "Gift", "Home", "Index", "Leaderboard", "Lock", "Money",
-	"Plants", "PlotUpgrade", "Robux", "SeedPack", "Seeds", "Shop", "Speed", "Star", "TrailShop", "Treadmill",
+	"Bag", "Bat", "Close", "DoubleMoney", "ExtraSlots", "Gift", "Home", "Index", "Leaderboard", "Lock", "Money", "PackSpaceBg", "PackSpiritBg",
+	"Plants", "PlotUpgrade", "Robux", "SeedPack", "Seeds", "Shop", "Speed", "Star", "Studs", "TrailShop", "Treadmill",
 }
 
 -- Runs fn with only these icon ids set (every other id 0), then puts Config.ICONS back.
@@ -58,7 +58,7 @@ local function show(pieces: { any }?): string?
 	return table.concat(out, " ")
 end
 
-H.test("icons: ids.json loads as Config.ICONS with all 21 keys (uploaded ids or 0)", function()
+H.test("icons: ids.json loads as Config.ICONS with all 24 keys (uploaded ids or 0)", function()
 	local raw = serde.decode("json", fs.readFile("icons/ids.json"))
 	local n = 0
 	for key, id in raw do
@@ -79,7 +79,7 @@ H.test("icons: ids.json loads as Config.ICONS with all 21 keys (uploaded ids or 
 	H.eq(Uploader.encodeIds(Config.ICONS), string.gsub(fs.readFile("icons/ids.json"), "\r", ""), "ids.json is in the uploader's format")
 end)
 
-H.test("icons: every Config.ICONS key has icons/<key>.png and an emoji token, and vice versa", function()
+H.test("icons: every Config.ICONS key has icons/<key>.png and an emoji token (or is a texture), and vice versa", function()
 	local pngs = {}
 	for _, entry in fs.readDir("icons") do
 		local key = string.match(entry, "^(.+)%.png$")
@@ -91,7 +91,7 @@ H.test("icons: every Config.ICONS key has icons/<key>.png and an emoji token, an
 	end
 	for key in Config.ICONS do
 		H.ok(pngs[key], `Config.ICONS.{key} has no icons/{key}.png`)
-		H.ok(Icons.TOKENS[key] and #Icons.TOKENS[key] > 0, `Icons.TOKENS has nothing for {key}`)
+		H.ok((Icons.TOKENS[key] and #Icons.TOKENS[key] > 0) or Icons.TEXTURES[key], `Icons.TOKENS has nothing for {key}`)
 	end
 	for key in Icons.TOKENS do
 		H.ok(Config.ICONS[key] ~= nil, `Icons.TOKENS.{key} is not in ids.json`)
@@ -286,7 +286,7 @@ local function reply(code: number, body: any)
 	}
 end
 
-H.test("uploader: --dry-run lists all 21 icons and never needs a key or the network", function()
+H.test("uploader: --dry-run lists all 24 icons and never needs a key or the network", function()
 	local opts = Uploader.parseArgs({ "--dry-run" })
 	H.ok(opts and opts.dryRun)
 	local run = fakeDeps({})
@@ -299,8 +299,8 @@ H.test("uploader: --dry-run lists all 21 icons and never needs a key or the netw
 			would += 1
 		end
 	end
-	H.eq(would, 21, "one line per icon")
-	H.eq(#Uploader.listIcons(run.deps), 21)
+	H.eq(would, #KEYS, "one line per icon")
+	H.eq(#Uploader.listIcons(run.deps), #KEYS)
 end)
 
 H.test("uploader: arguments, creator and the multipart body", function()
@@ -353,7 +353,7 @@ H.test("uploader: an Image upload polls the operation and writes the asset id to
 	for _ in ids do
 		n += 1
 	end
-	H.eq(n, 21, "every key stays in ids.json")
+	H.eq(n, #KEYS, "every key stays in ids.json")
 	for _, line in run.lines do
 		H.ok(not string.find(line, SECRET, 1, true), "the key is never printed")
 	end
