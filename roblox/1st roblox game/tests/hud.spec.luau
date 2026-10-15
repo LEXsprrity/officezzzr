@@ -91,7 +91,7 @@ H.test("Shop: bright cards with light rays, green R$ buttons, no filler text or 
 	H.ok(not string.find(HUD, "\"SOON\"", 1, true) and not string.find(HUD, "soonTag", 1, true), "no SOON tags on the prices")
 	H.ok(string.find(HUD, "local function sunburst", 1, true), "the cards' sunburst")
 	H.ok(string.find(HUD, "Speed = Color3.fromRGB(30, 165, 255)", 1, true), "Speed cards blue")
-	H.ok(string.find(HUD, "Money = Color3.fromRGB(70, 205, 30)", 1, true), "Money cards green")
+	H.ok(string.find(HUD, "Money = Color3.fromRGB(255, 185, 25)", 1, true), "Money cards gold (shopui.spec: no green cards under the green R$ buttons)")
 	H.ok(string.find(HUD, "ROBUX_GREEN = Color3.fromRGB(105, 235, 25)", 1, true), "bright green R$ buttons")
 	-- every Speed product's label splits into the green number and the word ("+150K" / "SPEED")
 	for _, entry in Config.products("Speed") do
@@ -136,11 +136,15 @@ H.test("HUD: Shop / Index / Slow Mode are centred on the left edge; Speed and mo
 	H.ok(string.find(HUD, "height / 2 - STATS_BOTTOM - STATS_H", 1, true), "the column shrinks before it reaches them")
 end)
 
-H.test("HUD: bright windows: the modal body takes the bar's colours, no dark slate", function()
+H.test("HUD: bright windows: the modal body takes the bar's colours (the Shop: its charcoal body), no dark slate", function()
 	for _, gone in { "BODY_COLOR", "SELL_DARK", "Color3.fromRGB(44, 50, 66)", "Color3.fromRGB(52, 58, 76)", "Color3.fromRGB(28, 24, 46)" } do
 		H.ok(not string.find(HUD, gone, 1, true), `"{gone}" is gone from the HUD`)
 	end
-	H.ok(string.find(HUD, "modal.BackgroundColor3 = window.from:Lerp(window.to, 0.5):Lerp(WHITE, 0.25)", 1, true), "tinted per window")
+	H.ok(string.find(HUD, "modal.BackgroundColor3 = window.body or window.from:Lerp(window.to, 0.5):Lerp(WHITE, 0.25)", 1, true), "tinted per window")
+	for _, name in { "Trails", "Index" } do
+		local window = string.match(HUD, "	" .. name .. " = (%b{})")
+		H.ok(window and not string.find(window, "body =", 1, true), `{name} keeps the bright body`)
+	end
 	H.ok(not string.find(REWARDS, "Color3.fromRGB(44, 50, 66)", 1, true), "the Free Gift window is bright too")
 end)
 
@@ -443,6 +447,22 @@ do
 		tweens[4].Completed:Fire(roblox.Enum.PlaybackState.Completed)
 		H.eq(b.AnchorPoint, roblox.Vector2.new(0, 0), "back to its own anchor at rest")
 		H.eq(b.Position, roblox.UDim2.fromOffset(100, 50))
+	end)
+
+	H.test("UiFx.pop: a button's PopScale attribute replaces the hover size (a long button beside another pops less)", function()
+		local Fx, tweens = loadFx("MouseMovement")
+		local b = fakeButton(false)
+		function b.GetAttribute(_, name)
+			return if name == "PopScale" then 1.05 else nil
+		end
+		Fx.pop(b)
+		b.MouseEnter:Fire()
+		H.eq(tweens[1].goal.Scale, 1.05)
+		b.MouseButton1Down:Fire()
+		b.MouseButton1Up:Fire()
+		H.eq(tweens[3].goal.Scale, 1.05, "springs back to its own size")
+		b.MouseLeave:Fire()
+		H.eq(tweens[4].goal.Scale, 1)
 	end)
 
 	H.test("UiFx.pop: a finger press inflates, lifting it springs back; taps don't stick as hovers", function()

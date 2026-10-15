@@ -213,5 +213,5 @@ H.test("HUD: the Index, Plants, Inventory and Sell cards show the flowers in 3D 
 	for _ in string.gmatch(HUD, "spin = true") do
 		spins += 1
 	end
-	H.eq(spins, 3, "Plants, Inventory and Sell pictures turn (only while on screen: FlowerView)")
+	H.eq(spins, 4, "Plants, Inventory, Sell and the pack reveal's seed turn (only while on screen: FlowerView)")
 end)

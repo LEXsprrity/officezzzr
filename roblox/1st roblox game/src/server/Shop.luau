@@ -68,7 +68,7 @@ end
 ----------------------------------------------------------------------------------------------------
 -- Robux: developer products (Config.DEVELOPER_PRODUCTS). There is no money path to any of them.
 ----------------------------------------------------------------------------------------------------
-export type Roll = { zone: number, rarity: number, mutation: string?, name: string }
+export type Roll = { zone: number, rarity: number, mutation: string?, name: string, gene: number } -- gene: its seed look (the bag key has it too)
 export type Grant = {
 	name: string, -- product key
 	product: Config.DevProduct,
@@ -140,8 +140,9 @@ local function apply(p: Profile, name: string, product: Config.DevProduct, incom
 		grant.pack = pack
 		if SeedPacks.bagCount(p.seedBag) < Config.SEED_BAG_HARD_MAX then
 			local rarity, mutation = SeedPacks.roll(pack, rng)
-			SeedPacks.addToBag(p.seedBag, pack.zone, rarity, mutation, Config.rollGene(rng)) -- (its hidden flower and size)
-			grant.roll = { zone = pack.zone, rarity = rarity, mutation = mutation, name = SeedPacks.seedName(pack.zone, rarity, mutation) }
+			local gene = Config.rollGene(rng)
+			SeedPacks.addToBag(p.seedBag, pack.zone, rarity, mutation, gene) -- (its hidden flower and size)
+			grant.roll = { zone = pack.zone, rarity = rarity, mutation = mutation, name = SeedPacks.seedName(pack.zone, rarity, mutation), gene = gene }
 		else
 			grant.compensation = Shop.fullBagCompensation(pack, income)
 			p.money += grant.compensation
