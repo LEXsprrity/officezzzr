@@ -605,7 +605,10 @@ local function fitModal()
 	local s = uiScale.Scale
 	local w, h = gui.AbsoluteSize.X / s, gui.AbsoluteSize.Y / s
 	local mw, mh = modal.Size.X.Offset, modal.Size.Y.Offset -- the open window's size (ShopLayout.window)
-	modalScale.Scale = math.clamp(math.min((w - 24) / (mw + 12), (h - 24) / (mh + 12)), 0.3, 1)
+	-- Windows sit between Roblox's top bar (TOP) and the hotbar (BOTTOM), never over the Bat / Seeds slots.
+	local TOP, BOTTOM = 44, 112
+	modal.Position = UDim2.new(0.5, 0, 0.5, (TOP - BOTTOM) / 2)
+	modalScale.Scale = math.clamp(math.min((w - 24) / (mw + 12), (h - TOP - BOTTOM - 12) / (mh + 12)), 0.3, 1)
 end
 
 ----------------------------------------------------------------------------------------------------
