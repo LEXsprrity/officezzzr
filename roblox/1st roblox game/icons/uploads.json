@@ -54,6 +54,16 @@
     "assetType": "Image",
     "imageId": "112609736720413"
   },
+  "PackSpaceBg": {
+    "assetId": "120983352592061",
+    "assetType": "Image",
+    "imageId": "120983352592061"
+  },
+  "PackSpiritBg": {
+    "assetId": "81521182446843",
+    "assetType": "Image",
+    "imageId": "81521182446843"
+  },
   "Plants": {
     "assetId": "85835687373029",
     "assetType": "Image",
@@ -65,9 +75,9 @@
     "imageId": "134084019366945"
   },
   "Robux": {
-    "assetId": "101357320341048",
+    "assetId": "136761121783815",
     "assetType": "Image",
-    "imageId": "101357320341048"
+    "imageId": "136761121783815"
   },
   "SeedPack": {
     "assetId": "107938233741877",
@@ -93,6 +103,11 @@
     "assetId": "82950881757837",
     "assetType": "Image",
     "imageId": "82950881757837"
+  },
+  "Studs": {
+    "assetId": "79047707668086",
+    "assetType": "Image",
+    "imageId": "79047707668086"
   },
   "TrailShop": {
     "assetId": "114969127966156",
