@@ -69,8 +69,8 @@ H.test("rewards: the Free Gift needs the group; likes and favourites are never c
 	end
 end)
 
-H.test("rewards: with no community id (0) the gift is 'coming soon' and never opens by itself", function()
-	H.eq(Config.COMMUNITY_GROUP_ID, 0, "the repo ships the stub; the owner sets the real id")
+H.test("rewards: the real community id is set; an invalid id (0, negative, fractional) is 'coming soon' and never opens by itself", function()
+	H.eq(Config.COMMUNITY_GROUP_ID, 48006453, "LeBandit Games")
 	local p = ProfileStore.defaultProfile()
 	local yes, calls = member(true)
 	for _, id in { 0, -5, 1.5 } do

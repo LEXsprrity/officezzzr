@@ -1037,8 +1037,8 @@ end
 -- favourite: the reward depends on the group membership alone (Player:IsInGroupAsync). 0 = no community yet:
 -- the window says "coming soon" and never opens by itself. PUT THE GROUP ID HERE (the number in the
 -- community's URL: roblox.com/communities/<id>/...).
-Config.COMMUNITY_GROUP_ID = 0
-Config.COMMUNITY_NAME = "Steal a Seed Community" -- what the window tells players to search for
+Config.COMMUNITY_GROUP_ID = 48006453 -- LeBandit Games (roblox.com/communities/48006453)
+Config.COMMUNITY_NAME = "LeBandit Games" -- what the window tells players to search for
 Config.FREE_GIFT_SPEED = 25_000 -- the Desert's recommended Speed
 Config.FREE_GIFT_AUTO_OPEN = 20 -- seconds after joining: the window opens by itself, once per account
 
