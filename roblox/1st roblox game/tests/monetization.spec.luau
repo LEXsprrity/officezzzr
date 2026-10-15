@@ -24,9 +24,9 @@ end
 
 local STUB = serde.decode("json", fs.readFile("tests/fixtures/monetization_stub.json")) -- what the other specs run with
 
--- Products added since the owner last ran tools/create_monetization.mjs: 0 in ids.json until they do (the Shop
--- says "coming soon" for them meanwhile). Owner 2026-10-15: the x10 seed packs, then the Grow Now products.
-local PENDING = { PackSpace10 = true, PackSpirit10 = true, GrowNow10 = true, GrowNow30 = true }
+-- Products added since tools/create_monetization.mjs last ran: 0 in ids.json until it runs again (the Shop says
+-- "coming soon" for them meanwhile). Empty: every product and pass is created on Roblox.
+local PENDING: { [string]: boolean } = {}
 
 H.test("monetization: ids.json has every pass and product created (a real id each), and Config reads it", function()
 	local raw = serde.decode("json", fs.readFile("monetization/ids.json"))
