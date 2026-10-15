@@ -465,11 +465,12 @@ H.test("passes: ownership is checked on the server (join and purchase); the clie
 		"the [VIP] chat tag comes from the server's VIP attribute")
 	local main = fs.readFile("src/server/Main.server.luau")
 	H.ok(string.find(main, "VipService.dress(char, true)", 1, true) ~= nil, "a respawned VIP gets the tag again")
-	-- the HUD badge (its own script, the same gold badge) shows from the server's attribute only
-	local hud = fs.readFile("src/client/VipHudBadge.client.luau")
-	H.ok(string.find(hud, "GetAttributeChangedSignal(\"VIP\")", 1, true) ~= nil and string.find(hud, "VipBadge.build(badge)", 1, true) ~= nil,
-		"the HUD's VIP badge follows the server's VIP attribute")
-	H.ok(string.find(fs.readFile("src/server/VipService.luau"), "VipBadge.build(gui)", 1, true) ~= nil, "...and looks like the head tag")
+	-- the head tag is the gold badge; the HUD has none any more (owner 2026-10-15)
+	H.ok(string.find(fs.readFile("src/server/VipService.luau"), "VipBadge.build(gui)", 1, true) ~= nil, "the head tag: the gold badge")
+	H.ok(not fs.isFile("src/client/VipHudBadge.client.luau"), "no VIP badge in the HUD")
+	for _, file in fs.readDir("src/client") do
+		H.ok(not string.find(fs.readFile("src/client/" .. file), "VipBadge", 1, true), `{file}: no HUD VIP badge`)
+	end
 end)
 
 ----------------------------------------------------------------------------------------------------

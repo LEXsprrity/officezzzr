@@ -139,6 +139,14 @@ function SeedPacks.percent(pct: number): string
 	return s .. "%"
 end
 
+-- The colour of a reward tile's rarity name and % (owner 2026-10-15): its rarity's colour (Config.RARITIES),
+-- brightened a little so it reads over the tile (drawn in the same colour, darker) inside its thick dark outline.
+SeedPacks.TEXT_LIFT = 0.3
+function SeedPacks.tileTextColor(rarity: number): Color3
+	local r = Config.RARITIES[rarity] or Config.RARITIES[1]
+	return r.color:Lerp(Color3.new(1, 1, 1), SeedPacks.TEXT_LIFT)
+end
+
 ----------------------------------------------------------------------------------------------------
 -- Seed bag: { [key] = count } with key "zone:rarity[:Mutation][#gene]". The gene (Config.rollGene, save
 -- v10) is the seed's hidden flower and size, so seeds with a gene rarely stack. A key without one (from

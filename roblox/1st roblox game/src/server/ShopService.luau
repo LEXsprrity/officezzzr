@@ -170,7 +170,7 @@ local function onUse(player: Player, itemId: any)
 			return
 		end
 		trailChanged(s)
-		Net.toast(player, `🏃 {msg} equipped: x{Sessions.speedMult(s)} Speed gain`, "blue")
+		Net.toast(player, `{msg} equipped: x{Sessions.speedMult(s)} Speed gain`, "blue", "Speed")
 	end
 end
 
@@ -232,7 +232,7 @@ local function processReceipt(receiptInfo: { [string]: any }): Enum.ProductPurch
 				end)
 			end
 		elseif pack then
-			Net.toast(s.player, `🎒 Your seed bag is full, so your {pack.name} paid {Format.money(grant.compensation)} instead.`, "gold")
+			Net.toast(s.player, `Your seed bag is full, so your {pack.name} paid {Format.money(grant.compensation)} instead.`, "gold", "Money")
 		else
 			Net.LootEvent:FireClient(s.player, "Bought", { itemId = "Product:" .. grant.name, label = grant.label })
 		end

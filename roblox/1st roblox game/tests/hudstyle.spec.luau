@@ -1,7 +1,7 @@
 -- The owner's 2026-10-15 HUD style pass (round 3): every HUD element in the classic Roblox studded plastic
 -- (one shared helper, ShopUi.studs: the uploaded Studs texture, one stud size everywhere, the window body's
 -- studs the same as its title bar's), the hotbar's dark see-through slots with a drawn bat, the shared
--- announcement look (Shared/Toast), the bigger Speed / money readout with the VIP badge over it, the plot
+-- announcement look (Shared/Toast), the bigger Speed / money readout (no VIP badge any more), the plot
 -- signs without their icon and the owner's Robux icon as the only Robux icon.
 local fs = require("@lune/fs")
 local roblox = require("@lune/roblox")
@@ -135,7 +135,6 @@ H.test("studs: on every HUD element (left column, Plants panel, readout, windows
 	-- the day/night timer, the zone banner, the VIP badge, the toasts
 	H.ok(string.find(read("src/client/DayTimer.client.luau"), "ShopUi.studs(strip,", 1, true) ~= nil, "day/night timer strip")
 	H.ok(string.find(read("src/client/ZoneBanner.client.luau"), "ShopUi.studs(dark,", 1, true) ~= nil, "zone banner strip")
-	H.ok(string.find(read("src/client/VipHudBadge.client.luau"), "ShopUi.studs(plate, PLATE)", 1, true) ~= nil, "VIP HUD badge")
 	H.ok(string.find(read("src/shared/Toast.luau"), "ShopUi.studs(plate, color, nil, 1)", 1, true) ~= nil, "toasts")
 	-- the hotbar's slots are the owner's dark see-through squares instead (their own request overrides studs there)
 	H.ok(not string.find(block(HUD, "local batSlot", "local batShade"), "ShopUi.studs", 1, true), "no studs on the Bat slot")
@@ -218,6 +217,18 @@ H.test("toasts: one announcement look (studded plate, bevel, icon, chunky relief
 		H.ok(big.Size.Y.Offset > plate.Size.Y.Offset and big.Size.X.Offset > plate.Size.X.Offset, "announcements are bigger")
 		H.ok(big:FindFirstChildOfClass("UIStroke"):FindFirstChild("Rainbow") ~= nil, "...with a rainbow frame")
 		H.eq(big:FindFirstChild("Icon").Image, "rbxassetid://22", "...and the star")
+		-- the icon is chosen per message, never by the colour (owner 2026-10-15: "+25,000 Speed!" showed the cash)
+		Config.ICONS.Speed, Config.ICONS.Money, Config.ICONS.Gift = 44, 55, 66
+		local speed = Toast.build(holder, "+25,000 Speed! Thanks for joining the community!", { color = "gold", icon = Toast.ICONS.speed })
+		H.eq(speed:FindFirstChild("Icon").Image, "rbxassetid://44", "a Speed gain: the sneaker")
+		H.eq(Toast.build(holder, "+$5", { color = "gold", icon = Toast.ICONS.money }):FindFirstChild("Icon").Image, "rbxassetid://55", "money: the cash")
+		H.eq(Toast.build(holder, "Gifting is coming soon!", { color = "blue", icon = Toast.ICONS.gift }):FindFirstChild("Icon").Image, "rbxassetid://66", "the gift")
+		H.eq(Toast.build(holder, "Something good", { color = "gold" }):FindFirstChild("Icon"), nil, "gold alone guesses no icon (no cash)")
+		H.eq(Toast.build(holder, "Something", { color = "green" }):FindFirstChild("Icon"), nil, "neither does green")
+		H.eq(Toast.STYLES.red.icon, Toast.ICONS.error, "errors: the lock")
+		H.eq(Toast.ICONS.legendary, "Star")
+		H.eq(Toast.ICONS.day, "Sun")
+		H.eq(Toast.ICONS.night, "Moon")
 		local slot = Toast.show(holder, "Hi", { color = "green", seconds = 2 })
 		H.ok(slot:FindFirstChildOfClass("CanvasGroup") ~= nil and played >= 3, "it pops and slides in (and fades out as one)")
 		local colours = {}
@@ -248,30 +259,67 @@ H.test("toasts: one announcement look (studded plate, bevel, icon, chunky relief
 	H.ok(string.find(effects, "Toast.build(gui, `Lucky! {from.id} > {to.id}`, { color = \"purple\", icon = \"Star\" })", 1, true) ~= nil, "Lucky!")
 end)
 
+H.test("toasts: each message names its icon (the Free Gift's +Speed shows the sneaker, not the cash)", function()
+	local Rewards = H.server("Rewards")
+	local text, color, icon = Rewards.giftMessage("granted")
+	H.ok(string.find(text, "Speed!", 1, true) ~= nil and color == "gold", text)
+	H.eq(icon, "Speed", "the claimed Free Gift: the sneaker")
+	H.eq(select(3, Rewards.giftMessage("soon")), "Gift")
+	H.eq(select(3, Rewards.giftMessage("claimed")), "Gift")
+	H.eq(select(3, Rewards.giftMessage("notMember")), nil, "refusals: red's lock")
+	-- the server sends the icon and the client shows it
+	local net = read("src/server/Net.luau")
+	H.ok(string.find(net, "function Net.toast(player: Player, text: string, color: string?, icon: string?)", 1, true)
+		and string.find(net, "{ text = text, color = color, icon = icon }", 1, true), "Net.toast carries the icon")
+	H.ok(string.find(read("src/server/RewardService.luau"), "local text, color, icon = Rewards.giftMessage(result)\n\tNet.toast(player, text, color, icon)", 1, true) ~= nil,
+		"the gift claim passes it")
+	H.ok(string.find(HUD, "toast(data.text, data.color, nil, data.icon)", 1, true) ~= nil, "the HUD shows the server's icon")
+	H.ok(string.find(HUD, "toast(\"Gifting is coming soon!\", \"blue\", nil, \"Gift\")", 1, true) ~= nil, "gifting: the gift")
+	H.ok(string.find(HUD, "\"gold\", 6, \"Money\")", 1, true) ~= nil, "offline earnings: the cash")
+	-- every gold / green toast the server sends names its icon (red brings the lock, blue news may go bare)
+	for _, file in fs.readDir("src/server") do
+		if string.sub(file, -5) == ".luau" then
+			for line in string.gmatch(read("src/server/" .. file), "[^\n]+") do
+				if string.find(line, "Net.toast(", 1, true) and (string.find(line, "\"gold\"", 1, true) or string.find(line, "\"green\"", 1, true)) then
+					H.ok(string.find(line, "\"gold\", \"%u") ~= nil or string.find(line, "\"green\", \"%u") ~= nil, `{file}: {line}`)
+				end
+			end
+		end
+	end
+	H.ok(string.find(read("src/server/ShopService.luau"), "Speed gain`, \"blue\", \"Speed\")", 1, true) ~= nil, "a trail equipped: the sneaker")
+end)
+
 ----------------------------------------------------------------------------------------------------
 -- Readout, VIP badge, pass Owned, plot sign, Robux
 ----------------------------------------------------------------------------------------------------
-H.test("readout: Speed and money about 2x bigger in chunky italic, the VIP badge on top, clear of the column and the hotbar", function()
+H.test("readout: Speed and money about 2x bigger in chunky italic, no VIP badge, the + clear of the digits, clear of the column and the hotbar", function()
 	local stats = block(HUD, "local statsFrame = new(\"Frame\", {", "plusBadge.Activated")
 	H.ok(string.find(stats, "Name = \"Stats\"", 1, true) and string.find(stats, "Size = UDim2.fromOffset(470, STATS_H)", 1, true), "a wider readout")
 	H.eq(tonumber(string.match(HUD, "local STATS_H, LEFT_H = (%d+),")), 176, "about twice as tall (was 100)")
 	H.ok(select(2, string.gsub(stats, "Size = UDim2.fromOffset%(84, 84%)", "")) >= 2, "big icons (84, was 48)")
-	H.ok(select(2, string.gsub(stats, "Size = UDim2.new%(1, %-100, 0, 80%)", "")) == 2, "huge numbers (80 tall, was 44)")
+	H.ok(string.find(stats, "Text = \"0\", Size = UDim2.new(1, -152, 0, 80), Position = UDim2.fromOffset(98, 2)", 1, true)
+		and string.find(stats, "Text = \"$0\", Size = UDim2.new(1, -100, 0, 80), Position = UDim2.fromOffset(98, 94)", 1, true), "huge numbers (80 tall, was 44)")
+	-- the yellow "+" (owner 2026-10-15: it sat over the Speed number): just past the number's right end, on its row
+	H.ok(string.find(stats, "Name = \"Plus\", Size = UDim2.fromOffset(44, 44), AnchorPoint = Vector2.new(0, 0.5), Position = UDim2.fromOffset(98 + 10, 42)", 1, true) ~= nil,
+		"the + starts right of where the number starts")
+	H.ok(string.find(stats, "plusBadge.Position = UDim2.fromOffset(math.min(98 + wide + 10, 470 - 44), 42)", 1, true)
+		and string.find(stats, "speedValue:GetPropertyChangedSignal(\"TextBounds\"):Connect(placePlus)", 1, true), "...and follows its right end")
+	local numberEnd = 98 + (470 - 152)
+	H.ok(numberEnd + 10 <= 470 - 44, "the widest Speed number still leaves the + its room inside the readout")
+	H.ok(98 + 10 > 84, "never over the sneaker either")
+	H.ok(42 - 22 >= 2 and 42 + 22 <= 94, "on the Speed row, clear of the money")
+	H.ok(not string.find(stats, "Position = UDim2.fromOffset(54, 50)", 1, true), "the old corner spot is gone")
 	H.ok(select(2, string.gsub(stats, "Enum.FontStyle.Italic", "")) == 2, "italic")
 	H.ok(string.find(stats, "UiFx.relief(speedValue, 6, 6)", 1, true) and string.find(stats, "UiFx.relief(moneyValue, 6, 6)", 1, true), "thick dark outlines")
 	local fit = block(HUD, "local function fitLeftColumn()", "\nend\n")
 	H.ok(string.find(fit, "fit.Scale = math.clamp((gui.AbsoluteSize.X / uiScale.Scale / 2 - 110 - 14) / 470, 0.5, 1)", 1, true) ~= nil,
 		"shrinks on narrow screens so it never reaches the hotbar")
-	H.ok(string.find(fit, "height / 2 - STATS_BOTTOM - STATS_H * fit.Scale - 64 * fit.Scale - 10", 1, true) ~= nil,
-		"the left column stops above the readout and the VIP badge")
+	H.ok(string.find(fit, "height / 2 - STATS_BOTTOM - STATS_H * fit.Scale - 10", 1, true) ~= nil,
+		"the left column stops above the readout")
 	H.ok(ShopUi.SLOT * 2 + 8 <= 2 * 110, "the hotbar fits in the room left for it")
-	local vip = read("src/client/VipHudBadge.client.luau")
-	H.ok(string.find(vip, ":WaitForChild(\"SeedHUD\"):WaitForChild(\"Stats\")", 1, true) and string.find(vip, "plate.Parent = stats", 1, true),
-		"the VIP badge sits on the readout, scaled with it")
-	local height = tonumber(string.match(vip, "local HEIGHT = (%d+)"))
-	local pad, gap = tonumber(string.match(vip, "local PAD = (%d+)")), tonumber(string.match(vip, "local GAP = (%d+)"))
-	H.ok(height and height >= 40, "a bigger VIP badge (was 34)")
-	H.eq((height :: number) + 2 * (pad :: number) + (gap :: number), 64, "the room fitLeftColumn leaves for it")
+	-- no VIP badge in the HUD any more (owner 2026-10-15; the tag over the head stays)
+	H.ok(not fs.isFile("src/client/VipHudBadge.client.luau"), "VipHudBadge.client is gone")
+	H.ok(not string.find(HUD, "VipHudBadge", 1, true) and not string.find(HUD, "64 * fit.Scale", 1, true), "and no room kept for it")
 end)
 
 H.test("passes: Owned is a bright gold button; plot signs show only the name; the owner's Robux icon is the only one", function()
@@ -310,6 +358,24 @@ H.test("passes: Owned is a bright gold button; plot signs show only the name; th
 	for key, id in ids do
 		H.ok(key == "Robux" or id ~= ids.Robux, `{key}: not the Robux image`)
 	end
+end)
+
+
+H.test("seed packs: each reward tile's rarity name and % in its rarity's colour, thick dark outline", function()
+	local SeedPacks = H.shared("SeedPacks")
+	for r, rarity in Config.RARITIES do
+		local c = SeedPacks.tileTextColor(r)
+		local want = rarity.color:Lerp(roblox.Color3.new(1, 1, 1), SeedPacks.TEXT_LIFT)
+		H.ok(math.abs(c.R - want.R) + math.abs(c.G - want.G) + math.abs(c.B - want.B) < 1e-6, `{rarity.id}: its colour, brightened`)
+		H.ok(c.R + c.G + c.B >= rarity.color.R + rarity.color.G + rarity.color.B, `{rarity.id}: no darker than the rarity`)
+	end
+	H.ok(SeedPacks.TEXT_LIFT > 0 and SeedPacks.TEXT_LIFT <= 0.4, "brightened a little, still its colour")
+	local tile = block(HUD, "local function rewardTile(", "\n\tend\n")
+	H.ok(string.find(tile, "local ink = if featured then COLORS.gold else SeedPacks.tileTextColor(tile.rarity)", 1, true) ~= nil, "the tile's ink")
+	local _, uses = string.gsub(tile, "TextColor3 = ink,", "")
+	H.eq(uses, 2, "the name and the %")
+	H.ok(string.find(tile, "UiFx.relief(name, 3, if featured then 4 else 3)", 1, true) ~= nil, "the name in relief too")
+	H.ok(not string.find(tile, "else WHITE", 1, true), "no white name / % any more")
 end)
 
 return nil

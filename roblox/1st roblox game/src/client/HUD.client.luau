@@ -213,15 +213,16 @@ local function bold(parent: Instance, thickness: number, props: { [string]: any 
 end
 
 -- Speed and money, big like the reference HUD (owner 2026-10-15: "about 2x bigger"): huge chunky italic
--- numbers with a thick dark outline, the icons left of them. Named "Stats": VipHudBadge.client puts the VIP
--- badge on top of it. Its "Fit" scale keeps it left of the hotbar on narrow screens (fitLeftColumn).
+-- numbers with a thick dark outline, the icons left of them (no VIP badge over it any more: owner 2026-10-15;
+-- the VIP tag over the head stays). Its "Fit" scale keeps it left of the hotbar on narrow screens (fitLeftColumn).
 local statsFrame = new("Frame", {
 	Name = "Stats", BackgroundTransparency = 1, AnchorPoint = Vector2.new(0, 1), Position = UDim2.new(0, 14, 1, -STATS_BOTTOM),
 	Size = UDim2.fromOffset(470, STATS_H), Parent = gui,
 }, { new("UIScale", { Name = "Fit" }) })
 iconLabel(statsFrame, "Speed", "⚡", { Size = UDim2.fromOffset(84, 84) })
 local speedValue = bold(statsFrame, 6, {
-	Text = "0", Size = UDim2.new(1, -100, 0, 80), Position = UDim2.fromOffset(98, 2), TextXAlignment = Enum.TextXAlignment.Left, TextColor3 = SPEED_PINK,
+	-- (narrower than the money: its "+" badge rides at its right end, inside the readout)
+	Text = "0", Size = UDim2.new(1, -152, 0, 80), Position = UDim2.fromOffset(98, 2), TextXAlignment = Enum.TextXAlignment.Left, TextColor3 = SPEED_PINK,
 	FontFace = Font.new("rbxasset://fonts/families/Montserrat.json", Enum.FontWeight.Heavy, Enum.FontStyle.Italic),
 })
 iconLabel(statsFrame, "Money", "💰", { Size = UDim2.fromOffset(84, 84), Position = UDim2.fromOffset(0, 92) })
@@ -231,16 +232,29 @@ local moneyValue = bold(statsFrame, 6, {
 })
 UiFx.relief(speedValue, 6, 6) -- raised, not flat: a dropped dark copy behind, a bevel, a thick outline
 UiFx.relief(moneyValue, 6, 6)
--- The Speed icon and its yellow "+" badge both open the Shop on the Speed section.
+-- The Speed icon and its yellow "+" badge both open the Shop on the Speed section. The "+" sits just past the
+-- Speed number's right end (owner 2026-10-15: on the sneaker's corner it covered the digits), following it as
+-- the number grows; the number is 52 narrower than the money (1, -152) so the badge always fits beside it.
 new("TextButton", { BackgroundTransparency = 1, Text = "", Size = UDim2.fromOffset(84, 84), Parent = statsFrame }).Activated:Connect(function()
 	openShopAt("Speed")
 end)
 local plusBadge = new("TextButton", {
-	Size = UDim2.fromOffset(40, 40), Position = UDim2.fromOffset(54, 50), BackgroundColor3 = Color3.fromRGB(255, 210, 40), Text = "",
-	AutoButtonColor = true, Parent = statsFrame,
+	Name = "Plus", Size = UDim2.fromOffset(44, 44), AnchorPoint = Vector2.new(0, 0.5), Position = UDim2.fromOffset(98 + 10, 42),
+	BackgroundColor3 = Color3.fromRGB(255, 210, 40), Text = "", AutoButtonColor = true, Parent = statsFrame,
 }, deco(4, 4))
 ShopUi.studs(plusBadge, Color3.fromRGB(255, 210, 40))
 UiFx.relief(bold(plusBadge, 4, { Text = "+", Size = UDim2.new(1, -6, 1, -6), Position = UDim2.fromOffset(3, 1) }), 2, 4)
+do
+	-- TextBounds are on-screen pixels: back to the readout's design pixels (its "Fit" and the HUD's scale)
+	local function placePlus()
+		local shown = speedValue.AbsoluteSize.Y
+		local wide = if shown > 0 then speedValue.TextBounds.X * 80 / shown else 0
+		plusBadge.Position = UDim2.fromOffset(math.min(98 + wide + 10, 470 - 44), 42)
+	end
+	speedValue:GetPropertyChangedSignal("TextBounds"):Connect(placePlus)
+	speedValue:GetPropertyChangedSignal("AbsoluteSize"):Connect(placePlus)
+	placePlus()
+end
 plusBadge.Activated:Connect(function()
 	openShopAt("Speed")
 end)
@@ -255,7 +269,7 @@ local leftColumn = new("Frame", {
 local leftScale = new("UIScale", { Parent = leftColumn })
 
 -- Wide vivid buttons (owner reference 2026-10-15): about 2.6:1, near-square corners, a thick dark outline,
--- a flat colour with a lighter top and a darker bottom edge (ShopUi.bevel), the icon on the left and the
+-- a flat colour, studded, with a lighter top (ShopUi.bevel; no dark bottom band), the icon on the left and the
 -- word in big white relief on its right.
 local function sideButton(order: number, label: string, icon: string, emoji: string, color: Color3, onClick: () -> ())
 	-- The column lays out the holder; the button sits centred in it so its hover pop grows from the middle.
@@ -332,8 +346,8 @@ local function fitLeftColumn()
 	-- the readout first: left of the hotbar (centred, under 200 wide), never over it
 	local fit = statsFrame:FindFirstChild("Fit") :: UIScale
 	fit.Scale = math.clamp((gui.AbsoluteSize.X / uiScale.Scale / 2 - 110 - 14) / 470, 0.5, 1)
-	-- from the middle of the screen down to the readout and the VIP badge over it (VipHudBadge.client, 64)
-	local room = height / 2 - STATS_BOTTOM - STATS_H * fit.Scale - 64 * fit.Scale - 10
+	-- from the middle of the screen down to the readout
+	local room = height / 2 - STATS_BOTTOM - STATS_H * fit.Scale - 10
 	leftScale.Scale = math.clamp(room / (LEFT_H / 2), 0.5, 1)
 end
 
@@ -530,7 +544,7 @@ local function bigIcon(parent: Instance, key: string, props: { [string]: any }):
 	return iconLabel(parent, key, if tokens then tokens[1] else "", props)
 end
 
--- A chunky button: square, a dark outline, a lighter top and a darker bottom edge (ShopUi.bevel), an
+-- A chunky button: square, a dark outline, studs, a lighter top (ShopUi.bevel; no dark bottom band), an
 -- outlined caption (with `icon` key(s) in place of emoji/"R$").
 local function chunky(parent: Instance, label: string, color: Color3, size: UDim2, onClick: () -> (), icon: (string | { string })?, iconSize: number?): TextButton
 	local b = new("TextButton", { Size = size, BackgroundColor3 = color, BorderSizePixel = 0, Text = "", AutoButtonColor = true, Parent = parent }, { outline() })
@@ -1099,7 +1113,7 @@ end
 
 -- Gifting needs extra work (choosing a player, granting to them): the gift buttons are shown, not live yet.
 local function giftSoon()
-	toast("Gifting is coming soon!", "blue")
+	toast("Gifting is coming soon!", "blue", nil, "Gift")
 end
 
 ----------------------------------------------------------------------------------------------------
@@ -1282,24 +1296,25 @@ do
 			new("UIGradient", { Name = "Rainbow", Rotation = 35, Color = RAINBOW, Parent = stroke }) -- the rainbow frame
 			new("UIGradient", { Rotation = 90, Color = ColorSequence.new(Color3.fromRGB(150, 80, 255), Color3.fromRGB(40, 20, 110)), Parent = f })
 		else
-			new("UIGradient", { Rotation = 90, Color = ColorSequence.new(rarity.color:Lerp(WHITE, 0.1), rarity.color:Lerp(FRAME_INK, 0.55)), Parent = f })
+			-- a shade darker than before, so the rarity-coloured name and % read over it
+			new("UIGradient", { Rotation = 90, Color = ColorSequence.new(rarity.color:Lerp(FRAME_INK, 0.2), rarity.color:Lerp(FRAME_INK, 0.62)), Parent = f })
 			f.BackgroundTransparency = 0.15 -- the card's picture shows a little through
 		end
 		local top = if featured then 38 else 24
 		FlowerView.show(f, FlowerView.flower(zone, tile.rarity, tile.flower), {
 			size = UDim2.new(1, -8, 1, -(top + 4)), position = UDim2.fromOffset(4, top), zindex = 4, spin = featured, zoom = 1.25,
 		})
-		local name = bold(f, if featured then 4 else 2, {
+		-- the rarity's name and its % in the rarity's colour (owner 2026-10-15), thick dark outline, relief
+		local ink = if featured then COLORS.gold else SeedPacks.tileTextColor(tile.rarity)
+		local name = bold(f, if featured then 4 else 3, {
 			Text = if featured then "LEGENDARY" else rarity.id, Size = UDim2.new(1, -12, 0, top - 6), Position = UDim2.fromOffset(6, 4), ZIndex = 5,
-			TextColor3 = if featured then COLORS.gold else WHITE,
+			TextColor3 = ink,
 		})
-		if featured then
-			UiFx.relief(name, 3, 4)
-		end
+		UiFx.relief(name, 3, if featured then 4 else 3)
 		UiFx.relief(bold(f, 3, {
 			Text = SeedPacks.percent(tile.pct), Size = UDim2.new(1, -10, 0, if featured then 36 else 28), AnchorPoint = Vector2.new(0, 1),
 			Position = UDim2.new(0, 4, 1, -4), TextXAlignment = Enum.TextXAlignment.Right, ZIndex = 5,
-			TextColor3 = if featured then COLORS.gold else WHITE,
+			TextColor3 = ink,
 		}), 3, 3)
 	end
 
@@ -2111,9 +2126,18 @@ renderModal = function()
 	end
 	if not focused then
 		modalBody.CanvasPosition = keep
-		task.defer(function() -- again once the layout has sized the new canvas
-			if modal.Visible then
-				modalBody.CanvasPosition = keep
+		-- again once the layout has sized the new canvas (it can take a frame or two; until then Roblox clamps
+		-- the scroll up to the still-short canvas): only ever back down to where it was, never past it
+		local shownAs = modalName
+		task.spawn(function()
+			for _ = 1, 4 do
+				task.wait()
+				if not modal.Visible or modalName ~= shownAs then
+					return
+				end
+				if modalBody.CanvasPosition.Y < keep.Y then
+					modalBody.CanvasPosition = keep
+				end
 			end
 		end)
 	end
@@ -2429,12 +2453,14 @@ local function refresh(changed: { [string]: any })
 	end
 end
 
-StatsUpdate.OnClientEvent:Connect(function(partial: { [string]: any })
-	for k, v in partial do
-		stats[k] = v
-	end
-	refresh(partial)
-end)
+do
+	-- Only what really changed (Shared/StatsDiff): the server re-sends unchanged values (the plants push's
+	-- `slots` every few seconds), which used to rebuild the open Shop and throw its scroll back up.
+	local StatsDiff = require(Shared:WaitForChild("StatsDiff"))
+	StatsUpdate.OnClientEvent:Connect(function(partial: { [string]: any })
+		refresh(StatsDiff.apply(stats, partial))
+	end)
+end
 
 ----------------------------------------------------------------------------------------------------
 -- Loot events -> toasts. Only what the player needs told: the server's messages (mostly why something
@@ -2444,7 +2470,7 @@ end)
 LootEvent.OnClientEvent:Connect(function(kind: string, data: any)
 	data = data or {}
 	if kind == "Toast" then
-		toast(data.text, data.color)
+		toast(data.text, data.color, nil, data.icon)
 	elseif kind == "Caught" then
 		toast(`The {data.guard} caught you! The seed went back to its nest.`, "red", 4)
 	elseif kind == "Bat" then
