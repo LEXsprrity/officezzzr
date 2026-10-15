@@ -204,13 +204,13 @@ H.test("Shop window: wider than the other windows, still fits a phone (modalScal
 	H.eq(ShopLayout.MAX_W, w, "the studs and bands cover the widest window")
 	H.ok(string.find(HUD, "local w, h = ShopLayout.window(name) -- the Shop is wider\n\tmodal.Size = UDim2.fromOffset(w, h)\n\tfitModal()", 1, true) ~= nil,
 		"openModal sizes the window, then fits it")
-	H.ok(string.find(HUD, "local mw, mh = modal.Size.X.Offset, modal.Size.Y.Offset", 1, true) ~= nil, "fitModal fits the open window's size")
-	-- fitModal's formula on small landscape screens (the HUD's UIScale bottoms out at 0.55)
+	H.ok(string.find(HUD, "local mw, mh, scale, tabs = ShopLayout.fit(modalName, w, h - TOP - BOTTOM)", 1, true) ~= nil, "fitModal fits the open window (ShopLayout.fit)")
+	-- ShopLayout.fit on small landscape screens (the HUD's UIScale bottoms out at 0.55), with the tabs
 	for _, screen in { { 844, 390 }, { 667, 375 }, { 1024, 600 }, { 1920, 1080 } } do
 		local ui = math.clamp(screen[2] / 900, 0.55, 1.25)
 		local dw, dh = screen[1] / ui, screen[2] / ui
-		local s = math.clamp(math.min((dw - 24) / (w + 12), (dh - 24) / (h + 12)), 0.3, 1)
-		H.ok(w * s <= dw - 12 and h * s <= dh - 12, `{screen[1]}x{screen[2]}: the window fits the screen`)
+		local fw, fh, s = ShopLayout.fit("Shop", dw, dh - 12)
+		H.ok(fw * s <= dw - 12 and fh * s <= dh - 12, `{screen[1]}x{screen[2]}: the window fits the screen`)
 	end
 	-- the cards fill the wider body
 	local content = ShopLayout.CONTENT_W

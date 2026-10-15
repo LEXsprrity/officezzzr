@@ -31,6 +31,66 @@ function ShopLayout.window(name: string?): (number, number)
 	return ShopLayout.DEFAULT_W, ShopLayout.DEFAULT_H
 end
 
+-- The Shop's section tabs (Featured / Speed / Money, HUD; owner 2026-10-15): a column of big icons with
+-- their words, part of the window (they scale and move with it). They hang just outside its right edge,
+-- from its top, when the screen has room there; otherwise (a narrow phone) they're tucked inside: the
+-- window grows TAB_W wider on its right (the body keeps its width, so the cards never sit under them) and
+-- they stand in that margin under the title bar. Design pixels.
+ShopLayout.TAB_W = 96 -- the column's width (a tab's word fits)
+ShopLayout.TAB_ICON, ShopLayout.TAB_WORD, ShopLayout.TAB_PAD = 66, 24, 4 -- a tab: its icon, its word under it, the gap to the next
+ShopLayout.TAB_H = 3 * (ShopLayout.TAB_ICON + ShopLayout.TAB_WORD) + 2 * ShopLayout.TAB_PAD
+ShopLayout.TAB_GAP = 8 -- outside: from the window's right edge
+ShopLayout.TAB_TOP = 6 -- outside: down from the window's top
+ShopLayout.TAB_ACTIVE = 1.2 -- the active tab's icon grows to this
+
+-- Fits window `name` on a screen `screenW` wide with `availH` free between Roblox's top bar and the
+-- hotbar (design pixels, after the HUD's UIScale): its width (the Shop's grows when its tabs are tucked
+-- inside), height, scale (never above design size, never below 0.3) and where the tabs go: "outside",
+-- "inside", or nil for the windows without tabs. The window is centred, so "outside" needs the tabs'
+-- room on both sides.
+function ShopLayout.fit(name: string?, screenW: number, availH: number): (number, number, number, ("outside" | "inside")?)
+	local w, h = ShopLayout.window(name)
+	local function scaleFor(width: number): number
+		return math.clamp(math.min((screenW - 24) / (width + 12), (availH - 12) / (h + 12)), 0.3, 1)
+	end
+	if name ~= "Shop" then
+		return w, h, scaleFor(w), nil
+	end
+	local s = scaleFor(w)
+	if (w + 2 * (ShopLayout.TAB_GAP + ShopLayout.TAB_W)) * s <= screenW - 16 then
+		return w, h, s, "outside"
+	end
+	local wide = w + ShopLayout.TAB_W
+	return wide, h, scaleFor(wide), "inside"
+end
+
+-- The tabs, top to bottom, and the Shop sections they scroll to (its "Section_FEATURED" title rows).
+ShopLayout.TAB_SECTIONS = { "Featured", "Speed", "Money" }
+ShopLayout.LIT_LINE = 0.4 -- a section's tab lights once its title has come up past this much of the body
+
+-- Which tab is lit with the sections' titles at `tops` (on screen; a missing one isn't laid out yet) in a
+-- body at `bodyTop`, `bodyH` tall: the last section whose title is at or above LIT_LINE of the body (the
+-- PASSES between FEATURED and SPEED keep FEATURED lit, the UPGRADES after MONEY keep MONEY), the first
+-- while none is; nil when no title is laid out (nothing to go by).
+function ShopLayout.litTab(tops: { [string]: number }, bodyTop: number, bodyH: number): string?
+	local line = bodyTop + bodyH * ShopLayout.LIT_LINE
+	local lit: string? = nil
+	local measured = false
+	for _, name in ShopLayout.TAB_SECTIONS do
+		local top = tops[name]
+		if top then
+			measured = true
+			if top <= line then
+				lit = name
+			end
+		end
+	end
+	if not measured then
+		return nil
+	end
+	return lit or ShopLayout.TAB_SECTIONS[1]
+end
+
 -- The width a full-width row of the body spans ("1, -8" inside the body's 4 px padding, beside the scrollbar).
 function ShopLayout.contentWidth(windowW: number): number
 	return windowW - 2 * ShopLayout.PAD - ShopLayout.SCROLLBAR - 8 - 8
