@@ -1,5 +1,5 @@
 -- Free planting (Shared/Planting): players plant anywhere on their own plot's dirt beds. The placement
--- rules the server checks (on a bed of your own plot, spacing by full-grown size, reach, the slot limit),
+-- rules the server checks (on a bed of your own plot, spacing by the plants' cores, reach, the slot limit),
 -- old saves' fixed slots moved onto the beds, auto-placing, and selling/removing by plant id. Runs on the
 -- generated map (world.spec builds it) and on the committed map/World.rbxm.
 local fs = require("@lune/fs")
@@ -64,7 +64,7 @@ H.test("planting: only YOUR plot's beds (a spot on another plot is refused)", fu
 	H.ok(string.find(source, "local state = plotOf(player)", 1, true) ~= nil, "...of the plot the player owns")
 end)
 
-H.test("planting: spacing by full-grown size (bigger rarities need more room)", function()
+H.test("planting: spacing by the plants' cores (bigger rarities need more room)", function()
 	local plot = plots()[2]
 	local planted = { { x = 20, z = 0, rarity = 1, slot = 1 } }
 	local need = Planting.minDistance(1, 1)
@@ -146,7 +146,7 @@ end)
 H.test("planting: Legendaries (the big plants) stand further inside the bed and take more room", function()
 	local plot = plots()[1]
 	local L = #Config.RARITIES
-	local edge = Config.PLOT_SIZE / 2 - Config.BED_FENCE_GAP - Config.PLANT_BED_MARGIN
+	local edge = Config.PLOT_SIZE / 2 - Config.BED_FENCE_GAP - Planting.bedMargin(1)
 	H.ok(Planting.check(query(plot, onBed(plot, edge - 0.1, 0))), "a Common by the fence")
 	H.eq(select(2, Planting.check(query(plot, onBed(plot, edge - 0.1, 0), { rarity = L }))), "bed", "a Legendary by the fence")
 	local inside = Config.PLOT_SIZE / 2 - Config.BED_FENCE_GAP - Planting.bedMargin(L)
@@ -253,7 +253,7 @@ end)
 H.test("planting: the server checks every request; the client only previews and sends a spot", function()
 	local plot = fs.readFile("src/server/PlotService.luau")
 	for _, needle in {
-		"function PlotService.plantAt(player: Player, pos: any, bagKey: any)",
+		"function PlotService.plantAt(player: Player, pos: any, bagKey: any, yaw: any)",
 		"typeof(pos) ~= \"Vector3\" or not finite(pos)",
 		"root = root.Position,",
 		"limit = Sessions.maxSlots(s),",
@@ -280,6 +280,168 @@ H.test("planting: the committed map/World.rbxm has two beds and an origin per pl
 		H.eq(#plot.beds, 2, `plot {i} beds`)
 		local x, z = Planting.legacySpot(1)
 		H.ok(Planting.bedAt(plot.beds, Planting.toWorld(plot.origin, x, z)) ~= nil, `plot {i}: old slot 1 lands on a bed`)
+	end
+end)
+
+
+----------------------------------------------------------------------------------------------------
+-- Owner request 2026-10-15: plants much closer together, and turning a plant while placing it
+----------------------------------------------------------------------------------------------------
+local Inventory = H.server("Inventory")
+local roblox = require("@lune/roblox")
+local CFrame, Enum = roblox.CFrame, roblox.Enum
+
+H.test("planting: plants may stand right next to each other (their cores apart), much closer than before", function()
+	local L = #Config.RARITIES
+	for a = 1, L do
+		H.ok(Planting.coreRadius(a) < Planting.radius(a) * 0.5, `rarity {a}: its core is well inside its leaves`)
+		for b = 1, L do
+			local d = Planting.minDistance(a, b)
+			H.ok(math.abs(d - (Planting.radius(a) + Planting.radius(b)) * Config.PLANT_CORE_SHARE) < 1e-9, `{a}/{b}: (radiusA + radiusB) x the core share`)
+			H.eq(d, Planting.minDistance(b, a), "symmetric")
+			-- the old rule was the full reaches minus a stud: now about half of that
+			H.ok(d <= (Planting.radius(a) + Planting.radius(b) - 1) * 0.6, `{a}/{b}: much closer than before ({d})`)
+			-- not on top of each other
+			H.ok(d >= 3 - 1e-9, `{a}/{b}: never on top of each other`)
+		end
+	end
+	H.ok(Config.PLANT_CORE_SHARE >= 0.4 and Config.PLANT_CORE_SHARE <= 0.5, "about 0.45")
+	H.ok(Planting.minDistance(1, 1) <= 3.2, "two Commons ~3 studs apart (they used to need ~6)")
+	-- the beds' margin is smaller too: a plant's core stays on the dirt, a big one's leaves at most
+	-- PLANT_FENCE_OVERHANG past the fence gap
+	H.ok(Config.PLANT_BED_MARGIN <= 1, "a smaller bed margin")
+	H.ok(Planting.bedMargin(1) < 2 and Planting.bedMargin(L) < 4, "Commons and Legendaries may stand nearer the bed's edge than before")
+	for r = 1, L do
+		H.ok(Planting.bedMargin(r) >= Planting.coreRadius(r), `rarity {r}: its core on the dirt`)
+	end
+	-- a block of Commons on one bed, a step apart: all pass, and one between them doesn't
+	local plot = plots()[1]
+	local step = Planting.minDistance(1, 1) + 0.01
+	local placed = {}
+	local x0 = Config.PLOT_PATH_WIDTH / 2 + Planting.bedMargin(1) + 0.01
+	for i = 0, 3 do
+		for j = 0, 3 do
+			local pos = onBed(plot, x0 + i * step, j * step)
+			local ok, why = Planting.check(query(plot, pos, { plants = placed, limit = 100, root = pos }))
+			H.ok(ok, `a Common at ({i}, {j}): {why}`)
+			table.insert(placed, { x = x0 + i * step, z = j * step, rarity = 1, slot = #placed + 1 })
+		end
+	end
+	local between = onBed(plot, x0 + step / 2, step / 2)
+	H.eq(select(2, Planting.check(query(plot, between, { plants = placed, limit = 100, root = between }))), "close", "but not on top of each other")
+	-- the server and the preview use this one rule
+	local client = fs.readFile("src/client/Planting.client.luau")
+	local server = fs.readFile("src/server/PlotService.luau")
+	H.ok(string.find(client, "return Planting.check({", 1, true) ~= nil and string.find(server, "local ok, why = Planting.check({", 1, true) ~= nil,
+		"Planting.check on both sides")
+	H.eq(Config.PLANT_OVERLAP, nil, "the old overlap rule is gone")
+end)
+
+H.test("planting: a yaw is a finite number of degrees, wrapped into 0..360; facing turns from the entrance", function()
+	H.eq(Planting.normalizeYaw(0), 0)
+	H.eq(Planting.normalizeYaw(45), 45)
+	H.eq(Planting.normalizeYaw(370), 10)
+	H.eq(Planting.normalizeYaw(-15), 345)
+	H.eq(Planting.normalizeYaw(360), 0)
+	H.eq(Planting.normalizeYaw(720.004), 0)
+	H.eq(Planting.normalizeYaw(12.345678), 12.35, "rounded to 0.01")
+	for _, bad in { 0 / 0, math.huge, -math.huge, 1e9, "90", true, {} } do
+		H.eq(Planting.normalizeYaw(bad), nil, `{tostring(bad)} is refused`)
+	end
+	H.eq(Planting.normalizeYaw(nil), nil)
+	local origin = CFrame.new(10, 2, -40) * CFrame.Angles(0, math.rad(90), 0)
+	local old = origin.Rotation * CFrame.Angles(0, math.pi, 0) -- how every plant faced before v11
+	local function same(a: any, b: any): boolean
+		return (a.LookVector - b.LookVector).Magnitude < 1e-6 and (a.UpVector - b.UpVector).Magnitude < 1e-6
+	end
+	H.ok(same(Planting.facing(origin, nil), old), "no yaw: facing the entrance, as before")
+	H.ok(same(Planting.facing(origin, 0), old), "0: the same")
+	H.ok(same(Planting.facing(origin, 360), old), "360: the same")
+	local turned = Planting.facing(origin, 90)
+	H.ok(math.abs(turned.LookVector:Dot(old.LookVector)) < 1e-6, "90: a quarter turn")
+	H.ok((turned.UpVector - old.UpVector).Magnitude < 1e-6, "around the vertical")
+	H.ok(Config.PLANT_YAW_STEP > 0 and 360 % Config.PLANT_YAW_STEP == 0, "steps that come full circle")
+end)
+
+H.test("planting saves v11: a plant's yaw round-trips; older plants keep facing the entrance; junk yaws are dropped", function()
+	H.ok(ProfileStore.VERSION >= 11)
+	local p = ProfileStore.defaultProfile()
+	p.plants = {
+		{ slot = 1, zone = 1, rarity = 1, plantedAt = 100, x = 15, z = 3, yaw = 45 },
+		{ slot = 2, zone = 2, rarity = 3, plantedAt = 200, x = -15, z = 8 },
+	}
+	p.inventory = { { id = 1, zone = 3, rarity = 2, age = 10, variance = 1.1, yaw = 300 } }
+	local data = serde.decode("json", serde.encode("json", ProfileStore.serialize(p)))
+	H.eq(data.v, ProfileStore.VERSION)
+	local back = ProfileStore.deserialize(data)
+	H.eq(back.plants[1].yaw, 45, "kept")
+	H.eq(back.plants[2].yaw, nil, "none: facing the entrance")
+	H.eq(back.inventory[1].yaw, 300, "an inventory plant keeps the way it faced")
+	-- a v10 save has no yaws: every plant keeps facing the entrance
+	local v10 = { v = 10, plants = { { s = 3, z = 1, r = 1, t = 50, px = 14, pz = 2 } }, inv = { { i = 2, z = 1, r = 1, a = 5, va = 1 } } }
+	local old = ProfileStore.deserialize(serde.decode("json", serde.encode("json", v10)))
+	H.eq(#old.plants, 1)
+	H.eq(old.plants[1].yaw, nil)
+	H.eq(old.inventory[1].yaw, nil)
+	-- junk from a hand-edited or broken save
+	for _, bad in { "x", 1e300, true } do
+		local junk = ProfileStore.deserialize({ v = 11, plants = { { s = 1, z = 1, r = 1, t = 5, px = 14, pz = 2, yw = bad } } })
+		H.eq(#junk.plants, 1, "the plant still loads")
+		H.eq(junk.plants[1].yaw, nil, `yaw {tostring(bad)} dropped`)
+	end
+	H.eq(ProfileStore.deserialize({ v = 11, plants = { { s = 1, z = 1, r = 1, t = 5, px = 14, pz = 2, yw = -90 } } }).plants[1].yaw, 270, "wrapped")
+end)
+
+H.test("planting: the inventory keeps a plant's yaw; planted again it faces the way the player turned it (or as before)", function()
+	local p = ProfileStore.defaultProfile()
+	p.plants = { { slot = 4, zone = 1, rarity = 2, plantedAt = 0, x = 15, z = 3, yaw = 120 } }
+	local entry = Inventory.take(p, 4, 100)
+	H.ok(entry ~= nil)
+	H.eq((entry :: any).yaw, 120, "taken off with its yaw")
+	H.eq(Inventory.toPlant(entry :: any, 9, 200, 1, 2).yaw, 120, "no new yaw: the way it faced")
+	H.eq(Inventory.toPlant(entry :: any, 9, 200, 1, 2, 1, 30).yaw, 30, "turned while placing it")
+	local server = fs.readFile("src/server/PlotService.luau")
+	for _, needle in {
+		"return CFrame.new(pos) * Planting.facing(info.origin, plant.yaw)", -- the model stands that way (restOf)
+		"function PlotService.plantAt(player: Player, pos: any, bagKey: any, yaw: any)",
+		"plantSeed(player, s, state, x, z, zone, rarity, mutation, entry, gene, Planting.normalizeYaw(yaw))", -- validated
+		"Inventory.toPlant(from, slot, now, x, z, Sessions.growMult(s), yaw)",
+		"plant.yaw = yaw -- (nil: facing the entrance)",
+		"yaw = entry.yaw or 0, -- its ghost starts facing the way the plant did (0: the entrance)",
+	} do
+		H.ok(string.find(server, needle, 1, true) ~= nil, needle)
+	end
+	local shop = fs.readFile("src/server/ShopService.luau")
+	H.ok(string.find(shop, "local function onPlant(player: Player, position: any, bagKey: any, yaw: any)", 1, true)
+		and string.find(shop, "PlotService.plantAt(player, position, bagKey, yaw)", 1, true), "the remote passes the yaw on")
+end)
+
+H.test("planting client: the wheel (sunk above the camera), L1 / R1, drawn turn buttons and a twist turn the ghost; PlantSeed sends the yaw", function()
+	local client = string.gsub(fs.readFile("src/client/Planting.client.luau"), "\r", "")
+	for _, needle in {
+		"ContextActionService:BindActionAtPriority(TURN_ACTION, onTurn, false, Enum.ContextActionPriority.High.Value,",
+		"Enum.UserInputType.MouseWheel, Enum.KeyCode.ButtonL1, Enum.KeyCode.ButtonR1)",
+		"return Enum.ContextActionResult.Sink", -- the camera doesn't zoom while turning
+		"ContextActionService:UnbindAction(TURN_ACTION)",
+		"bindTurn(rarity ~= nil)", -- only while placing
+		"UserInputService.TouchRotate:Connect(",
+		"local turnLeft, turnRight = turnButton(-1), turnButton(1)",
+		"PlantSeed:FireServer(pos, if bag then bag.key else nil, yaw)",
+		"model:PivotTo(CFrame.new(pos) * Planting.facing(origin :: CFrame, shownYaw))",
+		"yaw = Planting.normalizeYaw(data.yaw) or yaw",
+		"yaw = Planting.normalizeYaw(yaw + dir * Config.PLANT_YAW_STEP) or 0",
+	} do
+		H.ok(string.find(client, needle, 1, true) ~= nil, needle)
+	end
+	-- the camera's own wheel binding (PlayerModule) is at the default priority (Medium, 2000): ours is above it
+	H.ok(Enum.ContextActionPriority.High.Value > Enum.ContextActionPriority.Medium.Value)
+	-- the turn buttons are drawn (an arc and a head), no emoji or arrow characters
+	local button = string.match(client, "local function turnButton%(dir: number%): TextButton\n(.-)\nend\n") or ""
+	H.ok(button ~= "", "turnButton")
+	H.ok(string.find(button, "b.Text = \"\"", 1, true) and string.find(button, "\"Arc\"", 1, true) and string.find(button, "head.Name = \"Head\"", 1, true),
+		"an arc and a head, no text")
+	for _, glyph in { "⟲", "⟳", "↻", "↺", "🔄" } do
+		H.ok(not string.find(client, glyph, 1, true), `no "{glyph}"`)
 	end
 end)
 

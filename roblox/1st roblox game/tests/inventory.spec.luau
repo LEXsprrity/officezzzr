@@ -249,7 +249,7 @@ H.test("inventory: the server wiring (Remove, plant from the inventory, sell ids
 		"Inventory.take(s.profile, slot, now, Sessions.growMult(s))", -- Remove: into the inventory
 		"local invId = inventoryId(bagKey)", -- PlantSeed with "inv:<id>"
 		"Inventory.remove(s.profile, invId)",
-		"plantSeed(player, s, state, x, z, zone, rarity, mutation, entry, gene)", -- planted again as it was (a seed: as its gene says)
+		"plantSeed(player, s, state, x, z, zone, rarity, mutation, entry, gene, Planting.normalizeYaw(yaw))", -- planted again as it was (a seed: as its gene says)
 		"Selling.sell(s.profile, slots, distance, now, Sessions.moneyMult(s), ids, Sessions.growMult(s))",
 		"inventory = inventory, slots = Sessions.maxSlots(s)", -- the view
 	} do

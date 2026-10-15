@@ -10,9 +10,10 @@
 --     anywhere, into your inventory, for no money; PlotService.removePlant rate-limits it, Inventory.take
 --     checks it)
 --   server -> client: StatsUpdate "catalog" (catalog[zone][rarity] = the flower model names the Index lists)
---   client -> server: PlantSeed(position, bagKey?) (plant the carried seed, a bagged one or an inventory plant
---     "inv:<id>" on your own dirt bed at `position`, from the planting preview; PlotService.plantAt checks it all)
---   server -> client: LootEvent "PlaceSeed" { key, zone, rarity, name, ghost, scale } (the Inventory's Plant
+--   client -> server: PlantSeed(position, bagKey?, yaw?) (plant the carried seed, a bagged one or an inventory plant
+--     "inv:<id>" on your own dirt bed at `position`, turned `yaw` degrees, from the planting preview;
+--     PlotService.plantAt checks it all)
+--   server -> client: LootEvent "PlaceSeed" { key, zone, rarity, name, ghost, scale, yaw? } (the Inventory's Plant
 --     button or the hotbar's seed slot: show the ghost preview for that seed or plant: ReplicatedStorage
 --     .PlantGhosts "Ghost_<zone>_<rarity>_<ghost>" at plant scale `scale`, what it will be when planted; a
 --     seed's `key` may differ from the one asked for when an old seed got its gene; `name` never names a
