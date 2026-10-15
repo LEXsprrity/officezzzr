@@ -156,10 +156,15 @@ local function buildFrame(model: Model, cf: CFrame)
 	studs(Props.deco(model, "BoardPost", Vector3.new(1.4, postHeight, 1), cf * CFrame.new(0, -(h / 2 + postHeight / 2 - 0.2), 0.05), POST), { "FrontSurface" })
 end
 
--- The ground the treadmill stands on: the bottom of its frame or model (the plot's "Treadmill" group), or
--- the belt's bottom.
+-- The ground the treadmill stands on: a tier model's pivot (Assets stands it there; tier 4's front legs
+-- reach into the floor below it), else the bottom of its frame (the plot's "Treadmill" group), or the
+-- belt's bottom.
 local function groundOf(model: Model, belt: BasePart): number
 	local tm = model:FindFirstChild("Treadmill")
+	local pivot = if tm and tm:GetAttribute("Asset") ~= nil then Assets.pivotOf(tm :: Model) else nil
+	if pivot then
+		return pivot.Position.Y
+	end
 	local lo = if tm then Assets.bounds(tm) else nil
 	if lo then
 		return lo.Y

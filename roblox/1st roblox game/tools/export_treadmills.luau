@@ -9,6 +9,8 @@
 --     whichever tier is shown;
 --   * the console screen renamed "ConsoleScreen" (the tests find the console by name), see-through on the
 --     tiers with `glass` (see TIERS);
+--   * on the tiers with `groundOn` (see TIERS), a Pivot attribute at the ground point, so Assets stands the
+--     model there instead of on its lowest point;
 --   * attributes Yaw = 180 (the models' console is at their +Z end; the game's front is -Z), KeepScale =
 --     true (already scaled here), Tier and Source (the Tool it came from).
 -- The meshes keep the seller's mesh asset ids. Run from the game folder:
@@ -35,11 +37,16 @@ local MAX_SIZE = Vector3.new(12, 9.8, 14.5) -- and the whole model never bigger 
 -- is a glowing opaque cyan slab and its belt is raised: all you saw was a fist beside a block of light (owner
 -- screenshot 2026-10-15). Tiers 6 (cyan) and 7 (yellow) have the same opaque Neon back, taller than the
 -- runner's head. See-through, the runner shows behind it.
+-- `groundOn` (optional): the part whose bottom is the ground (the model's origin); without it, the model's
+-- lowest point. Tier 4 stands on long curved front legs, in the same meshes as its side frames, that reach
+-- 1.2 studs (game size) below everything else: on them its deck, rear wheel hub and frame hung in the air,
+-- the belt 2.8 studs up (owner screenshot 2026-10-15). Set on its frame and hub (.002), the legs go into
+-- the floor.
 local TIERS = {
 	{ tool = "Treadmill", belt = "Cube.056", top = 0.89 },
 	{ tool = "Lucky BlockTreadmill", belt = "Belt.001", top = 0.45 },
 	{ tool = "HackerTreadmill", belt = "Belt.001", top = 0.35 },
-	{ tool = "Sci-FiTreadmill", belt = "scifi treadmil fix", top = 3.07, glass = 0.75 },
+	{ tool = "Sci-FiTreadmill", belt = "scifi treadmil fix", top = 3.07, glass = 0.75, groundOn = "scifi treadmil fix.002" },
 	{ tool = "The FreezeTreadmill", belt = "the fire treadmil test.004", top = 0.85 },
 	{ tool = "FlameTreadmill", belt = "Cube.038", top = 0.80, glass = 0.75 },
 	{ tool = "GoldenTreadmill", belt = "Vip Treadmil fix.005", top = 1.66, glass = 0.75 },
@@ -99,8 +106,12 @@ local function export(spec: any, tier: number, tool: any): (any, string)
 		end
 	end
 	local lo, hi = Vector3.one * math.huge, -Vector3.one * math.huge
-	local belt, screen = nil, nil
+	local belt, screen, ground = nil, nil, nil
 	for _, p in parts do
+		if p.Name == spec.groundOn then
+			assert(ground == nil, `{spec.tool}: two parts named {spec.groundOn}`)
+			ground = p
+		end
 		if p.Transparency < 1 then
 			local a, b = box(p)
 			lo, hi = lo:Min(a), hi:Max(b)
@@ -113,6 +124,7 @@ local function export(spec: any, tier: number, tool: any): (any, string)
 		end
 	end
 	assert(belt and screen, `{spec.tool}: no belt part {spec.belt} or no VideoFeedScreen`)
+	assert(ground or not spec.groundOn, `{spec.tool}: no part {spec.groundOn}`)
 	local size = hi - lo
 	-- the models run along +Z with the console at the +Z end
 	assert(size.Z > size.X and select(1, box(screen)).Z > (lo.Z + hi.Z) / 2, `{spec.tool}: not along +Z`)
@@ -138,8 +150,10 @@ local function export(spec: any, tier: number, tool: any): (any, string)
 	end
 	local s = math.min(BELT_WIDTH / (surface.x1 - surface.x0), MAX_SIZE.X / size.X, MAX_SIZE.Y / size.Y, MAX_SIZE.Z / size.Z)
 
-	-- Scale about the bottom centre and move it to the origin, keeping every rotation.
-	local origin = Vector3.new((lo.X + hi.X) / 2, lo.Y, (lo.Z + hi.Z) / 2)
+	-- Scale about the bottom centre (at the groundOn part's bottom, if any) and move it to the origin,
+	-- keeping every rotation.
+	local floor = if ground then select(1, box(ground)).Y else lo.Y
+	local origin = Vector3.new((lo.X + hi.X) / 2, floor, (lo.Z + hi.Z) / 2)
 	for _, p in parts do
 		p.Size *= s
 		p.CFrame = CFrame.new((p.CFrame.Position - origin) * s) * p.CFrame.Rotation
@@ -188,9 +202,12 @@ local function export(spec: any, tier: number, tool: any): (any, string)
 	model:SetAttribute("KeepScale", true)
 	model:SetAttribute("Tier", tier)
 	model:SetAttribute("Source", spec.tool)
+	if ground then
+		model:SetAttribute("Pivot", Vector3.zero) -- the ground point (the legs reach below it)
+	end
 	local out = size * s
-	return model, string.format("T%-2d %-22s scale %.3f  model %.1f x %.1f x %.1f (w x h x l)  belt %.2f x %.2f, top %.2f",
-		tier, spec.tool, s, out.X, out.Y, out.Z, marker.Size.X, marker.Size.Z, (surface.top - lo.Y) * s)
+	return model, string.format("T%-2d %-22s scale %.3f  model %.1f x %.1f x %.1f (w x h x l)  belt %.2f x %.2f, top %.2f, sunk %.2f",
+		tier, spec.tool, s, out.X, out.Y, out.Z, marker.Size.X, marker.Size.Z, (surface.top - floor) * s, (floor - lo.Y) * s)
 end
 
 local place = roblox.deserializePlace(fs.readFile(SOURCE))

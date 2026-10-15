@@ -1002,6 +1002,36 @@ local DECK_PART = {
 	"Cube.056", "Belt.001", "Belt.001", "scifi treadmil fix", "the fire treadmil test.004",
 	"Cube.038", "Vip Treadmil fix.005", "Cube.017", "Belt.001", "Belt.002",
 }
+-- Each tier's main chassis: the frame / side rails under the deck (tier 4's: its frame and rear wheel hub).
+local CHASSIS_PART = {
+	"Cube.044", "Siderails.001", "SideRails.001", "scifi treadmil fix.002", "the fire treadmil test.002",
+	"Cube.037", "Vip Treadmil fix.002", "Cube.008", "SideRail.001", "SideRail.001",
+}
+
+H.test("treadmill tiers: every tier's main body sits on the ground (no tier floats on thin legs)", function()
+	H.ok(string.find(fs.readFile("tools/export_treadmills.luau"), `glass = 0.75, groundOn = "{CHASSIS_PART[4]}"`, 1, true) ~= nil,
+		"tier 4 is grounded on its frame in TIERS (its front legs reach 1.2 studs lower)")
+	local world = MapTool.load(MapTool.PATH)
+	local plots = WorldBuilder.adopt(world)
+	Assets.refresh(world)
+	local plot = plots[1]
+	local board = TreadmillBoard.build(plot.model, plot.belt, plot.center)
+	local ground = Assets.pivotOf(plot.model:FindFirstChild("Treadmill")).Position.Y
+	for tier = 1, Config.TREADMILL_MAX do
+		TreadmillBoard.showTier(board, tier)
+		local tm = plot.model:FindFirstChild("Treadmill")
+		H.near(Assets.pivotOf(tm).Position.Y, ground, 1e-3, `tier {tier}: stands where the treadmill piece does`)
+		local chassis = tm:FindFirstChild(CHASSIS_PART[tier], true)
+		H.ok(chassis ~= nil and chassis:IsA("BasePart") and chassis.Transparency < 1, `tier {tier}: its chassis {CHASSIS_PART[tier]}`)
+		local clo = Assets.bounds(chassis)
+		H.ok(math.abs(clo.Y - ground) <= 0.5, `tier {tier}: the chassis bottom is {clo.Y - ground} studs from the ground`)
+		local dlo = Assets.bounds(tm:FindFirstChild(DECK_PART[tier], true))
+		H.ok(dlo.Y - ground >= -0.05 and dlo.Y - ground <= 0.65, `tier {tier}: the deck's underside is {dlo.Y - ground} studs up`)
+		local _, bhi = Assets.bounds(tm:FindFirstChild("Belt", true), nil, true)
+		H.ok(bhi.Y - ground <= 2, `tier {tier}: the belt is {bhi.Y - ground} studs up (a low step, not a raised stage)`)
+	end
+	TreadmillBoard.showTier(board, 1)
+end)
 -- Tiers whose console screen is see-through (TIERS `glass`): tier 4's is a glowing opaque cyan slab from the
 -- runner's shins to over its head, between it and the walkway (owner screenshot 2026-10-15); tiers 6 (cyan)
 -- and 7 (yellow) have the same opaque Neon back, taller than the runner's head.
