@@ -1,6 +1,6 @@
 # Criar os produtos e passes do jogo automaticamente
 
-O jogo vende **30 developer products** (packs de Speed, dinheiro, trails, upgrades...) e **6 gamepasses** (2x Money, VIP...). Em vez de criar os 36 à mão no Creator Dashboard, um script cria todos de uma vez, já com nome, descrição, preço e ícone, e anota o número (id) de cada um em **`monetization/ids.json`**. O jogo lê os ids desse arquivo.
+O jogo vende **32 developer products** (packs de Speed, dinheiro, trails, upgrades...) e **6 gamepasses** (2x Money, VIP...). Em vez de criar os 38 à mão no Creator Dashboard, um script cria todos de uma vez, já com nome, descrição, preço e ícone, e anota o número (id) de cada um em **`monetization/ids.json`**. O jogo lê os ids desse arquivo.
 
 - `monetization/catalog.json`: a lista do que vai ser criado (nome, descrição, preço em Robux, ícone).
 - `monetization/ids.json`: os ids. `0` = ainda não criado (a loja mostra "coming soon").
@@ -46,6 +46,9 @@ node tools/create_monetization.mjs --dry-run
 
 # Agora de verdade
 node tools/create_monetization.mjs --universe 1234567890
+
+# Cria o que falta E acerta os preços dos que já existem (ex.: os packs x1 agora custam 200 / 300 R$)
+node tools/create_monetization.mjs --universe 1234567890 --update-prices
 ```
 
 No fim aparece uma tabela com cada item: o id, e se foi **created** (criado agora), **existing** (já existia) ou **failed** (deu erro, com a mensagem). Se algo falhar, é só rodar o mesmo comando de novo: ele cria só o que falta. Se o Roblox pedir para ir mais devagar (limite de requisições), o script espera e tenta de novo sozinho.
@@ -64,6 +67,6 @@ Depois de rodar, volte em **Open Cloud → API Keys** e **apague** a chave (ou d
 
 ### Dúvidas comuns
 
-- **Quero mudar um preço.** Mude direto no Creator Dashboard (Monetization). O jogo lê o preço real de lá; o do `catalog.json` é só o preço inicial.
+- **Quero mudar um preço.** Mude direto no Creator Dashboard (Monetization), ou deixe o script fazer: com `--update-prices` ele também acerta o preço dos itens que **já existem** para o preço do `catalog.json` (só onde está diferente). O jogo lê o preço real do Roblox.
 - **Os ícones aparecem cinza.** O Roblox ainda está revisando as imagens. Espere alguns minutos.
 - **Apareceu "is not a ... of this universe".** O `ids.json` tem um id de outra experiência. Confira o `--universe`. Se for isso mesmo que você quer, troque aquele id por `0` e rode de novo.
