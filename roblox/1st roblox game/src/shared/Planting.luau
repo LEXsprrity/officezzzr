@@ -25,10 +25,18 @@ Planting.MESSAGES = {
 } :: { [Reason]: string }
 
 -- How far a creature of `rarity` reaches on the ground once full-grown (the biggest variance, like
--- CreatureModels.scaleFor at full weight): the spacing between plants is budgeted on this.
+-- CreatureModels.scaleFor at full weight, its rarity's size multiplier included): the spacing between plants
+-- is budgeted on this.
 function Planting.radius(rarity: number): number
 	local grown = (Config.GROW_MAX_FACTOR * 1.2) ^ Config.CREATURE_GROWTH_EXPONENT * (1 + Config.CREATURE_RARITY_SCALE * (rarity - 1))
-	return Config.creatureFootprint(rarity) * math.clamp(grown, Config.CREATURE_MIN_SCALE, Config.CREATURE_MAX_SCALE) / 2
+	local scale = math.clamp(grown, Config.CREATURE_MIN_SCALE, Config.CREATURE_MAX_SCALE) * Config.creatureSizeMult(rarity)
+	return Config.creatureFootprint(rarity) * scale / 2
+end
+
+-- How far past its bed's fence gap a full-grown plant of `rarity` may reach: PLANT_FENCE_OVERHANG, more for a
+-- bigger one (x its size multiplier: a Legendary 3.75 studs, still well short of the treadmill out front).
+function Planting.fenceOverhang(rarity: number): number
+	return Config.PLANT_FENCE_OVERHANG * Config.creatureSizeMult(rarity)
 end
 
 -- A plant's stem / core footprint: PLANT_CORE_SHARE of its full-grown reach (not its leaves' spread).
@@ -37,9 +45,9 @@ function Planting.coreRadius(rarity: number): number
 end
 
 -- How far inside its bed a plant of `rarity` must stand: its core (at least PLANT_BED_MARGIN), or more for a
--- big one, so a full-grown plant reaches at most PLANT_FENCE_OVERHANG past the bed's fence gap.
+-- big one, so a full-grown plant reaches at most fenceOverhang past the bed's fence gap.
 function Planting.bedMargin(rarity: number): number
-	return math.max(Config.PLANT_BED_MARGIN, Planting.coreRadius(rarity), Planting.radius(rarity) - Config.BED_FENCE_GAP - Config.PLANT_FENCE_OVERHANG)
+	return math.max(Config.PLANT_BED_MARGIN, Planting.coreRadius(rarity), Planting.radius(rarity) - Config.BED_FENCE_GAP - Planting.fenceOverhang(rarity))
 end
 
 -- The closest two plants may stand (centre to centre): a tiny core, PLANT_SPACING_SHARE x (radiusA + radiusB),
