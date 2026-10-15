@@ -575,8 +575,9 @@ end)
 -- Treadmill: step on your OWN plot's belt and you are locked on it (Shared/Treadmill.stepLock): the
 -- character is held in place (centred on the belt, facing the front, the console: put back there every
 -- frame, with AutoRotate off and its WalkSpeed 0 on this client only, so the walking keys don't move it) and
--- sprints in place (its own run animation from the Animate script, sped up), with a "+X" Speed popup over
--- it about every second. The only way off is jumping (Space / the mobile jump button), which puts you just
+-- sprints in place (its own run animation from the Animate script, sped up to a blur, leaning forward, wind
+-- lines streaking off behind it), with a stream of "+X" Speed popups over its head (Treadmill.stepPopups:
+-- one every server tick, adding up to the real rate). The only way off is jumping (Space / the mobile jump button), which puts you just
 -- beside the belt; you can't be locked again for a moment. Dying, a respawn or the server moving you off
 -- the belt just unlocks. The root is NEVER anchored: a root anchored on the client stops replicating, so the
 -- server kept the last position from before the lock (just off the belt) and paid no Speed (owner playtest:
@@ -601,7 +602,8 @@ local function standLift(humanoid: Humanoid?, root: BasePart): number
 	end
 	return Treadmill.standLift(humanoid.RigType == Enum.HumanoidRigType.R6, humanoid.HipHeight, root.Size.Y)
 end
-local nextPopup = 0
+local popups = Treadmill.newPopups(0)
+local speedPopupsLive = 0
 -- What the Speed popups need from the stats (StatsUpdate sends partial tables).
 local stats = { treadmillTier = 1, equippedTrail = nil :: string?, passes = {} :: { [string]: boolean } }
 
@@ -689,39 +691,68 @@ local function release()
 	lockedRoot, lockedBelt, lockedHumanoid = nil, nil, nil
 end
 
--- "[sneaker] +1.6K" over the character, floating up and fading: the Speed a second on the treadmill pays.
-local POPUP_LIFE = 2
-local function speedPopup(root: BasePart)
-	local amount = Treadmill.perSecond(stats.treadmillTier, stats.equippedTrail, Config.passSpeedMult(stats.passes))
-	if amount <= 0 then
-		return
-	end
+-- "[sneaker] +1.6K" around and over the runner's head (owner's reference screenshot): big bold purple
+-- relief text, a little bigger or smaller and tilted at random, popping in, floating up and fading; several
+-- at a time, overlapping. `amount` is what that popup's slice of a second pays (Treadmill.stepPopups).
+local SPEED_PURPLE = Color3.fromRGB(128, 64, 240)
+local SPEED_INK = Color3.fromRGB(32, 12, 70)
+local POPUP_STUDS = Vector2.new(5.5, 1.5) -- studs, so the far ones look smaller
+local function speedPopup(root: BasePart, amount: number)
+	speedPopupsLive += 1
+	local life = Treadmill.POPUP_LIFE
+	local scale = 0.85 + math.random() * 0.35
+	local tilt = (math.random() - 0.5) * 18
+	local side = root.CFrame.RightVector
 	local attachment = Instance.new("Attachment")
-	attachment.WorldPosition = root.Position + Vector3.new((math.random() - 0.5) * 4, 3.5 + math.random() * 0.8, (math.random() - 0.5) * 4)
+	attachment.WorldPosition = root.Position + side * ((math.random() - 0.5) * 5) + Vector3.new(0, 3 + math.random() * 2.5, 0)
 	attachment.Parent = workspace.Terrain
 	local gui = Instance.new("BillboardGui")
-	gui.Size = UDim2.fromScale(6.5, 1.7) -- studs, so the far ones look smaller
+	local size = UDim2.fromScale(POPUP_STUDS.X * scale, POPUP_STUDS.Y * scale)
+	gui.Size = UDim2.fromScale(size.X.Scale * 0.4, size.Y.Scale * 0.4) -- pops in from small
 	gui.AlwaysOnTop = true
 	gui.LightInfluence = 0
+	gui.MaxDistance = 150
 	gui.Adornee = attachment
 	gui.Parent = attachment
+	-- the sneaker, square at the left (no emoji while the icon isn't uploaded: just the number)
+	local image = Icons.image("Speed")
+	local iconRoom = 0
+	if image then
+		local icon = Instance.new("ImageLabel")
+		icon.Name = "Icon_Speed"
+		icon.BackgroundTransparency = 1
+		icon.Image = image
+		icon.ScaleType = Enum.ScaleType.Fit
+		icon.SizeConstraint = Enum.SizeConstraint.RelativeYY
+		icon.Size = UDim2.fromScale(1, 1)
+		icon.Rotation = tilt
+		icon.Parent = gui
+		iconRoom = POPUP_STUDS.Y / POPUP_STUDS.X + 0.02
+	end
 	local label = Instance.new("TextLabel")
+	label.Name = "Gain"
 	label.BackgroundTransparency = 1
-	label.Size = UDim2.fromScale(1, 1)
+	label.Position = UDim2.fromScale(iconRoom, 0)
+	label.Size = UDim2.fromScale(1 - iconRoom, 1)
 	label.Font = Enum.Font.FredokaOne
 	label.TextScaled = true
-	label.TextColor3 = Color3.fromRGB(122, 58, 235)
+	label.TextXAlignment = if image then Enum.TextXAlignment.Left else Enum.TextXAlignment.Center
+	label.TextColor3 = SPEED_PURPLE
+	label.Rotation = tilt
+	label.Text = Treadmill.gainText(amount)
 	local stroke = Instance.new("UIStroke")
 	stroke.Thickness = 3
-	stroke.Color = Color3.fromRGB(32, 12, 70)
+	stroke.Color = SPEED_INK
 	stroke.Parent = label
 	label.Parent = gui
-	Icons.set(label, "Speed", "⚡ " .. Treadmill.gainText(amount))
+	UiFx.relief(label, 3)
 
-	local info = TweenInfo.new(POPUP_LIFE, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
-	TweenService:Create(gui, info, { StudsOffsetWorldSpace = Vector3.new(0, 5, 0) }):Play()
-	-- Fade only the last part of the rise, so several stay readable stacked above the runner.
-	local fade = TweenInfo.new(POPUP_LIFE * 0.45, Enum.EasingStyle.Quad, Enum.EasingDirection.In, 0, false, POPUP_LIFE * 0.55)
+	TweenService:Create(gui, TweenInfo.new(0.18, Enum.EasingStyle.Back, Enum.EasingDirection.Out), { Size = size }):Play()
+	local drift = side * ((math.random() - 0.5) * 1.5)
+	local info = TweenInfo.new(life, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
+	TweenService:Create(gui, info, { StudsOffsetWorldSpace = drift + Vector3.new(0, 4 + math.random() * 1.5, 0) }):Play()
+	-- Fade only the last part of the rise, so the stream stays readable stacked above the runner.
+	local fade = TweenInfo.new(life * 0.4, Enum.EasingStyle.Quad, Enum.EasingDirection.In, 0, false, life * 0.6)
 	for _, d in gui:GetDescendants() do
 		if d:IsA("TextLabel") then
 			TweenService:Create(d, fade, { TextTransparency = 1 }):Play()
@@ -731,9 +762,87 @@ local function speedPopup(root: BasePart)
 			TweenService:Create(d, fade, { Transparency = 1 }):Play()
 		end
 	end
-	task.delay(POPUP_LIFE + 0.05, function()
+	task.delay(life + 0.05, function()
 		attachment:Destroy()
+		speedPopupsLive -= 1
 	end)
+end
+
+-- The sprint's lean: the runner tilts forward into the run, eased in and out, by turning its root joint's
+-- C0 (HumanoidRootPart -> LowerTorso on R15, -> Torso on R6) on this client only. The root itself stays
+-- upright: it is what the lock holds and the server checks.
+local LEAN_RATE = 6 -- of the full lean, per second
+local leanJoint: Motor6D? = nil
+local leanBase = CFrame.identity
+local leanNow = 0
+
+local function rootJointOf(char: Model): Motor6D?
+	local lower = char:FindFirstChild("LowerTorso")
+	local joint = lower and lower:FindFirstChild("Root")
+	if joint and joint:IsA("Motor6D") then
+		return joint
+	end
+	local root = char:FindFirstChild("HumanoidRootPart")
+	joint = root and root:FindFirstChild("RootJoint")
+	return if joint and joint:IsA("Motor6D") then joint else nil
+end
+
+local function stepLean(char: Model?, running: boolean, dt: number)
+	local joint = if char then rootJointOf(char) else nil
+	if joint ~= leanJoint then
+		if leanJoint and leanJoint.Parent then
+			leanJoint.C0 = leanBase
+		end
+		leanJoint, leanNow = joint, 0
+		if joint then
+			leanBase = joint.C0
+		end
+	end
+	local target = if running then 1 else 0
+	if not leanJoint or leanNow == target then
+		return
+	end
+	leanNow = if target > leanNow then math.min(target, leanNow + dt * LEAN_RATE) else math.max(target, leanNow - dt * LEAN_RATE)
+	leanJoint.C0 = CFrame.Angles(-math.rad(Treadmill.RUN_LEAN) * leanNow, 0, 0) * leanBase
+end
+
+-- Wind lines streaking off behind the runner (a local emitter on its root, out of its back face).
+local wind: ParticleEmitter? = nil
+local function makeWind(root: BasePart): ParticleEmitter
+	local e = Instance.new("ParticleEmitter")
+	e.Name = "TreadmillWind"
+	e.Shape = Enum.ParticleEmitterShape.Box
+	e.ShapeStyle = Enum.ParticleEmitterShapeStyle.Volume
+	e.EmissionDirection = Enum.NormalId.Back
+	e.Orientation = Enum.ParticleOrientation.VelocityParallel
+	e.Color = ColorSequence.new(Color3.new(1, 1, 1))
+	e.LightEmission = 0.3
+	e.Transparency = NumberSequence.new({
+		NumberSequenceKeypoint.new(0, 1),
+		NumberSequenceKeypoint.new(0.2, 0.45),
+		NumberSequenceKeypoint.new(1, 1),
+	})
+	e.Size = NumberSequence.new(0.12)
+	e.Squash = NumberSequence.new(2.5) -- stretched along the velocity: a line, not a dot
+	e.Speed = NumberRange.new(28, 40)
+	e.Lifetime = NumberRange.new(0.18, 0.3)
+	e.SpreadAngle = Vector2.new(6, 6)
+	e.Rate = 40
+	e.Enabled = false
+	e.Parent = root
+	return e
+end
+
+local function stepWind(root: BasePart?, running: boolean)
+	if running and root and (not wind or wind.Parent ~= root) then
+		if wind then
+			wind:Destroy()
+		end
+		wind = makeWind(root)
+	end
+	if wind then
+		wind.Enabled = running and wind.Parent ~= nil
+	end
 end
 
 player.CharacterAdded:Connect(function()
@@ -742,7 +851,7 @@ player.CharacterAdded:Connect(function()
 	jumpQueued = false
 end)
 
-RunService.Heartbeat:Connect(function()
+RunService.Heartbeat:Connect(function(dt: number)
 	local now = os.clock()
 	local char = player.Character
 	local humanoid = char and char:FindFirstChildOfClass("Humanoid")
@@ -771,7 +880,7 @@ RunService.Heartbeat:Connect(function()
 		-- standing ON the belt's top, wherever the root was when it got over the belt (climbing onto a
 		-- raised belt, or mid-jump)
 		root.CFrame = Treadmill.lockCFrame(belt.CFrame, belt.Size, root.Position, standLift(humanoid, root))
-		nextPopup = now + 0.5
+		popups = Treadmill.newPopups(now)
 	elseif lock.mode == "locked" and root and belt and root == lockedRoot then
 		-- Still locked: keep it facing the console (nothing may turn it while it runs), centred and standing
 		-- on the belt's top (a new tier's model moves the belt: PlotService swaps it on an upgrade).
@@ -820,8 +929,13 @@ RunService.Heartbeat:Connect(function()
 		runTrack = nil
 	end
 
-	if want and root and now >= nextPopup then
-		nextPopup = now + 1
-		speedPopup(root)
+	if want and root then
+		local perSecond = Treadmill.perSecond(stats.treadmillTier, stats.equippedTrail, Config.passSpeedMult(stats.passes))
+		local amount = Treadmill.stepPopups(popups, now, perSecond, speedPopupsLive)
+		if amount then
+			speedPopup(root, amount)
+		end
 	end
+	stepLean(char, want, dt)
+	stepWind(root, want)
 end)

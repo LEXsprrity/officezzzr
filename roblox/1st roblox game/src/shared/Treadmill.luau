@@ -82,8 +82,11 @@ function Treadmill.shouldRun(standing: ("own" | "other")?, alive: boolean): bool
 	return alive and standing == "own"
 end
 
--- The run animation's playback speed on the treadmill: a sprint, well above a normal run.
-Treadmill.RUN_ANIM_SPEED = 2.75
+-- The run animation's playback speed on the treadmill: a real sprint, the legs a blur (owner: 2.75 looked
+-- like a jog). Much past 4 the default run's keyframes start to skip and the legs glitch.
+Treadmill.RUN_ANIM_SPEED = 4
+-- How far a locked runner leans into the sprint (degrees; client-side only, on its root joint's C0).
+Treadmill.RUN_LEAN = 12
 
 ----------------------------------------------------------------------------------------------------
 -- What standing on it pays, and the text over it
@@ -95,6 +98,36 @@ Treadmill.RUN_ANIM_SPEED = 2.75
 -- Upgrade board and the Shop card all show this one number.
 function Treadmill.perSecond(tier: number?, trailId: string?, passMult: number?): number
 	return Config.treadmillPerSecond(tier, trailId, passMult)
+end
+
+-- The "+X" popups over the runner (Effects.client): a stream of them, one every POPUP_INTERVAL seconds (the
+-- server's own tick, Config.TICK), each showing what that interval pays, so the numbers popping in one
+-- second add up to exactly Treadmill.perSecond (owner: spam them like the reference). At most
+-- POPUP_MAX_LIVE are on screen at once; each lives POPUP_LIFE seconds (about 6 at a time normally).
+Treadmill.POPUP_INTERVAL = Config.TICK
+Treadmill.POPUP_MAX_LIVE = 12
+Treadmill.POPUP_LIFE = 1.5
+
+export type PopupState = { nextAt: number }
+
+-- A new stream (on locking): the first popup one interval after `now`.
+function Treadmill.newPopups(now: number): PopupState
+	return { nextAt = now + Treadmill.POPUP_INTERVAL }
+end
+
+-- One frame of the stream at `now` with `live` popups on screen: the gain the popup to spawn now shows, or
+-- nil (not due yet, nothing to gain, or the cap is full: that one is skipped). A slow frame that missed
+-- several intervals shows them all in one popup, so the shown total never drifts from the real rate.
+function Treadmill.stepPopups(state: PopupState, now: number, perSecond: number, live: number): number?
+	if now < state.nextAt then
+		return nil
+	end
+	local due = math.floor((now - state.nextAt) / Treadmill.POPUP_INTERVAL) + 1
+	state.nextAt += due * Treadmill.POPUP_INTERVAL
+	if perSecond <= 0 or live >= Treadmill.POPUP_MAX_LIVE then
+		return nil
+	end
+	return perSecond * Treadmill.POPUP_INTERVAL * due
 end
 
 -- "+0.5", "+12.3", "+200", "+1.6K" (like the HUD's "+X/step").

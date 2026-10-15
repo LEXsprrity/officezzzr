@@ -103,7 +103,76 @@ H.test("treadmill: the run animation plays only on your own belt, alive", functi
 	H.eq(Treadmill.shouldRun("own", false), false, "dead")
 	H.eq(Treadmill.shouldRun("other", true), false, "someone else's treadmill: the playtest bug")
 	H.eq(Treadmill.shouldRun(nil, true), false, "not on a belt")
-	H.ok(Treadmill.RUN_ANIM_SPEED >= 2.5 and Treadmill.RUN_ANIM_SPEED <= 3, "a sprint, not a jog")
+	H.eq(Treadmill.RUN_ANIM_SPEED, 4, "a real sprint, the legs a blur (owner: 2.75 looked like a jog)")
+	H.ok(Treadmill.RUN_LEAN > 0 and Treadmill.RUN_LEAN <= 20, "a subtle forward lean")
+end)
+
+H.test("treadmill popups: a stream every server tick whose numbers add up to the real per-second rate", function()
+	H.eq(Treadmill.POPUP_INTERVAL, Config.TICK, "one per server tick")
+	H.ok(Treadmill.POPUP_INTERVAL <= 0.3, "spammed, several a second")
+	-- with the passes (2x Speed, VIP) and a trail, at several tiers and frame rates
+	for _, case in { { tier = 1, trail = nil, passes = {} }, { tier = 7, trail = "Rainbow", passes = { DoubleSpeed = true } },
+		{ tier = Config.TREADMILL_MAX, trail = "Red", passes = { DoubleSpeed = true, VIP = true } } } do
+		local perSecond = Treadmill.perSecond(case.tier, case.trail, Config.passSpeedMult(case.passes))
+		H.near(perSecond, Config.treadmillRate(case.tier) * Config.trailMult(case.trail) * Config.passSpeedMult(case.passes), 1e-9,
+			"the popups show the multiplied gain")
+		for _, dt in { 1 / 60, 1 / 30, 1 / 7, 0.6 } do
+			local state = Treadmill.newPopups(0)
+			local shown, count, now = 0, 0, 0
+			while now < 10 do
+				now += dt
+				local amount = Treadmill.stepPopups(state, now, perSecond, 0)
+				if amount then
+					shown += amount
+					count += 1
+				end
+			end
+			-- everything due by `now` was shown: exactly the rate times the intervals the stream has passed
+			local intervals = math.floor(state.nextAt / Treadmill.POPUP_INTERVAL + 0.5) - 1
+			H.near(shown, perSecond * intervals * Treadmill.POPUP_INTERVAL, 1e-6 * perSecond, `tier {case.tier} at dt {dt}: the sum`)
+			H.ok(math.abs(shown / now - perSecond) <= perSecond * (Treadmill.POPUP_INTERVAL + dt) / now, "per second, the real rate")
+			if dt < Treadmill.POPUP_INTERVAL then
+				H.eq(count, intervals, "one popup per tick")
+			end
+		end
+	end
+	-- the first one an interval after locking, none before
+	local state = Treadmill.newPopups(5)
+	H.eq(Treadmill.stepPopups(state, 5.1, 100, 0), nil, "not yet")
+	H.near(Treadmill.stepPopups(state, 5.25, 100, 0) :: number, 25, 1e-9, "a quarter second's gain")
+	H.eq(Treadmill.stepPopups(state, 5.3, 100, 0), nil, "the next one waits its interval")
+	H.eq(Treadmill.stepPopups(Treadmill.newPopups(0), 1, 0, 0), nil, "nothing to gain, nothing shown")
+end)
+
+H.test("treadmill popups: never more than POPUP_MAX_LIVE on screen", function()
+	H.ok(Treadmill.POPUP_MAX_LIVE >= 8 and Treadmill.POPUP_MAX_LIVE <= 12, "a dozen at most, for performance")
+	local state = Treadmill.newPopups(0)
+	H.eq(Treadmill.stepPopups(state, 1, 100, Treadmill.POPUP_MAX_LIVE), nil, "full: skipped")
+	H.ok(Treadmill.stepPopups(state, 2, 100, Treadmill.POPUP_MAX_LIVE - 1) ~= nil, "room for one more")
+	-- spawning every tick, each living POPUP_LIFE, the live count stays under the cap
+	H.ok(Treadmill.POPUP_LIFE / Treadmill.POPUP_INTERVAL < Treadmill.POPUP_MAX_LIVE, "normally under the cap, so no gain is hidden")
+	local live: { number } = {}
+	local now = 0
+	state = Treadmill.newPopups(0)
+	local most = 0
+	while now < 20 do
+		now += 1 / 60
+		for i = #live, 1, -1 do
+			if live[i] <= now then
+				table.remove(live, i)
+			end
+		end
+		if Treadmill.stepPopups(state, now, 100, #live) then
+			table.insert(live, now + Treadmill.POPUP_LIFE)
+		end
+		most = math.max(most, #live)
+	end
+	H.ok(most <= Treadmill.POPUP_MAX_LIVE, `at most {most} live`)
+	local source = fs.readFile("src/client/Effects.client.luau")
+	H.ok(string.find(source, "Treadmill.stepPopups(popups, now, perSecond, speedPopupsLive)", 1, true) ~= nil
+		and string.find(source, "speedPopupsLive += 1", 1, true) ~= nil and string.find(source, "speedPopupsLive -= 1", 1, true) ~= nil,
+		"Effects.client counts its live popups and spawns through the shared stream")
+	H.ok(string.find(source, "UiFx.relief(label", 1, true) ~= nil, "relief text, not flat")
 end)
 
 H.test("treadmill: Effects.client locks, sprints and pops Speed with the shared rules, on its own plot", function()
@@ -113,8 +182,10 @@ H.test("treadmill: Effects.client locks, sprints and pops Speed with the shared 
 	H.ok(string.find(source, "Treadmill.stepLock(", 1, true) ~= nil, "the shared lock")
 	H.ok(string.find(source, "JumpRequest", 1, true) ~= nil, "jumping (Space or the mobile button) leaves")
 	H.ok(string.find(source, "AdjustSpeed(Treadmill.RUN_ANIM_SPEED)", 1, true) ~= nil, "the sprint")
-	H.ok(string.find(source, "Treadmill.perSecond(", 1, true) ~= nil and string.find(source, "Icons.set(label, \"Speed\"", 1, true) ~= nil,
+	H.ok(string.find(source, "Treadmill.perSecond(", 1, true) ~= nil and string.find(source, "Icons.image(\"Speed\")", 1, true) ~= nil,
 		"the Speed popups, with the Speed icon")
+	H.ok(string.find(source, "stepLean(char, want, dt)", 1, true) ~= nil and string.find(source, "stepWind(root, want)", 1, true) ~= nil,
+		"the sprint leans and streams wind lines while running")
 	H.ok(string.find(source, "CharacterAdded", 1, true) ~= nil, "a respawn resets the lock")
 	H.ok(string.find(source, "partial.plot", 1, true) ~= nil, "reads its plot from StatsUpdate")
 	H.ok(string.find(source, "onAnyBelt", 1, true) == nil, "the any-belt check is gone")
