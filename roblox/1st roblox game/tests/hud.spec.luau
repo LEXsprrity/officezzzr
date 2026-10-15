@@ -230,7 +230,7 @@ do
 	local ALLOWED: { [string]: { string } } = {
 		["src/client/HUD.client.luau"] = {
 			"^%s*iconLabel%(statsFrame", "^sideButton%(", "button%(hotbar", "Icons%.set%(sideTitle", "^for _, tab in", "Icons%.set%(modalSubtitle",
-			"chunky%(parent, \"🎁\"", "Text = \"🏃\"", "^button%(rightTabs, \"🪴\"",
+			"chunky%(parent, \"🎁\"", "Text = \"🏃\"", "^button%(rightTabs, \"🪴\"", "iconLabel%(art, \"%a+\"",
 		},
 		["src/client/Rewards.client.luau"] = { "iconLabel%(" },
 		["src/client/ZoneBanner.client.luau"] = { "face = \"" }, -- the zone banner's faces (owner-approved design)

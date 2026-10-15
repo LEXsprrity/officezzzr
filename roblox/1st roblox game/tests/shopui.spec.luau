@@ -291,7 +291,7 @@ H.test("Shop look: yellow / cyan relief section titles, vivid square cards with 
 	for label, colour in string.gmatch(renderShop, "section%(\"([%u ]+)\", nextOrder%(%), (HEADING_%u+)%)") do
 		table.insert(colours, `{label}={colour}`)
 	end
-	H.eq(table.concat(colours, ","), "SEED PACKS=HEADING_GOLD,PASSES=HEADING_CYAN,SPEED=HEADING_GOLD,MONEY=HEADING_CYAN,UPGRADES=HEADING_GOLD", "alternating")
+	H.eq(table.concat(colours, ","), "FEATURED=HEADING_GOLD,PASSES=HEADING_CYAN,SPEED=HEADING_GOLD,MONEY=HEADING_CYAN,UPGRADES=HEADING_GOLD", "alternating")
 	H.ok(string.find(renderShop, "banner(nextOrder(), \"DoubleSpeed\", \"SPEED\"", 1, true) ~= nil, "a DOUBLE Your SPEED banner")
 	local cardFrame = block(SHOP, "local function cardFrame(", "\n\tend\n")
 	H.ok(string.find(cardFrame, "outline(L.CARD_STROKE, color:Lerp(WHITE, 0.6))", 1, true) ~= nil, "a thin bright outline")

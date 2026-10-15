@@ -378,4 +378,32 @@ H.test("seed packs: each reward tile's rarity name and % in its rarity's colour,
 	H.ok(not string.find(tile, "else WHITE", 1, true), "no white name / % any more")
 end)
 
+H.test("right edge: Featured / Speed / Money shortcuts above the Plants button open the Shop at their section", function()
+	local column = block(HUD, "local ICON, WORD, GAP = ", "\nend\n")
+	H.ok(string.find(column, "Name = \"ShopShortcuts\"", 1, true) and string.find(column, "AnchorPoint = Vector2.new(1, 1), Position = UDim2.new(1, -10, 0.45, -48)", 1, true),
+		"on the right edge, its bottom just above the Plants button (centred at 0.45, 70 tall)")
+	-- the Plants button: 70 tall, centred on 0.45 -> its top 35 above; the column ends 48 above: never over it
+	H.ok(48 > 70 / 2, "clear of the Plants button")
+	local icon, word, gap = string.match(column, "local ICON, WORD, GAP = (%d+), (%d+), (%d+)")
+	icon, word, gap = tonumber(icon), tonumber(word), tonumber(gap)
+	H.ok(icon and icon >= 60, "big icons")
+	-- the column's top stays under the day/night timer (top right, 6 + 46) on the design screen (900 tall)
+	H.ok(900 * 0.45 - 48 - (3 * ((icon :: number) + (word :: number)) + 2 * (gap :: number)) > 6 + 46, "clear of the day/night timer")
+	for _, s in { { "Featured", "Featured", "drawTag" }, { "Speed", "Speed", "function" }, { "Money", "Money", "function" } } do
+		H.ok(string.find(column, `shortcut%(%d, "{s[1]}", "{s[2]}", {s[3]}`) ~= nil, `{s[1]} opens the Shop at {s[2]}`)
+	end
+	H.ok(string.find(column, "iconLabel(art, \"Speed\", \"⚡\"", 1, true) and string.find(column, "iconLabel(art, \"Money\", \"💰\"", 1, true), "the sneaker and the cash")
+	H.ok(string.find(column, "openShopAt(section)", 1, true) ~= nil, "openShopAt")
+	H.ok(string.find(column, "Name = word, BackgroundTransparency = 1", 1, true) ~= nil, "no box behind them")
+	H.ok(string.find(column, "UiFx.relief(bold(b, 4, { Name = \"Word\", Text = word", 1, true) ~= nil, "the word in white relief under the icon")
+	-- the Featured tag: drawn red with a yellow % in relief
+	H.ok(string.find(column, "Name = \"Tag\"", 1, true) and string.find(column, "Name = \"Point\"", 1, true) and string.find(column, "Text = \"%\"", 1, true), "a red tag with a %")
+	-- the Shop has those sections
+	local renderShop = block(HUD, "function renderShop(): boolean", "\n\tend\nend")
+	H.ok(string.find(renderShop, "shopSections.Featured = section(\"FEATURED\"", 1, true) ~= nil, "-- FEATURED -- (the seed packs)")
+	H.ok(string.find(renderShop, "shopSections.Speed = section(\"SPEED\"", 1, true) ~= nil, "-- SPEED --")
+	H.ok(string.find(renderShop, "shopSections.Money = section(\"MONEY\"", 1, true) ~= nil, "-- MONEY --")
+	H.ok(not string.find(renderShop, "\"SEED PACKS\"", 1, true), "the old SEED PACKS title is renamed")
+end)
+
 return nil

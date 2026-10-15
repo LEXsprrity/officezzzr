@@ -490,6 +490,68 @@ button(rightTabs, "🪴", Color3.fromRGB(110, 235, 80), UDim2.fromOffset(70, 70)
 	renderSide()
 end, "Plants")
 
+-- Shop shortcuts (owner reference 2026-10-15): a column of three big icons on the right edge, above the
+-- Plants button: Featured (a red price tag with a "%", drawn), Speed (the sneaker), Money (the cash), each
+-- with its word in white relief under it, no box; they pop on hover (UiFx.watch) and open the Shop at
+-- their section (openShopAt: FEATURED = the seed packs, SPEED, MONEY).
+do
+	local ICON, WORD, GAP = 66, 24, 4 -- design pixels
+	local column = new("Frame", {
+		Name = "ShopShortcuts", BackgroundTransparency = 1, AnchorPoint = Vector2.new(1, 1), Position = UDim2.new(1, -10, 0.45, -48),
+		Size = UDim2.fromOffset(96, 3 * (ICON + WORD) + 2 * GAP), Parent = gui,
+	}, { new("UIListLayout", { Padding = UDim.new(0, GAP), SortOrder = Enum.SortOrder.LayoutOrder, HorizontalAlignment = Enum.HorizontalAlignment.Center }) })
+	-- The Featured icon: a red tag tilted up, its point on the left with a white hole, a yellow "%" in relief
+	local function drawTag(parent: GuiObject)
+		local RED, DARK_RED = Color3.fromRGB(235, 45, 55), Color3.fromRGB(150, 15, 30)
+		local tag = new("Frame", {
+			Name = "Tag", AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.56, 0.5), Size = UDim2.fromOffset(44, 34), Rotation = -32,
+			BackgroundColor3 = RED, BorderSizePixel = 0, ZIndex = 3, Parent = parent,
+		}, {
+			new("UIStroke", { Thickness = 3, Color = INK, LineJoinMode = Enum.LineJoinMode.Round }),
+			new("UIGradient", { Rotation = 90, Color = ColorSequence.new(RED:Lerp(WHITE, 0.15), RED:Lerp(DARK_RED, 0.5)) }),
+		})
+		new("Frame", { -- the point: a square turned 45 degrees behind the tag's left end
+			Name = "Point", AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.new(0, 0, 0.5, 0), Size = UDim2.fromOffset(24, 24), Rotation = 45,
+			BackgroundColor3 = RED, BorderSizePixel = 0, ZIndex = 2, Parent = tag,
+		}, {
+			new("UIStroke", { Thickness = 3, Color = INK, LineJoinMode = Enum.LineJoinMode.Round }),
+			new("UIGradient", { Rotation = 45, Color = ColorSequence.new(RED:Lerp(WHITE, 0.15), RED:Lerp(DARK_RED, 0.5)) }),
+		})
+		new("Frame", { -- hides the tag's outline where the point joins it
+			Name = "Join", AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.new(0, 0, 0.5, 0), Size = UDim2.new(0, 8, 1, -4),
+			BackgroundColor3 = RED, BorderSizePixel = 0, ZIndex = 4, Parent = tag,
+		})
+		new("Frame", { -- the hole
+			Name = "Hole", AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.new(0, -2, 0.5, 0), Size = UDim2.fromOffset(9, 9),
+			BackgroundColor3 = WHITE, ZIndex = 5, Parent = tag,
+		}, { new("UICorner", { CornerRadius = UDim.new(0.5, 0) }), new("UIStroke", { Thickness = 2, Color = INK }) }) -- round: a hole (art)
+		UiFx.relief(bold(tag, 3, {
+			Name = "Percent", Text = "%", Size = UDim2.new(1, -6, 1, -2), Position = UDim2.fromOffset(6, 0), ZIndex = 6,
+			TextColor3 = Color3.fromRGB(255, 225, 60),
+		}), 2, 3)
+	end
+	local function shortcut(order: number, word: string, section: string, draw: (GuiObject) -> ())
+		local b = new("TextButton", {
+			Name = word, BackgroundTransparency = 1, Text = "", Size = UDim2.fromOffset(96, ICON + WORD), LayoutOrder = order, Parent = column,
+		})
+		local art = new("Frame", {
+			Name = "Art", BackgroundTransparency = 1, AnchorPoint = Vector2.new(0.5, 0), Position = UDim2.fromScale(0.5, 0), Size = UDim2.fromOffset(ICON, ICON), Parent = b,
+		})
+		draw(art)
+		UiFx.relief(bold(b, 4, { Name = "Word", Text = word, Size = UDim2.new(1, 0, 0, WORD + 2), Position = UDim2.fromOffset(0, ICON - 4), ZIndex = 6 }), 3, 3)
+		b.Activated:Connect(function()
+			openShopAt(section)
+		end)
+	end
+	shortcut(1, "Featured", "Featured", drawTag)
+	shortcut(2, "Speed", "Speed", function(art: GuiObject)
+		iconLabel(art, "Speed", "⚡", { Size = UDim2.fromScale(1, 1), ZIndex = 3 })
+	end)
+	shortcut(3, "Money", "Money", function(art: GuiObject)
+		iconLabel(art, "Money", "💰", { Size = UDim2.fromScale(1, 1), ZIndex = 3 })
+	end)
+end
+
 ----------------------------------------------------------------------------------------------------
 -- Modals: Shop, Trail Shop, Index and Sell share one window, like the reference (owner 2026-10-15, round
 -- 2: "premium, more squared, no edges"): nothing is rounded. A flat bright title bar in the window's
@@ -1560,7 +1622,8 @@ do
 		local shopSections: { [string]: GuiObject } = {}
 
 		-- Seed packs (Robux)
-		section("SEED PACKS", nextOrder(), HEADING_GOLD)
+		-- (the right edge's Featured shortcut opens the Shop here; owner 2026-10-15: "-- FEATURED --")
+		shopSections.Featured = section("FEATURED", nextOrder(), HEADING_GOLD)
 		local bagCount = SeedPacks.bagCount(stats.seedBag or {})
 		local bagFull = bagCount >= Config.SEED_BAG_MAX
 		for _, entry in Config.products("Pack") do
@@ -1590,7 +1653,7 @@ do
 			end,
 		})
 
-		-- Speed (Robux), blue; the HUD's "+" on the Speed icon opens the Shop here
+		-- Speed (Robux), blue; the HUD's "+" by the Speed number and the right edge's Speed shortcut open the Shop here
 		shopSections.Speed = section("SPEED", nextOrder(), HEADING_GOLD)
 		banner(nextOrder(), "DoubleSpeed", "SPEED", CARD_COLORS.Speed, "Speed")
 		local grid = cardGrid(nextOrder())
@@ -1604,7 +1667,7 @@ do
 		end
 
 		-- Money (Robux), gold: the card shows what you'd get right now (fixed, or minutes of your income)
-		section("MONEY", nextOrder(), HEADING_CYAN)
+		shopSections.Money = section("MONEY", nextOrder(), HEADING_CYAN) -- (the right edge's Money shortcut opens it here)
 		banner(nextOrder(), "DoubleMoney", "MONEY", CARD_COLORS.Money, "Money")
 		grid = cardGrid(nextOrder())
 		local monies = Config.products("Money")
