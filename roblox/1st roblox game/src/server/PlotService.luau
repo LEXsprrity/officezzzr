@@ -36,14 +36,15 @@ type PlotState = {
 }
 
 -- Where a plant stands: its saved spot (in the plot's space, Shared/Planting) on the top of the bed under
--- it, facing the entrance (the origin looks into the plot). Off every bed (a hand-moved bed): on the floor.
+-- it, facing the way the player turned it (Planting.facing: `yaw` from facing the entrance; older plants
+-- face the entrance). Off every bed (a hand-moved bed): on the floor.
 local function restOf(info: WorldBuilder.PlotInfo, plant: ProfileStore.Plant): CFrame
 	local pos = Planting.toWorld(info.origin, plant.x, plant.z)
 	local bed = Planting.bedAt(info.beds, pos)
 	if bed then
 		pos = Planting.surface(bed, pos)
 	end
-	return CFrame.new(pos) * info.origin.Rotation * CFrame.Angles(0, math.pi, 0)
+	return CFrame.new(pos) * Planting.facing(info.origin, plant.yaw)
 end
 
 local plots: { PlotState } = {}
@@ -293,12 +294,15 @@ local function flowerRoll(): number
 	return flowerRng:NextNumber()
 end
 local function plantSeed(player: Player, s: Sessions.Session, state: PlotState, x: number, z: number, zone: number, rarity: number, mutation: string?,
-	from: ProfileStore.InvPlant?, gene: number?)
+	from: ProfileStore.InvPlant?, gene: number?, yaw: number?)
 	local now = os.time()
 	local slot = Planting.newId(s.profile.plants :: any)
 	x, z = math.round(x * 100) / 100, math.round(z * 100) / 100
-	local plant: ProfileStore.Plant = if from then Inventory.toPlant(from, slot, now, x, z, Sessions.growMult(s))
+	local plant: ProfileStore.Plant = if from then Inventory.toPlant(from, slot, now, x, z, Sessions.growMult(s), yaw)
 		else PlantGhosts.seedPlant(zone, rarity, mutation, gene, slot, now, x, z, flowerRoll)
+	if not from then
+		plant.yaw = yaw -- (nil: facing the entrance)
+	end
 	table.insert(s.profile.plants, plant)
 	spawnPlant(state, plant, now, Sessions.growMult(s))
 
@@ -335,12 +339,13 @@ local function inventoryId(key: any): number?
 end
 
 -- Plants the carried seed, or (with `bagKey`) one from the seed bag or a plant from the inventory
--- ("inv:<id>"), at `pos`: the remote PlantSeed, sent by the client's planting preview (Planting.client), so
--- nothing in it is trusted. The spot must be on one of the player's OWN dirt beds, clear of their other
--- plants (by full-grown size), within reach of where they stand, and the plot must have a free slot
+-- ("inv:<id>"), at `pos`, turned `yaw` degrees: the remote PlantSeed, sent by the client's planting preview
+-- (Planting.client), so nothing in it is trusted (a yaw that isn't a finite number is ignored: an inventory
+-- plant keeps the way it faced, a seed faces the entrance). The spot must be on one of the player's OWN
+-- dirt beds, clear of their other plants' cores (Planting.minDistance), within reach of where they stand, and the plot must have a free slot
 -- (Shared/Planting.check). A refused spot toasts why and plants nothing; the seed stays carried or in the
 -- bag, the plant in the inventory.
-function PlotService.plantAt(player: Player, pos: any, bagKey: any)
+function PlotService.plantAt(player: Player, pos: any, bagKey: any, yaw: any)
 	local s = Sessions.get(player)
 	local state = plotOf(player)
 	if not s or not state or typeof(pos) ~= "Vector3" or not finite(pos) then
@@ -398,7 +403,7 @@ function PlotService.plantAt(player: Player, pos: any, bagKey: any)
 		return
 	end
 	local x, z = Planting.toLocal(state.info.origin, pos)
-	local plant = plantSeed(player, s, state, x, z, zone, rarity, mutation, entry, gene)
+	local plant = plantSeed(player, s, state, x, z, zone, rarity, mutation, entry, gene, Planting.normalizeYaw(yaw))
 	if not bagKey and Config.announcesLegendary(zone, rarity, false) then
 		Net.announce(Config.legendaryAnnouncement(player.DisplayName, zone, mutation, PlotService.plantName(plant)), "gold")
 	end
@@ -407,9 +412,9 @@ end
 -- The Inventory's Plant button or the hotbar's seed slot, on a bagged seed or an inventory plant
 -- ("inv:<id>"): if the player has it, their client shows the planting preview for it (LootEvent
 -- "PlaceSeed", with `ghost` and `scale`: the flower its ghost shows, PlantGhosts.name, at the size it will
--- have when planted; a seed is still only called "Rare Seed"). A bag seed from before genes gets one now
--- (PlantGhosts.bagPreview), so its ghost matches too. Clicking or tapping their dirt then plants it
--- through PlotService.plantAt.
+-- have when planted, and an inventory plant's `yaw`; a seed is still only called "Rare Seed"). A bag seed
+-- from before genes gets one now (PlantGhosts.bagPreview), so its ghost matches too. Clicking or tapping
+-- their dirt then plants it through PlotService.plantAt.
 function PlotService.plantFromBag(player: Player, key: string)
 	local s = Sessions.get(player)
 	if not s or not plotOf(player) then
@@ -425,6 +430,7 @@ function PlotService.plantFromBag(player: Player, key: string)
 			PlantGhosts.ensure(entry.zone, entry.rarity, ghost)
 			Net.LootEvent:FireClient(player, "PlaceSeed", {
 				key = key, zone = entry.zone, rarity = entry.rarity, name = PlotService.plantName(plant), ghost = ghost, scale = scale,
+				yaw = entry.yaw or 0, -- its ghost starts facing the way the plant did (0: the entrance)
 			})
 		end
 		return

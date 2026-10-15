@@ -31,15 +31,37 @@ function Planting.radius(rarity: number): number
 	return Config.creatureFootprint(rarity) * math.clamp(grown, Config.CREATURE_MIN_SCALE, Config.CREATURE_MAX_SCALE) / 2
 end
 
--- How far inside its bed a plant of `rarity` must stand: PLANT_BED_MARGIN, or more for the big ones
--- (Epic, Legendary), so a full-grown one reaches at most PLANT_FENCE_OVERHANG past the bed's fence gap.
-function Planting.bedMargin(rarity: number): number
-	return math.max(Config.PLANT_BED_MARGIN, Planting.radius(rarity) - Config.BED_FENCE_GAP - Config.PLANT_FENCE_OVERHANG)
+-- A plant's stem / core footprint: PLANT_CORE_SHARE of its full-grown reach (not its leaves' spread).
+function Planting.coreRadius(rarity: number): number
+	return Planting.radius(rarity) * Config.PLANT_CORE_SHARE
 end
 
--- The closest two plants may stand (centre to centre): their full-grown reaches, overlapping a little.
+-- How far inside its bed a plant of `rarity` must stand: its core (at least PLANT_BED_MARGIN), or more for a
+-- big one, so a full-grown plant reaches at most PLANT_FENCE_OVERHANG past the bed's fence gap.
+function Planting.bedMargin(rarity: number): number
+	return math.max(Config.PLANT_BED_MARGIN, Planting.coreRadius(rarity), Planting.radius(rarity) - Config.BED_FENCE_GAP - Config.PLANT_FENCE_OVERHANG)
+end
+
+-- The closest two plants may stand (centre to centre): their cores side by side, (radiusA + radiusB) x
+-- PLANT_CORE_SHARE. Their leaves may overlap (owner: "right next to each other, not on top of each other").
 function Planting.minDistance(rarityA: number, rarityB: number): number
-	return Planting.radius(rarityA) + Planting.radius(rarityB) - Config.PLANT_OVERLAP
+	return Planting.coreRadius(rarityA) + Planting.coreRadius(rarityB)
+end
+
+-- Which way a plant faces: `yaw` degrees (turned by the player while placing it, Planting.client) from the
+-- way plants have always faced, the plot's entrance. nil or 0: facing the entrance (plants saved before v11).
+function Planting.facing(origin: CFrame, yaw: number?): CFrame
+	return origin.Rotation * CFrame.Angles(0, math.pi + math.rad(yaw or 0), 0)
+end
+
+-- A yaw from the network or a save (untrusted): a finite number, wrapped into 0..360 (rounded to 0.01
+-- degree), or nil.
+function Planting.normalizeYaw(yaw: any): number?
+	if type(yaw) ~= "number" or yaw ~= yaw or math.abs(yaw) > 1e6 then
+		return nil
+	end
+	local y = math.round((yaw % 360) * 100) / 100
+	return if y >= 360 then 0 else y
 end
 
 -- A world position in the plot's space, and back (on the origin's height).
@@ -151,12 +173,13 @@ end
 -- 46 studs in from the entrance. An old slot keeps its spot, with each half of the grid pushed out onto its
 -- bed (clear of the path), so an old plot keeps its arrangement.
 local LEGACY_COLUMNS, LEGACY_ROWS, LEGACY_FIRST_ROW = 8, 5, 46
+local LEGACY_MARGIN = 2 -- (the bed margin those spots were made with: kept, so an old save lands as it always did)
 
 function Planting.legacySpot(slot: number): (number, number)
 	local row = (slot - 1) // LEGACY_COLUMNS
 	local col = (slot - 1) % LEGACY_COLUMNS
 	local u = (col - (LEGACY_COLUMNS - 1) / 2) * Config.SLOT_SPACING
-	local push = Config.PLOT_PATH_WIDTH / 2 + Config.PLANT_BED_MARGIN + 1 - Config.SLOT_SPACING / 2
+	local push = Config.PLOT_PATH_WIDTH / 2 + LEGACY_MARGIN + 1 - Config.SLOT_SPACING / 2
 	return u + math.sign(u) * push, Config.PLOT_SIZE / 2 - (LEGACY_FIRST_ROW + row * Config.SLOT_SPACING)
 end
 

@@ -53,6 +53,7 @@ function Inventory.take(profile: ProfileStore.Profile, slot: any, now: number, g
 				id = id, zone = plant.zone, rarity = plant.rarity, mutation = plant.mutation,
 				variant = plant.variant, age = math.clamp(Config.plantAge(plant.plantedAt, now, growMult), 0, Config.GROW_TIME),
 				variance = Config.varianceOf(plant),
+				yaw = plant.yaw, -- planted again, it starts facing the same way
 			}
 			table.remove(profile.plants, i)
 			table.insert(profile.inventory, entry)
@@ -64,11 +65,12 @@ end
 
 -- The plant an entry grows back into, planted at (x, z) under id `slot` at `now`: the same flower,
 -- mutation and variance, its growth going on from where it stopped (at the owner's `growMult`, Fast Grow: its
--- plantedAt is set back by its age in real seconds at that rate; 1 when nil).
-function Inventory.toPlant(entry: ProfileStore.InvPlant, slot: number, now: number, x: number, z: number, growMult: number?): ProfileStore.Plant
+-- plantedAt is set back by its age in real seconds at that rate; 1 when nil), facing `yaw` (the way the player
+-- turned it; nil: the way it faced before).
+function Inventory.toPlant(entry: ProfileStore.InvPlant, slot: number, now: number, x: number, z: number, growMult: number?, yaw: number?): ProfileStore.Plant
 	return {
 		slot = slot, zone = entry.zone, rarity = entry.rarity, mutation = entry.mutation, plantedAt = now - entry.age / (growMult or 1),
-		x = x, z = z, variant = entry.variant, variance = entry.variance,
+		x = x, z = z, variant = entry.variant, variance = entry.variance, yaw = if yaw ~= nil then yaw else entry.yaw,
 	}
 end
 

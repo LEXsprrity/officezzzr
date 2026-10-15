@@ -42,9 +42,13 @@ Config.PLOT_PATH_WIDTH = 20 -- the grass path between the beds
 Config.BED_FENCE_GAP = 1.5 -- from a bed's outer edges to the fence line
 Config.BED_HEIGHT = 0.4 -- the beds' depth: their tops are level with the plot's grass (owner: level ground); plants stand on top
 Config.SLOT_SPACING = 8 -- the default planting grid (old saves, auto-placing); creature sizes are budgeted against it
-Config.PLANT_BED_MARGIN = 2 -- a plant's centre stays at least this far inside its bed
-Config.PLANT_OVERLAP = 1 -- two full-grown neighbours may overlap this much (studs)
-Config.PLANT_FENCE_OVERHANG = 1 -- a big full-grown plant may reach this far past its bed's fence gap (Planting.bedMargin)
+-- Spacing (owner 2026-10-15: "gardens look sparse"): plants may stand right next to each other, their leaves
+-- overlapping, but never on top of each other: only their stems / cores (PLANT_CORE_SHARE of their full-grown
+-- reach, Planting.coreRadius) may not overlap. The server and the planting preview share the rule (Shared/Planting).
+Config.PLANT_CORE_SHARE = 0.45 -- a plant's core: this share of its full-grown reach (Planting.radius)
+Config.PLANT_BED_MARGIN = 1 -- a plant's centre stays at least this far inside its bed (its core, if bigger)
+Config.PLANT_FENCE_OVERHANG = 2.5 -- a big full-grown plant may reach this far past its bed's fence gap (Planting.bedMargin)
+Config.PLANT_YAW_STEP = 15 -- the planting ghost turns this many degrees a wheel notch / button press (Planting.client)
 Config.PLANT_REACH = 28 -- you plant within this many studs (flat) of where you stand
 
 ----------------------------------------------------------------------------------------------------

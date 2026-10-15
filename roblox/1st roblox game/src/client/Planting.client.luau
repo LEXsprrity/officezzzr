@@ -6,6 +6,11 @@
 -- client only sends the spot (remote PlantSeed); PlotService.plantAt checks it all again and plants. Q or
 -- the Cancel word cancels a picked seed or plant. The hotbar's seed slot (2) lives here too. Kept out of
 -- HUD.client (its register headroom at -O0).
+-- Turning (owner request 2026-10-15): while placing, the mouse wheel turns the ghost PLANT_YAW_STEP degrees a
+-- notch (the camera doesn't zoom meanwhile: the wheel is sunk above the camera's own binding), L1 / R1 on a
+-- gamepad, the two drawn turn buttons or a two-finger twist on a phone. The plant is planted facing that way
+-- (PlantSeed's yaw; an inventory plant's ghost starts facing the way it did).
+local ContextActionService = game:GetService("ContextActionService")
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local RunService = game:GetService("RunService")
@@ -26,6 +31,7 @@ local PlantSeed = Remotes:WaitForChild("PlantSeed") :: RemoteEvent
 local player = Players.LocalPlayer
 
 local BAD = Color3.fromRGB(255, 80, 80)
+local INK = Color3.fromRGB(25, 25, 35)
 local HINT_RANGE = 90 -- a refusal shows while carrying within this many studs of your plot
 local SEND_GAP = 0.3 -- seconds between two plant requests
 
@@ -43,6 +49,10 @@ local slots = Config.SLOTS_START
 -- keys for inventory plants)
 local bag: { key: string, zone: number, rarity: number, name: string, ghost: number, scale: number }? = nil
 local seedBag: { [string]: number } = {}
+-- Which way the next plant faces (degrees from facing the entrance, Planting.facing): kept from one seed to
+-- the next (rows of plants facing alike); an inventory plant's ghost starts facing the way it did.
+local yaw = 0
+local shownYaw = 0 -- the ghost turns smoothly toward `yaw`
 
 -- The rarity of the seed we would plant now, or nil when there is nothing to plant.
 local function seedRarity(): number?
@@ -180,7 +190,7 @@ local function showPreview(pos: Vector3?, ok: boolean)
 			end
 		end
 	end
-	model:PivotTo(CFrame.new(pos) * (origin :: CFrame).Rotation * CFrame.Angles(0, math.pi, 0)) -- facing the entrance, like the plants
+	model:PivotTo(CFrame.new(pos) * Planting.facing(origin :: CFrame, shownYaw)) -- the way the plant will face
 	model.Parent = workspace
 end
 
@@ -220,6 +230,110 @@ cancel.Text = "Cancel"
 cancel.Parent = gui
 UiFx.relief(cancel :: any, 3, 3)
 UiFx.pop(cancel)
+
+-- Turning the ghost: `turn(1)` / `turn(-1)` one step; how to (a relief line), and on touch screens two bright
+-- square buttons with a curved arrow drawn on each (a white arc with a dark outline and a head; no emoji).
+local function turn(dir: number)
+	yaw = Planting.normalizeYaw(yaw + dir * Config.PLANT_YAW_STEP) or 0
+end
+local turnHint = Instance.new("TextLabel")
+turnHint.Name = "TurnHint"
+turnHint.BackgroundTransparency = 1
+turnHint.AnchorPoint = Vector2.new(0.5, 1)
+turnHint.Position = UDim2.new(0.5, 0, 1, -88)
+turnHint.Size = UDim2.fromOffset(260, 22)
+turnHint.FontFace = Font.new("rbxasset://fonts/families/FredokaOne.json", Enum.FontWeight.Bold)
+turnHint.TextScaled = true
+turnHint.TextColor3 = Color3.new(1, 1, 1)
+turnHint.Text = ""
+turnHint.Parent = gui
+UiFx.relief(turnHint, 2, 2)
+
+local TURN_BLUE = Color3.fromRGB(60, 165, 255)
+local function turnButton(dir: number): TextButton
+	local b = Instance.new("TextButton")
+	b.Name = if dir > 0 then "TurnRight" else "TurnLeft"
+	b.AnchorPoint = Vector2.new(0.5, 1)
+	b.Position = UDim2.new(0.5, dir * 142, 1, -18) -- beside the hotbar
+	b.Size = UDim2.fromOffset(66, 66)
+	b.BackgroundColor3 = TURN_BLUE
+	b.AutoButtonColor = true
+	b.Text = ""
+	b.Visible = false
+	local corner = Instance.new("UICorner")
+	corner.CornerRadius = UDim.new(0, 8)
+	corner.Parent = b
+	local stroke = Instance.new("UIStroke")
+	stroke.Thickness = 4
+	stroke.Color = INK
+	stroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
+	stroke.Parent = b
+	local lit = Instance.new("Frame") -- a lighter top half, like the HUD's buttons
+	lit.Name = "Lit"
+	lit.Size = UDim2.fromScale(1, 0.5)
+	lit.BackgroundColor3 = Color3.new(1, 1, 1)
+	lit.BackgroundTransparency = 0.75
+	lit.BorderSizePixel = 0
+	lit.Parent = b
+	-- The arrow: an open ring (the gradient hides a slice of it on the arrow's side), outlined, and a head
+	-- at its top end pointing the way it turns.
+	-- (a stroke grows outward from its ring: the dark one starts 2 px inside the white one and ends 4 px past it)
+	for i, ring in { { size = 30, thickness = 11, color = INK }, { size = 34, thickness = 5, color = Color3.new(1, 1, 1) } } do
+		local arc = Instance.new("Frame")
+		arc.Name = if i == 1 then "ArcOutline" else "Arc"
+		arc.AnchorPoint = Vector2.new(0.5, 0.5)
+		arc.Position = UDim2.fromScale(0.5, 0.54)
+		arc.Size = UDim2.fromOffset(ring.size, ring.size)
+		arc.BackgroundTransparency = 1
+		arc.ZIndex = 2 + i
+		local round = Instance.new("UICorner")
+		round.CornerRadius = UDim.new(1, 0)
+		round.Parent = arc
+		local line = Instance.new("UIStroke")
+		line.Thickness = ring.thickness
+		line.Color = ring.color
+		line.Parent = arc
+		local gap = Instance.new("UIGradient")
+		gap.Rotation = if dir > 0 then -45 else 225 -- the open slice: upper right (clockwise) or upper left
+		gap.Transparency = NumberSequence.new({
+			NumberSequenceKeypoint.new(0, 0), NumberSequenceKeypoint.new(0.66, 0), NumberSequenceKeypoint.new(0.67, 1), NumberSequenceKeypoint.new(1, 1),
+		})
+		gap.Parent = line
+		arc.Parent = b
+	end
+	-- The head: a triangle at the arc's top end, pointing the way it turns (a turned square, half of it shown
+	-- through an upright clipping frame)
+	local head = Instance.new("Frame")
+	head.Name = "Head"
+	head.AnchorPoint = Vector2.new(if dir > 0 then 0 else 1, 0.5)
+	head.Position = UDim2.new(0.5, -dir * 6, 0.54, -19)
+	head.Size = UDim2.fromOffset(13, 26)
+	head.BackgroundTransparency = 1
+	head.ClipsDescendants = true
+	head.ZIndex = 5
+	local tip = Instance.new("Frame")
+	tip.Name = "Tip"
+	tip.AnchorPoint = Vector2.new(0.5, 0.5)
+	tip.Position = UDim2.fromScale(if dir > 0 then 0 else 1, 0.5)
+	tip.Size = UDim2.fromOffset(16, 16)
+	tip.Rotation = 45
+	tip.BackgroundColor3 = Color3.new(1, 1, 1)
+	tip.BorderSizePixel = 0
+	tip.ZIndex = 5
+	local tipStroke = Instance.new("UIStroke")
+	tipStroke.Thickness = 2.5
+	tipStroke.Color = INK
+	tipStroke.Parent = tip
+	tip.Parent = head
+	head.Parent = b
+	b.Activated:Connect(function()
+		turn(dir)
+	end)
+	b.Parent = gui
+	UiFx.pop(b)
+	return b
+end
+local turnLeft, turnRight = turnButton(-1), turnButton(1)
 gui.Parent = player:WaitForChild("PlayerGui")
 
 local refusedUntil, refusedText = 0, ""
@@ -237,6 +351,13 @@ local function updateHint(nearPlot: boolean, stuck: boolean)
 	local refused = os.clock() < refusedUntil
 	label.Visible = refused or stuck
 	label.Text = if refused then refusedText else BAG_FULL
+	-- how to turn the ghost, for the input in use (touch: the two buttons)
+	local placing = rarity ~= nil and (bag ~= nil or nearPlot)
+	local last = UserInputService:GetLastInputType()
+	local touch = last == Enum.UserInputType.Touch
+	turnLeft.Visible, turnRight.Visible = placing and touch, placing and touch
+	turnHint.Visible = placing and not touch
+	turnHint.Text = if string.find(last.Name, "Gamepad", 1, true) then "L1 / R1 to turn" else "Scroll to turn"
 end
 
 local onBagChanged = function() end -- (the hotbar's seed slot repaints, below)
@@ -253,7 +374,6 @@ cancel.Activated:Connect(stopBag)
 -- Q or Cancel puts it back. Each press of 2 after planting picks the next most recent.
 ----------------------------------------------------------------------------------------------------
 local RequestUseItem = Remotes:WaitForChild("RequestUseItem") :: RemoteEvent
-local INK = Color3.fromRGB(25, 25, 35)
 local SEED_GREEN = Color3.fromRGB(95, 190, 80)
 local recent: { string } = {} -- bag keys, oldest first
 
@@ -422,7 +542,7 @@ end
 local function aim(): Vector3?
 	local last = UserInputService:GetLastInputType()
 	if last == Enum.UserInputType.Touch then
-		return if lastTouch then bedUnder(lastTouch) else nil
+		return if lastTouch then bedUnder(lastTouch) else bedAhead() -- (before the first tap: in front of you, to turn it)
 	elseif string.find(last.Name, "Gamepad", 1, true) then
 		return bedAhead()
 	end
@@ -460,7 +580,7 @@ local function plantAt(pos: Vector3?)
 		return
 	end
 	lastSent = os.clock()
-	PlantSeed:FireServer(pos, if bag then bag.key else nil)
+	PlantSeed:FireServer(pos, if bag then bag.key else nil, yaw)
 end
 
 UserInputService.InputBegan:Connect(function(input: InputObject, processed: boolean)
@@ -485,6 +605,46 @@ UserInputService.InputBegan:Connect(function(input: InputObject, processed: bool
 	end
 end)
 
+-- Turning while placing: the mouse wheel (sunk above the camera's own wheel binding, so the camera doesn't
+-- zoom meanwhile) and L1 / R1. Bound only while there is something to place.
+local TURN_ACTION = "PlantTurn"
+local turnBound = false
+local function onTurn(_: string, state: Enum.UserInputState, input: InputObject): Enum.ContextActionResult
+	if input.UserInputType == Enum.UserInputType.MouseWheel then
+		if state == Enum.UserInputState.Change and input.Position.Z ~= 0 then
+			turn(if input.Position.Z > 0 then -1 else 1)
+		end
+	elseif state == Enum.UserInputState.Begin then
+		turn(if input.KeyCode == Enum.KeyCode.ButtonL1 then -1 else 1)
+	end
+	return Enum.ContextActionResult.Sink
+end
+local function bindTurn(on: boolean)
+	if on == turnBound then
+		return
+	end
+	turnBound = on
+	if on then
+		ContextActionService:BindActionAtPriority(TURN_ACTION, onTurn, false, Enum.ContextActionPriority.High.Value,
+			Enum.UserInputType.MouseWheel, Enum.KeyCode.ButtonL1, Enum.KeyCode.ButtonR1)
+	else
+		ContextActionService:UnbindAction(TURN_ACTION)
+	end
+end
+
+-- A two-finger twist turns it too, in whole steps from where the twist began.
+local twistFrom = 0
+UserInputService.TouchRotate:Connect(function(_: { Vector2 }, rotation: number, _: number, state: Enum.UserInputState, processed: boolean)
+	if processed or not seedRarity() then
+		return
+	end
+	if state == Enum.UserInputState.Begin then
+		twistFrom = yaw
+	end
+	local steps = math.round(rotation / Config.PLANT_YAW_STEP)
+	yaw = Planting.normalizeYaw(twistFrom - steps * Config.PLANT_YAW_STEP) or 0
+end)
+
 -- Phones and tablets: a tap in the world plants there (and the preview stays where you tapped).
 UserInputService.TouchTapInWorld:Connect(function(position: Vector2, processedByUI: boolean)
 	if processedByUI or not seedRarity() then
@@ -496,8 +656,12 @@ UserInputService.TouchTapInWorld:Connect(function(position: Vector2, processedBy
 	end
 end)
 
-RunService.RenderStepped:Connect(function()
+RunService.RenderStepped:Connect(function(dt: number)
 	local rarity = seedRarity()
+	bindTurn(rarity ~= nil)
+	-- the ghost turns smoothly to `yaw` (the short way round)
+	local diff = (yaw - shownYaw + 540) % 360 - 180
+	shownYaw = if math.abs(diff) < 0.5 then yaw else shownYaw + diff * math.min(1, dt * 18)
 	local near = false
 	if rarity and plotReady() then
 		local root = rootPart()
@@ -604,6 +768,9 @@ LootEvent.OnClientEvent:Connect(function(kind: string, data: any)
 			ghost = if type(data.ghost) == "number" then data.ghost else 1,
 			scale = if type(data.scale) == "number" and data.scale == data.scale then data.scale else 1,
 		}
+		if data.yaw ~= nil then -- an inventory plant: its ghost starts facing the way the plant did
+			yaw = Planting.normalizeYaw(data.yaw) or yaw
+		end
 		lastTouch = nil
 		paintSlot()
 	elseif kind == "Planted" then
