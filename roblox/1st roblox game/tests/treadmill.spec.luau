@@ -1003,8 +1003,9 @@ local DECK_PART = {
 	"Cube.038", "Vip Treadmil fix.005", "Cube.017", "Belt.001", "Belt.002",
 }
 -- Tiers whose console screen is see-through (TIERS `glass`): tier 4's is a glowing opaque cyan slab from the
--- runner's shins to over its head, between it and the walkway (owner screenshot 2026-10-15).
-local GLASS_SCREEN = { [4] = true }
+-- runner's shins to over its head, between it and the walkway (owner screenshot 2026-10-15); tiers 6 (cyan)
+-- and 7 (yellow) have the same opaque Neon back, taller than the runner's head.
+local GLASS_SCREEN = { [4] = true, [6] = true, [7] = true }
 -- How far (studs, along the belt) the locked runner's body stays from the console screen and its panel.
 local SCREEN_CLEAR = 2.75
 
@@ -1036,7 +1037,9 @@ H.test("treadmill tiers: the runner is locked over the middle of the belt you se
 	for tier, name in names do
 		H.eq(DECK_PART[tier], name, `tier {tier}'s running surface part`)
 	end
-	H.ok(string.find(export, "belt = \"scifi treadmil fix\", top = 3.07, glass = ", 1, true) ~= nil, "tier 4's screen is glass")
+	for tier in GLASS_SCREEN do
+		H.ok(string.find(export, `belt = "{DECK_PART[tier]}", top = [%d.]+, glass = `) ~= nil, `tier {tier}'s screen is glass in TIERS`)
+	end
 
 	local world = MapTool.load(MapTool.PATH)
 	local plots = WorldBuilder.adopt(world)

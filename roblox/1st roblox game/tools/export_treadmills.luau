@@ -33,15 +33,16 @@ local MAX_SIZE = Vector3.new(12, 9.8, 14.5) -- and the whole model never bigger 
 -- at the console end in front of the runner, from its shins to over its head, and the game turns the console
 -- toward the walkway, so from there you see the back of the screen with the runner behind it. Tier 4's back
 -- is a glowing opaque cyan slab and its belt is raised: all you saw was a fist beside a block of light (owner
--- screenshot 2026-10-15). See-through, the runner shows behind it.
+-- screenshot 2026-10-15). Tiers 6 (cyan) and 7 (yellow) have the same opaque Neon back, taller than the
+-- runner's head. See-through, the runner shows behind it.
 local TIERS = {
 	{ tool = "Treadmill", belt = "Cube.056", top = 0.89 },
 	{ tool = "Lucky BlockTreadmill", belt = "Belt.001", top = 0.45 },
 	{ tool = "HackerTreadmill", belt = "Belt.001", top = 0.35 },
 	{ tool = "Sci-FiTreadmill", belt = "scifi treadmil fix", top = 3.07, glass = 0.75 },
 	{ tool = "The FreezeTreadmill", belt = "the fire treadmil test.004", top = 0.85 },
-	{ tool = "FlameTreadmill", belt = "Cube.038", top = 0.80 },
-	{ tool = "GoldenTreadmill", belt = "Vip Treadmil fix.005", top = 1.66 },
+	{ tool = "FlameTreadmill", belt = "Cube.038", top = 0.80, glass = 0.75 },
+	{ tool = "GoldenTreadmill", belt = "Vip Treadmil fix.005", top = 1.66, glass = 0.75 },
 	{ tool = "CelebrityTreadmill", belt = "Cube.017", top = 1.38 },
 	{ tool = "DemonicTreadmill", belt = "Belt.001", top = 0.35 },
 	{ tool = "AngelicTreadmill", belt = "Belt.002", top = 0.42 },
