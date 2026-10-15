@@ -1,0 +1,315 @@
+-- The owner's 2026-10-15 HUD style pass (round 3): every HUD element in the classic Roblox studded plastic
+-- (one shared helper, ShopUi.studs: the uploaded Studs texture, one stud size everywhere, the window body's
+-- studs the same as its title bar's), the hotbar's dark see-through slots with a drawn bat, the shared
+-- announcement look (Shared/Toast), the bigger Speed / money readout with the VIP badge over it, the plot
+-- signs without their icon and the owner's Robux icon as the only Robux icon.
+local fs = require("@lune/fs")
+local roblox = require("@lune/roblox")
+local serde = require("@lune/serde")
+local H = require("./harness")
+
+local Config = H.shared("Config")
+local ShopUi = H.shared("ShopUi")
+
+local function read(path: string): string
+	return (string.gsub(fs.readFile(path), "\r", ""))
+end
+local HUD = read("src/client/HUD.client.luau")
+local REWARDS = read("src/client/Rewards.client.luau")
+local PLANTING = read("src/client/Planting.client.luau")
+local SHOP_UI = read("src/shared/ShopUi.luau")
+
+local function block(source: string, from: string, to: string): string
+	local a = string.find(source, from, 1, true)
+	local b = a and string.find(source, to, a + #from, true)
+	return if a and b then string.sub(source, a, b) else ""
+end
+
+-- Runs fn with Config.ICONS.Studs = id, then puts it back.
+local function withStuds(id: number, fn: () -> ())
+	local saved = Config.ICONS.Studs
+	Config.ICONS.Studs = id
+	local ok, err = pcall(fn)
+	Config.ICONS.Studs = saved
+	if not ok then
+		error(err, 0)
+	end
+end
+
+----------------------------------------------------------------------------------------------------
+-- The studs helper
+----------------------------------------------------------------------------------------------------
+H.test("studs: the uploaded Studs texture, tiled at one size everywhere, tinted to the frame's colour", function()
+	local ids = serde.decode("json", fs.readFile("icons/ids.json"))
+	H.ok(type(ids.Studs) == "number" and ids.Studs > 0, "the Studs texture is uploaded")
+	H.ok(ShopUi.STUD_CELL >= 14 and ShopUi.STUD_CELL <= 32, "a fine stud")
+	withStuds(ids.Studs, function()
+		local f = roblox.Instance.new("Frame")
+		f.Size = roblox.UDim2.fromOffset(200, 80)
+		local corner = roblox.Instance.new("UICorner")
+		corner.CornerRadius = roblox.UDim.new(0, 6)
+		corner.Parent = f
+		local green = roblox.Color3.fromRGB(95, 230, 45)
+		local layer = ShopUi.studs(f, green)
+		H.eq(layer.ClassName, "ImageLabel")
+		H.eq(layer.Name, "Studs")
+		H.eq(layer.Parent, f)
+		H.eq(layer.Image, `rbxassetid://{ids.Studs}`, "the uploaded texture, not the drawn fallback")
+		H.eq(layer.ScaleType, roblox.Enum.ScaleType.Tile)
+		H.eq(layer.TileSize, roblox.UDim2.fromOffset(ShopUi.STUD_CELL, ShopUi.STUD_CELL), "one stud size")
+		H.near(layer.ImageTransparency, ShopUi.STUD_FADE, 1e-5, "subtle, behind the words")
+		H.eq(layer.ImageColor3, ShopUi.studTint(green), "tinted to the frame's colour")
+		H.eq(layer.ImageColor3, green:Lerp(roblox.Color3.new(1, 1, 1), ShopUi.STUD_TINT))
+		local copied = layer:FindFirstChildOfClass("UICorner")
+		H.ok(copied ~= nil and copied.CornerRadius == corner.CornerRadius, "a rounded frame's studs follow its corners")
+		H.eq(layer.ZIndex, f.ZIndex, "under the frame's words (made first)")
+		ShopUi.paintStuds(f, roblox.Color3.fromRGB(35, 195, 255))
+		H.eq(layer.ImageColor3, ShopUi.studTint(roblox.Color3.fromRGB(35, 195, 255)), "re-tinted when the frame's colour changes")
+		local square = roblox.Instance.new("Frame")
+		H.eq(ShopUi.studs(square, nil, nil, 3):FindFirstChildOfClass("UICorner"), nil, "a square frame's studs are square")
+		H.eq(square:FindFirstChild("Studs").ZIndex, 3)
+		H.eq(square:FindFirstChild("Studs").ImageColor3, roblox.Color3.new(1, 1, 1), "no colour: white")
+	end)
+	withStuds(0, function()
+		local f = roblox.Instance.new("Frame")
+		f.Size = roblox.UDim2.fromOffset(180, 54)
+		local layer = ShopUi.studs(f, roblox.Color3.new(1, 0, 0))
+		H.eq(layer.ClassName, "Frame", "id 0: the drawn studs")
+		H.ok(layer:FindFirstChildOfClass("UIGridLayout") ~= nil, "a grid of small squares")
+		H.eq(layer:FindFirstChildOfClass("UIGridLayout").CellPadding, roblox.UDim2.fromOffset(ShopUi.STUD_CELL / 2, ShopUi.STUD_CELL / 2), "the same stud size")
+		local squares = 0
+		for _, c in layer:GetChildren() do
+			squares += if c:IsA("Frame") then 1 else 0
+		end
+		H.ok(squares >= math.ceil(180 / ShopUi.STUD_CELL) * math.ceil(54 / ShopUi.STUD_CELL), `enough squares to cover it ({squares})`)
+	end)
+	-- one style: no caller picks its own stud size or texture
+	local studs = block(SHOP_UI, "function ShopUi.studs(", "\nend")
+	H.ok(string.find(studs, "Icons.image(\"Studs\")", 1, true) and string.find(studs, "TileSize = UDim2.fromOffset(cell, cell)", 1, true)
+		and string.find(studs, "local cell = ShopUi.STUD_CELL", 1, true), "the texture at ShopUi.STUD_CELL")
+	for _, dir in { "src/client", "src/shared" } do
+		for _, entry in fs.readDir(dir) do
+			local source = read(dir .. "/" .. entry)
+			for args in string.gmatch(source, "ShopUi%.studs(%b())") do
+				H.ok(not string.match(args, "^%([^,]+, %d"), `{entry}: ShopUi.studs{args} sets no size of its own`)
+			end
+			if entry ~= "ShopUi.luau" then
+				H.ok(not string.find(source, "TileSize", 1, true), `{entry}: no studs of its own`)
+			end
+		end
+	end
+end)
+
+H.test("studs: on every HUD element (left column, Plants panel, readout, windows, cards, timer, banner, VIP, toasts)", function()
+	local function has(source: string, from: string, to: string, needle: string, what: string)
+		local b = block(source, from, to)
+		H.ok(b ~= "", `{what}: its block`)
+		H.ok(string.find(b, needle, 1, true) ~= nil, `{what}: {needle}`)
+	end
+	-- the left column and the Speed readout's "+"
+	has(HUD, "local function sideButton(", "\nend\n", "ShopUi.studs(b, color)", "Shop / Index buttons")
+	H.ok(string.find(HUD, "ShopUi.studs(slowTrack, nil)", 1, true) ~= nil, "Slow Mode switch")
+	H.ok(string.find(HUD, "ShopUi.studs(plusBadge,", 1, true) ~= nil, "the Speed's + badge")
+	-- the Plants panel: its side button (button()), the panel, its tabs (chunky), its cards
+	has(HUD, "local function button(", "\nend\n", "ShopUi.studs(b, color)", "the Plants side button")
+	H.ok(string.find(HUD, "ShopUi.studs(sidePanel, COLORS.panel)", 1, true) ~= nil, "the Plants panel")
+	has(HUD, "local function chunky(", "\nend\n", "ShopUi.studs(b, nil)", "chunky buttons (tabs, Remove, Plant, Sell, Equip)")
+	has(HUD, "local function card(", "\nend\n", "ShopUi.studs(f, color)", "the Plants list's cards")
+	has(HUD, "local function plantCard(", "\n\tend\n", "ShopUi.studs(f, accent)", "plant cards")
+	has(HUD, "local function itemCard(", "\n\tend\n", "ShopUi.studs(f, accent)", "Inventory cards")
+	-- the windows: frame, Shop cards (packs, passes, banners, Speed / Money / upgrades), Trail, Index, Sell, reveal
+	has(HUD, "local function cardFrame(", "\n\tend\n", "ShopUi.studs(c, if rainbow then nil else color, nil, 1)", "every Shop card")
+	H.ok(string.find(HUD, "studLayer.ZIndex = 2 -- the studs over the picture too", 1, true) ~= nil, "pack cards with a picture")
+	has(HUD, "local function trailCard(", "\n\tend\n", "ShopUi.studs(c, if t.rainbow then nil else t.color)", "Trail cards")
+	has(HUD, "local function renderIndex()", "\nend\n", "ShopUi.studs(row, zone.ui)", "Index rows")
+	has(HUD, "local function renderIndex()", "\nend\n", "ShopUi.studs(cell, if got then rarity.color else zone.ui)", "Index cells")
+	has(HUD, "local function sellCard(", "\n\tend\n", "ShopUi.studs(c, SELL_CARD)", "Sell cards")
+	has(HUD, "local function sellCard(", "\n\tend\n", "ShopUi.studs(band, rarity.color)", "Sell cards' bands")
+	H.ok(string.find(HUD, "ShopUi.studs(panel, Color3.fromRGB(75, 40, 140), nil, 1)", 1, true) ~= nil, "the pack reveal's panel")
+	H.ok(string.find(HUD, "ShopUi.studs(f, r.color, nil, 3)", 1, true) ~= nil, "the reveal's seed cards")
+	-- the Free Gift window: body and title bar in the same studs, its buttons too
+	H.ok(string.find(REWARDS, "ShopUi.studs(studs, BODY_COLOR, nil, 1)", 1, true) and string.find(REWARDS, "ShopUi.studs(titleBar, CYAN_TO, nil, 2)", 1, true),
+		"Free Gift body and title bar")
+	H.ok(string.find(REWARDS, "ShopUi.studs(b, nil, nil, 3)", 1, true) ~= nil, "Free Gift buttons")
+	H.ok(not string.find(REWARDS, "BackgroundTransparency = 0.955", 1, true), "its own drawn studs are gone")
+	-- the day/night timer, the zone banner, the VIP badge, the toasts
+	H.ok(string.find(read("src/client/DayTimer.client.luau"), "ShopUi.studs(strip,", 1, true) ~= nil, "day/night timer strip")
+	H.ok(string.find(read("src/client/ZoneBanner.client.luau"), "ShopUi.studs(dark,", 1, true) ~= nil, "zone banner strip")
+	H.ok(string.find(read("src/client/VipHudBadge.client.luau"), "ShopUi.studs(plate, PLATE)", 1, true) ~= nil, "VIP HUD badge")
+	H.ok(string.find(read("src/shared/Toast.luau"), "ShopUi.studs(plate, color, nil, 1)", 1, true) ~= nil, "toasts")
+	-- the hotbar's slots are the owner's dark see-through squares instead (their own request overrides studs there)
+	H.ok(not string.find(block(HUD, "local batSlot", "local batShade"), "ShopUi.studs", 1, true), "no studs on the Bat slot")
+end)
+
+----------------------------------------------------------------------------------------------------
+-- Hotbar
+----------------------------------------------------------------------------------------------------
+H.test("hotbar: small dark see-through slots, the number top-left, a drawn bat and the seed, white outline when picked", function()
+	local b = roblox.Instance.new("TextButton")
+	local key = ShopUi.slot(b, "2")
+	H.eq(b.Size, roblox.UDim2.fromOffset(ShopUi.SLOT, ShopUi.SLOT), "square")
+	H.ok(b.BackgroundTransparency >= 0.3 and b.BackgroundTransparency <= 0.5, "dark, about 40% see-through")
+	local h, s, v = b.BackgroundColor3:ToHSV()
+	H.ok(v < 0.2, `dark ({h}, {s}, {v})`)
+	H.eq(b.Text, "")
+	H.eq(b:FindFirstChildOfClass("UICorner"), nil, "square")
+	local stroke = b:FindFirstChild("Outline")
+	H.ok(stroke and stroke.Thickness <= 2, "a thin darker outline")
+	H.eq(key.Text, "2")
+	H.ok(key.Position.X.Offset < 10 and key.Position.Y.Offset < 10 and key.Size.Y.Offset <= 20, "small, top-left")
+	H.eq(key.TextColor3, roblox.Color3.new(1, 1, 1), "white")
+	ShopUi.selectSlot(b, true)
+	H.eq(stroke.Color, roblox.Color3.new(1, 1, 1), "picked: a white outline")
+	ShopUi.selectSlot(b, false)
+	H.ok(stroke.Color ~= roblox.Color3.new(1, 1, 1), "not picked: dark")
+
+	local bat = block(HUD, "local batSlot", "local batShade")
+	H.ok(string.find(bat, "ShopUi.slot(batSlot, \"1\")", 1, true) ~= nil, "slot 1 in the hotbar's look")
+	H.ok(string.find(bat, "Name = \"Bat\"", 1, true) and string.find(bat, "Rotation = 42", 1, true), "a bat drawn diagonally")
+	H.ok(not string.find(bat, "\"Bat\")", 1, true) and not string.find(bat, "Bat\\n", 1, true) and not string.find(HUD, "\"🏏\\nBat\"", 1, true),
+		"no Bat name, no hammer icon")
+	H.ok(not string.find(bat, "Color3.fromRGB(200, 140, 80)", 1, true), "no brown slot background")
+	H.ok(string.find(PLANTING, "ShopUi.slot(seedSlot, \"2\")", 1, true) ~= nil, "slot 2 in the same look")
+	H.ok(string.find(PLANTING, "ShopUi.selectSlot(seedSlot, picked)", 1, true) ~= nil, "picked: white outline")
+	H.ok(not string.find(PLANTING, "SEED_GREEN", 1, true), "no green slot background")
+	H.ok(not string.find(PLANTING, "\"🌱\\nSeeds\"", 1, true), "no Seeds name under the icon")
+	H.ok(string.find(PLANTING, "slotView.Size = UDim2.new(1, -4, 1, -4) -- the seed fills the slot", 1, true) ~= nil, "the seed's 3D fills the slot")
+	H.ok(string.find(PLANTING, "slotCount.Text = `x{count}`", 1, true) and string.find(PLANTING, "UiFx.relief(slotCount, 2, 2)", 1, true), "x3 in white relief")
+end)
+
+----------------------------------------------------------------------------------------------------
+-- Announcements
+----------------------------------------------------------------------------------------------------
+H.test("toasts: one announcement look (studded plate, bevel, icon, chunky relief words, pop in, fade out)", function()
+	-- UiFx needs these services to load; relief needs property signals Lune lacks (it's checked elsewhere)
+	local saved = { RunService = H.services.RunService, TweenService = H.services.TweenService, UserInputService = H.services.UserInputService }
+	local played = 0
+	H.services.RunService = { RenderStepped = { Connect = function() end }, Heartbeat = { Connect = function() end } }
+	H.services.TweenService = { Create = function() return { Play = function() played += 1 end } end }
+	H.services.UserInputService = { GetLastInputType = function() return nil end }
+	local UiFx = H.shared("UiFx")
+	local relief = UiFx.relief
+	local reliefs = 0
+	UiFx.relief = function(l: any)
+		reliefs += 1
+		return l
+	end
+	local ok, err = pcall(function()
+		local Toast = H.shared("Toast")
+		local savedIds = table.clone(Config.ICONS)
+		Config.ICONS.Lock, Config.ICONS.Star, Config.ICONS.Studs = 11, 22, 33
+		local holder = roblox.Instance.new("Frame")
+		local plate, words = Toast.build(holder, "Not enough money!", { color = "red" })
+		H.eq(plate.Name, "Toast")
+		H.eq(plate:FindFirstChildOfClass("UICorner"), nil, "square")
+		local stroke = plate:FindFirstChildOfClass("UIStroke")
+		H.ok(stroke and stroke.Thickness >= 4 and stroke.Color == ShopUi.INK, "a thick dark outline")
+		H.ok(plate:FindFirstChild("Studs") and plate:FindFirstChild("Studs").Image == "rbxassetid://33", "studded")
+		H.ok(plate:FindFirstChild("BevelTop") ~= nil, "a lighter top band")
+		H.ok(plate:FindFirstChild("Shine") ~= nil, "a shine")
+		H.eq(plate:FindFirstChild("Icon").Image, "rbxassetid://11", "errors: the lock")
+		H.eq(words.Text, "Not enough money!")
+		H.ok(words.TextScaled and words.Font == roblox.Enum.Font.FredokaOne, "big chunky words")
+		H.ok(words:FindFirstChildOfClass("UIStroke").Thickness >= 3, "a thick outline")
+		H.eq(reliefs, 1, "in relief")
+		local _, w2 = Toast.build(holder, "The sun is up.", { color = "blue", icon = "Sun" })
+		H.ok(w2.Parent:FindFirstChild("Icon"):IsA("Frame"), "day and night: a drawn sun / moon")
+		local big = Toast.build(holder, "Alex got a LEGENDARY Starpetal!", { color = "gold", big = true })
+		H.ok(big.Size.Y.Offset > plate.Size.Y.Offset and big.Size.X.Offset > plate.Size.X.Offset, "announcements are bigger")
+		H.ok(big:FindFirstChildOfClass("UIStroke"):FindFirstChild("Rainbow") ~= nil, "...with a rainbow frame")
+		H.eq(big:FindFirstChild("Icon").Image, "rbxassetid://22", "...and the star")
+		local slot = Toast.show(holder, "Hi", { color = "green", seconds = 2 })
+		H.ok(slot:FindFirstChildOfClass("CanvasGroup") ~= nil and played >= 3, "it pops and slides in (and fades out as one)")
+		local colours = {}
+		for name, style in Toast.STYLES do
+			colours[name] = style.color
+		end
+		H.ok(colours.red and colours.gold and colours.green and colours.blue and colours.purple, "a vivid colour per kind")
+		table.clear(Config.ICONS)
+		for k, v in savedIds do
+			Config.ICONS[k] = v
+		end
+	end)
+	UiFx.relief = relief
+	for k, v in saved do
+		H.services[k] = v
+	end
+	if not ok then
+		error(err, 0)
+	end
+	-- every announcement uses it: the HUD's toasts, the day/night ones with the sun / moon, the server-wide
+	-- ones big, the "Lucky!" over a thief's head
+	H.ok(string.find(HUD, "Toast.show(toastHolder, message, { color = color, seconds = seconds, icon = icon, big = big })", 1, true) ~= nil, "HUD toasts")
+	H.ok(string.find(HUD, "if data.night then \"Moon\" else \"Sun\")", 1, true) ~= nil, "day / night icons")
+	H.ok(string.find(HUD, "toast(data.text, data.color, 6, \"Star\", true)", 1, true) ~= nil, "server-wide announcements: big, the star")
+	H.ok(not string.find(HUD, "TOAST_COLORS", 1, true) and not string.find(block(HUD, "local function toast(", "\nend\n"), "deco(", 1, true),
+		"the flat rounded bar is gone")
+	local effects = read("src/client/Effects.client.luau")
+	H.ok(string.find(effects, "Toast.build(gui, `Lucky! {from.id} > {to.id}`, { color = \"purple\", icon = \"Star\" })", 1, true) ~= nil, "Lucky!")
+end)
+
+----------------------------------------------------------------------------------------------------
+-- Readout, VIP badge, pass Owned, plot sign, Robux
+----------------------------------------------------------------------------------------------------
+H.test("readout: Speed and money about 2x bigger in chunky italic, the VIP badge on top, clear of the column and the hotbar", function()
+	local stats = block(HUD, "local statsFrame = new(\"Frame\", {", "plusBadge.Activated")
+	H.ok(string.find(stats, "Name = \"Stats\"", 1, true) and string.find(stats, "Size = UDim2.fromOffset(470, STATS_H)", 1, true), "a wider readout")
+	H.eq(tonumber(string.match(HUD, "local STATS_H, LEFT_H = (%d+),")), 176, "about twice as tall (was 100)")
+	H.ok(select(2, string.gsub(stats, "Size = UDim2.fromOffset%(84, 84%)", "")) >= 2, "big icons (84, was 48)")
+	H.ok(select(2, string.gsub(stats, "Size = UDim2.new%(1, %-100, 0, 80%)", "")) == 2, "huge numbers (80 tall, was 44)")
+	H.ok(select(2, string.gsub(stats, "Enum.FontStyle.Italic", "")) == 2, "italic")
+	H.ok(string.find(stats, "UiFx.relief(speedValue, 6, 6)", 1, true) and string.find(stats, "UiFx.relief(moneyValue, 6, 6)", 1, true), "thick dark outlines")
+	local fit = block(HUD, "local function fitLeftColumn()", "\nend\n")
+	H.ok(string.find(fit, "fit.Scale = math.clamp((gui.AbsoluteSize.X / uiScale.Scale / 2 - 110 - 14) / 470, 0.5, 1)", 1, true) ~= nil,
+		"shrinks on narrow screens so it never reaches the hotbar")
+	H.ok(string.find(fit, "height / 2 - STATS_BOTTOM - STATS_H * fit.Scale - 64 * fit.Scale - 10", 1, true) ~= nil,
+		"the left column stops above the readout and the VIP badge")
+	H.ok(ShopUi.SLOT * 2 + 8 <= 2 * 110, "the hotbar fits in the room left for it")
+	local vip = read("src/client/VipHudBadge.client.luau")
+	H.ok(string.find(vip, ":WaitForChild(\"SeedHUD\"):WaitForChild(\"Stats\")", 1, true) and string.find(vip, "plate.Parent = stats", 1, true),
+		"the VIP badge sits on the readout, scaled with it")
+	local height = tonumber(string.match(vip, "local HEIGHT = (%d+)"))
+	local pad, gap = tonumber(string.match(vip, "local PAD = (%d+)")), tonumber(string.match(vip, "local GAP = (%d+)"))
+	H.ok(height and height >= 40, "a bigger VIP badge (was 34)")
+	H.eq((height :: number) + 2 * (pad :: number) + (gap :: number), 64, "the room fitLeftColumn leaves for it")
+end)
+
+H.test("passes: Owned is a bright gold button; plot signs show only the name; the owner's Robux icon is the only one", function()
+	local PassCards = H.shared("PassCards")
+	local r, g, b = PassCards.OWNED.R * 255, PassCards.OWNED.G * 255, PassCards.OWNED.B * 255
+	H.ok(r > 230 and g > 160 and b < 90, "Owned: bright gold")
+	H.ok(not string.find(HUD, "text = \"Owned\", color = COLORS.disabled", 1, true), "no grey Owned")
+	-- plot owner signs: no Home icon
+	local plot = read("src/server/PlotService.luau")
+	H.ok(string.find(plot, "Icons.set(state.info.signLabel, {}, `{s.player.DisplayName}'s Plot`)", 1, true) ~= nil, "an owned plot: the name")
+	H.ok(string.find(plot, "Icons.set(state.info.signLabel, {}, WorldBuilder.EMPTY_PLOT)", 1, true) ~= nil, "a free plot: Empty Plot")
+	H.ok(not string.find(plot, "\"Home\"", 1, true), "no Home icon on them")
+	-- Robux: only Icons "Robux" (icons/Robux.png, the owner's icon), drawn white / as is, never another image or glyph
+	local ids = serde.decode("json", fs.readFile("icons/ids.json"))
+	H.eq(ids.Robux, 136761121783815, "the owner's uploaded Robux icon")
+	local robuxPng = fs.readFile("icons/Robux.png")
+	H.eq(string.sub(robuxPng, 2, 4), "PNG")
+	for _, dir in { "src/client", "src/shared", "src/server", "src/server/Zones" } do
+		for _, entry in fs.readDir(dir) do
+			if string.match(entry, "%.luau$") then
+				local source = read(dir .. "/" .. entry)
+				H.ok(not string.find(source, "rbxassetid://%d"), `{entry}: no hard-coded image id (Robux or other)`)
+				H.ok(not string.find(source, "\u{E002}", 1, true), `{entry}: no Roblox Robux glyph`)
+				H.ok(not string.find(string.lower(source), "hexagon", 1, true), `{entry}: no drawn Robux hexagon`)
+				for line in string.gmatch(source, "[^\n]+") do
+					if string.find(line, "Icons.image(\"Robux\")", 1, true) or string.find(line, "\"Robux\" }", 1, true) then
+						H.ok(not string.find(line, "ImageColor3 = ROBUX_GREEN", 1, true) and not string.find(line, "ImageColor3 = COLORS", 1, true),
+							`{entry}: the Robux icon is never tinted: {line}`)
+					end
+				end
+			end
+		end
+	end
+	H.ok(string.find(SHOP_UI, "Name = \"Icon\", BackgroundTransparency = 1, Image = image, ImageColor3 = WHITE", 1, true) ~= nil,
+		"the buy buttons' Robux icon: white, as is")
+	for key, id in ids do
+		H.ok(key == "Robux" or id ~= ids.Robux, `{key}: not the Robux image`)
+	end
+end)
+
+return nil

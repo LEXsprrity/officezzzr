@@ -17,6 +17,7 @@ local Icons = require(Shared:WaitForChild("Icons"))
 local Treadmill = require(Shared:WaitForChild("Treadmill"))
 local UiFx = require(Shared:WaitForChild("UiFx"))
 local BoardButton = require(Shared:WaitForChild("BoardButton"))
+local Toast = require(Shared:WaitForChild("Toast"))
 
 local player = Players.LocalPlayer
 local remotes = ReplicatedStorage:WaitForChild("Remotes")
@@ -115,8 +116,8 @@ local SOUND_FOR = {
 }
 
 -- 2x Luck raised a seed as it was stolen (the server's Pickup says what the pod showed: `shown`): "Lucky!
--- Rare > Epic" rises over the thief's head in relief text (no toast box), so a Rare pod giving an Epic reads
--- as the pass working, not a wrong label.
+-- Rare > Epic" rises over the thief's head on a purple announcement plate with the star (Shared/Toast, the
+-- look of every announcement), so a Rare pod giving an Epic reads as the pass working, not a wrong label.
 local function luckyPopup(shown: number, rarity: number)
 	local char = player.Character
 	local head = char and char:FindFirstChild("Head")
@@ -126,39 +127,20 @@ local function luckyPopup(shown: number, rarity: number)
 	end
 	local gui = Instance.new("BillboardGui")
 	gui.Name = "LuckyPopup"
-	gui.Size = UDim2.fromOffset(300, 64)
+	local SIZE = 0.6 -- the plate's scale over the head
+	gui.Size = UDim2.fromOffset(Toast.W * SIZE + 12, Toast.H * SIZE + 12)
 	gui.StudsOffset = Vector3.new(0, 2.6, 0)
 	gui.AlwaysOnTop = true
 	gui.LightInfluence = 0
 	gui.Adornee = head
-	local function line(text: string, color: Color3, y: number, h: number): TextLabel
-		local l = Instance.new("TextLabel")
-		l.BackgroundTransparency = 1
-		l.Font = Enum.Font.FredokaOne
-		l.TextScaled = true
-		l.Text = text
-		l.TextColor3 = color
-		l.Size = UDim2.new(1, 0, 0, h)
-		l.Position = UDim2.fromOffset(0, y)
-		l.Parent = gui
-		UiFx.relief(l, 3, 3)
-		return l
-	end
-	line("Lucky!", Color3.fromRGB(255, 214, 50), 0, 32)
-	line(`{from.id} > {to.id}`, to.color, 32, 30) -- (plain text: the relief's dark copy mirrors it)
+	local plate = Toast.build(gui, `Lucky! {from.id} > {to.id}`, { color = "purple", icon = "Star" })
+	plate.AnchorPoint = Vector2.new(0.5, 0.5)
+	plate.Position = UDim2.fromScale(0.5, 0.5)
 	gui.Parent = player:WaitForChild("PlayerGui")
 	local scale = Instance.new("UIScale")
-	scale.Scale = 0.3
-	for _, l in gui:GetChildren() do
-		if l:IsA("TextLabel") then
-			scale:Clone().Parent = l
-		end
-	end
-	for _, s in gui:GetDescendants() do
-		if s:IsA("UIScale") then
-			TweenService:Create(s, TweenInfo.new(0.4, Enum.EasingStyle.Back, Enum.EasingDirection.Out), { Scale = 1 }):Play()
-		end
-	end
+	scale.Scale = SIZE * 0.3
+	scale.Parent = plate
+	TweenService:Create(scale, TweenInfo.new(0.4, Enum.EasingStyle.Back, Enum.EasingDirection.Out), { Scale = SIZE }):Play()
 	TweenService:Create(gui, TweenInfo.new(2.2, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), { StudsOffset = Vector3.new(0, 4.2, 0) }):Play()
 	task.delay(2.2, function()
 		gui:Destroy()

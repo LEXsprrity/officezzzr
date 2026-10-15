@@ -524,7 +524,17 @@ H.test("Shop PASSES: a bright card per pass with its icon, name, benefit and gre
 	H.eq(cards.FastGrow:FindFirstChild("Buy").Text, "R$ 149")
 	H.eq(cards.DoubleLuck:FindFirstChild("Buy").Text, "R$ 249")
 	H.eq(cards.DoubleSpeed:GetAttribute("Icon"), "Speed")
-	H.eq(cards.VIP:GetAttribute("Icon"), "VIP badge", "VIP: the gold badge instead of an icon")
+	H.eq(cards.VIP:GetAttribute("Icon"), "Vip", "VIP: the VIP ticket (icons/Vip.png)")
+	H.eq(cards.DoubleMoney:GetAttribute("Icon"), "Money", "2x Money: the cash, not the VIP ticket")
+	H.eq(PassCards.view("DoubleMoney", nil, 0).coin, "x2", "...on a gold x2 coin")
+	H.eq(PassCards.view("DoubleSpeed", nil, 0).coin, nil)
+	-- every pass's icon is its own: an uploaded Icons key whose picture is about that pass
+	local ICON_FOR = { DoubleMoney = "Money", DoubleSpeed = "Speed", DoubleLuck = "Star", VIP = "Vip", FastGrow = "Seeds", ExtraSlots = "ExtraSlots" }
+	for _, name in Config.passNames() do
+		H.eq(Config.GAMEPASSES[name].icon, ICON_FOR[name], `{name}'s icon`)
+		H.ok(fs.isFile(`icons/{ICON_FOR[name]}.png`), `icons/{ICON_FOR[name]}.png`)
+	end
+	H.ok(not fs.isFile("icons/DoubleMoney.png"), "the VIP ticket art is named Vip now")
 	clicks.VIP()
 	clicks.DoubleLuck()
 	H.deepEq(bought, { "DoubleLuck" }, "clicking an owned pass asks nothing")
@@ -539,6 +549,10 @@ H.test("Shop PASSES: a bright card per pass with its icon, name, benefit and gre
 		"RequestBuy:FireServer(\"Pass:\" .. name)",
 		"robuxColor(pass.id, ROBUX_GREEN)",
 		"UiFx.relief(bold(badge, 5, {",
+		"if view.icon and view.coin then", -- the coin badge
+		"Name = \"Stamp\", Text = view.coin",
+		"then { text = \"Owned\", color = PassCards.OWNED,", -- the banners' Owned: gold
+		"color = if view.owned then PassCards.OWNED else robuxColor(pass.id, ROBUX_GREEN)", -- the pass cards' Owned: gold
 	} do
 		H.ok(string.find(hud, needle, 1, true) ~= nil, needle)
 	end

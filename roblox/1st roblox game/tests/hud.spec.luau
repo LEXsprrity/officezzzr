@@ -189,7 +189,7 @@ H.test("HUD: more room between Shop, Index and Slow Mode", function()
 	H.ok(gap and gap >= 16, "a gap of 16+ design pixels")
 	local column = string.match(HUD, "local leftColumn = new%(\"Frame\", %b{}, (%b{})")
 	H.ok(column and string.find(column, "Padding = UDim.new(0, LEFT_GAP)", 1, true), "the column's layout uses it")
-	H.ok(string.find(HUD, "LEFT_H = 100, SIDE_H * 2 + 30 + 2 * LEFT_GAP", 1, true), "and the column's height counts it")
+	H.ok(string.find(HUD, "LEFT_H = 176, SIDE_H * 2 + 30 + 2 * LEFT_GAP", 1, true), "and the column's height counts it")
 end)
 
 H.test("HUD Sell window: mutation only on mutated plants, no \"no mutation\", no emoji; flower names on the cards", function()

@@ -705,13 +705,14 @@ Config.BAT_COOLDOWN = 4
 -- at join, and again when PromptGamePassPurchaseFinished reports a purchase) into Sessions.passes; the
 -- client only shows it.
 -- `robux` is the placeholder price shown until the real one (Dashboard) is read with GetProductInfo;
--- `about` is the Shop card's benefit line; `icon` its Icons key (nil: a gold "VIP" badge); `order` its place.
+-- `about` is the Shop card's benefit line; `icon` its Icons key (2x Money: the cash, on a gold "x2" coin; VIP: the
+-- VIP ticket; nil: a gold "VIP" badge); `order` its place.
 export type Gamepass = { id: number, label: string, robux: number, about: string, icon: string?, order: number }
 Config.GAMEPASSES = {
-	DoubleMoney = { label = "2x Money", robux = 0, about = "Doubles all plant income", icon = "DoubleMoney", order = 1 },
+	DoubleMoney = { label = "2x Money", robux = 0, about = "Doubles all plant income", icon = "Money", order = 1 },
 	DoubleSpeed = { label = "2x Speed", robux = 299, about = "Walk + treadmill Speed x2", icon = "Speed", order = 2 },
 	DoubleLuck = { label = "2x Luck", robux = 249, about = "Rarer seeds when you steal", icon = "Star", order = 3 },
-	VIP = { label = "VIP", robux = 399, about = "Gold tag, x1.25 cash + Speed", icon = nil, order = 4 },
+	VIP = { label = "VIP", robux = 399, about = "Gold tag, x1.25 cash + Speed", icon = "Vip", order = 4 },
 	FastGrow = { label = "Fast Grow", robux = 149, about = "Your plants grow 2x faster", icon = "Seeds", order = 5 },
 	ExtraSlots = { label = "+10 Plant Slots", robux = 0, about = "On top of your plot level's slots", icon = "ExtraSlots", order = 6 },
 } :: { [string]: Gamepass }

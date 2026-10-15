@@ -1,6 +1,7 @@
 -- The Shop's PASSES section (client): one bright card per gamepass in Config.GAMEPASSES, in Shop order, each
--- in its own colour: its icon (VIP: a gold relief "VIP" badge instead), its name, its one-line benefit and a
--- green R$ button with its price, or a grey "Owned" once the server says the player owns it (StatsUpdate
+-- in its own colour: its icon (2x Money: the cash on a gold "x2" coin, PassCards.COINS; VIP: the VIP ticket),
+-- its name, its one-line benefit and a green R$ button with its price, or a gold "Owned" (PassCards.OWNED)
+-- once the server says the player owns it (StatsUpdate
 -- `passes`, from the server's own check). Clicking asks the server ("Pass:<name>"), which prompts the
 -- purchase, or says "coming soon" while the pass has no id. The HUD hands in its card style (`Deps`), so
 -- these look like every other Shop card; this module only decides what goes on them.
@@ -22,12 +23,17 @@ PassCards.COLORS = {
 } :: { [string]: Color3 }
 PassCards.RAINBOW = { FastGrow = true } :: { [string]: boolean } -- painted with a rainbow instead
 PassCards.DEFAULT_COLOR = Color3.fromRGB(165, 70, 255) -- a pass added to Config without a colour here
+-- Passes whose icon sits on a gold coin with a stamp (owner reference: the cash on a gold "x2" coin)
+PassCards.COINS = { DoubleMoney = "x2" } :: { [string]: string }
+-- The "Owned" button (pass cards and the Shop's banners): bright gold, a dark outline, white relief words
+PassCards.OWNED = Color3.fromRGB(255, 200, 30)
 
 export type Card = {
 	name: string,
 	title: string, -- "2X SPEED"
 	about: string, -- the benefit line
-	icon: string?, -- Icons key; nil = the VIP badge
+	icon: string?, -- Icons key; nil = a gold "VIP" badge
+	coin: string?, -- the icon on a gold coin with this stamp ("x2"), PassCards.COINS
 	color: Color3,
 	rainbow: boolean, -- a rainbow card (PassCards.RAINBOW)
 	owned: boolean,
@@ -43,6 +49,7 @@ function PassCards.view(name: string, passes: { [string]: boolean }?, price: num
 		title = string.upper(pass.label),
 		about = pass.about,
 		icon = pass.icon,
+		coin = PassCards.COINS[name],
 		color = PassCards.COLORS[name] or PassCards.DEFAULT_COLOR,
 		rainbow = PassCards.RAINBOW[name] == true,
 		owned = owned,

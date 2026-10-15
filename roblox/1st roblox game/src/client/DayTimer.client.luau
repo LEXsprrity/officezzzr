@@ -1,7 +1,7 @@
 -- The day/night timer, top right in the top bar's row (under it the player list would cover it): a
--- translucent dark rounded strip, a chunky icon of what comes next (a cloud and moon by day, the sun by
--- night) and the time left in big bold italic white with a thick dark outline, a dropped shadow and a bevel
--- ("in 2m 58s"). When the phase flips the strip pops and the icon swaps. Display only: the phase comes from
+-- translucent dark square strip studded like every HUD element (ShopUi.studs), a chunky icon of what comes
+-- next (a cloud and moon by day, the sun by night) and the time left in big bold italic white with a thick
+-- dark outline, a dropped shadow and a bevel ("in 2m 58s"). When the phase flips the strip pops and the icon swaps. Display only: the phase comes from
 -- Config.dayPhase(server time), like the server's. Kept out of HUD.client (near Luau's 200-locals limit).
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -12,6 +12,7 @@ local Shared = ReplicatedStorage:WaitForChild("Shared")
 local Config = require(Shared:WaitForChild("Config"))
 local Format = require(Shared:WaitForChild("Format"))
 local UiFx = require(Shared:WaitForChild("UiFx"))
+local ShopUi = require(Shared:WaitForChild("ShopUi"))
 
 local player = Players.LocalPlayer
 
@@ -52,11 +53,11 @@ local strip = new("Frame", {
 	Name = "Strip", AnchorPoint = Vector2.new(1, 0), Position = UDim2.new(1, -TIMER_RIGHT, 0, TIMER_TOP),
 	Size = UDim2.fromOffset(TIMER_W, TIMER_H), BackgroundColor3 = Color3.fromRGB(12, 14, 24), BackgroundTransparency = 0.42, Parent = gui,
 }, {
-	new("UICorner", { CornerRadius = UDim.new(0, 12) }),
-	new("UIStroke", { Thickness = 2, Color = WHITE, Transparency = 0.82, ApplyStrokeMode = Enum.ApplyStrokeMode.Border }),
+	new("UIStroke", { Thickness = 3, Color = INK, Transparency = 0.2, ApplyStrokeMode = Enum.ApplyStrokeMode.Border }),
 	-- a touch lighter at the top, like glass
 	new("UIGradient", { Rotation = 90, Transparency = NumberSequence.new(0, 0.25) }),
 })
+ShopUi.studs(strip, Color3.fromRGB(60, 66, 90)) -- under the icon and the time
 local stripScale = new("UIScale", { Parent = strip })
 
 -- Chunky emoji icons: big, with a dark outline. Night: a crescent moon with a cloud in front of it.

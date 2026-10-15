@@ -34,6 +34,7 @@ require("./passes.spec")
 require("./security.spec")
 require("./monetization.spec")
 require("./shopui.spec")
+require("./hudstyle.spec")
 require("./compile.spec")
 
 print("Steal a Seed: mocked server tests\n")

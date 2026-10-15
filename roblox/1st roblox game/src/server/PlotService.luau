@@ -900,7 +900,7 @@ function PlotService.assign(s: Sessions.Session): WorldBuilder.PlotInfo?
 		if state.owner == nil then
 			state.owner = s.player
 			s.plot = state.info
-			Icons.set(state.info.signLabel, "Home", `🏠 {s.player.DisplayName}'s Plot`)
+			Icons.set(state.info.signLabel, {}, `{s.player.DisplayName}'s Plot`) -- the name only, no icon (owner)
 			setButtonsOwner(state, s.player.UserId)
 			renderTreadmillSign(state)
 			renderUpgradeSign(state)
@@ -929,7 +929,7 @@ function PlotService.release(player: Player)
 	end
 	clearPlants(state)
 	state.owner = nil
-	Icons.set(state.info.signLabel, "Home", "🏠 Empty Plot")
+	Icons.set(state.info.signLabel, {}, WorldBuilder.EMPTY_PLOT)
 	state.info.model:SetAttribute("OwnerUserId", nil)
 	setButtonsOwner(state, 0)
 	renderUpgradeSign(state)

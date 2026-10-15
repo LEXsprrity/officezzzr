@@ -184,6 +184,7 @@ local function envFor(node: Node)
 		Random = RandomMock,
 		workspace = Harness.workspace,
 		typeof = typeof,
+		TweenInfo = { new = function(...) return { ... } end }, -- (Lune has no TweenInfo; UI modules only hand it to TweenService)
 	}
 end
 

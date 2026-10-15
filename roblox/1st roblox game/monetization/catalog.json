@@ -5,7 +5,7 @@
     "name": "2x Money",
     "description": "Doubles the money all your plants make. Works offline and when you sell, too.",
     "price": 349,
-    "image": "icons/DoubleMoney.png"
+    "image": "icons/Money.png"
   },
   {
     "key": "DoubleSpeed",
@@ -29,7 +29,7 @@
     "name": "VIP",
     "description": "A gold VIP tag over your head and in chat, plus 1.25x money and 1.25x Speed.",
     "price": 399,
-    "image": "icons/Star.png"
+    "image": "icons/Vip.png"
   },
   {
     "key": "FastGrow",

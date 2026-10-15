@@ -21,6 +21,7 @@ local ZoneThemes = require(script.Parent:WaitForChild("ZoneThemes"))
 local Assets = require(script.Parent:WaitForChild("Assets"))
 
 local WorldBuilder = {}
+WorldBuilder.EMPTY_PLOT = "Empty Plot" -- an unowned plot's sign (the name only, no icon)
 
 export type PlotInfo = {
 	index: number,
@@ -362,7 +363,7 @@ local function ownerSign(model: Model, cf: CFrame, index: number): BasePart
 	label.Font = Enum.Font.FredokaOne
 	label.TextScaled = true
 	label.TextColor3 = Color3.new(1, 1, 1)
-	label.Text = "🏠 Empty Plot"
+	label.Text = WorldBuilder.EMPTY_PLOT
 	local stroke = Instance.new("UIStroke")
 	stroke.Thickness = 3
 	stroke.Color = OWNER_INK
@@ -1118,13 +1119,16 @@ function WorldBuilder.setMoneyBoard(labels: MoneyBoardLabels, rows: { { name: st
 end
 
 -- The fixed sign texts that show an icon once it is uploaded (Config.ICONS), matched by their exact text so
--- signs hand-edited to say something else are left alone. The plot and treadmill signs are rewritten by
--- PlotService through Icons.set too; these are their texts before anyone owns the plot.
+-- signs hand-edited to say something else are left alone.
 WorldBuilder.SIGN_ICONS = {
 	["🛒 SHOP"] = "Shop",
 	["🏃 TRAIL SHOP"] = "TrailShop",
 	["📖 INDEX"] = "Index",
-	["🏠 Empty Plot"] = "Home",
+} :: { [string]: string }
+-- Old sign texts rewritten at runtime: the plot owner signs show only the name, no icon (owner 2026-10-15:
+-- "I don't like the plot icon, remove it completely"); map/World.rbxm may still say "🏠 Empty Plot".
+WorldBuilder.SIGN_TEXTS = {
+	["🏠 Empty Plot"] = WorldBuilder.EMPTY_PLOT,
 } :: { [string]: string }
 
 -- Writes a plot's Upgrade board. `level` is the owner's plot level (nil: nobody owns the plot) and `robux`
@@ -1167,6 +1171,9 @@ end
 function WorldBuilder.applyIcons(world: Instance): number
 	local count = 0
 	for _, d in world:GetDescendants() do
+		if d:IsA("TextLabel") and WorldBuilder.SIGN_TEXTS[d.Text] then
+			d.Text = WorldBuilder.SIGN_TEXTS[d.Text]
+		end
 		if d:IsA("TextLabel") then
 			local key = WorldBuilder.SIGN_ICONS[d.Text]
 			if key and Icons.image(key) then

@@ -374,7 +374,7 @@ cancel.Activated:Connect(stopBag)
 -- Q or Cancel puts it back. Each press of 2 after planting picks the next most recent.
 ----------------------------------------------------------------------------------------------------
 local RequestUseItem = Remotes:WaitForChild("RequestUseItem") :: RemoteEvent
-local SEED_GREEN = Color3.fromRGB(95, 190, 80)
+local ShopUi = require(Shared:WaitForChild("ShopUi"))
 local recent: { string } = {} -- bag keys, oldest first
 
 -- Keeps `recent` in step with the bag: gone keys leave, new ones go last (the first time, rarest last).
@@ -406,18 +406,7 @@ end
 local seedSlot = Instance.new("TextButton")
 seedSlot.Name = "SeedSlot"
 seedSlot.LayoutOrder = 2
-seedSlot.Size = UDim2.fromOffset(84, 84)
-seedSlot.BackgroundColor3 = SEED_GREEN
-seedSlot.AutoButtonColor = true
-seedSlot.Text = ""
-local slotCorner = Instance.new("UICorner")
-slotCorner.CornerRadius = UDim.new(0, 10)
-slotCorner.Parent = seedSlot
-local slotStroke = Instance.new("UIStroke")
-slotStroke.Thickness = 3
-slotStroke.Color = INK
-slotStroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
-slotStroke.Parent = seedSlot
+ShopUi.slot(seedSlot, "2") -- the hotbar's look (a dark see-through square, its number top-left)
 local function slotText(name: string, text: string, size: UDim2, pos: UDim2, color: Color3): TextLabel
 	local t = Instance.new("TextLabel")
 	t.Name = name
@@ -431,11 +420,17 @@ local function slotText(name: string, text: string, size: UDim2, pos: UDim2, col
 	t.Parent = seedSlot
 	return t
 end
-local slotLabel = slotText("Label", "Seeds", UDim2.new(1, -10, 1, -6), UDim2.fromOffset(5, 3), Color3.new(1, 1, 1))
-Icons.set(slotLabel, "Seeds", "🌱\nSeeds", 0.85)
-UiFx.relief(slotText("Key", "2", UDim2.fromOffset(18, 18), UDim2.fromOffset(4, 2), Color3.fromRGB(255, 205, 50)), 2, 2)
-local slotCount = slotText("Count", "0", UDim2.fromOffset(34, 22), UDim2.new(1, -38, 1, -24), Color3.new(1, 1, 1))
+-- With an empty bag: the Seeds icon, faded (no name: the picture says it)
+local slotLabel = slotText("Label", "", UDim2.new(1, -16, 1, -16), UDim2.fromOffset(8, 8), Color3.new(1, 1, 1))
+Icons.set(slotLabel, "Seeds", "🌱", 1)
+slotLabel.TextTransparency = 0.35
+local slotCount = slotText("Count", "0", UDim2.fromOffset(46, 28), UDim2.new(1, -50, 1, -30), Color3.new(1, 1, 1))
 slotCount.TextXAlignment = Enum.TextXAlignment.Right
+slotCount.ZIndex = 4 -- over the seed
+local countStroke = Instance.new("UIStroke")
+countStroke.Thickness = 3
+countStroke.Color = INK
+countStroke.Parent = slotCount
 UiFx.relief(slotCount, 2, 2)
 
 -- The seed the slot would plant, as it looks (its zone's design its gene picks, from
@@ -443,8 +438,9 @@ UiFx.relief(slotCount, 2, 2)
 local slotView = Instance.new("ViewportFrame")
 slotView.Name = "SeedView"
 slotView.BackgroundTransparency = 1
-slotView.Size = UDim2.new(1, -10, 1, -10)
-slotView.Position = UDim2.fromOffset(5, 5)
+slotView.Size = UDim2.new(1, -4, 1, -4) -- the seed fills the slot
+slotView.Position = UDim2.fromOffset(2, 2)
+slotView.ZIndex = 2
 slotView.Visible = false
 slotView.Parent = seedSlot
 local viewCamera = Instance.new("Camera")
@@ -478,9 +474,7 @@ local function paintSlot()
 	local count = SeedPacks.bagCount(seedBag)
 	slotCount.Text = `x{count}`
 	local picked = bag ~= nil and not string.find(bag.key, "^inv:")
-	seedSlot.BackgroundColor3 = SEED_GREEN -- always green, even with an empty bag (owner)
-	slotStroke.Color = if picked then Color3.fromRGB(255, 205, 50) else INK
-	slotStroke.Thickness = if picked then 4 else 3
+	ShopUi.selectSlot(seedSlot, picked) -- picked: a white outline
 end
 
 local function useSeedSlot()
