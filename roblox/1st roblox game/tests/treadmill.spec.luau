@@ -107,29 +107,36 @@ H.test("treadmill: the run animation plays only on your own belt, alive", functi
 	H.ok(Treadmill.RUN_LEAN > 0 and Treadmill.RUN_LEAN <= 20, "a subtle forward lean")
 end)
 
-H.test("treadmill popups: a stream every server tick whose numbers add up to the real per-second rate", function()
+H.test("treadmill popups: a stream every server tick, each the '+X' one step pays, adding up to the real gain", function()
+	local SpeedLogic = H.server("SpeedLogic")
 	H.eq(Treadmill.POPUP_INTERVAL, Config.TICK, "one per server tick")
 	H.ok(Treadmill.POPUP_INTERVAL <= 0.3, "spammed, several a second")
 	-- with the passes (2x Speed, VIP) and a trail, at several tiers and frame rates
 	for _, case in { { tier = 1, trail = nil, passes = {} }, { tier = 7, trail = "Rainbow", passes = { DoubleSpeed = true } },
 		{ tier = Config.TREADMILL_MAX, trail = "Red", passes = { DoubleSpeed = true, VIP = true } } } do
+		local perStep = Treadmill.perStep(case.tier, case.trail, Config.passSpeedMult(case.passes))
 		local perSecond = Treadmill.perSecond(case.tier, case.trail, Config.passSpeedMult(case.passes))
-		H.near(perSecond, Config.treadmillRate(case.tier) * Config.trailMult(case.trail) * Config.passSpeedMult(case.passes), 1e-9,
+		H.near(perSecond, perStep / Config.TICK, 1e-9, "a second is 4 steps")
+		H.near(perStep, Config.treadmillRate(case.tier) * Config.trailMult(case.trail) * Config.passSpeedMult(case.passes), 1e-9,
 			"the popups show the multiplied gain")
 		for _, dt in { 1 / 60, 1 / 30, 1 / 7, 0.6 } do
 			local state = Treadmill.newPopups(0)
 			local shown, count, now = 0, 0, 0
 			while now < 10 do
 				now += dt
-				local amount = Treadmill.stepPopups(state, now, perSecond, 0)
+				local amount = Treadmill.stepPopups(state, now, perStep, 0)
+				if amount and dt < Treadmill.POPUP_INTERVAL then
+					H.near(amount, perStep, 1e-9, "each popup shows exactly one step's gain")
+				end
 				if amount then
 					shown += amount
 					count += 1
 				end
 			end
-			-- everything due by `now` was shown: exactly the rate times the intervals the stream has passed
+			-- everything due by `now` was shown: exactly one step per interval the stream has passed, which is what
+			-- the server pays (a step a tick, SpeedLogic.treadmillGain)
 			local intervals = math.floor(state.nextAt / Treadmill.POPUP_INTERVAL + 0.5) - 1
-			H.near(shown, perSecond * intervals * Treadmill.POPUP_INTERVAL, 1e-6 * perSecond, `tier {case.tier} at dt {dt}: the sum`)
+			H.near(shown, intervals * SpeedLogic.treadmillGain(case.tier, Config.trailMult(case.trail) * Config.passSpeedMult(case.passes)), 1e-6 * perSecond, `tier {case.tier} at dt {dt}: the sum == the real gain`)
 			H.ok(math.abs(shown / now - perSecond) <= perSecond * (Treadmill.POPUP_INTERVAL + dt) / now, "per second, the real rate")
 			if dt < Treadmill.POPUP_INTERVAL then
 				H.eq(count, intervals, "one popup per tick")
@@ -139,7 +146,7 @@ H.test("treadmill popups: a stream every server tick whose numbers add up to the
 	-- the first one an interval after locking, none before
 	local state = Treadmill.newPopups(5)
 	H.eq(Treadmill.stepPopups(state, 5.1, 100, 0), nil, "not yet")
-	H.near(Treadmill.stepPopups(state, 5.25, 100, 0) :: number, 25, 1e-9, "a quarter second's gain")
+	H.near(Treadmill.stepPopups(state, 5.25, 100, 0) :: number, 100, 1e-9, "one step's gain: the number on the sign")
 	H.eq(Treadmill.stepPopups(state, 5.3, 100, 0), nil, "the next one waits its interval")
 	H.eq(Treadmill.stepPopups(Treadmill.newPopups(0), 1, 0, 0), nil, "nothing to gain, nothing shown")
 end)
@@ -169,7 +176,7 @@ H.test("treadmill popups: never more than POPUP_MAX_LIVE on screen", function()
 	end
 	H.ok(most <= Treadmill.POPUP_MAX_LIVE, `at most {most} live`)
 	local source = fs.readFile("src/client/Effects.client.luau")
-	H.ok(string.find(source, "Treadmill.stepPopups(popups, now, perSecond, speedPopupsLive)", 1, true) ~= nil
+	H.ok(string.find(source, "Treadmill.stepPopups(popups, now, perStep, speedPopupsLive)", 1, true) ~= nil
 		and string.find(source, "speedPopupsLive += 1", 1, true) ~= nil and string.find(source, "speedPopupsLive -= 1", 1, true) ~= nil,
 		"Effects.client counts its live popups and spawns through the shared stream")
 	H.ok(string.find(source, "UiFx.relief(label", 1, true) ~= nil, "relief text, not flat")
@@ -182,7 +189,7 @@ H.test("treadmill: Effects.client locks, sprints and pops Speed with the shared 
 	H.ok(string.find(source, "Treadmill.stepLock(", 1, true) ~= nil, "the shared lock")
 	H.ok(string.find(source, "JumpRequest", 1, true) ~= nil, "jumping (Space or the mobile button) leaves")
 	H.ok(string.find(source, "AdjustSpeed(Treadmill.RUN_ANIM_SPEED)", 1, true) ~= nil, "the sprint")
-	H.ok(string.find(source, "Treadmill.perSecond(", 1, true) ~= nil and string.find(source, "Icons.image(\"Speed\")", 1, true) ~= nil,
+	H.ok(string.find(source, "Treadmill.perStep(", 1, true) ~= nil and string.find(source, "Icons.image(\"Speed\")", 1, true) ~= nil,
 		"the Speed popups, with the Speed icon")
 	H.ok(string.find(source, "stepLean(char, want, dt)", 1, true) ~= nil and string.find(source, "stepWind(root, want)", 1, true) ~= nil,
 		"the sprint leans and streams wind lines while running")
@@ -236,21 +243,21 @@ end)
 ----------------------------------------------------------------------------------------------------
 -- Tiers
 ----------------------------------------------------------------------------------------------------
-H.test("treadmill tiers: 10 tiers, each a fixed Speed/s, rates and prices strictly rising", function()
+H.test("treadmill tiers: 10 tiers, each a fixed Speed a step, values and prices strictly rising", function()
 	H.eq(Config.TREADMILL_MAX, 10)
 	H.eq(#Config.TREADMILL_TIERS, Config.TREADMILL_MAX)
 	H.eq(Config.TREADMILL_TIERS[1].price, 0, "the first tier is free")
-	H.ok(Config.TREADMILL_TIERS[1].perSecond > 0)
+	H.ok(Config.TREADMILL_TIERS[1].perStep > 0)
 	for tier = 2, Config.TREADMILL_MAX do
 		local t, prev = Config.TREADMILL_TIERS[tier], Config.TREADMILL_TIERS[tier - 1]
-		H.ok(t.perSecond > prev.perSecond, `tier {tier} rate rises`)
+		H.ok(t.perStep > prev.perStep, `tier {tier} value rises`)
 		H.ok(t.price > prev.price, `tier {tier} price rises`)
-		H.eq(Config.treadmillRate(tier), t.perSecond)
+		H.eq(Config.treadmillRate(tier), t.perStep)
 	end
-	H.ok(Config.treadmillRate(Config.TREADMILL_MAX) >= 10 * Config.treadmillRate(1), "the last tier is a strong AFK rate")
+	H.ok(Config.treadmillRate(Config.TREADMILL_MAX) >= 3 * Config.treadmillRate(1), "the last tier is a strong AFK rate (4 steps a second)")
 	H.eq(Config.treadmillRate(0), Config.treadmillRate(1), "bad tiers clamp")
-	H.eq(Config.treadmillRate(99), Config.TREADMILL_TIERS[Config.TREADMILL_MAX].perSecond)
-	H.eq(Config.treadmillRate(2.7), Config.TREADMILL_TIERS[2].perSecond)
+	H.eq(Config.treadmillRate(99), Config.TREADMILL_TIERS[Config.TREADMILL_MAX].perStep)
+	H.eq(Config.treadmillRate(2.7), Config.TREADMILL_TIERS[2].perStep)
 	H.eq(Config.treadmillRate(0 / 0), Config.treadmillRate(1), "NaN-safe")
 	H.eq(Config.treadmillRate(nil), Config.treadmillRate(1))
 end)
@@ -259,11 +266,11 @@ H.test("treadmill rate: fixed per tier, whatever the Speed or WalkSpeed; scales 
 	local SpeedLogic = H.server("SpeedLogic")
 	for tier = 1, Config.TREADMILL_MAX do
 		local base = Config.treadmillRate(tier)
-		H.eq(Treadmill.perSecond(tier, "Grey"), base, `tier {tier}: the free trail is x1`)
-		H.eq(Treadmill.perSecond(tier, nil), base, `tier {tier}: no trail = the free one`)
+		H.eq(Treadmill.perStep(tier, "Grey"), base, `tier {tier}: the free trail is x1`)
+		H.eq(Treadmill.perStep(tier, nil), base, `tier {tier}: no trail = the free one`)
 		for _, trail in Config.TRAILS do
-			H.near(Treadmill.perSecond(tier, trail.id), base * trail.mult, 1e-9, `tier {tier} {trail.id}`)
-			H.near(SpeedLogic.treadmillGain(1, tier, Config.trailMult(trail.id)), base * trail.mult, 1e-9, `tier {tier} {trail.id}: the server's second`)
+			H.near(Treadmill.perStep(tier, trail.id), base * trail.mult, 1e-9, `tier {tier} {trail.id}`)
+			H.near(SpeedLogic.treadmillGain(tier, Config.trailMult(trail.id)), base * trail.mult, 1e-9, `tier {tier} {trail.id}: the server's step`)
 		end
 		-- through SpeedLogic.step: any WalkSpeed, any Speed, the same gain per tick
 		local paid = {}
@@ -279,7 +286,7 @@ H.test("treadmill rate: fixed per tier, whatever the Speed or WalkSpeed; scales 
 		for i = 2, #paid do
 			H.eq(paid[i], paid[1], `tier {tier}: the same at every Speed/WalkSpeed`)
 		end
-		H.near(paid[1], base * Config.trailMult("Blue") * Config.TICK, 1e-9, `tier {tier}: a tick pays rate x trail x TICK`)
+		H.near(paid[1], base * Config.trailMult("Blue"), 1e-9, `tier {tier}: a tick pays the full step x trail`)
 	end
 end)
 
@@ -493,7 +500,7 @@ H.test("floating titles: no name over the guards/bosses or the mother plants; st
 end)
 
 ----------------------------------------------------------------------------------------------------
--- The Upgrade board and the "+X/s" text
+-- The Upgrade board and the "+X" text
 ----------------------------------------------------------------------------------------------------
 local TreadmillBoard = H.server("TreadmillBoard")
 local Assets = H.server("Assets")
@@ -625,7 +632,7 @@ local function shown(label: any): string
 	return table.concat(parts, " ")
 end
 
-H.test("treadmill board: shows the tier, both prices and +X/s (the popups' number); MAX hides the buttons; empty plot shows nothing to buy", function()
+H.test("treadmill board: shows the tier, both prices and +X (the popups' number); MAX hides the buttons; empty plot shows nothing to buy", function()
 	local world = H.workspace:FindFirstChild("World")
 	local plots = WorldBuilder.adopt(world)
 	local plot = plots[1]
@@ -638,29 +645,29 @@ H.test("treadmill board: shows the tier, both prices and +X/s (the popups' numbe
 	H.eq(board.stepGui.Enabled, false, "no step text on an empty plot")
 
 	local p = profileAt(7)
-	local perSecond = Treadmill.perSecond(7, p.equippedTrail)
-	local nextPerSecond = Treadmill.perSecond(8, p.equippedTrail)
-	TreadmillBoard.render(board, { tier = 7, cash = Config.priceOf("TreadmillUpgrade", p), robux = 400, perSecond = perSecond, nextPerSecond = nextPerSecond })
+	local perStep = Treadmill.perStep(7, p.equippedTrail)
+	local nextPerStep = Treadmill.perStep(8, p.equippedTrail)
+	TreadmillBoard.render(board, { tier = 7, cash = Config.priceOf("TreadmillUpgrade", p), robux = 400, perStep = perStep, nextPerStep = nextPerStep })
 	H.eq(board.labels.level.Text, "Level 7 > Level 8")
-	H.eq(board.labels.rate.Text, `{Treadmill.rateText(perSecond)} > {Treadmill.rateText(nextPerSecond)}`, "now and the next level")
-	H.ok(string.match(board.labels.rate.Text, "^%+[%d%.KM]+/s > %+[%d%.KM]+/s$") ~= nil, board.labels.rate.Text)
+	H.eq(board.labels.rate.Text, `{Treadmill.stepText(perStep)} > {Treadmill.stepText(nextPerStep)}`, "now and the next level")
+	H.ok(string.match(board.labels.rate.Text, "^%+[%d%.KM]+ > %+[%d%.KM]+$") ~= nil, board.labels.rate.Text)
 	H.eq(board.labels.buttons.Visible, true)
 	H.ok(string.find(shown(board.labels.cash), Format.money(Config.TREADMILL_TIERS[8].price), 1, true) ~= nil, shown(board.labels.cash))
 	H.ok(string.find(shown(board.labels.robux), "400", 1, true) ~= nil, shown(board.labels.robux))
 	H.eq(board.stepGui.Enabled, true)
-	H.eq(board.stepLabel.Text, Treadmill.gainText(perSecond) .. "/s")
-	H.ok(board.stepGui.MaxDistance > 0 and board.stepGui.MaxDistance <= 40, `the "+X/s" text only shows up close ({board.stepGui.MaxDistance})`)
+	H.eq(board.stepLabel.Text, Treadmill.gainText(perStep), "the popups' own number, no /s")
+	H.ok(board.stepGui.MaxDistance > 0 and board.stepGui.MaxDistance <= 40, `the "+X" text only shows up close ({board.stepGui.MaxDistance})`)
 
 	-- a tier bought: the text follows
-	TreadmillBoard.render(board, { tier = 8, cash = Config.TREADMILL_TIERS[9].price, robux = 640, perSecond = nextPerSecond, nextPerSecond = Treadmill.perSecond(9, p.equippedTrail) })
+	TreadmillBoard.render(board, { tier = 8, cash = Config.TREADMILL_TIERS[9].price, robux = 640, perStep = nextPerStep, nextPerStep = Treadmill.perStep(9, p.equippedTrail) })
 	H.eq(board.labels.level.Text, "Level 8 > Level 9")
 	H.ok(string.find(shown(board.labels.cash), Format.money(Config.TREADMILL_TIERS[9].price), 1, true) ~= nil, shown(board.labels.cash))
-	H.eq(board.stepLabel.Text, Treadmill.rateText(nextPerSecond))
+	H.eq(board.stepLabel.Text, Treadmill.stepText(nextPerStep))
 
 	-- the last tier: MAX, no buttons, the step text stays
-	TreadmillBoard.render(board, { tier = Config.TREADMILL_MAX, cash = nil, robux = nil, perSecond = perSecond })
+	TreadmillBoard.render(board, { tier = Config.TREADMILL_MAX, cash = nil, robux = nil, perStep = perStep })
 	H.eq(board.labels.level.Text, "MAX")
-	H.eq(board.labels.rate.Text, Treadmill.rateText(perSecond), "just the rate at the last level")
+	H.eq(board.labels.rate.Text, Treadmill.stepText(perStep), "just the step at the last level")
 	H.eq(board.labels.buttons.Visible, false, "no buttons at the last tier")
 	H.eq(shown(board.labels.cash), "")
 	H.eq(board.stepGui.Enabled, true)
@@ -682,16 +689,17 @@ H.test("treadmill board: PlotService builds it per plot, writes it and puts the 
 	H.ok(string.find(plot, "Icons.set(state.info.treadmillLabel", 1, true) == nil, "the old sign isn't written any more")
 end)
 
-H.test("treadmill step: what a second on it pays, as text", function()
-	H.eq(Treadmill.perSecond(3, nil), Config.treadmillRate(3))
-	H.eq(Treadmill.perSecond(3, "Rainbow"), Config.treadmillRate(3) * Config.trailMult("Rainbow"))
+H.test("treadmill step: what a step on it pays, as text", function()
+	H.eq(Treadmill.perStep(3, nil), Config.treadmillRate(3))
+	H.eq(Treadmill.perSecond(3, nil), Config.treadmillRate(3) * 4, "4 steps a second")
+	H.eq(Treadmill.perStep(3, "Rainbow"), Config.treadmillRate(3) * Config.trailMult("Rainbow"))
 	H.eq(Treadmill.gainText(0.5), "+0.5")
 	H.eq(Treadmill.gainText(12.34), "+12.3")
 	H.eq(Treadmill.gainText(200), "+200")
 	H.eq(Treadmill.gainText(1600), "+1.6K")
 	H.eq(Treadmill.boardRateText(nil, nil), "")
-	H.eq(Treadmill.boardRateText(100, 200), "+100/s > +200/s")
-	H.eq(Treadmill.boardRateText(1500, nil), "+1.5K/s")
+	H.eq(Treadmill.boardRateText(100, 200), "+100 > +200")
+	H.eq(Treadmill.boardRateText(1500, nil), "+1.5K")
 	-- the text floats over the front end (the console head), above head height
 	local off = Treadmill.stepTextOffset(Vector3.new(5.2, 1, 18))
 	H.ok(off.Z * Treadmill.FRONT >= 11 and off.Y >= 6, `{off}`)
@@ -712,18 +720,18 @@ H.test("treadmill step: what a second on it pays, as text", function()
 			H.ok(rel.Z * Treadmill.FRONT > 0, `plot {i}: the stop is at the front end ({rel})`)
 		end
 	end
-	-- and the treadmill text matches SpeedLogic's treadmill gain for a whole second
+	-- and the treadmill text matches SpeedLogic's treadmill gain for one step
 	local SpeedLogic = H.server("SpeedLogic")
-	H.ok(math.abs(SpeedLogic.treadmillGain(1, 4, Config.trailMult("Purple")) - Treadmill.perSecond(4, "Purple")) < 1e-6, "same as the server's gain")
+	H.ok(math.abs(SpeedLogic.treadmillGain(4, Config.trailMult("Purple")) - Treadmill.perStep(4, "Purple")) < 1e-6, "same as the server's gain")
 end)
 
-H.test("treadmill sign: the '+X/s' over the treadmill is exactly what a second on it pays (the popups' number)", function()
+H.test("treadmill sign: the '+X' over the treadmill is exactly what each step on it pays (the popups' number)", function()
 	local SpeedLogic = H.server("SpeedLogic")
 	local TreadmillBoard = H.server("TreadmillBoard")
 	local world = H.workspace:FindFirstChild("World")
 	local plot = WorldBuilder.adopt(world)[2]
 	local board = TreadmillBoard.build(plot.model, plot.belt, plot.center)
-	local ticks = math.round(1 / Config.TICK)
+	local ticks = math.round(1 / Config.TICK) -- (4: a second)
 	for _, speed in { 0, 250, 9e3, 4e5, 7e6, 3e8, 2e10 } do
 		for _, trail in { "Grey", "Blue", "Red", "Rainbow" } do
 			for _, tier in { 1, 4, Config.TREADMILL_MAX } do
@@ -735,24 +743,25 @@ H.test("treadmill sign: the '+X/s' over the treadmill is exactly what a second o
 				for _ = 1, ticks do
 					paid += (SpeedLogic.step(state, Vector3.zero, Config.TICK, opts))
 				end
-				-- the sign (PlotService), the board and the popups (Effects.client) all use Treadmill.perSecond(tier, trail)
-				local shown = Treadmill.perSecond(tier, trail)
-				H.ok(math.abs(shown - paid) <= 1e-9 * math.max(1, paid), `speed {speed} {trail} tier {tier}: sign {shown} vs paid {paid}`)
-				H.near(shown, Config.treadmillRate(tier) * Config.trailMult(trail), 1e-9, "the tier's rate x the trail")
-				TreadmillBoard.render(board, { tier = tier, cash = 1, robux = 1, perSecond = shown })
-				H.eq(board.stepLabel.Text, Treadmill.gainText(shown) .. "/s")
+				-- the sign (PlotService), the board and the popups (Effects.client) all use Treadmill.perStep(tier, trail)
+				local shown = Treadmill.perStep(tier, trail)
+				H.ok(math.abs(shown * ticks - paid) <= 1e-9 * math.max(1, paid), `speed {speed} {trail} tier {tier}: sign {shown} x {ticks} steps vs paid {paid}`)
+				H.near(paid, Treadmill.perSecond(tier, trail), 1e-9 * math.max(1, paid), "a second pays perSecond")
+				H.near(shown, Config.treadmillRate(tier) * Config.trailMult(trail), 1e-9, "the tier's step x the trail")
+				TreadmillBoard.render(board, { tier = tier, cash = 1, robux = 1, perStep = shown })
+				H.eq(board.stepLabel.Text, Treadmill.gainText(shown))
 			end
 		end
 	end
-	H.eq(Treadmill.rateText(60.94), "+60.9/s")
+	H.eq(Treadmill.stepText(60.94), "+60.9")
 	-- the board and the popups read the same stats: the owner's tier, equipped trail and Speed passes
 	local plotService = fs.readFile("src/server/PlotService.luau")
-	H.ok(string.find(plotService, "perSecond = Treadmill.perSecond(tier, s.profile.equippedTrail, Sessions.passSpeedMult(s))", 1, true) ~= nil,
-		"PlotService writes the per-second gain")
-	H.ok(string.find(plotService, "nextPerSecond = if price then Treadmill.perSecond(tier + 1, s.profile.equippedTrail, Sessions.passSpeedMult(s)) else nil", 1, true) ~= nil,
+	H.ok(string.find(plotService, "perStep = Treadmill.perStep(tier, s.profile.equippedTrail, Sessions.passSpeedMult(s))", 1, true) ~= nil,
+		"PlotService writes the per-step gain")
+	H.ok(string.find(plotService, "nextPerStep = if price then Treadmill.perStep(tier + 1, s.profile.equippedTrail, Sessions.passSpeedMult(s)) else nil", 1, true) ~= nil,
 		"and the next level's on the board")
 	local effects = fs.readFile("src/client/Effects.client.luau")
-	H.ok(string.find(effects, "Treadmill.perSecond(stats.treadmillTier, stats.equippedTrail, Config.passSpeedMult(stats.passes))", 1, true) ~= nil,
+	H.ok(string.find(effects, "Treadmill.perStep(stats.treadmillTier, stats.equippedTrail, Config.passSpeedMult(stats.passes))", 1, true) ~= nil,
 		"the popups use the same function")
 	local sessions = fs.readFile("src/server/Sessions.luau")
 	H.ok(string.find(sessions, "treadmillTier = p.treadmillTier", 1, true) ~= nil and string.find(sessions, "equippedTrail = p.equippedTrail", 1, true) ~= nil,
@@ -858,7 +867,7 @@ H.test("treadmill tiers: each tier has its model file (one Model, no code, tools
 	H.eq(Assets.treadmillSlot(99), `Treadmill_T{Config.TREADMILL_MAX}`)
 end)
 
-H.test("treadmill tiers: the treadmill swaps to each tier in place; belt, lock, +X/s text and board follow every tier", function()
+H.test("treadmill tiers: the treadmill swaps to each tier in place; belt, lock, +X text and board follow every tier", function()
 	local world = H.workspace:FindFirstChild("World")
 	local plots = WorldBuilder.adopt(world)
 	Assets.refresh(world)
@@ -1355,8 +1364,8 @@ H.test("treadmill speed: stepping on your own treadmill raises Speed every tick,
 		for f = 15, #frames, 15 do
 			root:move(frames[f])
 			-- (WalkSpeed grows with the Speed it pays, but the gain doesn't: the tier's fixed rate x the trail)
-			local perTick = SpeedLogic.treadmillGain(Config.TICK, s.profile.treadmillTier, Sessions.speedMult(s))
-			H.near(perTick, Config.treadmillRate(tier) * Config.trailMult(profile.equippedTrail) * Config.TICK, 1e-9, `tier {tier}: fixed`)
+			local perTick = SpeedLogic.treadmillGain(s.profile.treadmillTier, Sessions.speedMult(s))
+			H.near(perTick, Config.treadmillRate(tier) * Config.trailMult(profile.equippedTrail), 1e-9, `tier {tier}: the full step every tick`)
 			SpeedService.tickPlayer(s, Config.TICK, f * FRAME)
 			if f > lockedAt + 15 then
 				H.near(profile.speed - last, perTick, 1e-6, `tier {tier}: a tick on the belt pays the treadmill gain (frame {f})`)

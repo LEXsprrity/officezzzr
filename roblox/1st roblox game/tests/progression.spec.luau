@@ -22,10 +22,11 @@ H.test("progression: Speed per step is flat: the base x the trail's small multip
 	for i = 2, #Config.TRAILS do
 		H.ok(Config.TRAILS[i].mult > Config.TRAILS[i - 1].mult, `{Config.TRAILS[i].id} beats the trail before it`)
 	end
-	-- the treadmill pays its tier's fixed rate x the trail per second (no Speed or WalkSpeed in it at all)
+	-- the treadmill pays its tier's fixed value x the trail every step (server tick) (no Speed or WalkSpeed in it at all)
 	local SpeedLogic = H.server("SpeedLogic")
 	local dt = Config.TICK
-	H.near(SpeedLogic.treadmillGain(dt, 3, Config.trailMult("Blue")), Config.TREADMILL_TIERS[3].perSecond * 1.5 * dt, 1e-9, "tier 3, Blue x1.5")
+	H.near(SpeedLogic.treadmillGain(3, Config.trailMult("Blue")), Config.TREADMILL_TIERS[3].perStep * 1.5, 1e-9, "tier 3, Blue x1.5, every step")
+	H.near(Config.treadmillPerSecond(3, "Blue"), Config.TREADMILL_TIERS[3].perStep * 1.5 / dt, 1e-9, "4 steps a second")
 end)
 
 H.test("progression: each zone takes clearly longer than the one before; the Spirit Garden in ~10-14 h", function()

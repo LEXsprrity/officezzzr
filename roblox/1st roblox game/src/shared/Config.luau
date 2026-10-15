@@ -74,8 +74,8 @@ function Config.walkSpeedFor(speed: number): number
 end
 
 -- Speed from moving: a flat BASE_SPEED_PER_STUD per stud walked ("per step"), times the equipped trail's
--- small multiplier (Config.speedPerStud). A treadmill pays its tier's fixed rate x the trail instead
--- (Config.treadmillPerSecond). Nothing grows with the Speed you already have and there are no levels: a player progresses by running faster (WalkSpeed
+-- small multiplier (Config.speedPerStud). A treadmill pays its tier's fixed value x the trail every server step instead
+-- (Config.treadmillPerStep). Nothing grows with the Speed you already have and there are no levels: a player progresses by running faster (WalkSpeed
 -- above), better trails and treadmill tiers. Tuned with the free-player simulation in tests/progression_sim
 -- (README "Progression").
 Config.BASE_SPEED_PER_STUD = 1
@@ -695,30 +695,33 @@ function Config.moneyMult(plotLevel: number, passes: { [string]: boolean } | boo
 	return Config.plotMoneyMult(plotLevel) * Config.passMoneyMult(owned)
 end
 
--- Treadmill tiers: standing on your own treadmill pays a FIXED Speed per second for its tier (`perSecond`)
--- times the equipped trail's multiplier (Config.trailMult, x1 .. x3), and nothing else: not your WalkSpeed,
--- not the Speed you already have (owner decision: "level 1 -> X Speed/s always"). AFK works.
+-- Treadmill tiers: standing on your own treadmill pays a FIXED Speed every step (server tick, Config.TICK:
+-- 4 a second) for its tier (`perStep`) times the equipped trail's multiplier (Config.trailMult, x1 .. x3),
+-- and nothing else: not your WalkSpeed, not the Speed you already have. AFK works. Owner decision
+-- 2026-10-15: the "+X" over the belt, on its board, on the Shop card and on every popup is that one number,
+-- and each step pays exactly it (a second pays 4x it).
 -- Tier 1 is free. Each next tier is bought one at a time, at the treadmill itself (its owner-only E/F
 -- prompts) or in the Shop: for money (`price`, Config.priceOf "TreadmillUpgrade") or Robux (one tier per
--- TreadmillT1..T3 receipt, Config.treadmillUpgradeProduct). Prices grow x10 a tier: level 1 pays +100/s,
--- each level +100/s more up to +800/s, then +1K and +1.5K/s (x the trail: up to x3 with the Rainbow). A
--- free player buys level 2 after ~11 minutes and level 9 near the Spirit Garden; level 10 is a late-game
--- sink like the last plot levels. Tuned with tests/progression_sim, together with the zones' recommended
--- Speed: a free player who buys these lands every zone near its target, and an AFK farmer (fills the plot
--- once, then only stands on the treadmill) is far slower than a player who keeps running the corridor
--- (README "Progression").
-export type TreadmillTier = { perSecond: number, price: number }
+-- TreadmillT1..T3 receipt, Config.treadmillUpgradeProduct). Prices grow x10 a tier: level 1 pays +100 a
+-- step (400/s), each level +10 more up to +170, then +200 and +300 (x the trail: up to x3 with the Rainbow).
+-- (When steps started paying the full value, 4x the old per-second rate, the old +100..+1.5K curve sent a
+-- free player to the Spirit Garden in ~4 h: it is flatter now.) A free player buys level 2 after ~11 minutes
+-- and level 9 near the Spirit Garden; level 10 is a late-game sink like the last plot levels. Tuned with
+-- tests/progression_sim, together with the zones' recommended Speed: a free player who buys these lands
+-- every zone near its target, and an AFK farmer (fills the plot once, then only stands on the treadmill)
+-- is still clearly slower than a player who keeps running the corridor (README "Progression").
+export type TreadmillTier = { perStep: number, price: number }
 Config.TREADMILL_TIERS = {
-	{ perSecond = 100, price = 0 },
-	{ perSecond = 200, price = 1e6 },
-	{ perSecond = 300, price = 10e6 },
-	{ perSecond = 400, price = 100e6 },
-	{ perSecond = 500, price = 1e9 },
-	{ perSecond = 600, price = 10e9 },
-	{ perSecond = 700, price = 100e9 },
-	{ perSecond = 800, price = 1e12 },
-	{ perSecond = 1000, price = 10e12 },
-	{ perSecond = 1500, price = 100e12 },
+	{ perStep = 100, price = 0 },
+	{ perStep = 110, price = 1e6 },
+	{ perStep = 120, price = 10e6 },
+	{ perStep = 130, price = 100e6 },
+	{ perStep = 140, price = 1e9 },
+	{ perStep = 150, price = 10e9 },
+	{ perStep = 160, price = 100e9 },
+	{ perStep = 170, price = 1e12 },
+	{ perStep = 200, price = 10e12 },
+	{ perStep = 300, price = 100e12 },
 } :: { TreadmillTier }
 Config.TREADMILL_MAX = #Config.TREADMILL_TIERS
 
@@ -728,17 +731,22 @@ function Config.treadmillTierOf(tier: any): number
 	return math.clamp(math.floor(t), 1, Config.TREADMILL_MAX)
 end
 
--- The fixed Speed per second of treadmill tier `tier`, before the trail.
+-- The fixed Speed per step (server tick) of treadmill tier `tier`, before the trail.
 function Config.treadmillRate(tier: number?): number
-	return Config.TREADMILL_TIERS[Config.treadmillTierOf(tier)].perSecond
+	return Config.TREADMILL_TIERS[Config.treadmillTierOf(tier)].perStep
 end
 
--- What a second on a treadmill of tier `tier` pays with trail `trailId` equipped: the tier's fixed rate x
--- the trail x the Speed passes (`passMult`: Config.passSpeedMult, 1 when nil), at any Speed or WalkSpeed.
--- SpeedLogic.treadmillGain pays it a tick at a time; the "+X/s" text over the belt, the popups over the
--- runner, the Upgrade board and the Shop show it (Treadmill.perSecond).
-function Config.treadmillPerSecond(tier: number?, trailId: string?, passMult: number?): number
+-- What a step (one server tick, Config.TICK) on a treadmill of tier `tier` pays with trail `trailId`
+-- equipped: the tier's fixed value x the trail x the Speed passes (`passMult`: Config.passSpeedMult, 1 when
+-- nil), at any Speed or WalkSpeed. SpeedLogic.treadmillGain pays it every tick; the "+X" text over the belt,
+-- each popup over the runner, the Upgrade board and the Shop show it (Treadmill.perStep).
+function Config.treadmillPerStep(tier: number?, trailId: string?, passMult: number?): number
 	return Config.treadmillRate(tier) * Config.trailMult(trailId) * (passMult or 1)
+end
+
+-- ...and what a second on it pays: 1 / TICK steps (4).
+function Config.treadmillPerSecond(tier: number?, trailId: string?, passMult: number?): number
+	return Config.treadmillPerStep(tier, trailId, passMult) / Config.TICK
 end
 
 -- Treadmill upgrades for Robux: like the plot's, the next tier is sold by the product of its price tier.

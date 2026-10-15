@@ -164,7 +164,7 @@ H.test("trails: the equipped trail multiplies Speed gained walking and on the tr
 	end
 	for _, onTreadmill in { false, true } do
 		local grey = gain("Grey", onTreadmill)
-		H.near(grey, if onTreadmill then Config.treadmillRate(1) * DT else 80 * DT * Config.BASE_SPEED_PER_STUD, 1e-9, "Grey x1: the flat base (the treadmill: its fixed rate)")
+		H.near(grey, if onTreadmill then Config.treadmillRate(1) else 80 * DT * Config.BASE_SPEED_PER_STUD, 1e-9, "Grey x1: the flat base (the treadmill: its fixed step)")
 		for _, t in Config.TRAILS do
 			H.near(gain(t.id, onTreadmill), grey * t.mult, 1e-9, t.id)
 		end

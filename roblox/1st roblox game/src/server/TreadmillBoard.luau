@@ -1,7 +1,7 @@
 -- Each plot's treadmill visuals, built at runtime around whatever belt the map has (so they follow the
 -- treadmill wherever it is moved): an "Upgrade" board beside it, facing the walkway like the runner (a
 -- chunky dark navy sign on a post, like the plot's Upgrade board: "Level X > Level Y", a red button with the
--- money price and a purple one with the Robux price) and a small "+X/s" text floating over the belt's front
+-- money price and a purple one with the Robux price) and a small "+X" text floating over the belt's front
 -- end, seen only up close. An old map's "TREADMILL" sign is removed (there is none any more). PlotService writes them and owns the board's buttons (click/tap and E/F).
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Shared = ReplicatedStorage:WaitForChild("Shared")
@@ -27,9 +27,9 @@ export type Board = {
 	center: Vector3,
 }
 -- What the board shows: the owner's tier (nil: nobody owns the plot), the next tier's prices, what
--- a second on the belt pays the owner now (Treadmill.perSecond, like the popups over the runner) and what
+-- a step on the belt pays the owner now (Treadmill.perStep, the same "+X" as each popup over the runner) and what
 -- it will pay at the next tier (nil at the last).
-export type View = { tier: number?, cash: number?, robux: number?, perSecond: number?, nextPerSecond: number? }
+export type View = { tier: number?, cash: number?, robux: number?, perStep: number?, nextPerStep: number? }
 
 local NAVY = Color3.fromRGB(30, 36, 60)
 local CORNER = Color3.fromRGB(44, 54, 92)
@@ -84,7 +84,7 @@ local function list(parent: Instance, direction: Enum.FillDirection, gap: number
 	layout.Parent = parent
 end
 
--- The panel's SurfaceGui: "Upgrade", "Level X > Level Y", "+X/s > +Y/s" and the row of two buttons.
+-- The panel's SurfaceGui: "Upgrade", "Level X > Level Y", "+X > +Y" and the row of two buttons.
 local function buildGui(panel: BasePart): Labels
 	local gui = Instance.new("SurfaceGui")
 	gui.Name = "Board"
@@ -191,9 +191,9 @@ function TreadmillBoard.placement(model: Model, belt: BasePart, center: Vector3)
 	return Treadmill.boardCFrame(belt.CFrame, belt.Size, center, groundOf(model, belt), clearSide(model, belt))
 end
 
--- Builds the board and the "+X/s" text for one plot (`model` the plot Model, `center` its centre),
+-- Builds the board and the "+X" text for one plot (`model` the plot Model, `center` its centre),
 -- and removes the big "TREADMILL" sign an older map has over the belt (a part with Role "TreadmillSign";
--- owner playtest: only the small "+X/s" text stays).
+-- owner playtest: only the small "+X" text stays).
 function TreadmillBoard.build(model: Model, belt: BasePart, center: Vector3): Board
 	local signs = {}
 	for _, d in model:GetDescendants() do
@@ -223,7 +223,7 @@ function TreadmillBoard.build(model: Model, belt: BasePart, center: Vector3): Bo
 	local labels = buildGui(panel)
 	boardModel.Parent = model
 
-	-- "+X/s" over the front end of the belt, on an attachment that follows it; only up close.
+	-- "+X" over the front end of the belt, on an attachment that follows it; only up close.
 	local anchor = Instance.new("Attachment")
 	anchor.Name = "StepTextAnchor"
 	anchor.Position = Treadmill.stepTextOffset(belt.Size)
@@ -279,7 +279,7 @@ end
 
 -- Shows treadmill tier `tier`'s model on the board's plot (assets/Treadmill_T<tier>, or the nearest lower
 -- tier that has one), where the plot's treadmill stands now and in the same space. The hidden belt follows
--- the new model's belt (Assets.fitUnder), and the board and the "+X/s" text follow the belt. Does nothing
+-- the new model's belt (Assets.fitUnder), and the board and the "+X" text follow the belt. Does nothing
 -- when that model is already shown or no tier has a model (the built-in frame stays). Returns whether it
 -- swapped.
 function TreadmillBoard.showTier(board: Board, tier: number): boolean
@@ -301,7 +301,7 @@ function TreadmillBoard.showTier(board: Board, tier: number): boolean
 	return true
 end
 
--- Writes the board and the "+X/s" text. Below the last tier: "Level X > Level Y", "+X/s > +Y/s" and both buttons
+-- Writes the board and the "+X" text. Below the last tier: "Level X > Level Y", "+X > +Y" and both buttons
 -- (the red one with the money price and the Treadmill icon, the purple one with the Robux icon); at the
 -- last tier "MAX" and no buttons; with no owner "Empty plot", no buttons and no step text.
 function TreadmillBoard.render(board: Board, view: View)
@@ -309,7 +309,7 @@ function TreadmillBoard.render(board: Board, view: View)
 	local labels = board.labels
 	labels.level.Text = line
 	labels.level.TextColor3 = TEXT[kind]
-	labels.rate.Text = Treadmill.boardRateText(view.perSecond, view.nextPerSecond)
+	labels.rate.Text = Treadmill.boardRateText(view.perStep, view.nextPerStep)
 	local open = kind == "open" and view.cash ~= nil
 	labels.buttons.Visible = open
 	-- the money price on the red button, so the owner's client can turn it green when affordable
@@ -329,8 +329,8 @@ function TreadmillBoard.render(board: Board, view: View)
 		Icons.set(labels.cash, {}, "")
 		Icons.set(labels.robux, {}, "")
 	end
-	board.stepGui.Enabled = view.perSecond ~= nil
-	board.stepLabel.Text = if view.perSecond then Treadmill.rateText(view.perSecond) else ""
+	board.stepGui.Enabled = view.perStep ~= nil
+	board.stepLabel.Text = if view.perStep then Treadmill.stepText(view.perStep) else ""
 end
 
 return TreadmillBoard
