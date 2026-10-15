@@ -123,33 +123,44 @@ H.test("treadmill: Effects.client locks, sprints and pops Speed with the shared 
 		local text = fs.readFile(file)
 		H.ok(string.find(text, "isn't your treadmill", 1, true) == nil, `{file} has no "isn't your treadmill" toast`)
 	end
-	H.ok(string.find(source, "Treadmill.blockBox(belt.CFrame, belt.Size)", 1, true) ~= nil and string.find(source, "CanCollide = true", 1, true) ~= nil,
-		"Effects.client puts a solid invisible wall over the other belts")
-	H.ok(string.find(source, "belt:GetAttribute(\"PlotIndex\") == myPlot", 1, true) ~= nil, "...but not over its own")
 	H.ok(string.find(source, "AutoRotate = false", 1, true) ~= nil, "a locked runner isn't turned by the walking keys")
 end)
 
-H.test("treadmill wall: someone else's belt is walled off; a runner on it would be inside the wall", function()
-	local b = belt(3, Vector3.new(-40, 1.5, 30))
-	b.Size = Vector3.new(4.5, 1, 9)
-	local cf, size = Treadmill.blockBox(b.CFrame, b.Size)
-	local rel = b.CFrame:PointToObjectSpace(cf.Position)
-	H.ok(math.abs(rel.X) < 1e-4 and math.abs(rel.Z) < 1e-4, "centred over the belt")
-	H.ok(size.X >= b.Size.X and size.Z >= b.Size.Z, "covers its whole footprint")
-	local bottom = rel.Y - size.Y / 2
-	H.ok(bottom >= b.Size.Y / 2 and bottom <= b.Size.Y / 2 + 0.2, `starts just above the belt ({bottom})`)
-	H.ok(size.Y >= 8, "too tall to jump onto")
-	-- every spot the belt check counts as on the belt is inside the wall
-	for _, x in { -2.2, 0, 2.2 } do
-		for _, z in { -4.4, 0, 4.4 } do
-			local pos = (b.CFrame * CFrame.new(x, b.Size.Y / 2 + 3, z)).Position
-			H.ok(Treadmill.onBelt(b.CFrame, b.Size, pos), "on the belt")
-			local p = cf:PointToObjectSpace(pos)
-			H.ok(math.abs(p.X) < size.X / 2 and math.abs(p.Y) < size.Y / 2 and math.abs(p.Z) < size.Z / 2, `({x}, {z}) inside the wall`)
+H.test("treadmill keep-out: nobody can use someone else's belt, and nothing over it can be stood on (no floating)", function()
+	-- Owner playtest: another player stood in mid-air over a treadmill, on top of the invisible solid wall
+	-- Effects.client used to put over belts that weren't the viewer's. Now nothing solid is made at all.
+	local source = fs.readFile("src/client/Effects.client.luau")
+	H.ok(string.find(source, "CanCollide = true", 1, true) == nil and string.find(source, "TreadmillBlock", 1, true) == nil,
+		"Effects.client makes no solid part (no invisible wall with a top to stand on)")
+	H.ok(string.find(source, "Treadmill.pushOut(belt.CFrame, belt.Size, root.Position)", 1, true) ~= nil
+		and string.find(source, "belt:GetAttribute(\"PlotIndex\") == myPlot", 1, true) ~= nil, "it keeps its own character off the other belts, not its own")
+	H.eq((Treadmill :: any).blockBox, nil, "the solid box is gone")
+	for _, size in { Vector3.new(4.5, 1, 9), Vector3.new(4.4, 2.84, 7.8) } do
+		local b = belt(3, Vector3.new(-40, size.Y / 2, 30))
+		b.Size = size
+		local top = size.Y / 2
+		-- every spot over the belt, standing, jumping or landing from the board beside it: put back outside
+		for _, x in { -2.2, -0.5, 0, 1.9 } do
+			for _, z in { -size.Z / 2 + 0.1, -1, 0, 2.5, size.Z / 2 - 0.1 } do
+				for _, y in { top + 0.2, top + 3, top + 7, top + Treadmill.BLOCK_HEIGHT - 0.1 } do
+					local pos = (b.CFrame * CFrame.new(x, y, z)).Position
+					local out = Treadmill.pushOut(b.CFrame, b.Size, pos)
+					H.ok(out ~= nil, `({x}, {y}, {z}) is kept out`)
+					local rel = b.CFrame:PointToObjectSpace(out)
+					H.ok(not Treadmill.onBelt(b.CFrame, b.Size, out), "off the belt")
+					H.eq(Treadmill.pushOut(b.CFrame, b.Size, out), nil, "and stays out (no ping-pong)")
+					H.near(rel.Y, y, 1e-4, "sideways only: never lifted (nothing to stand on), a fall keeps falling")
+					H.ok((out - pos).Magnitude <= math.max(size.X, size.Z) / 2 + Treadmill.KEEP_OUT_PAD + 0.1, "out the nearest side")
+				end
+			end
 		end
+		-- beside it on the ground, or far over it: left alone
+		H.eq(Treadmill.pushOut(b.CFrame, b.Size, (b.CFrame * CFrame.new(size.X / 2 + 1.5, top + 3, 0)).Position), nil, "walking past beside it")
+		H.eq(Treadmill.pushOut(b.CFrame, b.Size, (b.CFrame * CFrame.new(0, top + Treadmill.BLOCK_HEIGHT + 1, 0)).Position), nil, "high above it")
+		b:Destroy()
 	end
-	b:Destroy()
 end)
+
 
 ----------------------------------------------------------------------------------------------------
 -- Tiers

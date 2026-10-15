@@ -137,40 +137,24 @@ local belts: { [BasePart]: boolean? } = {} -- every plot's treadmill belt (Role 
 local myPlot: number? = nil
 local rainbows: { [BasePart]: boolean? } = {}
 
--- Other players' treadmills: an invisible solid box over each belt that isn't ours (Treadmill.blockBox), made
--- on this client only, so we can't step onto it. Our own belt stays open. It rides inside its belt, so it
--- streams out with it.
-local blocks: { [BasePart]: BasePart } = {}
-local function syncBlock(belt: BasePart)
-	local block = blocks[belt] or belt:FindFirstChild("TreadmillBlock") :: BasePart? -- or a belt that streamed back in
-	if not belt.Parent or (myPlot ~= nil and belt:GetAttribute("PlotIndex") == myPlot) then
-		if block then
-			block:Destroy()
-		end
-		blocks[belt] = nil
-		return
-	end
-	local wall: BasePart = block or Instance.new("Part")
-	wall.Name = "TreadmillBlock"
-	wall.Anchored = true
-	wall.CanCollide = true
-	wall.CanTouch = false
-	wall.CastShadow = false
-	wall.Transparency = 1
-	local cf, size = Treadmill.blockBox(belt.CFrame, belt.Size)
-	wall.Size = size
-	wall.CFrame = cf
-	wall.Parent = belt
-	blocks[belt] = wall
+-- Other players' treadmills: we can't step onto them, but nothing solid stands over them (an invisible solid
+-- box was a floor people jumped onto and stood on, floating: owner playtest). Every frame, our own character
+-- is put back out of any belt that isn't ours (Treadmill.pushOut, in the Heartbeat below); our own belt
+-- stays open. Each client does it for its own character only, so everyone is kept off, and nobody floats.
+local function setMyPlot(index: number?)
+	myPlot = index
 end
 
-local function setMyPlot(index: number?)
-	if index == myPlot then
-		return
-	end
-	myPlot = index
+local function keepOffOthersBelts(root: BasePart)
 	for belt in belts do
-		syncBlock(belt)
+		if belt.Parent and not (myPlot ~= nil and belt:GetAttribute("PlotIndex") == myPlot) then
+			local out = Treadmill.pushOut(belt.CFrame, belt.Size, root.Position)
+			if out then
+				root.CFrame = CFrame.new(out) * root.CFrame.Rotation
+				local v = root.AssemblyLinearVelocity
+				root.AssemblyLinearVelocity = Vector3.new(0, v.Y, 0) -- (falling keeps going: no hovering)
+			end
+		end
 	end
 end
 
@@ -319,14 +303,6 @@ local function consider(inst: Instance)
 		watchClick(inst)
 	elseif inst:IsA("BasePart") and inst:GetAttribute("Role") == "TreadmillBelt" then
 		belts[inst] = true
-		syncBlock(inst)
-		for _, property in { "CFrame", "Size" } do
-			inst:GetPropertyChangedSignal(property):Connect(function()
-				if belts[inst] then
-					syncBlock(inst)
-				end
-			end)
-		end
 	elseif inst:IsA("Model") and inst:GetAttribute("Role") == "Plot" then
 		local function owner()
 			local index = inst:GetAttribute("PlotIndex")
@@ -374,10 +350,7 @@ workspace.DescendantRemoving:Connect(function(inst)
 		stripes[inst] = nil
 	elseif inst:IsA("BasePart") then
 		rainbows[inst] = nil
-		if belts[inst] then
-			belts[inst] = nil
-			blocks[inst] = nil -- its wall goes with it
-		end
+		belts[inst] = nil
 		local c = inst.Parent and creatures[inst.Parent :: Model]
 		if c then
 			c.dirty = true
@@ -739,6 +712,10 @@ RunService.Heartbeat:Connect(function()
 		end
 	elseif action == "unlock" or action == "exit" then
 		release()
+	end
+	-- Everybody else's treadmill: kept off it (nothing solid over it to stand on).
+	if root and alive and lock.mode ~= "locked" then
+		keepOffOthersBelts(root)
 	end
 
 	-- Sprint in place while locked.
