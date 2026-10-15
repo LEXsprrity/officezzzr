@@ -42,7 +42,10 @@ ProfileStore.__index = ProfileStore
 -- v11 keeps which way each plant faces (`yaw`, degrees, turned by the player while placing it; `yw`), in the
 -- inventory too, so a plant planted again starts facing the same way. Older plants have none and keep
 -- facing the plot's entrance, as they always did (Planting.facing).
-ProfileStore.VERSION = 11
+-- v12 added sprouting: a fresh seed first stands as a seedling until `sproutUntil` (unix seconds, `su`; its
+-- plantedAt, where growth starts, is the same time), and an inventory plant taken off mid-sprout keeps what
+-- was left (`sprout`, seconds, `sp`). Older plants have neither: they are fully sprouted, as they were.
+ProfileStore.VERSION = 12
 
 -- The zones' recommended Speed before v7 (Config.ZONES order), for migrateSpeed.
 ProfileStore.LEGACY_ZONE_REQ = { 0, 10e3, 500e3, 5e6, 50e6, 500e6, 5e9 }
@@ -83,6 +86,7 @@ export type Plant = {
 	variant: string?, -- v8: its flower (plant model name), drawn at planting; nil = the id-based pick (older saves)
 	variance: number?, -- v9: its weight variance, kept from before it went to the inventory; nil = Config.plantVariance
 	yaw: number?, -- v11: degrees it is turned from facing the entrance (Planting.facing); nil = 0 (older saves)
+	sproutUntil: number?, -- v12: a seedling (no income) until then (unix seconds); nil = sprouted (Config.sproutLeft)
 }
 
 -- A plant in the inventory (v9): taken off the plot as it was, its growth stopped. Planted again it keeps
@@ -96,6 +100,7 @@ export type InvPlant = {
 	age: number, -- seconds it had grown (0..Config.GROW_TIME)
 	variance: number,
 	yaw: number?, -- v11: the way it faced on the plot
+	sprout: number?, -- v12: seconds of sprouting it still had when it left the plot (nil = none)
 }
 
 export type Profile = {
@@ -245,11 +250,11 @@ end
 function ProfileStore.serialize(p: Profile): { [string]: any }
 	local plants = {}
 	for _, pl in p.plants do
-		table.insert(plants, { s = pl.slot, z = pl.zone, r = pl.rarity, m = pl.mutation, t = pl.plantedAt, px = pl.x, pz = pl.z, vr = pl.variant, va = pl.variance, yw = pl.yaw })
+		table.insert(plants, { s = pl.slot, z = pl.zone, r = pl.rarity, m = pl.mutation, t = pl.plantedAt, px = pl.x, pz = pl.z, vr = pl.variant, va = pl.variance, yw = pl.yaw, su = pl.sproutUntil })
 	end
 	local inventory = {}
 	for _, it in p.inventory do
-		table.insert(inventory, { i = it.id, z = it.zone, r = it.rarity, m = it.mutation, vr = it.variant, a = it.age, va = it.variance, yw = it.yaw })
+		table.insert(inventory, { i = it.id, z = it.zone, r = it.rarity, m = it.mutation, vr = it.variant, a = it.age, va = it.variance, yw = it.yaw, sp = it.sprout })
 	end
 	local index = {}
 	for key, v in p.index do
@@ -333,6 +338,7 @@ function ProfileStore.deserialize(data: any): Profile
 
 	local used = {}
 	local modern = type(data.v) == "number" and data.v >= 6 -- plants saved with their spot
+	local v12 = type(data.v) == "number" and data.v >= 12 -- plants saved with their sprouting
 	if type(data.plants) == "table" then
 		for _, raw in data.plants do
 			if type(raw) == "table" then
@@ -349,11 +355,14 @@ function ProfileStore.deserialize(data: any): Profile
 					if modern and type(raw.px) == "number" and type(raw.pz) == "number" and math.abs(raw.px) <= half and math.abs(raw.pz) <= half then
 						x, z = raw.px, raw.pz
 					end
+					-- v12: still a seedling until `su` (a sane time; its growth starts no earlier). Older saves: sprouted.
+					local sproutUntil = if v12 and type(raw.su) == "number" and raw.su == raw.su and math.abs(raw.su) < 1e12 then raw.su else nil
 					-- v8: its flower, a plant model's name (one that is no longer a model falls back to the id pick)
 					table.insert(p.plants, {
-						slot = slot, zone = zone, rarity = rarity, mutation = mutation, plantedAt = raw.t, x = x, z = z,
+						slot = slot, zone = zone, rarity = rarity, mutation = mutation, plantedAt = math.max(raw.t, sproutUntil or raw.t), x = x, z = z,
 						variant = variantOf(raw.vr), variance = varianceOf(raw.va),
 						yaw = Planting.normalizeYaw(raw.yw), -- v11 (nil before: facing the entrance)
+						sproutUntil = sproutUntil,
 					})
 				end
 			end
@@ -373,11 +382,13 @@ function ProfileStore.deserialize(data: any): Profile
 				local variance = varianceOf(raw.va)
 				if zone >= 1 and rarity >= 1 and id >= 1 and not ids[id] and variance then
 					ids[id] = true
+					local sprout = if v12 then num(raw.sp, 0, 0, Config.SPROUT_MAX) else 0
 					table.insert(p.inventory, {
 						id = id, zone = zone, rarity = rarity,
 						mutation = if type(raw.m) == "string" and Config.mutationById(raw.m) then raw.m else nil,
 						variant = variantOf(raw.vr), age = num(raw.a, 0, 0, Config.GROW_TIME), variance = variance,
 						yaw = Planting.normalizeYaw(raw.yw),
+						sprout = if sprout > 0 then sprout else nil, -- v12
 					})
 				end
 			end

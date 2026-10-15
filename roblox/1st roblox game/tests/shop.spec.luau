@@ -348,7 +348,7 @@ H.test("robux: the agreed Speed, Money and Treadmill products, all id = 0 stubs;
 	H.eq(Config.DEVELOPER_PRODUCTS.SleepDust3, nil)
 	for name, product in Config.DEVELOPER_PRODUCTS do
 		H.ok(product.kind == "Pack" or product.kind == "Speed" or product.kind == "Money" or product.kind == "TreadmillUpgrade"
-			or product.kind == "Trail" or product.kind == "PlotUpgrade", name .. " has a known kind")
+			or product.kind == "Trail" or product.kind == "PlotUpgrade" or product.kind == "GrowNow", name .. " has a known kind")
 		H.ok(#name <= 24 and string.match(name, "^%a%w*$"), name .. " fits the Product:<name> remote id")
 	end
 end)

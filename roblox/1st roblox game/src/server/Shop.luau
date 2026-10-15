@@ -22,6 +22,8 @@ type Profile = {
 	items: { [string]: number },
 	seedBag: { [string]: number },
 	receipts: { string },
+	plants: { any }?, -- (ProfileStore.Plant: GrowNow finds its plant here...)
+	inventory: { any }?, -- (...or, taken off the plot, a seedling here)
 }
 
 local function ownTrail(p: Profile, trail: Config.Trail)
@@ -77,14 +79,35 @@ export type Grant = {
 	roll: Roll?, -- the seed that went into the bag (a x10: the best one), or nil if none fit (bag at SEED_BAG_HARD_MAX)...
 	rolls: { Roll }, -- every seed that went into the bag (1, or 10 for a x10 pack)
 	compensation: number, -- ...and the money paid instead (also what a Money product paid)
+	grown: { number }?, -- GrowNow: the plot plants (ids) whose sprouting it finished or shortened
+	wasted: boolean?, -- GrowNow: no seedling anywhere to spend it on (logged by ShopService)
 }
+
+-- What a GrowNow prompt or receipt is about: the plant the player picked (`slot`, its id; untrusted until
+-- found in their own profile) and the time.
+export type GrowNowTarget = { slot: any, now: number }
+
+-- The player's own plot plant with this id, or nil (an id that isn't one of theirs is just not found).
+function Shop.plantBySlot(p: Profile, slot: any): any
+	if type(slot) ~= "number" or slot ~= math.floor(slot) then
+		return nil
+	end
+	for _, plant in p.plants or {} do
+		if plant.slot == slot then
+			return plant
+		end
+	end
+	return nil
+end
 
 -- Whether the server may open the Robux prompt for `productName`. Returns (product, nil) or
 -- (nil, message). A product without an id is "coming soon"; packs aren't prompted unless all their seeds fit
--- under SEED_BAG_MAX (a x10 needs 10 free spaces), trails the player already has aren't prompted at all, and a plot or treadmill
--- upgrade only through the price tier of the plot's level / treadmill's tier (never once maxed). Only the
--- *prompt* is gated: a receipt that arrives is always granted (Shop.grantProduct).
-function Shop.canPrompt(p: Profile, productName: string): (Config.DevProduct?, string?)
+-- under SEED_BAG_MAX (a x10 needs 10 free spaces), trails the player already has aren't prompted at all, a plot or treadmill
+-- upgrade only through the price tier of the plot's level / treadmill's tier (never once maxed), and Grow
+-- Now only for `target`: one of the player's own plants that is still sprouting, with the product its time
+-- left calls for (Config.growNowProduct). Only the *prompt* is gated: a receipt that arrives is always
+-- granted (Shop.grantProduct).
+function Shop.canPrompt(p: Profile, productName: string, target: GrowNowTarget?): (Config.DevProduct?, string?)
 	local product = Config.DEVELOPER_PRODUCTS[productName]
 	if not product then
 		return nil, "Unknown product"
@@ -108,6 +131,17 @@ function Shop.canPrompt(p: Profile, productName: string): (Config.DevProduct?, s
 			return nil, "Your treadmill is fully upgraded!"
 		elseif current ~= productName then
 			return nil, "That isn't the upgrade for your treadmill's tier."
+		end
+	elseif product.kind == "GrowNow" then
+		local plant = if target then Shop.plantBySlot(p, target.slot) else nil
+		if not plant or not target then
+			return nil, "Pick one of your sprouting plants first."
+		end
+		local left = Config.sproutLeft(plant, target.now)
+		if left <= 0 then
+			return nil, "That plant has already grown!"
+		elseif Config.growNowProduct(left) ~= productName then
+			return nil, "That isn't the Grow Now for this plant's time left."
 		end
 	elseif product.kind == "PlotUpgrade" then
 		-- Only the tier that sells this plot's next level (a cheaper tier can't buy a late level).
@@ -135,8 +169,66 @@ local function remember(p: Profile, purchaseId: string)
 	end
 end
 
+-- Shortens a plot plant's sprouting by `seconds` (math.huge: all of it) at `now`; its growth still starts
+-- when the sprouting ends (its plantedAt moves with it).
+local function skipSprout(plant: any, seconds: number, now: number)
+	local offset = plant.plantedAt - plant.sproutUntil -- (0 for a seedling)
+	if Config.sproutLeft(plant, now) <= seconds then
+		plant.sproutUntil = nil
+		plant.plantedAt = now + offset
+	else
+		plant.sproutUntil -= seconds
+		plant.plantedAt = plant.sproutUntil + offset
+	end
+end
+
+-- A Grow Now receipt (`target`: the plant it was prompted for, nil when the prompt was in another server).
+-- That plant, if it is still one of the player's seedlings, sprouts at once. If it isn't (it finished
+-- while the prompt was open, or was sold or taken off the plot), the purchase is not lost: it goes to the
+-- seedling with the most time left, on the plot first, then in the inventory, skipping up to what the
+-- product covers (its upTo; the top one all of it). With no seedling anywhere it does nothing but say so
+-- (`wasted`; ShopService logs it). Robux can't be refunded from a game.
+function Shop.grantGrowNow(p: Profile, product: Config.DevProduct, target: GrowNowTarget?, grant: Grant)
+	local now = if target then target.now else os.time()
+	local plant = if target then Shop.plantBySlot(p, target.slot) else nil
+	if plant and Config.isSprouting(plant, now) then
+		skipSprout(plant, math.huge, now)
+		grant.grown = { plant.slot }
+		grant.label = "Your plant grew!"
+		return
+	end
+	local skip = product.upTo or math.huge
+	local best, bestLeft = nil, 0
+	for _, other in p.plants or {} do
+		local left = Config.sproutLeft(other, now)
+		if left > bestLeft then
+			best, bestLeft = other, left
+		end
+	end
+	if best then
+		skipSprout(best, skip, now)
+		grant.grown = { best.slot }
+		grant.label = if Config.isSprouting(best, now) then "Your seedling grows faster!" else "Your plant grew!"
+		return
+	end
+	local entry, entryLeft = nil, 0
+	for _, e in p.inventory or {} do
+		if (e.sprout or 0) > entryLeft then
+			entry, entryLeft = e, e.sprout
+		end
+	end
+	if entry then
+		local left = math.max(entryLeft - skip, 0)
+		entry.sprout = if left > 0 then left else nil
+		grant.label = "A seedling in your Inventory grew!"
+		return
+	end
+	grant.wasted = true
+	grant.label = "Your plants had all grown already."
+end
+
 -- Applies one product to the profile. `income` = the player's $/s with all multipliers.
-local function apply(p: Profile, name: string, product: Config.DevProduct, income: number, rng: () -> number): Grant
+local function apply(p: Profile, name: string, product: Config.DevProduct, income: number, rng: () -> number, target: GrowNowTarget?): Grant
 	local grant: Grant = { name = name, product = product, label = product.label, pack = nil, roll = nil, rolls = {}, compensation = 0 }
 	local kind = product.kind
 	if kind == "Pack" then
@@ -180,6 +272,8 @@ local function apply(p: Profile, name: string, product: Config.DevProduct, incom
 		end
 	elseif kind == "Trail" then
 		ownTrail(p, Config.trailById(product.trail) :: Config.Trail)
+	elseif kind == "GrowNow" then
+		Shop.grantGrowNow(p, product, target, grant)
 	elseif kind == "PlotUpgrade" then
 		-- Exactly one level, from the level the plot has now (whatever the tier: the player may have bought
 		-- levels with money since the prompt). Already maxed: the last level's money price instead.
@@ -196,8 +290,8 @@ local function apply(p: Profile, name: string, product: Config.DevProduct, incom
 end
 
 -- Grants a developer product at most once per PurchaseId. Returns "granted" with the grant,
--- "duplicate" (already granted: just confirm again) or "unknown".
-function Shop.grantProduct(p: Profile, productName: string, purchaseId: string, income: number, rng: () -> number): (string, Grant?)
+-- "duplicate" (already granted: just confirm again) or "unknown". `target`: a Grow Now's plant.
+function Shop.grantProduct(p: Profile, productName: string, purchaseId: string, income: number, rng: () -> number, target: GrowNowTarget?): (string, Grant?)
 	for _, id in p.receipts do
 		if id == purchaseId then
 			return "duplicate", nil
@@ -207,7 +301,7 @@ function Shop.grantProduct(p: Profile, productName: string, purchaseId: string, 
 	if not product then
 		return "unknown", nil
 	end
-	local grant = apply(p, productName, product, income, rng)
+	local grant = apply(p, productName, product, income, rng, target)
 	remember(p, purchaseId)
 	return "granted", grant
 end
@@ -217,11 +311,12 @@ end
 -- Returns (confirm, status, grant); confirm = false means "NotProcessedYet" (Roblox retries).
 -- A retry in the same session finds the id and doesn't grant twice; if the server died before the
 -- save, neither the grant nor the id persisted, so the retry elsewhere grants exactly once.
-function Shop.processReceipt(p: Profile?, productName: string?, purchaseId: string, income: number, rng: () -> number, save: () -> boolean): (boolean, string, Grant?)
+function Shop.processReceipt(p: Profile?, productName: string?, purchaseId: string, income: number, rng: () -> number, save: () -> boolean,
+	target: GrowNowTarget?): (boolean, string, Grant?)
 	if not p or not productName then
 		return false, "unavailable", nil
 	end
-	local status, grant = Shop.grantProduct(p, productName, purchaseId, income, rng)
+	local status, grant = Shop.grantProduct(p, productName, purchaseId, income, rng, target)
 	if status == "unknown" then
 		return false, status, nil
 	end

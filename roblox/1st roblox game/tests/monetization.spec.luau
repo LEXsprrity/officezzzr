@@ -25,8 +25,8 @@ end
 local STUB = serde.decode("json", fs.readFile("tests/fixtures/monetization_stub.json")) -- what the other specs run with
 
 -- Products added since the owner last ran tools/create_monetization.mjs: 0 in ids.json until they do (the Shop
--- says "coming soon" for them meanwhile). Owner 2026-10-15: the x10 seed packs.
-local PENDING = { PackSpace10 = true, PackSpirit10 = true }
+-- says "coming soon" for them meanwhile). Owner 2026-10-15: the x10 seed packs, then the Grow Now products.
+local PENDING = { PackSpace10 = true, PackSpirit10 = true, GrowNow10 = true, GrowNow30 = true }
 
 H.test("monetization: ids.json has every pass and product created (a real id each), and Config reads it", function()
 	local raw = serde.decode("json", fs.readFile("monetization/ids.json"))
@@ -103,7 +103,7 @@ H.test("monetization: catalog.json is up to date and covers every pass and produ
 	end
 	H.eq(count(seen.pass), count(Config.GAMEPASSES), "every pass")
 	H.eq(count(seen.product), count(Config.DEVELOPER_PRODUCTS), "every product")
-	H.eq(#list, 38, "6 passes + 32 products (the x10 packs: owner 2026-10-15)")
+	H.eq(#list, 40, "6 passes + 34 products (the x10 packs, the Grow Now products: owner 2026-10-15)")
 	-- The passes without a placeholder price get the agreed ones.
 	for _, e in list do
 		if e.key == "DoubleMoney" then

@@ -507,6 +507,39 @@ function Config.plantIncome(k: number, rarity: number, weight: number, mutation:
 	return base * math.sqrt(weight / Config.sproutWeight(k, rarity))
 end
 
+-- Sprouting: a seed planted from the bag or carried home first stands as a seedling (a dirt mound and a
+-- sprout, PlotService) that earns nothing, for sproutTime(zone, rarity) seconds; then it pops into its
+-- flower and its growth curve (GROW_TIME, plantAge) starts from there. It is an absolute time (the plant's
+-- `sproutUntil`), so it goes on offline. Base time by rarity x a zone factor rising evenly with depth
+-- (Meadow x1 .. Spirit Garden x2.5), rounded to SPROUT_ROUND seconds: a Meadow Common 30 s, a Spirit
+-- Garden Legendary 50 min (tests/progression_sim: the free timeline still lands ~12 h, README). The owner's
+-- Fast Grow pass divides it (Config.passGrowMult), like growth. "Grow now" (the GrowNow products below)
+-- skips what is left for Robux.
+Config.SPROUT_BASE = { 30, 60, 180, 480, 1200 } -- seconds, Config.RARITIES order (Common .. Legendary)
+Config.SPROUT_ZONE_STEP = 0.25 -- the zone factor grows this much per zone: 1, 1.25, 1.5 .. 2.5
+Config.SPROUT_ROUND = 5
+
+function Config.sproutZoneFactor(zone: number): number
+	return 1 + Config.SPROUT_ZONE_STEP * (zone - 1)
+end
+
+-- Seconds a fresh seed of (zone, rarity) sprouts for. `growMult`: the owner's Fast Grow (1 when nil).
+function Config.sproutTime(zone: number, rarity: number, growMult: number?): number
+	local base = (Config.SPROUT_BASE[rarity] or Config.SPROUT_BASE[1]) * Config.sproutZoneFactor(zone) / math.max(growMult or 1, 1)
+	return math.max(Config.SPROUT_ROUND, math.floor(base / Config.SPROUT_ROUND + 0.5) * Config.SPROUT_ROUND)
+end
+Config.SPROUT_MAX = Config.sproutTime(7, 5) -- the longest sprout (a Spirit Garden Legendary); saves are clamped to it
+
+-- Seconds a plant still sprouts at `now` (0: it is a flower). Plants from before sprouting have no sproutUntil.
+function Config.sproutLeft(plant: { sproutUntil: number? }, now: number): number
+	local untilAt = plant.sproutUntil
+	return if untilAt then math.max(untilAt - now, 0) else 0
+end
+
+function Config.isSprouting(plant: { sproutUntil: number? }, now: number): boolean
+	return Config.sproutLeft(plant, now) > 0
+end
+
 -- Plant-creature models (CreatureModels). Sizes are studs at scale 1, and PlotService scales each creature
 -- by weight. CREATURE_FOOTPRINT * CREATURE_MAX_SCALE (8.8) keeps a Common..Rare within about one
 -- SLOT_SPACING, and Shared/Planting spaces plants by their full-grown size.
@@ -537,11 +570,21 @@ Config.CREATURE_ASSETS = {} :: { [number]: number }
 
 Config.OFFLINE_CAP_SECONDS = 3600
 -- The SELL stall in the shop plaza is the only place plants are sold (the Plants panel's Remove puts a
--- plant in the inventory, for no money): 120 s of the plant's base income (no day/night) x the plot level
--- / 2x Money multiplier. A plant keeps earning forever, so that is only ~2 min of what it would make by
--- staying.
+-- plant in the inventory, for no money): 10x its $/s, i.e. 10 s of the plant's base income (no day/night)
+-- x the plot level / 2x Money multiplier (owner 2026-10-15: 2 min paid far too much). A plant keeps
+-- earning forever, so selling is only worth it to make room.
 
-Config.SELL_STALL_SECONDS = 120
+Config.SELL_STALL_SECONDS = 10
+-- Seeds from the seed bag sell at the stall too: SEED_SELL_SECONDS of the income the seed would have right
+-- when it sprouts (its sprout weight, mutation included, no variance) x the same money multiplier, at least
+-- $1. Planted, the same seed sells for 10 s of at least ~0.9x that income (the lowest weight variance), so a
+-- seed is always worth less than its plant.
+Config.SEED_SELL_SECONDS = 5
+
+function Config.seedSellPrice(zone: number, rarity: number, mutation: string?, moneyMult: number?): number
+	local income = Config.plantIncome(zone, rarity, Config.sproutWeight(zone, rarity), mutation)
+	return math.max(1, income * Config.SEED_SELL_SECONDS * (moneyMult or 1))
+end
 Config.SELL_STALL_DISTANCE = 20 -- studs from the stall's prompt part the player must stand within
 
 ----------------------------------------------------------------------------------------------------
@@ -800,6 +843,8 @@ Config.RECEIPT_HISTORY = 100 -- processed Robux PurchaseIds kept per profile, so
 --   Trail     owns and equips Config.TRAILS[`trail`]
 --   PlotUpgrade  one plot level, from the level the player has when the receipt arrives (`tier`: the
 --             range of levels it is sold for, Config.plotUpgradeProduct); a maxed plot gets money instead
+--   GrowNow   finishes sprouting the plant it was prompted for (`upTo`: the most seconds of sprouting
+--             left it is sold for, Config.growNowProduct; Shop.grantGrowNow)
 ----------------------------------------------------------------------------------------------------
 export type DevProduct = {
 	id: number,
@@ -811,6 +856,7 @@ export type DevProduct = {
 	amount: number?,
 	tier: number?, -- PlotUpgrade / TreadmillUpgrade: its price tier
 	trail: string?,
+	upTo: number?, -- GrowNow: the most seconds of sprouting left it is sold for (math.huge: any)
 }
 Config.DEVELOPER_PRODUCTS = {
 	-- Seed packs, x1 and x10 (owner 2026-10-15: 200 / 1,500 and 300 / 2,299 R$): the Shop shows both on the pack's card.
@@ -859,6 +905,12 @@ Config.DEVELOPER_PRODUCTS = {
 	PlotUpgradeT4 = { kind = "PlotUpgrade", label = "Plot Upgrade (Lv 14-17)", robux = 199, tier = 4 },
 	PlotUpgradeT5 = { kind = "PlotUpgrade", label = "Plot Upgrade (Lv 18-21)", robux = 399, tier = 5 },
 	PlotUpgradeT6 = { kind = "PlotUpgrade", label = "Plot Upgrade (Lv 22-26)", robux = 799, tier = 6 },
+
+	-- Grow now: finish a sprouting plant right away (its hover info's and Plants card's button). Priced by
+	-- how much sprouting is left when it is prompted (Config.growNowProduct); the top one finishes any
+	-- sprout, however long (only deep Legendaries wait over 30 min).
+	GrowNow10 = { kind = "GrowNow", label = "Grow Now (10 min)", robux = 9, upTo = 10 * 60 },
+	GrowNow30 = { kind = "GrowNow", label = "Grow Now (30+ min)", robux = 29, upTo = math.huge },
 } :: { [string]: DevProduct }
 
 -- The gamepass and developer product ids: monetization/ids.json ({ passes = { [key]: id }, products =
@@ -905,6 +957,24 @@ function Config.plotUpgradeProduct(level: number): (string?, DevProduct?)
 	end
 	local name = `PlotUpgradeT{tier}`
 	return name, Config.DEVELOPER_PRODUCTS[name]
+end
+
+-- The Grow Now product for a plant with `left` seconds of sprouting left, as (name, product): the cheapest
+-- one whose upTo covers it (owner: up to 10 min 9 R$, anything longer 29 R$, which finishes it however
+-- long it is), or nil when it isn't sprouting.
+Config.GROW_NOW_PRODUCTS = { "GrowNow10", "GrowNow30" }
+function Config.growNowProduct(left: number): (string?, DevProduct?)
+	if not (left > 0) then
+		return nil, nil
+	end
+	for _, name in Config.GROW_NOW_PRODUCTS do
+		local product = Config.DEVELOPER_PRODUCTS[name]
+		if left <= (product.upTo or math.huge) then
+			return name, product
+		end
+	end
+	local last = Config.GROW_NOW_PRODUCTS[#Config.GROW_NOW_PRODUCTS]
+	return last, Config.DEVELOPER_PRODUCTS[last]
 end
 
 -- What a plot-upgrade receipt pays instead of a level when the plot is already at the last one (it can

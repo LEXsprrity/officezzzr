@@ -1,5 +1,5 @@
 -- A simple free-to-play player, simulated second by second with the real Config formulas (Speed gain,
--- WalkSpeed, trails, plot levels, plant income and growth, day/night). Used by progression.spec and
+-- WalkSpeed, trails, plot levels, plant sprouting, income and growth, day/night). Used by progression.spec and
 -- handy for tuning (print Sim.report()).
 --
 -- Strategy (an active player, no Robux unless `opts` says so):
@@ -35,12 +35,13 @@ export type Result = {
 	treadmillTier: number,
 }
 
+Sim.INCOME_REFRESH = 10 -- seconds between income re-reads (growth and sprouting are slow)
 local TRIP_OVERHEAD = 10 -- seconds per steal trip beyond running: grabbing, dodging, planting, menus
 local IDLE_CHUNK = 30 -- seconds on the treadmill between checks
 local HOME_X = Config.PLOT_FIRST_X -- the nearest plot
 local WALKWAY = 40 -- studs from the plot's pad to the corridor line, each way
 
-type Plant = { zone: number, rarity: number, mutation: string?, plantedAt: number }
+type Plant = { zone: number, rarity: number, mutation: string?, plantedAt: number } -- plantedAt: when it sprouted (growth starts)
 
 local function grownValue(zone: number, rarity: number, mutation: string?): number
 	return Config.plantIncome(zone, rarity, Config.sproutWeight(zone, rarity) * Config.GROW_MAX_FACTOR, mutation)
@@ -73,8 +74,10 @@ function Sim.run(opts: Options?): Result
 	local function refreshIncome()
 		local total = 0
 		for _, p in plants do
-			local w = Config.plantWeight(p.zone, p.rarity, t - p.plantedAt, 1)
-			total += Config.plantIncome(p.zone, p.rarity, w, p.mutation) * Config.averageTimeMult(p.zone)
+			if t >= p.plantedAt then -- (a seedling earns nothing: Config.sproutTime)
+				local w = Config.plantWeight(p.zone, p.rarity, t - p.plantedAt, 1)
+				total += Config.plantIncome(p.zone, p.rarity, w, p.mutation) * Config.averageTimeMult(p.zone)
+			end
 		end
 		income = total * Config.plotMoneyMult(level)
 		incomeAt = t
@@ -94,7 +97,7 @@ function Sim.run(opts: Options?): Result
 	-- One second: earn money, and Speed: running pays WalkSpeed studs x the trail, the treadmill its tier's
 	-- fixed rate x the trail (Config.treadmillPerSecond), standing still nothing.
 	local function second(how: "run" | "treadmill" | "still")
-		if t - incomeAt >= 10 then
+		if t - incomeAt >= Sim.INCOME_REFRESH then
 			refreshIncome()
 		end
 		money += income
@@ -184,7 +187,7 @@ function Sim.run(opts: Options?): Result
 			end
 			local isNight = Config.dayPhase(t)
 			local rarity, mutation = Config.rollSeed(k, if isNight then Config.NIGHT_LUCK else 1, isNight, rng)
-			local plant = { zone = k, rarity = rarity, mutation = mutation, plantedAt = t }
+			local plant = { zone = k, rarity = rarity, mutation = mutation, plantedAt = t + Config.sproutTime(k, rarity) } -- it sprouts first
 			if #plants < slots then
 				table.insert(plants, plant)
 			else

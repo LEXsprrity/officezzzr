@@ -724,7 +724,8 @@ end
 --   (or mutation) colour, the plant's name (the flower it grew into), rarity, mutation and weight, its $/s
 --   (with the day/night bonus while it's on) and a Remove button that asks once more ("Sure?" for 2 s).
 --   Remove puts the plant in the Inventory, as it is (never money; the server re-checks it: remote
---   RemovePlant, one of your own plants).
+--   RemovePlant, one of your own plants). A seedling (still sprouting, `sproutUntil`) says "Sprouting 2:31"
+--   instead of its $/s, and a taller card holds its Grow now button (Shared/GrowNowUi).
 --   Inventory: the seeds in the seed bag ("Rare Seed", their flower a surprise) and the removed plants
 --   (their flower's name), each with a Plant button that starts the ghost planting preview
 --   (Planting.client); the SELL stall sells them too. Full bag or inventory: a relief line says so.
@@ -791,7 +792,8 @@ do
 		local rarity = Config.RARITIES[p.rarity]
 		local mut = Config.mutationById(p.mutation)
 		local accent = if mut then mut.color else rarity.color
-		local f = new("Frame", { Name = "Plant_" .. p.slot, Size = UDim2.new(1, -8, 0, CARD_H), BackgroundColor3 = WHITE, LayoutOrder = order, Parent = sideList }, {
+		local sprouting = p.sproutUntil ~= nil -- a seedling: its countdown and Grow now (the card is taller)
+		local f = new("Frame", { Name = "Plant_" .. p.slot, Size = UDim2.new(1, -8, 0, CARD_H + (if sprouting then 52 else 0)), BackgroundColor3 = WHITE, LayoutOrder = order, Parent = sideList }, {
 			new("UICorner", { CornerRadius = UDim.new(0, 4) }),
 			new("UIStroke", { Thickness = 2, Color = accent:Lerp(INK, 0.3), ApplyStrokeMode = Enum.ApplyStrokeMode.Border }),
 			new("UIGradient", { Rotation = 90, Color = ColorSequence.new(WHITE, accent:Lerp(WHITE, 0.8)) }),
@@ -800,7 +802,7 @@ do
 		new("Frame", { Size = UDim2.new(0, 8, 1, -14), Position = UDim2.fromOffset(7, 7), BackgroundColor3 = accent, BorderSizePixel = 0, Parent = f },
 			{ new("UICorner", { CornerRadius = UDim.new(1, 0) }) })
 		FlowerView.show(f, FlowerView.flower(p.zone, p.rarity, p.flower), {
-			size = UDim2.fromOffset(VIEW, VIEW), position = UDim2.new(0, 20, 0.5, 0), anchor = Vector2.new(0, 0.5), spin = true,
+			size = UDim2.fromOffset(VIEW, VIEW), position = UDim2.new(0, 20, 0, CARD_H / 2), anchor = Vector2.new(0, 0.5), spin = true,
 		})
 		ink(f, { Text = p.name or SeedPacks.seedName(p.zone, p.rarity, p.mutation), Size = UDim2.new(1, TEXT_W, 0, 24), Position = UDim2.fromOffset(TEXT_X, 7) })
 		local info = ink(f, { RichText = true, Size = UDim2.new(1, TEXT_W, 0, 16), Position = UDim2.fromOffset(TEXT_X, 31), TextColor3 = rarity.color:Lerp(INK, 0.45) })
@@ -836,17 +838,43 @@ do
 		end)
 		remove.Name = "Remove"
 		remove.AnchorPoint = Vector2.new(1, 0.5)
-		remove.Position = UDim2.new(1, -8, 0.5, 0)
+		remove.Position = UDim2.new(1, -8, 0, CARD_H / 2)
 		look()
 
+		local growNow: ((number) -> ())? = nil
+		if sprouting then
+			local GrowNowUi = require(Shared:WaitForChild("GrowNowUi"))
+			local button
+			button, growNow = GrowNowUi.button(f, slot, UDim2.fromOffset(236, 44))
+			button.AnchorPoint = Vector2.new(1, 1)
+			button.Position = UDim2.new(1, -8, 1, -8)
+		end
 		local function update()
 			local now = plantIn(slot) or p
 			info.Text = `{rarity.id}{if mut then ` · <font color="#{mut.color:ToHex()}">{mut.id}</font>` else ""}`
+			if now.sproutUntil then
+				local left = math.max(now.sproutUntil - workspace:GetServerTimeNow(), 0)
+				income.Text = `Sprouting {Format.clock(math.ceil(left))}`
+				if growNow then
+					growNow(left)
+				end
+				return
+			end
 			local bonus = Config.bonusLabel(now.zone, (Config.dayPhase(workspace:GetServerTimeNow())))
 			income.Text = `{Format.money(now.income)}/s{if bonus then ` · <font color="#{MUTED_INK:ToHex()}">{bonus}</font>` else ""}`
 		end
 		update()
 		table.insert(updaters, update)
+		if sprouting then
+			task.spawn(function() -- the countdown ticks every second (the plants view comes every few)
+				while f.Parent do
+					task.wait(1)
+					if f.Parent then
+						update()
+					end
+				end
+			end)
+		end
 	end
 
 	-- One Inventory card: a seed from the bag or a removed plant (`look`: its seed design or flower), with its
@@ -917,7 +945,8 @@ do
 		for _, p in inventory do
 			local rarity = Config.RARITIES[p.rarity]
 			itemCard(nextOrder(), p.name or SeedPacks.seedName(p.zone, p.rarity, p.mutation),
-				`{rarity.id}{if p.mutation then " · " .. p.mutation else ""} · {Config.ZONES[p.zone].name}`, p.rarity, p.mutation, `inv:{p.id}`,
+				`{rarity.id}{if p.mutation then " · " .. p.mutation else ""} · {if p.sprout then `Sprouts in {Format.clock(p.sprout)}` else Config.ZONES[p.zone].name}`,
+				p.rarity, p.mutation, `inv:{p.id}`,
 				FlowerView.flower(p.zone, p.rarity, p.flower))
 		end
 	end
@@ -938,7 +967,7 @@ do
 		Icons.set(sideTitle, "Plants", `🪴 Plants {#plants}/{stats.slots} · {Format.money(stats.income)}/s`)
 		local keys = {}
 		for _, p in plants do
-			table.insert(keys, `{p.slot}:{p.zone}:{p.rarity}:{p.mutation or ""}:{p.name or ""}`)
+			table.insert(keys, `{p.slot}:{p.zone}:{p.rarity}:{p.mutation or ""}:{p.name or ""}:{if p.sproutUntil then "s" else ""}`)
 		end
 		table.insert(keys, tostring(#(stats.inventory or {}) >= Config.INVENTORY_MAX)) -- (Remove is off while it's full)
 		local signature = table.concat(keys, ",")
@@ -1912,154 +1941,128 @@ end
 ----------------------------------------------------------------------------------------------------
 -- SELL window (TODO 9; the SELL stall in the shop plaza opens it). Everything for it is in this block;
 -- renderModal and refresh call renderSell / sellChanged. One card per plant, planted or in the Inventory,
--- cheapest first: the plant's name in its rarity colour, its mutation (only on a mutated plant), weight, $/s
--- (with the day/night bonus while it's on; "In your Inventory" for one there), the sell price and a Sell
--- button. Above them "Sell all Common" / "Sell all below Rare" (they keep mutated plants). Every sale asks
--- once more inside the window: the card's button turns into "Sure?", a quick sell shows a confirm bar.
--- The server re-checks it all (remote SellPlants: your plants and inventory, standing at the stall).
+-- then one per kind of seed in the seed bag ("Rare Seed" / "x3 · Desert", its seed design), cheapest
+-- first. Each card's body is its rarity's colour (studded, a shade darker than its title band, owner
+-- 2026-10-15); a mutation shows as its coloured border and word. A plant card: weight, $/s (with the
+-- day/night bonus while it's on; "In your Inventory" for one there), the price and a Sell button; a seed
+-- card: the price of one, Sell 1 and Sell all. Above them the quick sells: one button per rarity, Common to
+-- Epic, and Sell all (never Legendary), each saying how many it sells and for how much, or "nothing to
+-- sell" (greyed), and an "Include mutated" toggle (off: they keep mutated plants and seeds). What each
+-- button sells: Shared/SellPick. Every sale asks once more inside the window: the card's button turns into
+-- "Sure?", a quick sell shows a confirm bar. The server re-checks it all (remote SellPlants: your plants,
+-- inventory and seed bag, standing at the stall).
 -- Scoped in a do-block (the HUD's main chunk is near Luau's 200-locals limit); only these two leave it.
 ----------------------------------------------------------------------------------------------------
 local renderSell: () -> ()
 local sellChanged: (changed: { [string]: any }) -> ()
 do
 	local FlowerView = require(Shared:WaitForChild("FlowerView"))
+	local SellPick = require(Shared:WaitForChild("SellPick"))
 	local SellPlants = remotes:WaitForChild("SellPlants") :: RemoteEvent
 	WINDOWS.Sell = { title = "Sell", bar = Color3.fromRGB(255, 95, 40) }
 	local SELL_RED = Color3.fromRGB(235, 60, 50)
 	local SELL_ORANGE = Color3.fromRGB(255, 140, 30)
-	local SELL_CARD = Color3.fromRGB(85, 125, 235) -- the cards' body under the rarity band
-	local SELL_VIEW = 92 -- the flower in 3D, under the band (Shared/FlowerView)
+	local SELL_VIEW = 92 -- the flower (or seed) in 3D, under the band (Shared/FlowerView)
 	local SELL_CARD_W, SELL_CARD_H = 190, 252 + SELL_VIEW
+	local SEED_CARD_H = 214 + SELL_VIEW
+	local BODY_SHADE = 0.3 -- a card's body: its rarity's colour this much toward black (its band is lighter)
 
-	local function rarityIndex(id: string): number
-		for i, r in Config.RARITIES do
-			if r.id == id then
-				return i
-			end
-		end
-		return 0
-	end
-	-- The quick sells: every plant up to rarity `max` that has no mutation.
-	local SELL_GROUPS = {
-		{ label = "Sell all Common", what = "Common", max = rarityIndex("Common") },
-		{ label = "Sell all below Rare", what = "below Rare", max = rarityIndex("Rare") - 1 },
-	}
-
-	type SellPending = { key: string?, group: number? }
-	local sellPending: SellPending? = nil -- the sale waiting for its confirm: one plant's key, or a quick sell
+	local sellPending: any = nil -- the sale waiting for its confirm (a SellPick.Pick)
+	local sellMutated = false -- the quick sells' "Include mutated" toggle
 	local sellUpdaters: { () -> () } = {} -- the open window's prices and $/s, updated in place on payouts
-	local sellShown = "" -- which plants the window shows (sellSignature)
+	local sellShown = "" -- which things the window shows (sellSignature)
 
-	-- Every plant the stall can sell: the planted ones ("p<slot>") and those in the Inventory ("i<id>").
-	local function sellables(): { any }
-		local out = {}
-		for _, p in stats.plants or {} do
-			local item = table.clone(p)
-			item.key = `p{p.slot}`
-			table.insert(out, item)
-		end
-		for _, p in stats.inventory or {} do
-			local item = table.clone(p)
-			item.key, item.inv = `i{p.id}`, true
-			table.insert(out, item)
-		end
-		return out
-	end
-
-	-- Which plants there are (key and kind), so a payout tick (same plants, new numbers) doesn't rebuild the
-	-- window under the player's finger, but a sale or a new plant does.
+	-- Which things there are (key, kind and a seed's count), so a payout tick (same things, new numbers)
+	-- doesn't rebuild the window under the player's finger, but a sale or a new plant or seed does.
 	local function sellSignature(): string
 		local keys = {}
-		for _, p in sellables() do
-			table.insert(keys, `{p.key}:{p.zone}:{p.rarity}:{p.mutation or ""}:{p.flower or ""}`)
+		for _, it in SellPick.items(stats) do
+			local src = it.src or {}
+			table.insert(keys, `{it.key}:{it.zone}:{it.rarity}:{it.mutation or ""}:{src.flower or ""}:{it.count}:{if src.sproutUntil then "s" else ""}`)
 		end
 		table.sort(keys)
 		return table.concat(keys, ",")
 	end
 
 	local function itemOf(key: string): any
-		for _, p in sellables() do
-			if p.key == key then
-				return p
+		for _, it in SellPick.items(stats) do
+			if it.key == key then
+				return it
 			end
 		end
 		return nil
 	end
 
-	-- The slots and inventory ids a sale would sell and what it pays right now.
-	local function saleOf(pending: SellPending): ({ number }, { number }, number)
-		local slots, ids, total = {}, {}, 0
-		local group = pending.group and SELL_GROUPS[pending.group]
-		for _, p in sellables() do
-			if (pending.key ~= nil and p.key == pending.key) or (group ~= nil and p.mutation == nil and p.rarity <= group.max) then
-				table.insert(if p.inv then ids else slots, if p.inv then p.id else p.slot)
-				total += p.sell or 0
-			end
-		end
-		return slots, ids, total
-	end
-
-	local function saleCount(pending: SellPending): number
-		local slots, ids = saleOf(pending)
-		return #slots + #ids
-	end
-
-	local function sellNow(pending: SellPending)
-		local slots, ids = saleOf(pending)
+	local function sellNow(pick: any)
+		local sale = SellPick.sale(SellPick.items(stats), pick)
 		sellPending = nil
-		if #slots + #ids > 0 then
-			SellPlants:FireServer(slots, ids)
+		if sale.count > 0 then
+			SellPlants:FireServer(sale.slots, sale.ids, sale.seeds)
 		end
 		renderModal()
 	end
 
+	local function samePick(a: any, b: any): boolean
+		return a ~= nil and b ~= nil and a.key == b.key and a.count == b.count and a.group == b.group
+	end
+
 	-- "$1.2K/s · Night x0.8" in a muted grey while the plant is out of its phase (earning less), like its billboard.
-	local function sellIncomeText(p: any): (string, Color3)
-		if p.inv then
+	local function sellIncomeText(it: any): (string, Color3)
+		local p = it.src
+		if it.kind == "inv" then
 			return "In your Inventory", NOTE_COLOR
+		elseif p.sproutUntil then
+			return "Sprouting", NOTE_COLOR
 		end
 		local bonus = Config.bonusLabel(p.zone, (Config.dayPhase(workspace:GetServerTimeNow())))
 		return `{Format.money(p.income)}/s{if bonus then " · " .. bonus else ""}`, if bonus then Config.OFF_TIME_COLOR else MONEY_GREEN
 	end
 
-	local function sellCard(grid: Instance, order: number, p: any)
-		local rarity = Config.RARITIES[p.rarity]
-		local mut = Config.mutationById(p.mutation)
-		local c = new("Frame", { BackgroundColor3 = SELL_CARD, LayoutOrder = order, Parent = grid }, {
+	-- A card: its body in its rarity's colour, the band with `title` and `sub`, its 3D picture.
+	local function cardBase(grid: Instance, order: number, it: any, title: string, sub: string, look: Model?): Frame
+		local rarity = Config.RARITIES[it.rarity]
+		local mut = Config.mutationById(it.mutation)
+		local body = rarity.color:Lerp(Color3.new(0, 0, 0), BODY_SHADE)
+		local c = new("Frame", { BackgroundColor3 = body, LayoutOrder = order, Parent = grid }, {
 			new("UIStroke", { Thickness = 4, Color = if mut then mut.color else FRAME_INK, ApplyStrokeMode = Enum.ApplyStrokeMode.Border }),
 		})
-		ShopUi.studs(c, SELL_CARD)
-		-- The rarity band: the plant's name and rarity
+		ShopUi.studs(c, body)
 		local band = new("Frame", { Size = UDim2.new(1, 0, 0, 70), BorderSizePixel = 0, Parent = c })
 		shade(band, rarity.color, 0.25, 0.25)
 		ShopUi.studs(band, rarity.color)
 		shine(band)
-		bold(band, 3, { Text = p.name or SeedPacks.seedName(p.zone, p.rarity, p.mutation), Size = UDim2.new(1, -14, 0, 32), Position = UDim2.fromOffset(7, 6) })
-		bold(band, 3, { Text = rarity.id, Size = UDim2.new(1, -14, 0, 24), Position = UDim2.fromOffset(7, 40) })
-		-- The plant itself, turning slowly
-		FlowerView.show(c, FlowerView.flower(p.zone, p.rarity, p.flower), {
-			size = UDim2.new(1, -16, 0, SELL_VIEW), position = UDim2.fromOffset(8, 74), spin = true,
-		})
-		-- Mutation (a plant without one shows nothing there), weight, $/s
-		local y = SELL_VIEW
+		bold(band, 3, { Text = title, Size = UDim2.new(1, -14, 0, 32), Position = UDim2.fromOffset(7, 6) })
+		bold(band, 3, { Text = sub, Size = UDim2.new(1, -14, 0, 24), Position = UDim2.fromOffset(7, 40) })
+		FlowerView.show(c, look, { size = UDim2.new(1, -16, 0, SELL_VIEW), position = UDim2.fromOffset(8, 74), spin = true })
 		if mut then
-			bold(c, 2, { Text = mut.id, Size = UDim2.new(1, -14, 0, 24), Position = UDim2.fromOffset(7, 78 + y), TextColor3 = mut.color })
+			bold(c, 2, { Text = mut.id, Size = UDim2.new(1, -14, 0, 24), Position = UDim2.fromOffset(7, 78 + SELL_VIEW), TextColor3 = mut.color })
 		end
-		local weightLabel = text(c, { Visible = false, Text = "", Size = UDim2.new(1, -14, 0, 22), Position = UDim2.fromOffset(7, 106 + y) })
-		local incomeLabel = bold(c, 2, { Size = UDim2.new(1, -14, 0, 22), Position = UDim2.fromOffset(7, 132 + y) })
-		-- What the stall pays, and the button (a second click confirms)
-		local priceLabel = bold(c, 3, { Size = UDim2.new(1, -14, 0, 34), Position = UDim2.fromOffset(7, 158 + y), TextColor3 = MONEY_GREEN })
-		local sure = sellPending ~= nil and sellPending.key == p.key
-		chunky(c, if sure then "Sure? Sell" else "Sell", if sure then COLORS.gold else SELL_RED, UDim2.new(1, -16, 0, 48), function()
-			if sure then
-				sellNow({ key = p.key })
+		return c
+	end
+
+	-- A Sell button on a card for `pick` (a second click confirms: "Sure?").
+	local function sellButton(c: Frame, words: string, pick: any, size: UDim2, position: UDim2)
+		local sure = samePick(sellPending, pick)
+		chunky(c, if sure then "Sure?" else words, if sure then COLORS.gold else SELL_RED, size, function()
+			if samePick(sellPending, pick) then
+				sellNow(pick)
 			else
-				sellPending = { key = p.key }
+				sellPending = pick
 				renderModal()
 			end
-		end).Position = UDim2.new(0, 8, 1, -56)
+		end).Position = position
+	end
+
+	local function plantCard(grid: Instance, order: number, it: any)
+		local p = it.src
+		local c = cardBase(grid, order, it, p.name or SeedPacks.seedName(p.zone, p.rarity, p.mutation), Config.RARITIES[p.rarity].id,
+			FlowerView.flower(p.zone, p.rarity, p.flower))
+		local y = SELL_VIEW
+		local incomeLabel = bold(c, 2, { Size = UDim2.new(1, -14, 0, 22), Position = UDim2.fromOffset(7, 132 + y) })
+		local priceLabel = bold(c, 3, { Size = UDim2.new(1, -14, 0, 34), Position = UDim2.fromOffset(7, 158 + y), TextColor3 = MONEY_GREEN })
+		sellButton(c, "Sell", { key = it.key }, UDim2.new(1, -16, 0, 48), UDim2.new(0, 8, 1, -56))
 		local function update()
-			local now = itemOf(p.key) or p
+			local now = itemOf(it.key) or it
 			incomeLabel.Text, incomeLabel.TextColor3 = sellIncomeText(now)
 			priceLabel.Text = Format.money(now.sell or 0)
 		end
@@ -2067,42 +2070,89 @@ do
 		table.insert(sellUpdaters, update)
 	end
 
+	local function seedCard(grid: Instance, order: number, it: any)
+		local c = cardBase(grid, order, it, SeedPacks.seedName(it.zone, it.rarity, it.mutation), `x{it.count} · {Config.ZONES[it.zone].name}`,
+			FlowerView.seed(it.zone, it.gene))
+		local y = SELL_VIEW
+		local priceLabel = bold(c, 3, { Size = UDim2.new(1, -14, 0, 34), Position = UDim2.fromOffset(7, 106 + y), TextColor3 = MONEY_GREEN })
+		if it.count > 1 then
+			sellButton(c, "Sell 1", { key = it.key, count = 1 }, UDim2.new(0.5, -12, 0, 48), UDim2.new(0, 8, 1, -56))
+			sellButton(c, "Sell all", { key = it.key }, UDim2.new(0.5, -12, 0, 48), UDim2.new(0.5, 4, 1, -56))
+		else
+			sellButton(c, "Sell", { key = it.key }, UDim2.new(1, -16, 0, 48), UDim2.new(0, 8, 1, -56))
+		end
+		local function update()
+			local now = itemOf(it.key) or it
+			priceLabel.Text = if now.count > 1 then `{Format.money(now.sell)} each` else Format.money(now.sell)
+		end
+		update()
+		table.insert(sellUpdaters, update)
+	end
+
+	-- One quick-sell button: its name, and how many it sells for how much, or "nothing to sell" (greyed).
+	local function quickButton(parent: Instance, group: any, list: { any })
+		local pick = { group = group.id, mutated = sellMutated }
+		local sale = SellPick.sale(list, pick)
+		local b = chunky(parent, group.label, if sale.count > 0 then SELL_ORANGE else COLORS.disabled, UDim2.fromOffset(148, 74), function()
+			if sale.count > 0 then
+				sellPending = pick
+				renderModal()
+			end
+		end)
+		local label = b:FindFirstChild("Label") :: TextLabel
+		label.Size = UDim2.new(1, -12, 0, 34)
+		local caption = bold(b, 2, {
+			Text = if sale.count > 0 then `{sale.count} · {Format.money(sale.total)}` else "nothing to sell",
+			Size = UDim2.new(1, -16, 0, 22), Position = UDim2.fromOffset(8, 42), TextColor3 = if sale.count > 0 then WHITE else NOTE_COLOR,
+		})
+		UiFx.relief(caption, 2, 2)
+	end
+
 	renderSell = function()
 		clearModal(10)
 		table.clear(sellUpdaters)
 		sellShown = sellSignature()
-		local plants = sellables()
-		table.sort(plants, function(a, b)
-			if (a.sell or 0) ~= (b.sell or 0) then
-				return (a.sell or 0) < (b.sell or 0)
+		local list = SellPick.items(stats)
+		table.sort(list, function(a, b)
+			if a.sell ~= b.sell then
+				return a.sell < b.sell
 			end
 			return a.key < b.key
 		end)
-		note(`The stall pays {Config.SELL_STALL_SECONDS // 60} min of a plant's income. Plants in your Inventory sell here too.`, 1)
-		if #plants == 0 then
-			note("No plants yet: steal a seed and plant it on your dirt!", 2)
+		note(`Plants sell for {Config.SELL_STALL_SECONDS}x their $/s. Plants in your Inventory and seeds in your bag sell here too.`, 1)
+		if #list == 0 then
+			note("Nothing to sell yet: steal a seed and plant it on your dirt!", 2)
 			return
 		end
 
-		-- Quick sells (they keep mutated plants)
-		local row = new("Frame", { BackgroundTransparency = 1, Size = UDim2.new(1, -12, 0, 60), LayoutOrder = 2, Parent = modalBody }, {
-			new("UIListLayout", { FillDirection = Enum.FillDirection.Horizontal, HorizontalAlignment = Enum.HorizontalAlignment.Center, Padding = UDim.new(0, 14) }),
+		-- Quick sells: one per rarity, then Sell all (Legendary never), and the mutated toggle under them
+		local row = new("Frame", { BackgroundTransparency = 1, Size = UDim2.new(1, -12, 0, 78), LayoutOrder = 2, Parent = modalBody }, {
+			new("UIListLayout", { FillDirection = Enum.FillDirection.Horizontal, HorizontalAlignment = Enum.HorizontalAlignment.Center, Padding = UDim.new(0, 10) }),
 		})
-		for i, group in SELL_GROUPS do
-			local count = saleCount({ group = i })
-			chunky(row, `{group.label} ({count})`, if count > 0 then SELL_ORANGE else COLORS.disabled, UDim2.fromOffset(330, 56), function()
-				if count > 0 then
-					sellPending = { group = i }
-					renderModal()
-				end
-			end)
+		for _, group in SellPick.GROUPS do
+			quickButton(row, group, list)
 		end
-		note("Quick sells skip mutated plants.", 3)
+		local toggleRow = new("Frame", { BackgroundTransparency = 1, Size = UDim2.new(1, -12, 0, 52), LayoutOrder = 3, Parent = modalBody }, {
+			new("UIListLayout", { FillDirection = Enum.FillDirection.Horizontal, HorizontalAlignment = Enum.HorizontalAlignment.Center,
+				VerticalAlignment = Enum.VerticalAlignment.Center, Padding = UDim.new(0, 12) }),
+		})
+		chunky(toggleRow, `Include mutated: {if sellMutated then "ON" else "OFF"}`, if sellMutated then COLORS.gold else COLORS.disabled, UDim2.fromOffset(300, 48), function()
+			sellMutated = not sellMutated
+			if sellPending and sellPending.group then
+				sellPending = nil -- (it was asked with the other setting)
+			end
+			renderModal()
+		end)
+		local why = bold(toggleRow, 2, {
+			Text = if sellMutated then "Quick sells take mutated plants and seeds too." else "Quick sells keep mutated plants and seeds.",
+			Size = UDim2.fromOffset(420, 30), TextColor3 = NOTE_COLOR,
+		})
+		why.TextXAlignment = Enum.TextXAlignment.Left
 
 		-- The quick sell's confirm bar
 		local pending = sellPending
-		local group = pending and pending.group and SELL_GROUPS[pending.group]
-		if pending and group and saleCount(pending) == 0 then
+		local group = pending and pending.group and SellPick.group(pending.group)
+		if pending and group and SellPick.sale(list, pending).count == 0 then
 			sellPending, pending, group = nil, nil, nil -- nothing left to sell
 		end
 		if pending and group then
@@ -2111,14 +2161,14 @@ do
 				Size = UDim2.new(1, -350, 1, -18), Position = UDim2.fromOffset(16, 9), TextXAlignment = Enum.TextXAlignment.Left, TextColor3 = HEADING_GOLD,
 			})
 			local function update()
-				local _, _, total = saleOf(pending :: SellPending)
-				local count = saleCount(pending :: SellPending)
-				question.Text = `Sell {count} {group.what} plant{if count == 1 then "" else "s"} for {Format.money(total)}?`
+				local sale = SellPick.sale(SellPick.items(stats), pending)
+				local what = if group.rarity then `{group.id} ` else ""
+				question.Text = `Sell {sale.count} {what}item{if sale.count == 1 then "" else "s"}{if pending.mutated then " (mutated too)" else ""} for {Format.money(sale.total)}?`
 			end
 			update()
 			table.insert(sellUpdaters, update)
 			chunky(bar, "Yes, sell!", COLORS.buy, UDim2.fromOffset(170, 56), function()
-				sellNow(pending :: SellPending)
+				sellNow(pending)
 			end).Position = UDim2.new(1, -330, 0, 8)
 			chunky(bar, "Cancel", COLORS.disabled, UDim2.fromOffset(140, 56), function()
 				sellPending = nil
@@ -2126,23 +2176,39 @@ do
 			end).Position = UDim2.new(1, -150, 0, 8)
 		end
 
-		local grid = new("Frame", {
-			BackgroundTransparency = 1, Size = UDim2.new(1, -8, 0, 0), AutomaticSize = Enum.AutomaticSize.Y, LayoutOrder = 5, Parent = modalBody,
-		}, {
-			new("UIGridLayout", {
-				CellSize = UDim2.fromOffset(SELL_CARD_W, SELL_CARD_H), CellPadding = UDim2.fromOffset(12, 12), SortOrder = Enum.SortOrder.LayoutOrder,
-				HorizontalAlignment = Enum.HorizontalAlignment.Center,
-			}),
-		})
-		for i, p in plants do
-			sellCard(grid, i, p)
+		local function grid(order: number, h: number): Frame
+			return new("Frame", {
+				BackgroundTransparency = 1, Size = UDim2.new(1, -8, 0, 0), AutomaticSize = Enum.AutomaticSize.Y, LayoutOrder = order, Parent = modalBody,
+			}, {
+				new("UIGridLayout", {
+					CellSize = UDim2.fromOffset(SELL_CARD_W, h), CellPadding = UDim2.fromOffset(12, 12), SortOrder = Enum.SortOrder.LayoutOrder,
+					HorizontalAlignment = Enum.HorizontalAlignment.Center,
+				}),
+			})
+		end
+		local plants, seeds = {}, {}
+		for _, it in list do
+			table.insert(if it.kind == "seed" then seeds else plants, it)
+		end
+		if #plants > 0 then
+			local g = grid(5, SELL_CARD_H)
+			for i, it in plants do
+				plantCard(g, i, it)
+			end
+		end
+		if #seeds > 0 then
+			local heading = bold(modalBody, 3, { Text = "Seeds", Size = UDim2.new(1, -12, 0, 40), LayoutOrder = 6, TextColor3 = HEADING_GOLD })
+			heading.TextXAlignment = Enum.TextXAlignment.Center
+			local g = grid(7, SEED_CARD_H)
+			for i, it in seeds do
+				seedCard(g, i, it)
+			end
 		end
 	end
 
-	-- The plants view arrives with every payout: rebuild only when the plants themselves changed.
+	-- The plants view arrives with every payout: rebuild only when the things themselves changed.
 	sellChanged = function(changed: { [string]: any })
-		if changed.plants or changed.inventory then
-
+		if changed.plants or changed.inventory or changed.seedBag or changed.plotLevel or changed.passes then
 			if sellSignature() ~= sellShown then
 				renderModal()
 			else
