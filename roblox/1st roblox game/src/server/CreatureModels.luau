@@ -742,11 +742,12 @@ function CreatureModels.applyScale(model: Model, scale: number)
 end
 
 -- Scale for a plant of this weight: grows with weight/sprout weight (sprout ~1, full-grown ~1.9) and a
--- little with rarity, clamped so the biggest still fits its slot.
+-- little with rarity, clamped so the biggest still fits its slot, then x its rarity's size multiplier
+-- (Config.creatureSizeMult: a Legendary is 1.5x bigger at every stage; Shared/Planting budgets on it too).
 function CreatureModels.scaleFor(zoneIndex: number, rarityIndex: number, weight: number): number
 	local ratio = math.max(weight, 0) / Config.sproutWeight(zoneIndex, rarityIndex)
 	local s = ratio ^ Config.CREATURE_GROWTH_EXPONENT * (1 + Config.CREATURE_RARITY_SCALE * (rarityIndex - 1))
-	return math.clamp(s, Config.CREATURE_MIN_SCALE, Config.CREATURE_MAX_SCALE)
+	return math.clamp(s, Config.CREATURE_MIN_SCALE, Config.CREATURE_MAX_SCALE) * Config.creatureSizeMult(rarityIndex)
 end
 
 return CreatureModels

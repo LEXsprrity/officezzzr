@@ -233,6 +233,32 @@ H.test("plants: Legendaries tower over the zone's Commons and grow past 15 studs
 	end
 end)
 
+H.test("plants: Legendaries are 1.5x bigger at every stage (owner 2026-10-15); Epics and below unchanged", function()
+	H.eq(Config.creatureSizeMult(L), 1.5, "Legendary size")
+	for r = 1, L - 1 do
+		H.eq(Config.creatureSizeMult(r), 1, `rarity {r} unchanged`)
+	end
+	for k = 1, #Config.ZONES do
+		for r = 1, L do
+			for step = 0, 4 do
+				local w = Config.plantWeight(k, r, Config.GROW_TIME * step / 4, 1)
+				local ratio = w / Config.sproutWeight(k, r)
+				local base = math.clamp(ratio ^ Config.CREATURE_GROWTH_EXPONENT * (1 + Config.CREATURE_RARITY_SCALE * (r - 1)),
+					Config.CREATURE_MIN_SCALE, Config.CREATURE_MAX_SCALE)
+				H.near(CreatureModels.scaleFor(k, r, w), base * (if r == L then 1.5 else 1), 1e-9, `zone {k} rarity {r} step {step}`)
+			end
+		end
+		-- the zone's tallest Legendary, full-grown: ~36 (Meadow) .. ~43+ (Spirit Garden) studs
+		local tallest = 0
+		for i in variants(k, L) do
+			local _, h = CreatureModels.extents(CreatureModels.build(k, L, nil, i))
+			tallest = math.max(tallest, h)
+		end
+		local grown = CreatureModels.scaleFor(k, L, Config.sproutWeight(k, L) * Config.GROW_MAX_FACTOR)
+		H.ok(tallest * grown >= 33 and tallest * grown <= 50, `{Config.ZONES[k].id} tallest Legendary full-grown {tallest * grown} studs`)
+	end
+end)
+
 H.test("plants: they keep their own effects and still get rarity and mutation flair", function()
 	local cryonix
 	for i, m in variants(SPIRIT, L) do
