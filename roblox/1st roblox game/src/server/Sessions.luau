@@ -87,9 +87,9 @@ function Sessions.speedPerStud(s: Session): number
 	return Config.speedPerStud(s.profile.equippedTrail, Sessions.passSpeedMult(s))
 end
 
--- What a second on their own treadmill pays right now: its tier's fixed rate x the trail x the Speed passes.
-function Sessions.treadmillPerSecond(s: Session): number
-	return Config.treadmillPerSecond(s.profile.treadmillTier, s.profile.equippedTrail, Sessions.passSpeedMult(s))
+-- What a step (server tick) on their own treadmill pays right now: its tier's fixed value x the trail x the Speed passes.
+function Sessions.treadmillPerStep(s: Session): number
+	return Config.treadmillPerStep(s.profile.treadmillTier, s.profile.equippedTrail, Sessions.passSpeedMult(s))
 end
 
 -- Plant income multiplier besides day/night: plot level x the money passes (2x Money, VIP).

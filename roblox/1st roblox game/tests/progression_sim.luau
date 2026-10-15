@@ -95,7 +95,7 @@ function Sim.run(opts: Options?): Result
 	end
 
 	-- One second: earn money, and Speed: running pays WalkSpeed studs x the trail, the treadmill its tier's
-	-- fixed rate x the trail (Config.treadmillPerSecond), standing still nothing.
+	-- fixed value x the trail every step, 4 steps a second (Config.treadmillPerSecond), standing still nothing.
 	local function second(how: "run" | "treadmill" | "still")
 		if t - incomeAt >= Sim.INCOME_REFRESH then
 			refreshIncome()
@@ -274,10 +274,10 @@ function Sim.report(): string
 		end
 	end
 	table.insert(lines, "")
-	table.insert(lines, "| Treadmill | Speed/s (x trail) | Price | Free player buys it |")
+	table.insert(lines, "| Treadmill | Speed a step (x trail; 4 steps/s) | Price | Free player buys it |")
 	table.insert(lines, "|---|---|---|---|")
 	for tier, tt in Config.TREADMILL_TIERS do
-		table.insert(lines, `| Level {tier} | +{Format.short(tt.perSecond)}/s | {if tt.price > 0 then Format.money(tt.price) else "free"} | {if tier == 1 then "start" elseif boughtAt[tier] then Sim.clock(boughtAt[tier]) else "after the Spirit Garden"} |`)
+		table.insert(lines, `| Level {tier} | +{Format.short(tt.perStep)} (+{Format.short(tt.perStep / Config.TICK)}/s) | {if tt.price > 0 then Format.money(tt.price) else "free"} | {if tier == 1 then "start" elseif boughtAt[tier] then Sim.clock(boughtAt[tier]) else "after the Spirit Garden"} |`)
 	end
 	return table.concat(lines, "\n")
 end

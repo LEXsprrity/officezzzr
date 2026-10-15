@@ -49,18 +49,20 @@ H.test("speed: the treadmill pays its tier's fixed rate x the trail, whatever th
 		local s = tracker(Vector3.new(0, 0, 0))
 		local tmGain, verdict = SpeedLogic.step(s, Vector3.new(0, 0, 0), DT, opts(walk, true, 1, 1, 1))
 		H.eq(verdict, "ok")
-		H.near(tmGain, Config.TREADMILL_TIERS[1].perSecond * DT, 1e-9, `WalkSpeed {walk}`)
+		H.near(tmGain, Config.TREADMILL_TIERS[1].perStep, 1e-9, `WalkSpeed {walk}: the full step`)
 	end
 	-- the trail multiplies it, and nothing else does
 	local s = tracker(Vector3.new(0, 0, 0))
-	H.near(SpeedLogic.step(s, Vector3.new(0, 0, 0), DT, opts(180, true, 7, 1, 2.5)), Config.TREADMILL_TIERS[1].perSecond * 2.5 * DT, 1e-9, "x2.5 trail")
+	H.near(SpeedLogic.step(s, Vector3.new(0, 0, 0), DT, opts(180, true, 7, 1, 2.5)), Config.TREADMILL_TIERS[1].perStep * 2.5, 1e-9, "x2.5 trail")
 end)
 
 H.test("speed: every treadmill tier pays its own fixed rate", function()
 	for tier, t in Config.TREADMILL_TIERS do
 		local s = tracker(Vector3.new(0, 0, 0))
 		local gain = SpeedLogic.step(s, Vector3.new(0, 0, 0), DT, opts(100, true, 1, tier, 1))
-		H.near(gain, t.perSecond * DT, 1e-9, `tier {tier}`)
+		H.near(gain, t.perStep, 1e-9, `tier {tier}`)
+		-- a tick that took longer or shorter still pays exactly one step (the "+X" its popup shows)
+		H.near(SpeedLogic.step(s, Vector3.new(0, 0, 0), DT * 1.3, opts(100, true, 1, tier, 1)), t.perStep, 1e-9, `tier {tier}: a slow tick`)
 	end
 end)
 

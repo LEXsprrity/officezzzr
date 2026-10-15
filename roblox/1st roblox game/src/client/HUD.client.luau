@@ -1805,9 +1805,9 @@ do
 		upgradeButtons(plotCard, price, "PlotUpgrade", Config.plotUpgradeProduct(level))
 		local tier = stats.treadmillTier or 1
 		local treadPrice = Config.priceOf("TreadmillUpgrade", stats :: any)
-		-- "+60/s": a second on it at that tier with your equipped trail and Speed passes (the "+X/s" over the treadmill)
+		-- "+100": a step on it at that tier with your equipped trail and Speed passes (the "+X" over the treadmill and its popups)
 		local function treadRate(t: number): string
-			return Treadmill.rateText(Treadmill.perSecond(t, stats.equippedTrail, Config.passSpeedMult(stats.passes)))
+			return Treadmill.stepText(Treadmill.perStep(t, stats.equippedTrail, Config.passSpeedMult(stats.passes)))
 		end
 		local treadCard = shopCard(grid, 2, CARD_COLORS.Treadmill,
 			if treadPrice then `LEVEL {tier + 1} TREADMILL` else "MAX TREADMILL",

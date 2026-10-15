@@ -578,7 +578,7 @@ end)
 -- frame, with AutoRotate off and its WalkSpeed 0 on this client only, so the walking keys don't move it) and
 -- sprints in place (its own run animation from the Animate script, sped up to a blur, leaning forward, wind
 -- lines streaking off behind it), with a stream of "+X" Speed popups over its head (Treadmill.stepPopups:
--- one every server tick, adding up to the real rate). The only way off is jumping (Space / the mobile jump button), which puts you just
+-- one every server tick, each the step's "+X" the server pays). The only way off is jumping (Space / the mobile jump button), which puts you just
 -- beside the belt; you can't be locked again for a moment. Dying, a respawn or the server moving you off
 -- the belt just unlocks. The root is NEVER anchored: a root anchored on the client stops replicating, so the
 -- server kept the last position from before the lock (just off the belt) and paid no Speed (owner playtest:
@@ -694,7 +694,7 @@ end
 
 -- "[sneaker] +1.6K" around and over the runner's head (owner's reference screenshot): big bold purple
 -- relief text, a little bigger or smaller and tilted at random, popping in, floating up and fading; several
--- at a time, overlapping. `amount` is what that popup's slice of a second pays (Treadmill.stepPopups).
+-- at a time, overlapping. `amount` is what that step pays (Treadmill.stepPopups).
 local SPEED_PURPLE = Color3.fromRGB(128, 64, 240)
 local SPEED_INK = Color3.fromRGB(32, 12, 70)
 local POPUP_STUDS = Vector2.new(5.5, 1.5) -- studs, so the far ones look smaller
@@ -931,8 +931,8 @@ RunService.Heartbeat:Connect(function(dt: number)
 	end
 
 	if want and root then
-		local perSecond = Treadmill.perSecond(stats.treadmillTier, stats.equippedTrail, Config.passSpeedMult(stats.passes))
-		local amount = Treadmill.stepPopups(popups, now, perSecond, speedPopupsLive)
+		local perStep = Treadmill.perStep(stats.treadmillTier, stats.equippedTrail, Config.passSpeedMult(stats.passes))
+		local amount = Treadmill.stepPopups(popups, now, perStep, speedPopupsLive)
 		if amount then
 			speedPopup(root, amount)
 		end

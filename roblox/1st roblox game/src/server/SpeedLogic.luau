@@ -49,10 +49,12 @@ function SpeedLogic.walkGain(dist: number, mult: number): number
 	return math.min(dist, Config.GAIN_CAP_STUDS_PER_TICK) * mult
 end
 
--- Treadmill: the tier's fixed Speed per second (Config.treadmillRate) x the equipped trail's multiplier,
--- for `dt` seconds. Nothing else: not WalkSpeed, not the Speed you have. Standing still (AFK) on it counts.
-function SpeedLogic.treadmillGain(dt: number, tier: number, trailMult: number): number
-	return Config.treadmillRate(tier) * trailMult * dt
+-- Treadmill: one step (server tick, Config.TICK) on it pays the tier's fixed Speed per step
+-- (Config.treadmillRate) x `trailMult` (the equipped trail x the Speed passes), in full, every tick: the
+-- exact "+X" its popups and sign show (owner 2026-10-15). Nothing else: not WalkSpeed, not the Speed you
+-- have, not how long the tick took. Standing still (AFK) on it counts.
+function SpeedLogic.treadmillGain(tier: number, trailMult: number): number
+	return Config.treadmillRate(tier) * trailMult
 end
 
 function SpeedLogic.allowedPerTick(walkSpeed: number, dt: number): number
@@ -98,7 +100,7 @@ function SpeedLogic.step(state: State, pos: Vector3, dt: number, opts: Opts): (n
 	state.lastGood = pos
 
 	if opts.onTreadmill then
-		return SpeedLogic.treadmillGain(dt, opts.treadmillTier, opts.trailMult), "ok", nil
+		return SpeedLogic.treadmillGain(opts.treadmillTier, opts.trailMult), "ok", nil
 	end
 	return SpeedLogic.walkGain(dist, opts.mult), "ok", nil
 end

@@ -637,8 +637,8 @@ local function treadmillPrompts(state: PlotState): { ProximityPrompt }
 end
 
 -- The board shows its owner's tier ("Level X > Level Y") and the next tier's prices, or "MAX"; the text
--- over the belt what a second on it pays the owner right now (Treadmill.perSecond: the same number the
--- server pays a second there and the "+X" popups over the runner show). Refreshed with every payout. The prompts say what they buy; at the last tier they switch off.
+-- over the belt what a step on it pays the owner right now (Treadmill.perStep: the same number the
+-- server pays every tick there and each "+X" popup over the runner shows). Refreshed with every payout. The prompts say what they buy; at the last tier they switch off.
 local function renderTreadmillSign(state: PlotState)
 	local s = state.owner and Sessions.get(state.owner)
 	-- the treadmill shows the owner's tier (an empty plot: tier 1); a no-op unless the tier changed
@@ -658,8 +658,8 @@ local function renderTreadmillSign(state: PlotState)
 		tier = tier,
 		cash = price,
 		robux = robux,
-		perSecond = Treadmill.perSecond(tier, s.profile.equippedTrail, Sessions.passSpeedMult(s)),
-		nextPerSecond = if price then Treadmill.perSecond(tier + 1, s.profile.equippedTrail, Sessions.passSpeedMult(s)) else nil,
+		perStep = Treadmill.perStep(tier, s.profile.equippedTrail, Sessions.passSpeedMult(s)),
+		nextPerStep = if price then Treadmill.perStep(tier + 1, s.profile.equippedTrail, Sessions.passSpeedMult(s)) else nil,
 	})
 	for _, prompt in treadmillPrompts(state) do
 		prompt.ActionText = if price then `Upgrade to Level {tier + 1}` else "Maxed"
@@ -685,7 +685,7 @@ function PlotService.upgradeTreadmill(player: Player)
 	Sessions.pushFull(s)
 	Net.LootEvent:FireClient(player, "Bought", {
 		itemId = "TreadmillUpgrade",
-		label = `{msg}! Your treadmill pays {Treadmill.rateText(Sessions.treadmillPerSecond(s))} Speed`,
+		label = `{msg}! Your treadmill pays {Treadmill.stepText(Sessions.treadmillPerStep(s))} Speed a step`,
 	})
 end
 

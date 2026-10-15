@@ -3,7 +3,7 @@
 -- is the player's own, and when the client loops the run-in-place animation. A belt is the part tagged
 -- Role = "TreadmillBelt" with its plot's PlotIndex attribute (WorldBuilder). Only your own treadmill
 -- pays Speed (SpeedService checks your plot's belt), so only your own one plays the animation. Also: what
--- standing on it pays, where its Upgrade board and "+X/s" text go, the lock that keeps you on it, and the
+-- standing on it pays, where its Upgrade board and "+X" text go, the lock that keeps you on it, and the
 -- invisible wall that keeps everyone else off it.
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Shared = ReplicatedStorage:WaitForChild("Shared")
@@ -91,18 +91,24 @@ Treadmill.RUN_LEAN = 12
 ----------------------------------------------------------------------------------------------------
 -- What standing on it pays, and the text over it
 ----------------------------------------------------------------------------------------------------
--- Speed per second standing on your own treadmill of tier `tier` with trail `trailId` equipped: the tier's
--- fixed rate x the trail x the Speed passes (`passMult`: Config.passSpeedMult of the owner's passes, 1 when
--- nil; Config.treadmillPerSecond), whatever your Speed or WalkSpeed. What the server pays a second
--- (SpeedLogic.treadmillGain every tick), the "+X" popups over the runner, the "+X/s" text over the treadmill, its
--- Upgrade board and the Shop card all show this one number.
+-- Speed per STEP (one server tick, Config.TICK: 4 a second) standing on your own treadmill of tier `tier`
+-- with trail `trailId` equipped: the tier's fixed value x the trail x the Speed passes (`passMult`:
+-- Config.passSpeedMult of the owner's passes, 1 when nil; Config.treadmillPerStep), whatever your Speed or
+-- WalkSpeed. Owner decision 2026-10-15: the number shown is the number you get, every step. What the server
+-- pays a tick (SpeedLogic.treadmillGain), each "+X" popup over the runner, the "+X" text over the treadmill,
+-- its Upgrade board and the Shop card all show this one number ("+5K"; no "/s").
+function Treadmill.perStep(tier: number?, trailId: string?, passMult: number?): number
+	return Config.treadmillPerStep(tier, trailId, passMult)
+end
+
+-- ...and what a second on it really pays: 1 / Config.TICK steps (4) (Config.treadmillPerSecond).
 function Treadmill.perSecond(tier: number?, trailId: string?, passMult: number?): number
 	return Config.treadmillPerSecond(tier, trailId, passMult)
 end
 
 -- The "+X" popups over the runner (Effects.client): a stream of them, one every POPUP_INTERVAL seconds (the
--- server's own tick, Config.TICK), each showing what that interval pays, so the numbers popping in one
--- second add up to exactly Treadmill.perSecond (owner: spam them like the reference). At most
+-- server's own tick, Config.TICK), each showing what that step pays (Treadmill.perStep), so the numbers
+-- popping add up to exactly what the server pays (owner: spam them like the reference). At most
 -- POPUP_MAX_LIVE are on screen at once; each lives POPUP_LIFE seconds (about 6 at a time normally).
 Treadmill.POPUP_INTERVAL = Config.TICK
 Treadmill.POPUP_MAX_LIVE = 12
@@ -117,17 +123,18 @@ end
 
 -- One frame of the stream at `now` with `live` popups on screen: the gain the popup to spawn now shows, or
 -- nil (not due yet, nothing to gain, or the cap is full: that one is skipped). A slow frame that missed
--- several intervals shows them all in one popup, so the shown total never drifts from the real rate.
-function Treadmill.stepPopups(state: PopupState, now: number, perSecond: number, live: number): number?
+-- several intervals shows them all in one popup (`perStep` x the steps), so the shown total never drifts
+-- from the real gain.
+function Treadmill.stepPopups(state: PopupState, now: number, perStep: number, live: number): number?
 	if now < state.nextAt then
 		return nil
 	end
 	local due = math.floor((now - state.nextAt) / Treadmill.POPUP_INTERVAL) + 1
 	state.nextAt += due * Treadmill.POPUP_INTERVAL
-	if perSecond <= 0 or live >= Treadmill.POPUP_MAX_LIVE then
+	if perStep <= 0 or live >= Treadmill.POPUP_MAX_LIVE then
 		return nil
 	end
-	return perSecond * Treadmill.POPUP_INTERVAL * due
+	return perStep * due
 end
 
 -- "+0.5", "+12.3", "+200", "+1.6K" (like the HUD's "+X/step").
@@ -135,12 +142,13 @@ function Treadmill.gainText(x: number): string
 	return "+" .. (if x < 100 then string.format("%.1f", x) else Format.short(x))
 end
 
--- The text over the treadmill: "+60.9/s", the same number as the popups.
-function Treadmill.rateText(perSecond: number): string
-	return Treadmill.gainText(perSecond) .. "/s"
+-- The text over the treadmill, on its board and Shop card: "+5K", exactly what each popup shows and each
+-- step pays (no "/s": owner 2026-10-15, one number everywhere).
+function Treadmill.stepText(perStep: number): string
+	return Treadmill.gainText(perStep)
 end
 
--- The "+X/s" text over the treadmill only shows up close (studs).
+-- The "+X" text over the treadmill only shows up close (studs).
 Treadmill.RATE_TEXT_DISTANCE = 35
 
 -- The belt's long axis is its local Z unless it is wider than long.
@@ -149,7 +157,7 @@ local function axes(beltSize: Vector3): (boolean, number, number)
 	return alongZ, (if alongZ then beltSize.Z else beltSize.X) / 2, (if alongZ then beltSize.X else beltSize.Z) / 2
 end
 
--- Where the "+X/s" text floats, in the belt's own space: over the front end, a little in from it.
+-- Where the "+X" text floats, in the belt's own space: over the front end, a little in from it.
 function Treadmill.stepTextOffset(beltSize: Vector3): Vector3
 	local alongZ, halfAlong = axes(beltSize)
 	local inFrom = Treadmill.FRONT * (halfAlong + 2.5) -- just past the head (console end), so the console never hides it
@@ -195,15 +203,15 @@ function Treadmill.boardText(tier: number?): (string, "open" | "max" | "empty")
 	return `Level {tier} > Level {tier + 1}`, "open"
 end
 
--- The board's line under it: what a second pays now and at the next tier ("+60/s > +100/s"), just now's
--- at the last tier ("+2.5K/s"), nothing with no owner.
-function Treadmill.boardRateText(perSecond: number?, nextPerSecond: number?): string
-	if perSecond == nil then
+-- The board's line under it: what a step pays now and at the next tier ("+100 > +200"), just now's
+-- at the last tier ("+1.5K"), nothing with no owner.
+function Treadmill.boardRateText(perStep: number?, nextPerStep: number?): string
+	if perStep == nil then
 		return ""
-	elseif nextPerSecond == nil then
-		return Treadmill.rateText(perSecond)
+	elseif nextPerStep == nil then
+		return Treadmill.stepText(perStep)
 	end
-	return `{Treadmill.rateText(perSecond)} > {Treadmill.rateText(nextPerSecond)}`
+	return `{Treadmill.stepText(perStep)} > {Treadmill.stepText(nextPerStep)}`
 end
 
 -- How close the owner must be to the board to see its prompts; the server re-checks with some slack.

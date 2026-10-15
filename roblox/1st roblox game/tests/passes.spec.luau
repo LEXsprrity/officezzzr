@@ -211,20 +211,20 @@ H.test("2x Speed: owners gain double Speed walking and on the treadmill (server 
 	-- the treadmill pays the same number its sign, the popups and the Shop show
 	local s = session({ DoubleSpeed = true })
 	s.profile.treadmillTier = 3
-	local perSecond = Treadmill.perSecond(3, s.profile.equippedTrail, Config.passSpeedMult(s.passes))
-	H.near(perSecond, Config.treadmillRate(3) * 2, 1e-9, "the shown rate is doubled")
-	H.near(Sessions.treadmillPerSecond(s), perSecond, 1e-9)
-	H.near(SpeedLogic.treadmillGain(1, 3, Sessions.speedMult(s)), perSecond, 1e-9, "the server's second")
+	local perStep = Treadmill.perStep(3, s.profile.equippedTrail, Config.passSpeedMult(s.passes))
+	H.near(perStep, Config.treadmillRate(3) * 2, 1e-9, "the shown step is doubled")
+	H.near(Sessions.treadmillPerStep(s), perStep, 1e-9)
+	H.near(SpeedLogic.treadmillGain(3, Sessions.speedMult(s)), perStep, 1e-9, "the server's step")
 	H.near(Config.speedPerStud(nil, 2), Config.BASE_SPEED_PER_STUD * 2, 1e-9, "+X/step doubled")
-	H.eq(Treadmill.perSecond(3, nil), Config.treadmillRate(3), "no pass: unchanged")
+	H.eq(Treadmill.perStep(3, nil), Config.treadmillRate(3), "no pass: unchanged")
 	-- every place that shows it passes the owner's Speed passes
 	local plot = fs.readFile("src/server/PlotService.luau")
-	H.ok(string.find(plot, "Treadmill.perSecond(tier, s.profile.equippedTrail, Sessions.passSpeedMult(s))", 1, true) ~= nil, "the +X/s sign and board")
+	H.ok(string.find(plot, "Treadmill.perStep(tier, s.profile.equippedTrail, Sessions.passSpeedMult(s))", 1, true) ~= nil, "the +X sign and board")
 	local effects = fs.readFile("src/client/Effects.client.luau")
 	H.ok(string.find(effects, "Config.passSpeedMult(stats.passes)", 1, true) ~= nil and string.find(effects, "stats.passes = partial.passes", 1, true) ~= nil,
 		"the popups over the runner")
 	local hud = fs.readFile("src/client/HUD.client.luau")
-	H.ok(string.find(hud, "Treadmill.perSecond(t, stats.equippedTrail, Config.passSpeedMult(stats.passes))", 1, true) ~= nil, "the Shop's treadmill card")
+	H.ok(string.find(hud, "Treadmill.perStep(t, stats.equippedTrail, Config.passSpeedMult(stats.passes))", 1, true) ~= nil, "the Shop's treadmill card")
 	H.ok(string.find(hud, "Config.speedPerStud(stats.equippedTrail, Config.passSpeedMult(stats.passes))", 1, true) ~= nil, "the +X/step")
 end)
 
