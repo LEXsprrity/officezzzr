@@ -39,7 +39,10 @@ ProfileStore.__index = ProfileStore
 -- exactly what grows) and keeps it in the seed bag's key, "zone:rarity[:Mutation]#gene". Older keys load
 -- as they are (SeedPacks.parseBagKey takes both): such a seed gets its gene when its Plant button is
 -- pressed (PlantGhosts.bagPreview), or draws its flower when it is planted, as before.
-ProfileStore.VERSION = 10
+-- v11 keeps which way each plant faces (`yaw`, degrees, turned by the player while placing it; `yw`), in the
+-- inventory too, so a plant planted again starts facing the same way. Older plants have none and keep
+-- facing the plot's entrance, as they always did (Planting.facing).
+ProfileStore.VERSION = 11
 
 -- The zones' recommended Speed before v7 (Config.ZONES order), for migrateSpeed.
 ProfileStore.LEGACY_ZONE_REQ = { 0, 10e3, 500e3, 5e6, 50e6, 500e6, 5e9 }
@@ -79,6 +82,7 @@ export type Plant = {
 	z: number, -- ...and along (+z toward the entrance)
 	variant: string?, -- v8: its flower (plant model name), drawn at planting; nil = the id-based pick (older saves)
 	variance: number?, -- v9: its weight variance, kept from before it went to the inventory; nil = Config.plantVariance
+	yaw: number?, -- v11: degrees it is turned from facing the entrance (Planting.facing); nil = 0 (older saves)
 }
 
 -- A plant in the inventory (v9): taken off the plot as it was, its growth stopped. Planted again it keeps
@@ -91,6 +95,7 @@ export type InvPlant = {
 	variant: string?,
 	age: number, -- seconds it had grown (0..Config.GROW_TIME)
 	variance: number,
+	yaw: number?, -- v11: the way it faced on the plot
 }
 
 export type Profile = {
@@ -240,11 +245,11 @@ end
 function ProfileStore.serialize(p: Profile): { [string]: any }
 	local plants = {}
 	for _, pl in p.plants do
-		table.insert(plants, { s = pl.slot, z = pl.zone, r = pl.rarity, m = pl.mutation, t = pl.plantedAt, px = pl.x, pz = pl.z, vr = pl.variant, va = pl.variance })
+		table.insert(plants, { s = pl.slot, z = pl.zone, r = pl.rarity, m = pl.mutation, t = pl.plantedAt, px = pl.x, pz = pl.z, vr = pl.variant, va = pl.variance, yw = pl.yaw })
 	end
 	local inventory = {}
 	for _, it in p.inventory do
-		table.insert(inventory, { i = it.id, z = it.zone, r = it.rarity, m = it.mutation, vr = it.variant, a = it.age, va = it.variance })
+		table.insert(inventory, { i = it.id, z = it.zone, r = it.rarity, m = it.mutation, vr = it.variant, a = it.age, va = it.variance, yw = it.yaw })
 	end
 	local index = {}
 	for key, v in p.index do
@@ -348,6 +353,7 @@ function ProfileStore.deserialize(data: any): Profile
 					table.insert(p.plants, {
 						slot = slot, zone = zone, rarity = rarity, mutation = mutation, plantedAt = raw.t, x = x, z = z,
 						variant = variantOf(raw.vr), variance = varianceOf(raw.va),
+						yaw = Planting.normalizeYaw(raw.yw), -- v11 (nil before: facing the entrance)
 					})
 				end
 			end
@@ -371,6 +377,7 @@ function ProfileStore.deserialize(data: any): Profile
 						id = id, zone = zone, rarity = rarity,
 						mutation = if type(raw.m) == "string" and Config.mutationById(raw.m) then raw.m else nil,
 						variant = variantOf(raw.vr), age = num(raw.a, 0, 0, Config.GROW_TIME), variance = variance,
+						yaw = Planting.normalizeYaw(raw.yw),
 					})
 				end
 			end

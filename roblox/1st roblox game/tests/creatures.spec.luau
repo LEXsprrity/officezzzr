@@ -135,7 +135,7 @@ H.test("creatures: scale grows with weight and rarity, within the clamp", functi
 end)
 H.test("creatures: the biggest creatures fit the planting spacing and the plot", function()
 	local Planting = H.shared("Planting")
-	-- Planting spaces plants by their full-grown reach: never smaller than the real biggest creature
+	-- Planting budgets on the full-grown reach (the cores, the bed margins): never smaller than the real biggest creature
 	for k = 1, #Config.ZONES do
 		for r = 1, #Config.RARITIES do
 			local biggest = CreatureModels.scaleFor(k, r, Config.sproutWeight(k, r) * Config.GROW_MAX_FACTOR * 1.2)
@@ -144,7 +144,9 @@ H.test("creatures: the biggest creatures fit the planting spacing and the plot",
 	end
 	local L = #Config.RARITIES
 	H.ok(math.abs(Planting.radius(L) - Config.creatureFootprint(L) * Config.CREATURE_MAX_SCALE / 2) < 0.2, "the biggest reach is about the max scale")
-	H.ok(2 * Planting.radius(L) - Planting.minDistance(L, L) <= 1 + 1e-6, "neighbours overlap by at most a stud")
+	-- neighbours may stand close (their leaves overlapping), but their cores never overlap
+	H.ok(math.abs(Planting.minDistance(L, L) - 2 * Planting.coreRadius(L)) < 1e-9, "Legendaries: core to core")
+	H.ok(Planting.minDistance(L, L) < Planting.radius(L), "Legendaries: much closer than their full reach")
 	-- Common..Rare (the base footprint) fit the default grid, and every default spot keeps them inside the fence
 	local small = 0
 	for r = 1, L do

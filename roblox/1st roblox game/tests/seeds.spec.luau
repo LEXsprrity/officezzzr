@@ -150,7 +150,7 @@ H.test("seeds: bag keys carry the gene, old keys still load, and junk genes are 
 end)
 
 H.test("seeds: save v10 keeps the bag's genes; a v9 bag loads as it was", function()
-	H.eq(ProfileStore.VERSION, 10)
+	H.ok(ProfileStore.VERSION >= 10)
 	local p = ProfileStore.defaultProfile()
 	p.seedBag["3:2:Gold#4242"] = 1
 	p.seedBag["1:1#9"] = 2
@@ -161,7 +161,7 @@ H.test("seeds: save v10 keeps the bag's genes; a v9 bag loads as it was", functi
 	H.eq(v9.seedBag["3:2:Gold"], 2, "old keys load unchanged")
 	H.eq(v9.seedBag["1:1"], 1)
 	H.eq(v9.seedBag["1:1#bad"], nil, "junk is dropped")
-	H.eq(ProfileStore.serialize(v9).v, 10, "saved back as v10")
+	H.eq(ProfileStore.serialize(v9).v, ProfileStore.VERSION, "saved back in the current version")
 end)
 
 H.test("seeds: a bag seed's ghost is what it grows into, and an old seed gets its gene at its Plant button", function()

@@ -253,12 +253,12 @@ end
 -- The planting preview: plant the carried seed (or bagged seed `bagKey`) at `position` (PlotService.plantAt
 -- checks the spot, the plot, the reach and the slots).
 local PLANTS_PER_SECOND = 4
-local function onPlant(player: Player, position: any, bagKey: any)
+local function onPlant(player: Player, position: any, bagKey: any, yaw: any)
 	local s = Sessions.get(player)
 	if not s or not Sessions.allowRequest(s, PLANTS_PER_SECOND) then
 		return
 	end
-	PlotService.plantAt(player, position, bagKey)
+	PlotService.plantAt(player, position, bagKey, yaw)
 end
 
 function ShopService.init()
