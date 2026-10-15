@@ -123,7 +123,8 @@ H.test("creatures: scale grows with weight and rarity, within the clamp", functi
 				local w = Config.plantWeight(k, r, Config.GROW_TIME * step / 10, 1)
 				local s = CreatureModels.scaleFor(k, r, w)
 				H.ok(s >= last, "monotonic in weight")
-				H.ok(s >= Config.CREATURE_MIN_SCALE and s <= Config.CREATURE_MAX_SCALE, "clamped")
+				local m = Config.creatureSizeMult(r)
+				H.ok(s >= Config.CREATURE_MIN_SCALE * m - 1e-9 and s <= Config.CREATURE_MAX_SCALE * m + 1e-9, "clamped (x its rarity size)")
 				last = s
 			end
 		end
@@ -143,7 +144,7 @@ H.test("creatures: the biggest creatures fit the planting spacing and the plot",
 		end
 	end
 	local L = #Config.RARITIES
-	H.ok(math.abs(Planting.radius(L) - Config.creatureFootprint(L) * Config.CREATURE_MAX_SCALE / 2) < 0.2, "the biggest reach is about the max scale")
+	H.ok(math.abs(Planting.radius(L) - Config.creatureFootprint(L) * Config.CREATURE_MAX_SCALE * Config.creatureSizeMult(L) / 2) < 0.3, "the biggest reach is about the max scale x the Legendary size")
 	-- neighbours may touch (their leaves overlapping freely); only a tiny core stays apart
 	H.ok(math.abs(Planting.minDistance(L, L) - math.max(Config.PLANT_MIN_GAP, 2 * Config.PLANT_SPACING_SHARE * Planting.radius(L))) < 1e-9, "Legendaries: a tiny core")
 	H.ok(Planting.minDistance(L, L) < Planting.radius(L), "Legendaries: much closer than their full reach")
@@ -162,10 +163,11 @@ H.test("creatures: the biggest creatures fit the planting spacing and the plot",
 		H.ok(math.abs(c[1]) + reach <= half - 0.5 and math.abs(c[2]) + reach <= half - 0.5, `spot {i} ({c[1]}, {c[2]}) fits inside the fence`)
 	end
 	-- the bigger ones (Epic, Legendary) must stand further inside the bed, so they reach at most
-	-- PLANT_FENCE_OVERHANG past the fence line from anywhere planting allows
+	-- Planting.fenceOverhang past the fence line from anywhere planting allows
 	local outer = half - Config.BED_FENCE_GAP
 	for r = 1, L do
-		H.ok(outer - Planting.bedMargin(r) + Planting.radius(r) <= half + Config.PLANT_FENCE_OVERHANG + 1e-6, `rarity {r} stays off the fence`)
+		H.ok(outer - Planting.bedMargin(r) + Planting.radius(r) <= half + Planting.fenceOverhang(r) + 1e-6, `rarity {r} stays off the fence`)
+		H.ok(Planting.fenceOverhang(r) <= Config.PLANT_FENCE_OVERHANG * 1.5 + 1e-9, `rarity {r}: overhangs the fence a little at most`)
 		H.ok(Planting.bedMargin(r) >= Config.PLANT_BED_MARGIN, `rarity {r} margin`)
 	end
 	H.ok(Planting.bedMargin(L) > Planting.bedMargin(1), "Legendaries stand further inside the bed")

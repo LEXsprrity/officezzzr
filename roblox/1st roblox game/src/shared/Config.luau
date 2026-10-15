@@ -50,7 +50,7 @@ Config.PLANT_SPACING_SHARE = 0.2 -- the tiny core two plants may not share: this
 Config.PLANT_MIN_GAP = 0.8 -- ...but never closer than this (studs, centre to centre)
 Config.PLANT_CORE_SHARE = 0.45 -- a plant's core (kept on the dirt, Planting.bedMargin): this share of its full-grown reach
 Config.PLANT_BED_MARGIN = 1 -- a plant's centre stays at least this far inside its bed (its core, if bigger)
-Config.PLANT_FENCE_OVERHANG = 2.5 -- a big full-grown plant may reach this far past its bed's fence gap (Planting.bedMargin)
+Config.PLANT_FENCE_OVERHANG = 2.5 -- a big full-grown plant may reach this far past its bed's fence gap (Planting.bedMargin), x its creatureSizeMult
 Config.PLANT_YAW_STEP = 15 -- the planting ghost turns this many degrees a wheel notch / button press (Planting.client)
 Config.PLANT_REACH = 28 -- you plant within this many studs (flat) of where you stand
 
@@ -564,6 +564,16 @@ Config.CREATURE_GROWTH_EXPONENT = 0.4 -- scale ~ (weight / sprout weight) ^ this
 Config.CREATURE_RARITY_SCALE = 0.07 -- +7% size per rarity step
 Config.CREATURE_MIN_SCALE = 0.85
 Config.CREATURE_MAX_SCALE = 2.6
+-- Per-rarity size on top of that clamp (owner 2026-10-15: Legendaries must be BIGGER): every stage of a plant
+-- (its sprout size, growing, full-grown, its planting ghost) is this many times its clamped scale, and
+-- Shared/Planting budgets its reach, core, bed margin and fence overhang by it. Common..Epic x1; a Legendary
+-- x1.5 (full-grown ~36 studs tall in the Meadow .. ~43 in the Spirit Garden). Index / card pictures fit their
+-- camera to the model (FlowerPreviews), so they are unchanged.
+Config.CREATURE_RARITY_SIZE = { 1, 1, 1, 1, 1.5 }
+
+function Config.creatureSizeMult(rarity: number): number
+	return Config.CREATURE_RARITY_SIZE[rarity] or 1
+end
 -- Optional uploaded models: zone index -> asset id (0 or missing = procedural). Loaded once through
 -- InsertService, so the asset must be owned by the game's creator. Rarity/mutation flair still applies.
 Config.CREATURE_ASSETS = {} :: { [number]: number }

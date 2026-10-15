@@ -162,6 +162,12 @@ H.test("planting: Legendaries (the big plants) stand further inside the bed and 
 	end
 	print(`        a plot's beds fit {#placed} full-grown Legendaries on the old grid`)
 	H.ok(#placed >= 10, `{#placed} Legendaries`)
+	-- 1.5x bigger Legendaries (owner 2026-10-15) still leave the grass path walkable with one on each
+	-- side at the beds' inner edges, and reach past the front fence well short of the treadmill (its near
+	-- end is 12 - 9/2 = 7.5 studs out, WorldBuilder's TREADMILL)
+	local intoPath = Planting.radius(L) - Planting.bedMargin(L)
+	H.ok(Config.PLOT_PATH_WIDTH - 2 * intoPath >= 8, `path left clear between two Legendaries ({Config.PLOT_PATH_WIDTH - 2 * intoPath} studs)`)
+	H.ok(Planting.fenceOverhang(L) <= 7.5 - 3, `past the fence {Planting.fenceOverhang(L)} studs`)
 end)
 
 H.test("planting: settle moves only the plants that don't fit (off a bed, overlapping), oldest id first", function()
@@ -315,7 +321,8 @@ H.test("planting: plants may touch and nearly stack; only a spot over a neighbou
 	-- the beds' margin is smaller too: a plant's core stays on the dirt, a big one's leaves at most
 	-- PLANT_FENCE_OVERHANG past the fence gap
 	H.ok(Config.PLANT_BED_MARGIN <= 1, "a smaller bed margin")
-	H.ok(Planting.bedMargin(1) < 2 and Planting.bedMargin(L) < 4, "Commons and Legendaries may stand nearer the bed's edge than before")
+	-- (Legendaries are 1.5x bigger since: their margin grew with them, 2.9 -> 4.5 studs)
+	H.ok(Planting.bedMargin(1) < 2 and Planting.bedMargin(L) < 5, "Commons and Legendaries may stand nearer the bed's edge than before")
 	for r = 1, L do
 		H.ok(Planting.bedMargin(r) >= Planting.coreRadius(r), `rarity {r}: its core on the dirt`)
 	end
