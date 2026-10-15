@@ -261,6 +261,7 @@ end
 ----------------------------------------------------------------------------------------------------
 Config.PODS_PER_NEST = 4
 Config.POD_REGROW = 8
+Config.POD_REFRESH = 180 -- seconds an untouched pod keeps its seed before it re-rolls (each pod on its own clock)
 Config.PICKUP_DISTANCE = 12
 
 export type Rarity = { id: string, color: Color3, income: number, weight: number, spawn: number }

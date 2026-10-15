@@ -1,6 +1,7 @@
 -- Local-only effects: "+$1.2M" income popups, event sounds, camera shake, the treadmill belt scroll,
 -- rainbow mutations, hiding other players' plot prompts, the Upgrade boards' button pops, and the treadmill
--- lock, sprint and Speed popups and the invisible walls that keep you off other players' treadmills.
+-- lock, sprint and Speed popups, keeping you off other players' treadmills, a pod's pop when it gets a new
+-- seed, and the "Lucky!" over a seed that 2x Luck raised.
 -- Nothing here affects game state.
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -113,10 +114,65 @@ local SOUND_FOR = {
 	Bat = "Bat", Bought = "Buy", End = "Pickup", PackRoll = "Buy", Announce = "Pickup", SoldPlants = "Buy",
 }
 
+-- 2x Luck raised a seed as it was stolen (the server's Pickup says what the pod showed: `shown`): "Lucky!
+-- Rare > Epic" rises over the thief's head in relief text (no toast box), so a Rare pod giving an Epic reads
+-- as the pass working, not a wrong label.
+local function luckyPopup(shown: number, rarity: number)
+	local char = player.Character
+	local head = char and char:FindFirstChild("Head")
+	local from, to = Config.RARITIES[shown], Config.RARITIES[rarity]
+	if not (head and head:IsA("BasePart") and from and to) then
+		return
+	end
+	local gui = Instance.new("BillboardGui")
+	gui.Name = "LuckyPopup"
+	gui.Size = UDim2.fromOffset(300, 64)
+	gui.StudsOffset = Vector3.new(0, 2.6, 0)
+	gui.AlwaysOnTop = true
+	gui.LightInfluence = 0
+	gui.Adornee = head
+	local function line(text: string, color: Color3, y: number, h: number): TextLabel
+		local l = Instance.new("TextLabel")
+		l.BackgroundTransparency = 1
+		l.Font = Enum.Font.FredokaOne
+		l.TextScaled = true
+		l.Text = text
+		l.TextColor3 = color
+		l.Size = UDim2.new(1, 0, 0, h)
+		l.Position = UDim2.fromOffset(0, y)
+		l.Parent = gui
+		UiFx.relief(l, 3, 3)
+		return l
+	end
+	line("Lucky!", Color3.fromRGB(255, 214, 50), 0, 32)
+	line(`{from.id} > {to.id}`, to.color, 32, 30) -- (plain text: the relief's dark copy mirrors it)
+	gui.Parent = player:WaitForChild("PlayerGui")
+	local scale = Instance.new("UIScale")
+	scale.Scale = 0.3
+	for _, l in gui:GetChildren() do
+		if l:IsA("TextLabel") then
+			scale:Clone().Parent = l
+		end
+	end
+	for _, s in gui:GetDescendants() do
+		if s:IsA("UIScale") then
+			TweenService:Create(s, TweenInfo.new(0.4, Enum.EasingStyle.Back, Enum.EasingDirection.Out), { Scale = 1 }):Play()
+		end
+	end
+	TweenService:Create(gui, TweenInfo.new(2.2, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), { StudsOffset = Vector3.new(0, 4.2, 0) }):Play()
+	task.delay(2.2, function()
+		gui:Destroy()
+	end)
+end
+
 LootEvent.OnClientEvent:Connect(function(kind: string, data: any)
 	local sound = SOUND_FOR[kind]
 	if sound then
 		play(sound)
+	end
+	if kind == "Pickup" and type(data) == "table" and type(data.shown) == "number" and type(data.rarity) == "number"
+		and data.rarity > data.shown then
+		luckyPopup(data.shown, data.rarity)
 	end
 	if kind == "Caught" then
 		shake(0.6, 6)
@@ -294,6 +350,41 @@ local function watchClick(detector: ClickDetector)
 	end)
 end
 
+-- A pod's new seed springs up from half its size, and its name tag pops (local only).
+local POD_POP = TweenInfo.new(0.4, Enum.EasingStyle.Back, Enum.EasingDirection.Out)
+local function popPod(pod: BasePart)
+	local model = pod:FindFirstChild("SeedModel")
+	if model and model:IsA("Model") then
+		local ok, base = pcall(function()
+			return model:GetScale()
+		end)
+		if ok and type(base) == "number" and base > 0 and pcall(model.ScaleTo, model, base * 0.5) then
+			local size = Instance.new("NumberValue")
+			size.Value = base * 0.5
+			size.Changed:Connect(function(x: number)
+				if model.Parent then
+					pcall(model.ScaleTo, model, x)
+				end
+			end)
+			local grow = TweenService:Create(size, POD_POP, { Value = base })
+			grow.Completed:Connect(function()
+				size:Destroy()
+			end)
+			grow:Play()
+		end
+	end
+	local tag = pod:FindFirstChild("SeedLabel")
+	for _, l in if tag then tag:GetChildren() else {} do
+		if l:IsA("TextLabel") then
+			local scale = l:FindFirstChild("Pop") or Instance.new("UIScale")
+			scale.Name = "Pop"
+			scale.Scale = 1.5
+			scale.Parent = l
+			TweenService:Create(scale, POD_POP, { Scale = 1 }):Play()
+		end
+	end
+end
+
 local function consider(inst: Instance)
 	if inst:IsA("Texture") and inst.Name == "Stripes" then
 		stripes[inst] = true
@@ -337,6 +428,10 @@ local function consider(inst: Instance)
 	if inst:IsA("BasePart") and string.sub(inst.Name, 1, 7) == "SeedPod" then
 		inst:GetAttributeChangedSignal("Mutation"):Connect(function()
 			rainbows[inst] = if inst:GetAttribute("Mutation") == "Rainbow" then true else nil
+		end)
+		-- a new seed in the pod (it re-rolled after Config.POD_REFRESH, regrew or came back): a little pop
+		inst:GetAttributeChangedSignal("Roll"):Connect(function()
+			task.defer(popPod, inst)
 		end)
 	end
 end
