@@ -1,6 +1,6 @@
 # Como subir os ícones para o Roblox
 
-O jogo usa os 21 ícones desta pasta (`Shop.png`, `Robux.png`, ...). O Roblox só mostra imagens que foram **enviadas** para ele, e cada imagem enviada ganha um número (o *asset id*). Esses números ficam em **`icons/ids.json`**:
+O jogo usa as imagens desta pasta (os ícones e algumas texturas/fundos) (`Shop.png`, `Robux.png`, ...). O Roblox só mostra imagens que foram **enviadas** para ele, e cada imagem enviada ganha um número (o *asset id*). Esses números ficam em **`icons/ids.json`**:
 
 ```json
 {
@@ -102,3 +102,21 @@ Se você tiver só o número de um **decal** (por exemplo, enviado pelo site em 
 ---
 
 Créditos: Icons by @gvesster (Free Icon Pack). A licença permite uso comercial (o crédito é opcional), mas não permite revender os ícones nem dizer que fomos nós que fizemos.
+
+---
+
+## Imagens novas (Shop, rodada 2: 2026-10-15)
+
+- `Robux.png`: o ícone novo do Robux (branco), que substituiu o antigo. O `ids.json` ainda tem o número do ícone **antigo**, então ele precisa ser enviado de novo (`--force`).
+- `Studs.png`: a textura de studs da barra de título e do fundo das janelas (enquanto o número for `0`, o jogo desenha studs quadradinhos sozinho).
+- `PackSpaceBg.png` (Starpetal Pack, espaço) e `PackSpiritBg.png` (Lotus Wyrm Pack, cerejeiras): os fundos dos cards dos packs (enquanto o número for `0`, o card fica com as cores da zona).
+
+Para enviar **só essas quatro** (PowerShell, na pasta do jogo):
+
+```powershell
+$env:ROBLOX_API_KEY = "cole-a-chave-aqui"
+$env:ROBLOX_USER_ID = "123456789"
+lune run tools/upload_icons.luau --only Robux,Studs,PackSpaceBg,PackSpiritBg --force
+```
+
+Depois: `rojo build -o StealASeed.rbxlx` (ou o `rojo serve` já pega) e commit do `icons/ids.json`.

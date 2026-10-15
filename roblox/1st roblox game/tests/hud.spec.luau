@@ -136,16 +136,18 @@ H.test("HUD: Shop / Index / Slow Mode are centred on the left edge; Speed and mo
 	H.ok(string.find(HUD, "height / 2 - STATS_BOTTOM - STATS_H", 1, true), "the column shrinks before it reaches them")
 end)
 
-H.test("HUD: bright windows: the modal body takes the bar's colours (the Shop: its charcoal body), no dark slate", function()
+H.test("HUD: one window frame (owner 2026-10-15, round 2): a charcoal body for every window, a flat bar in each window's colour", function()
 	for _, gone in { "BODY_COLOR", "SELL_DARK", "Color3.fromRGB(44, 50, 66)", "Color3.fromRGB(52, 58, 76)", "Color3.fromRGB(28, 24, 46)" } do
 		H.ok(not string.find(HUD, gone, 1, true), `"{gone}" is gone from the HUD`)
 	end
-	H.ok(string.find(HUD, "modal.BackgroundColor3 = window.body or window.from:Lerp(window.to, 0.5):Lerp(WHITE, 0.25)", 1, true), "tinted per window")
-	for _, name in { "Trails", "Index" } do
+	H.ok(string.find(HUD, "BackgroundColor3 = WINDOW_BODY", 1, true), "the charcoal body")
+	H.ok(string.find(HUD, "titleBar.BackgroundColor3 = window.bar", 1, true), "the bar tinted per window")
+	for _, name in { "Shop", "Trails", "Index" } do
 		local window = string.match(HUD, "	" .. name .. " = (%b{})")
-		H.ok(window and not string.find(window, "body =", 1, true), `{name} keeps the bright body`)
+		H.ok(window and string.find(window, "bar = Color3.fromRGB(", 1, true), `{name} has its bar colour`)
 	end
-	H.ok(not string.find(REWARDS, "Color3.fromRGB(44, 50, 66)", 1, true), "the Free Gift window is bright too")
+	H.ok(string.find(HUD, "WINDOWS.Sell = { title = \"Sell\", bar = ", 1, true), "Sell too")
+	H.ok(not string.find(REWARDS, "Color3.fromRGB(44, 50, 66)", 1, true), "the Free Gift window is bright")
 end)
 
 H.test("ZoneBanner.client: entering a zone flashes its name and a face for ~1 s (from Config.zoneAtX)", function()
@@ -187,7 +189,7 @@ H.test("HUD: more room between Shop, Index and Slow Mode", function()
 	H.ok(gap and gap >= 16, "a gap of 16+ design pixels")
 	local column = string.match(HUD, "local leftColumn = new%(\"Frame\", %b{}, (%b{})")
 	H.ok(column and string.find(column, "Padding = UDim.new(0, LEFT_GAP)", 1, true), "the column's layout uses it")
-	H.ok(string.find(HUD, "LEFT_H = 100, 74 * 2 + 30 + 2 * LEFT_GAP", 1, true), "and the column's height counts it")
+	H.ok(string.find(HUD, "LEFT_H = 100, SIDE_H * 2 + 30 + 2 * LEFT_GAP", 1, true), "and the column's height counts it")
 end)
 
 H.test("HUD Sell window: mutation only on mutated plants, no \"no mutation\", no emoji; flower names on the cards", function()

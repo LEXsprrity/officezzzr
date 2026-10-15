@@ -517,7 +517,7 @@ H.test("Shop PASSES: a bright card per pass with its icon, name, benefit and gre
 	-- the HUD draws them with its Shop card style and asks GetProductInfo for gamepass prices
 	local hud = fs.readFile("src/client/HUD.client.luau")
 	for _, needle in {
-		"PassCards.render(cardGrid(nextOrder(), WIDE_W, WIDE_H), stats.passes, {",
+		"PassCards.render(cardGrid(nextOrder(), L.WIDE_W, L.WIDE_H), stats.passes, {",
 		"robuxPrice(pass, Enum.InfoType.GamePass)",
 		"RequestBuy:FireServer(\"Pass:\" .. name)",
 		"robuxColor(pass.id, ROBUX_GREEN)",

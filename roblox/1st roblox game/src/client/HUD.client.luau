@@ -16,6 +16,8 @@ local SeedPacks = require(Shared:WaitForChild("SeedPacks"))
 local Icons = require(Shared:WaitForChild("Icons"))
 local Treadmill = require(Shared:WaitForChild("Treadmill"))
 local UiFx = require(Shared:WaitForChild("UiFx"))
+local ShopLayout = require(Shared:WaitForChild("ShopLayout"))
+local ShopUi = require(Shared:WaitForChild("ShopUi"))
 
 local player = Players.LocalPlayer
 local remotes = ReplicatedStorage:WaitForChild("Remotes")
@@ -188,7 +190,8 @@ end
 local SPEED_PINK = Color3.fromRGB(255, 70, 150)
 local MONEY_GREEN = Color3.fromRGB(85, 240, 70)
 local LEFT_GAP = 18 -- between Shop, Index and Slow Mode
-local STATS_H, LEFT_H = 100, 74 * 2 + 30 + 2 * LEFT_GAP -- LEFT_H: 2 side buttons + Slow Mode
+local SIDE_W, SIDE_H = 176, 68 -- the Shop / Index buttons (wide, like the reference)
+local STATS_H, LEFT_H = 100, SIDE_H * 2 + 30 + 2 * LEFT_GAP -- LEFT_H: 2 side buttons + Slow Mode
 local STATS_BOTTOM = 10
 
 local openModal: (name: string) -> ()
@@ -247,27 +250,25 @@ end)
 -- Shop / Index, then the Slow Mode switch, centred on the left edge (the Speed and money stay bottom-left).
 local leftColumn = new("Frame", {
 	Name = "LeftColumn", BackgroundTransparency = 1, AnchorPoint = Vector2.new(0, 0.5), Position = UDim2.new(0, 14, 0.5, 0),
-	Size = UDim2.fromOffset(180, LEFT_H), Parent = gui,
+	Size = UDim2.fromOffset(SIDE_W + 12, LEFT_H), Parent = gui,
 }, {
 	new("UIListLayout", { Padding = UDim.new(0, LEFT_GAP), SortOrder = Enum.SortOrder.LayoutOrder, VerticalAlignment = Enum.VerticalAlignment.Center }),
 })
 local leftScale = new("UIScale", { Parent = leftColumn })
 
--- Bright, lit buttons: the colour with a light top and a soft white shine.
+-- Wide vivid buttons (owner reference 2026-10-15): about 2.6:1, near-square corners, a thick dark outline,
+-- a flat colour with a lighter top and a darker bottom edge (ShopUi.bevel), the icon on the left and the
+-- word in big white relief on its right.
 local function sideButton(order: number, label: string, icon: string, emoji: string, color: Color3, onClick: () -> ())
 	-- The column lays out the holder; the button sits centred in it so its hover pop grows from the middle.
-	local holder = new("Frame", { Name = label, Size = UDim2.fromOffset(92, 74), BackgroundTransparency = 1, LayoutOrder = order, Parent = leftColumn })
+	local holder = new("Frame", { Name = label, Size = UDim2.fromOffset(SIDE_W, SIDE_H), BackgroundTransparency = 1, LayoutOrder = order, Parent = leftColumn })
 	local b = new("TextButton", {
 		Name = "Button", AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.5), Size = UDim2.fromScale(1, 1),
-		BackgroundColor3 = WHITE, Text = "", AutoButtonColor = true, Parent = holder,
-	}, deco(14, 4))
-	new("UIGradient", { Rotation = 90, Color = ColorSequence.new(color:Lerp(WHITE, 0.3), color), Parent = b })
-	new("Frame", { Size = UDim2.fromScale(1, 0.5), BackgroundColor3 = WHITE, BorderSizePixel = 0, Parent = b }, {
-		new("UICorner", { CornerRadius = UDim.new(0, 14) }),
-		new("UIGradient", { Rotation = 90, Transparency = NumberSequence.new(0.6, 1) }),
-	})
-	iconLabel(b, icon, emoji, { Size = UDim2.fromOffset(46, 46), AnchorPoint = Vector2.new(0.5, 0), Position = UDim2.new(0.5, 0, 0, 2) })
-	bold(b, 3, { Text = label, Size = UDim2.new(1, -6, 0, 26), Position = UDim2.new(0, 3, 1, -28) })
+		BackgroundColor3 = color, Text = "", AutoButtonColor = true, Parent = holder,
+	}, deco(4, 4))
+	ShopUi.bevel(b)
+	iconLabel(b, icon, emoji, { Size = UDim2.fromOffset(54, 54), AnchorPoint = Vector2.new(0, 0.5), Position = UDim2.new(0, 8, 0.5, -1) })
+	UiFx.relief(bold(b, 4, { Text = label, Size = UDim2.new(1, -78, 0, 42), Position = UDim2.new(0, 68, 0.5, -23), TextXAlignment = Enum.TextXAlignment.Left }), 3, 4)
 	b.Activated:Connect(onClick)
 end
 
@@ -280,14 +281,15 @@ end)
 
 -- Slow Mode: purely local, clamps our own WalkSpeed so we can potter around the base.
 local slowMode = false
+-- (styled like the buttons above: a square-ish track with a thick outline, the words in relief)
 local slowRow = new("TextButton", { Name = "SlowMode", Size = UDim2.new(1, 0, 0, 30), BackgroundTransparency = 1, Text = "", LayoutOrder = 3, Parent = leftColumn })
 local slowTrack = new("Frame", {
-	Size = UDim2.fromOffset(54, 28), Position = UDim2.fromOffset(0, 1), BackgroundColor3 = Color3.fromRGB(150, 165, 215), Parent = slowRow,
-}, { new("UICorner", { CornerRadius = UDim.new(1, 0) }), new("UIStroke", { Thickness = 3, Color = INK }) })
+	Size = UDim2.fromOffset(54, 28), Position = UDim2.fromOffset(2, 1), BackgroundColor3 = Color3.fromRGB(150, 165, 215), Parent = slowRow,
+}, deco(4, 4))
 local slowKnob = new("Frame", {
 	Size = UDim2.fromOffset(22, 22), Position = UDim2.fromOffset(3, 3), BackgroundColor3 = WHITE, Parent = slowTrack,
-}, { new("UICorner", { CornerRadius = UDim.new(1, 0) }), new("UIStroke", { Thickness = 2, Color = INK }) })
-bold(slowRow, 3, { Text = "Slow Mode", Size = UDim2.new(1, -62, 0, 24), Position = UDim2.fromOffset(62, 3), TextXAlignment = Enum.TextXAlignment.Left })
+}, deco(3, 2))
+UiFx.relief(bold(slowRow, 3, { Text = "Slow Mode", Size = UDim2.new(1, -66, 0, 26), Position = UDim2.fromOffset(66, 1), TextXAlignment = Enum.TextXAlignment.Left }), 3, 3)
 
 local function applySlow()
 	local char = player.Character
@@ -445,29 +447,31 @@ button(rightTabs, "🪴", Color3.fromRGB(110, 235, 80), UDim2.fromOffset(70, 70)
 end, "Plants")
 
 ----------------------------------------------------------------------------------------------------
--- Modals: Shop, Trail Shop and Index share one chunky window, like the reference: a coloured title bar
--- (light diagonal stripes, a shine, the big outlined title) with a red square X, over a bright body
--- (the bar's colours, lightened) with a faint stud pattern. Each window has its own colours
--- (WINDOWS). The body scrolls down (Shop,
--- Index) or sideways (Trail Shop: one row of tall cards, a scrollbar at the bottom, arrows on the sides).
--- Sizes are design pixels; modalScale shrinks the whole window to fit small screens (fitModal).
+-- Modals: Shop, Trail Shop, Index and Sell share one window, like the reference (owner 2026-10-15, round
+-- 2: "premium, more squared, no edges"): nothing is rounded. A flat bright title bar in the window's
+-- colour with classic studs over it, three light diagonal bands on its right half, the title in big white
+-- relief on the left and a square red X on the right; under it a dark charcoal body with faint studs, a
+-- thin dark outline around it all. The body scrolls down (Shop, Index, Sell) or sideways (Trail Shop: one
+-- row of tall cards, a scrollbar at the bottom, arrows on the sides).
+-- Sizes are design pixels (ShopLayout: the Shop is wider than the others); modalScale shrinks the whole
+-- window to fit small screens (fitModal).
 ----------------------------------------------------------------------------------------------------
-local MODAL_W, MODAL_H, TITLE_H = 860, 600, 84
-local MODAL_PAD = 14 -- the body's inset from the window's edges
-local SCROLLBAR = 14
+local MODAL_W, MODAL_H, TITLE_H = ShopLayout.MAX_W, ShopLayout.MAX_H, ShopLayout.TITLE_H
+local MODAL_PAD = ShopLayout.PAD -- the body's inset from the window's edges
+local SCROLLBAR = ShopLayout.SCROLLBAR
 local FRAME_INK = Color3.fromRGB(16, 18, 26)
 local NOTE_COLOR = Color3.fromRGB(215, 222, 240)
 local NUMBER_GREEN = "#5FFF3C" -- the "x2" on the trail cards' Speed pill
 local HEADING_GOLD = Color3.fromRGB(255, 214, 50)
 local HEADING_CYAN = Color3.fromRGB(60, 215, 255)
 local ROBUX_GREEN = Color3.fromRGB(105, 235, 25) -- the Shop's R$ buttons
-local GIFT_PINK = Color3.fromRGB(215, 55, 235) -- the gift button beside them
--- `body`: a fixed body colour instead of the bar's colours lightened; `plain`: the title in words only.
--- The Shop (owner reference 2026-10-15): a bright green bar over a dark charcoal studded body, "Shop" with no icon.
+local GIFT_PINK = Color3.fromRGB(205, 50, 235) -- the gift button beside them
+local WINDOW_BODY = Color3.fromRGB(48, 50, 58) -- every window's dark charcoal body
+-- `bar`: the title bar's flat colour.
 local WINDOWS: { [string]: any } = {
-	Shop = { title = "Shop", icon = "Shop", from = Color3.fromRGB(120, 235, 40), to = Color3.fromRGB(40, 200, 60), body = Color3.fromRGB(48, 50, 58), plain = true },
-	Trails = { title = "Trail Shop", icon = "TrailShop", from = Color3.fromRGB(170, 60, 255), to = Color3.fromRGB(250, 80, 205) },
-	Index = { title = "Index", icon = "Index", from = Color3.fromRGB(55, 178, 255), to = Color3.fromRGB(45, 92, 235) },
+	Shop = { title = "Shop", bar = Color3.fromRGB(59, 227, 59) },
+	Trails = { title = "Trail Shop", bar = Color3.fromRGB(185, 70, 255) },
+	Index = { title = "Index", bar = Color3.fromRGB(40, 170, 255) },
 }
 
 -- Paints a frame `color` with a lit top: a WHITE background under a vertical colour gradient.
@@ -478,12 +482,16 @@ local function shade(f: GuiObject, color: Color3, light: number?, dark: number?)
 	})
 end
 
--- A soft white shine over the top half of a rounded frame.
-local function shine(f: GuiObject, radius: number)
-	new("Frame", { Size = UDim2.fromScale(1, 0.5), BackgroundColor3 = WHITE, BorderSizePixel = 0, Parent = f }, {
-		new("UICorner", { CornerRadius = UDim.new(0, radius) }),
+-- A soft white shine over the top half of a (square) frame.
+local function shine(f: GuiObject)
+	new("Frame", { Name = "Shine", Size = UDim2.fromScale(1, 0.5), BackgroundColor3 = WHITE, BorderSizePixel = 0, Parent = f }, {
 		new("UIGradient", { Rotation = 90, Transparency = NumberSequence.new(0.7, 1) }),
 	})
+end
+
+-- A square frame's thick dark outline (the windows' cards, tiles and buttons have no rounded corners).
+local function outline(thickness: number?, color: Color3?): Instance
+	return new("UIStroke", { Thickness = thickness or 3, Color = color or FRAME_INK, ApplyStrokeMode = Enum.ApplyStrokeMode.Border })
 end
 
 -- An icon by its Icons key, or its emoji (Icons.TOKENS) while it isn't uploaded.
@@ -492,10 +500,11 @@ local function bigIcon(parent: Instance, key: string, props: { [string]: any }):
 	return iconLabel(parent, key, if tokens then tokens[1] else "", props)
 end
 
--- A chunky button: lit top, dark outline, outlined caption (with `icon` key(s) in place of emoji/"R$").
+-- A chunky button: square, a dark outline, a lighter top and a darker bottom edge (ShopUi.bevel), an
+-- outlined caption (with `icon` key(s) in place of emoji/"R$").
 local function chunky(parent: Instance, label: string, color: Color3, size: UDim2, onClick: () -> (), icon: (string | { string })?, iconSize: number?): TextButton
-	local b = new("TextButton", { Size = size, BackgroundColor3 = color, Text = "", AutoButtonColor = true, Parent = parent }, deco(10, 3))
-	new("UIGradient", { Rotation = 90, Color = ColorSequence.new(WHITE, Color3.fromRGB(200, 200, 200)), Parent = b })
+	local b = new("TextButton", { Size = size, BackgroundColor3 = color, BorderSizePixel = 0, Text = "", AutoButtonColor = true, Parent = parent }, { outline() })
+	ShopUi.bevel(b)
 	local l = bold(b, 3, { Name = "Label", Text = label, Size = UDim2.new(1, -12, 1, -12), Position = UDim2.fromOffset(6, 6) })
 	if icon then
 		Icons.set(l, icon, label, iconSize or ICON.medium)
@@ -506,81 +515,61 @@ end
 
 local modal = new("Frame", {
 	AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.5), Size = UDim2.fromOffset(MODAL_W, MODAL_H),
-	BackgroundColor3 = WHITE, Active = true, Visible = false, ZIndex = 10, Parent = gui, -- tinted per window (openModal)
-}, {
-	new("UICorner", { CornerRadius = UDim.new(0, 18) }),
-	new("UIStroke", { Thickness = 6, Color = FRAME_INK, ApplyStrokeMode = Enum.ApplyStrokeMode.Border }),
-	new("UIGradient", { Rotation = 90, Color = ColorSequence.new(WHITE, Color3.fromRGB(215, 218, 232)) }),
-})
+	BackgroundColor3 = WINDOW_BODY, BorderSizePixel = 0, Active = true, Visible = false, ZIndex = 10, Parent = gui, -- sized per window (openModal)
+}, { outline(4) })
 local modalScale = new("UIScale", { Parent = modal })
 
 -- Faint studs over the body, like the reference's plate
 local studs = new("Frame", {
 	BackgroundTransparency = 1, Position = UDim2.fromOffset(0, TITLE_H), Size = UDim2.new(1, 0, 1, -TITLE_H), ClipsDescendants = true, Parent = modal,
-}, {
-	new("UIGridLayout", { CellSize = UDim2.fromOffset(20, 20), CellPadding = UDim2.fromOffset(16, 16) }),
-	new("UIPadding", { PaddingLeft = UDim.new(0, 14), PaddingTop = UDim.new(0, 16) }),
 })
-for _ = 1, math.ceil(MODAL_W / 36) * math.ceil((MODAL_H - TITLE_H) / 36) do
-	new("Frame", { BackgroundColor3 = WHITE, BackgroundTransparency = 0.955, Parent = studs }, { new("UICorner", { CornerRadius = UDim.new(0, 5) }) })
-end
+ShopUi.studs(studs, 32, 0.86, 1, MODAL_W, MODAL_H - TITLE_H)
 
--- Title bar: the window's colours left to right, square bottom corners, stripes and a shine
+-- Title bar: one flat colour (openModal), studs, three light diagonal bands on its right half, a shine
 local titleBar = new("Frame", {
-	Size = UDim2.new(1, 0, 0, TITLE_H), BackgroundColor3 = WHITE, BorderSizePixel = 0, ZIndex = 2, Parent = modal,
-}, { new("UICorner", { CornerRadius = UDim.new(0, 18) }) })
-local titleGradient = new("UIGradient", { Parent = titleBar })
-local barBottom = new("Frame", {
-	Position = UDim2.fromScale(0, 0.5), Size = UDim2.fromScale(1, 0.5), BackgroundColor3 = WHITE, BorderSizePixel = 0, ZIndex = 1, Parent = titleBar,
+	Size = UDim2.new(1, 0, 0, TITLE_H), BackgroundColor3 = WHITE, BorderSizePixel = 0, ClipsDescendants = true, ZIndex = 2, Parent = modal,
 })
-local barBottomGradient = new("UIGradient", { Parent = barBottom })
--- Diagonal stripes: a square (so the gradient's 45° is a true 45°) seen through the bar, clipped to it
-local stripeClip = new("Frame", { BackgroundTransparency = 1, Size = UDim2.fromScale(1, 1), ClipsDescendants = true, ZIndex = 2, Parent = titleBar })
+ShopUi.studs(titleBar, 18, 0.8, 2, MODAL_W, TITLE_H)
+-- Diagonal bands: a square (so the gradient's 45° is a true 45°) seen through the bar, clipped to it
 local stripeKeys = { NumberSequenceKeypoint.new(0, 1) }
-for _, band in { { 0.53, 0.565 }, { 0.585, 0.6 }, { 0.625, 0.67 } } do
+for _, band in { { 0.6, 0.645 }, { 0.665, 0.68 }, { 0.705, 0.76 } } do
 	table.insert(stripeKeys, NumberSequenceKeypoint.new(band[1] - 0.001, 1))
-	table.insert(stripeKeys, NumberSequenceKeypoint.new(band[1], 0.8))
-	table.insert(stripeKeys, NumberSequenceKeypoint.new(band[2], 0.8))
+	table.insert(stripeKeys, NumberSequenceKeypoint.new(band[1], 0.7))
+	table.insert(stripeKeys, NumberSequenceKeypoint.new(band[2], 0.7))
 	table.insert(stripeKeys, NumberSequenceKeypoint.new(band[2] + 0.001, 1))
 end
 table.insert(stripeKeys, NumberSequenceKeypoint.new(1, 1))
 new("Frame", {
-	AnchorPoint = Vector2.new(0, 0.5), Position = UDim2.fromScale(0, 0.5), Size = UDim2.fromOffset(MODAL_W, MODAL_W), BackgroundColor3 = WHITE,
-	BorderSizePixel = 0, Parent = stripeClip,
+	Name = "Bands", AnchorPoint = Vector2.new(0, 0.5), Position = UDim2.fromScale(0, 0.5), Size = UDim2.fromOffset(MODAL_W, MODAL_W), BackgroundColor3 = WHITE,
+	BorderSizePixel = 0, ZIndex = 2, Parent = titleBar,
 }, { new("UIGradient", { Rotation = 45, Transparency = NumberSequence.new(stripeKeys) }) })
 new("Frame", { Size = UDim2.fromScale(1, 1), BackgroundColor3 = WHITE, BorderSizePixel = 0, ZIndex = 2, Parent = titleBar }, {
-	new("UICorner", { CornerRadius = UDim.new(0, 18) }),
 	new("UIGradient", { Rotation = 90, Transparency = NumberSequence.new({
-		NumberSequenceKeypoint.new(0, 0.7), NumberSequenceKeypoint.new(0.5, 1), NumberSequenceKeypoint.new(1, 1),
-	}) }),
+		NumberSequenceKeypoint.new(0, 0.75), NumberSequenceKeypoint.new(0.45, 1), NumberSequenceKeypoint.new(0.8, 1), NumberSequenceKeypoint.new(1, 0.82),
+	}), Color = ColorSequence.new(WHITE, Color3.new(0, 0, 0)) }),
 })
 -- The dark line between the bar and the body
-new("Frame", { Position = UDim2.fromOffset(0, TITLE_H - 3), Size = UDim2.new(1, 0, 0, 6), BackgroundColor3 = FRAME_INK, BorderSizePixel = 0, ZIndex = 3, Parent = modal })
+new("Frame", { Position = UDim2.fromOffset(0, TITLE_H - 2), Size = UDim2.new(1, 0, 0, 4), BackgroundColor3 = FRAME_INK, BorderSizePixel = 0, ZIndex = 3, Parent = modal })
 
 local modalTitle = bold(titleBar, 5, {
-	Text = "", Size = UDim2.new(1, -460, 0, 60), Position = UDim2.fromOffset(22, 10), TextXAlignment = Enum.TextXAlignment.Left, ZIndex = 3,
+	Text = "", Size = UDim2.new(1, -460, 0, 64), Position = UDim2.fromOffset(22, 8), TextXAlignment = Enum.TextXAlignment.Left, ZIndex = 3,
 })
--- Right of the title: your money (Shop, Trail Shop) or how much of the Index you've found
+UiFx.relief(modalTitle, 4, 5)
+-- Right of the title: what the window counts (the Index's discoveries, the Trail Shop's Speed a step);
+-- no money (the HUD shows it)
 local modalSubtitle = bold(titleBar, 3, {
 	Text = "", AnchorPoint = Vector2.new(1, 0.5), Position = UDim2.new(1, -94, 0.5, 0), Size = UDim2.fromOffset(340, 34),
-	TextXAlignment = Enum.TextXAlignment.Right, TextColor3 = MONEY_GREEN, ZIndex = 3,
+	TextXAlignment = Enum.TextXAlignment.Right, TextColor3 = WHITE, ZIndex = 3,
 })
 
--- The red square X (the Close icon inside once uploaded, a white outlined X until then)
+-- The square red X: a dark red border, a bevel, a white X in relief
 local modalClose = new("TextButton", {
-	AnchorPoint = Vector2.new(1, 0.5), Position = UDim2.new(1, -12, 0.5, -1), Size = UDim2.fromOffset(64, 64), BackgroundColor3 = WHITE,
+	AnchorPoint = Vector2.new(1, 0.5), Position = UDim2.new(1, -12, 0.5, 0), Size = UDim2.fromOffset(62, 62), BackgroundColor3 = WHITE, BorderSizePixel = 0,
 	Text = "", AutoButtonColor = true, ZIndex = 3, Parent = titleBar,
-}, deco(10, 4))
-new("UIGradient", { Rotation = 90, Color = ColorSequence.new(Color3.fromRGB(255, 85, 85), Color3.fromRGB(200, 20, 35)), Parent = modalClose })
-local closeImage = Icons.image("Close")
-if closeImage then
-	new("ImageLabel", {
-		BackgroundTransparency = 1, Image = closeImage, ScaleType = Enum.ScaleType.Fit, Size = UDim2.new(1, -10, 1, -10), Position = UDim2.fromOffset(5, 5),
-		ZIndex = 3, Parent = modalClose,
-	})
-else
-	bold(modalClose, 4, { Text = "X", Size = UDim2.new(1, -16, 1, -14), Position = UDim2.fromOffset(8, 7), ZIndex = 3 })
-end
+}, { outline(4, Color3.fromRGB(95, 6, 12)) })
+new("UIGradient", { Rotation = 90, Color = ColorSequence.new(Color3.fromRGB(255, 50, 50), Color3.fromRGB(210, 10, 20)), Parent = modalClose })
+ShopUi.bevel(modalClose)
+UiFx.relief(bold(modalClose, 4, { Name = "X", Text = "X", Size = UDim2.new(1, -18, 1, -16), Position = UDim2.fromOffset(9, 6), ZIndex = 4 }), 3, 4)
 
 local bodyHolder = new("Frame", {
 	BackgroundTransparency = 1, Position = UDim2.fromOffset(MODAL_PAD, TITLE_H + 10), Size = UDim2.new(1, -2 * MODAL_PAD, 1, -TITLE_H - 10 - MODAL_PAD),
@@ -615,7 +604,8 @@ modalClose.Activated:Connect(closeModal)
 local function fitModal()
 	local s = uiScale.Scale
 	local w, h = gui.AbsoluteSize.X / s, gui.AbsoluteSize.Y / s
-	modalScale.Scale = math.clamp(math.min((w - 24) / (MODAL_W + 12), (h - 24) / (MODAL_H + 12)), 0.3, 1)
+	local mw, mh = modal.Size.X.Offset, modal.Size.Y.Offset -- the open window's size (ShopLayout.window)
+	modalScale.Scale = math.clamp(math.min((w - 24) / (mw + 12), (h - 24) / (mh + 12)), 0.3, 1)
 end
 
 ----------------------------------------------------------------------------------------------------
@@ -885,7 +875,7 @@ local function trailArrow(dir: number): TextButton
 		AnchorPoint = Vector2.new(if dir < 0 then 0 else 1, 0.5), Position = UDim2.new(if dir < 0 then 0 else 1, 6 * dir, 0.5, -SCROLLBAR / 2),
 		Size = UDim2.fromOffset(46, 86), BackgroundColor3 = FRAME_INK, BackgroundTransparency = 0.15, Text = "", AutoButtonColor = true,
 		Visible = false, ZIndex = 5, Parent = bodyHolder,
-	}, { new("UICorner", { CornerRadius = UDim.new(0, 10) }), new("UIStroke", { Thickness = 3, Color = WHITE, Transparency = 0.35 }) })
+	}, { new("UIStroke", { Thickness = 3, Color = WHITE, Transparency = 0.35 }) })
 	bold(b, 3, { Text = if dir < 0 then "<" else ">", Size = UDim2.new(1, -8, 0, 52), Position = UDim2.new(0, 4, 0.5, -26), ZIndex = 5 })
 	b.Activated:Connect(function()
 		scrollTrails(dir, true)
@@ -950,21 +940,12 @@ openModal = function(name: string)
 	end
 	local window = WINDOWS[name]
 	modalName = name
-	titleGradient.Color = ColorSequence.new(window.from, window.to)
-	-- a bright body in the bar's colours, or the window's own (the Shop's charcoal, where the studs show more)
-	modal.BackgroundColor3 = window.body or window.from:Lerp(window.to, 0.5):Lerp(WHITE, 0.25)
-	for _, stud in studs:GetChildren() do
-		if stud:IsA("Frame") then
-			stud.BackgroundTransparency = if window.body then 0.93 else 0.955
-		end
-	end
-	barBottomGradient.Color = titleGradient.Color
-	local tokens = Icons.TOKENS[window.icon]
-	if window.plain then
-		Icons.set(modalTitle, {}, window.title, ICON.big)
-	else
-		Icons.set(modalTitle, window.icon, `{if tokens then tokens[1] .. " " else ""}{window.title}`, ICON.big)
-	end
+	local w, h = ShopLayout.window(name) -- the Shop is wider
+	modal.Size = UDim2.fromOffset(w, h)
+	fitModal()
+	titleBar.BackgroundColor3 = window.bar
+	modalTitle.Text = window.title -- words only, in relief
+	Icons.set(modalSubtitle, {}, "") -- the window's render may fill it
 	modal.Visible = true
 	modalBody.CanvasPosition = Vector2.zero
 	renderModal()
@@ -1006,14 +987,6 @@ local function section(label: string, order: number, color: Color3): Frame
 	local row = new("Frame", { Name = "Section_" .. label, BackgroundTransparency = 1, Size = UDim2.new(1, -12, 0, 56), LayoutOrder = order, Parent = modalBody })
 	UiFx.relief(bold(row, 4, { Text = `-- {label} --`, Size = UDim2.new(1, 0, 0, 48), Position = UDim2.fromOffset(0, 2), TextColor3 = color }), 4, 5)
 	return row
-end
-
--- Your money in the title bar (Shop, Trail Shop)
-local function moneySubtitle()
-	modalSubtitle.TextColor3 = MONEY_GREEN
-	watchMoney(function()
-		Icons.set(modalSubtitle, "Money", `💰 {Format.money(stats.money)}`, ICON.big, 30)
-	end)
 end
 
 -- Scrolls the modal body so `target` sits at its top, once the layout has placed it. Measured from
@@ -1087,27 +1060,28 @@ local function robuxColor(id: number, color: Color3): Color3
 	return if id == 0 then color:Lerp(Color3.fromRGB(150, 160, 150), 0.3) else color
 end
 
-local function giftButton(parent: Instance, size: UDim2): TextButton
-	-- Gifting needs extra work (choosing a player, granting to them): shown, but not live yet.
-	return chunky(parent, "🎁", GIFT_PINK, size, function()
-		toast("Gifting is coming soon!", "blue")
-	end, "Gift", ICON.big)
+-- Gifting needs extra work (choosing a player, granting to them): the gift buttons are shown, not live yet.
+local function giftSoon()
+	toast("Gifting is coming soon!", "blue")
 end
 
 ----------------------------------------------------------------------------------------------------
--- Shop (owner references 2026-10-15): a charcoal studded body under the bright green bar, section titles
--- in yellow / cyan relief, then:
---   * SEED PACKS: one wide featured card per pack in its zone's colours: the pack's name in gold relief,
---     what it can give as 3D tiles with the exact odds (SeedPacks.showcase: the zone's flower per rarity,
---     the Legendary big in a rainbow frame at the right) and the gift + green R$ buttons on a grey tray;
---   * PASSES: wide cards two a row, each in its pass's vivid colours (a rainbow for Fast Grow): a big round
---     icon, the name, the benefit with its number in green, the gift + green R$ buttons;
+-- Shop (owner references 2026-10-15, round 2: "premium, square, lively"): a wide window (ShopLayout),
+-- section titles in yellow / cyan relief, then square cards with a thin bright outline and vivid art edge
+-- to edge (their paint, a sunburst and its glow, white speckles):
+--   * SEED PACKS: one wide featured card per pack in its zone's colours, gold-outlined: a red "New!" tag,
+--     the pack's name in gold relief, what it can give as square 3D tiles with the exact odds
+--     (SeedPacks.showcase: the zone's flower per rarity, the Legendary big in a rainbow frame at the right);
+--   * PASSES: wide cards two a row, each in its pass's vivid colours (a rainbow for Fast Grow): a big square
+--     badge with the icon, the name, the benefit with its number in green;
 --   * SPEED / MONEY: a full-width "DOUBLE Your ..." banner for the matching pass, then cards three a row on
 --     a blue (Speed) or gold (Money) sunburst whose art grows with the pack (Shared/ShopArt: one sneaker
---     ... a chest overflowing with them), "+150K SPEED" with the amount in green (yellow for big packs);
+--     ... a sack ... a chest overflowing with them), "+150K SPEED" with the amount in green (yellow for big packs);
 --   * UPGRADES: the plot and treadmill cards with a $ and an R$ button.
--- No card is green, so the green R$ button always stands out. Buttons side by side pop a little less on
--- hover (UiFx PopScale), so a popped button never grows over its neighbour.
+-- The buttons are like the reference's: a square purple gift button with a white gift, then a green R$
+-- button sized to its price (the white Robux icon first), a small caption under it, straight on the card
+-- art. ShopLayout places them and decides how much each pops, so a hovered button never grows past its
+-- card or into its neighbour. No card is green, so the green R$ button always stands out.
 ----------------------------------------------------------------------------------------------------
 local packShines: { Frame } = {} -- swept across the pack cards every frame while they're shown
 local renderShop: () -> boolean
@@ -1115,19 +1089,17 @@ do
 	local PassCards = require(Shared:WaitForChild("PassCards"))
 	local ShopArt = require(Shared:WaitForChild("ShopArt"))
 	local FlowerView = require(Shared:WaitForChild("FlowerView"))
-	local SHOP_CARD_W, SHOP_CARD_H = 252, 236 -- three cards a row
-	local WIDE_W, WIDE_H = 392, 200 -- two a row (passes)
-	local PACK_W, PACK_H, TRAY_H = 802, 372, 58 -- PACK_W: the Shop body's width (the card spans it)
+	local L = ShopLayout
+	local PACK_W = L.CONTENT_W -- the pack cards and banners span the Shop
 	local CARD_COLORS = {
 		Speed = Color3.fromRGB(30, 165, 255),
 		Money = Color3.fromRGB(255, 185, 25), -- warm gold, never green: the green R$ button must stand out
 		PlotUpgrade = Color3.fromRGB(150, 85, 255), -- violet: its gold $ button stands out
 		Treadmill = Color3.fromRGB(255, 60, 95),
 	}
-	local SACKS = { Speed = Color3.fromRGB(40, 110, 230), Money = Color3.fromRGB(60, 170, 70) }
+	local SACKS = { Speed = Color3.fromRGB(214, 158, 92), Money = Color3.fromRGB(60, 170, 70) } -- burlap on the blue cards, green on the gold
 	local YELLOW_NUMBER = "#FFE13C" -- the big packs' amounts
-	local TRAY_GREY = Color3.fromRGB(62, 64, 74) -- the strip under a pack card's buttons
-	local SIDE_POP = 1.05 -- a long button beside another pops this much (UiFx PopScale)
+	local BUTTON_Z = 7 -- over the card's art
 	local RAINBOW = ColorSequence.new({
 		ColorSequenceKeypoint.new(0, Color3.fromRGB(255, 80, 80)), ColorSequenceKeypoint.new(0.2, Color3.fromRGB(255, 170, 40)),
 		ColorSequenceKeypoint.new(0.4, Color3.fromRGB(255, 235, 60)), ColorSequenceKeypoint.new(0.6, Color3.fromRGB(80, 230, 110)),
@@ -1155,7 +1127,7 @@ do
 			new("Frame", {
 				AnchorPoint = Vector2.new(0.5, 0.5), Size = UDim2.fromOffset(glow[1], glow[1]), BackgroundColor3 = WHITE, BackgroundTransparency = glow[2],
 				BorderSizePixel = 0, Parent = burst,
-			}, { new("UICorner", { CornerRadius = UDim.new(1, 0) }) })
+			}, { new("UICorner", { CornerRadius = UDim.new(1, 0) }) }) -- round: the glow is light, not a frame
 		end
 	end
 
@@ -1172,15 +1144,19 @@ do
 		})
 	end
 
-	-- A card frame: rounded, a thick dark outline, clipping its rays.
-	local function cardFrame(parent: Instance, order: number, props: { [string]: any }?): Frame
-		local c = new("Frame", { LayoutOrder = order, ClipsDescendants = true, Parent = parent }, {
-			new("UICorner", { CornerRadius = UDim.new(0, 14) }),
-			new("UIStroke", { Thickness = 4, Color = FRAME_INK, ApplyStrokeMode = Enum.ApplyStrokeMode.Border }),
+	-- A card: square, a thin bright outline in its colour (gold for the featured packs), clipping its art.
+	-- Painted `color` with its sunburst at (cx, cy) and `speckles` white sparkles placed by `seed`.
+	local cardSeed = 0
+	local function cardFrame(parent: Instance, order: number, color: Color3, props: { [string]: any }?, rainbow: boolean?): Frame
+		local c = new("Frame", { LayoutOrder = order, ClipsDescendants = true, BorderSizePixel = 0, Parent = parent }, {
+			outline(L.CARD_STROKE, color:Lerp(WHITE, 0.6)),
 		})
 		for k, v in props or {} do
 			(c :: any)[k] = v
 		end
+		paint(c, color, rainbow)
+		cardSeed += 1
+		ShopUi.speckles(c, cardSeed, 12, 1)
 		return c
 	end
 
@@ -1195,32 +1171,50 @@ do
 		return words
 	end
 
-	-- The magenta gift button and the green R$ (or $) button, side by side at (x, y) of `parent`, `w` wide
-	-- in all. Returns the buy button.
-	local function buyPair(parent: Instance, x: UDim, y: UDim, w: number, h: number, caption: string, color: Color3, onClick: () -> (), icon: (string | { string })?, gift: boolean, z: number): TextButton
-		local giftW = if gift then math.floor(h * 1.15) else 0
-		local gap = if gift then 10 else 0
-		local b = chunky(parent, caption, color, UDim2.fromOffset(w - giftW - gap, h), onClick, icon, ICON.small)
-		b.Position, b.ZIndex = UDim2.new(x.Scale, x.Offset + giftW + gap, y.Scale, y.Offset), z
-		b:SetAttribute("PopScale", SIDE_POP)
-		if gift then
-			local g = giftButton(parent, UDim2.fromOffset(giftW, h))
-			g.Position, g.ZIndex = UDim2.new(x.Scale, x.Offset, y.Scale, y.Offset), z
-		end
-		return b
-	end
+	-- One buy button of a row: its text, colour, the Robux icon (`robux`), the gift button before it
+	-- (`gift`), the caption under it; `still`: no pop (an "Owned" button does nothing).
+	type Buy = { text: string, color: Color3, robux: boolean, gift: boolean, caption: string?, onClick: () -> (), still: boolean? }
 
-	-- The bottom row of a card: the gift button on the left for Robux items, then the buy button.
-	local function buyRow(c: Frame, caption: string, color: Color3, onClick: () -> (), icon: (string | { string })?, gift: boolean): TextButton
-		local w = c.Size.X.Offset
-		if w == 0 then
-			w = SHOP_CARD_W -- placed by a grid: its cell's width
-			local grid = c.Parent and c.Parent:FindFirstChildOfClass("UIGridLayout")
-			if grid then
-				w = grid.CellSize.X.Offset
+	-- A row of buttons on card `c` (cardW x cardH) at `y`, centred between `left` and `right` (ShopLayout.row
+	-- places them and sets each one's pop). Returns the buy buttons, in order.
+	local function buttonRow(c: Frame, cardW: number, cardH: number, y: number, buys: { Buy }, left: number?, right: number?): { TextButton }
+		local specs: { ShopLayout.Button } = {}
+		for _, b in buys do
+			if b.gift then
+				table.insert(specs, { kind = "gift" })
+			end
+			table.insert(specs, { kind = "buy", text = b.text, icon = b.robux and Icons.image("Robux") ~= nil, caption = b.caption })
+		end
+		local out = {}
+		for _, p in L.row(specs, cardW, cardH, y, left, right) do
+			if p.kind == "gift" then
+				local g = ShopUi.button(c, p, GIFT_PINK, BUTTON_Z)
+				ShopUi.giftIcon(g, GIFT_PINK:Lerp(Color3.new(0, 0, 0), 0.35))
+				g.Activated:Connect(giftSoon)
+			else
+				local spec = buys[#out + 1]
+				local b = ShopUi.button(c, p, spec.color, BUTTON_Z)
+				b.Activated:Connect(spec.onClick)
+				if spec.still then
+					b:SetAttribute("PopScale", nil)
+					b:SetAttribute("NoPop", true)
+				end
+				ShopUi.price(b, p.text or "", spec.robux)
+				ShopUi.caption(c, p, BUTTON_Z)
+				table.insert(out, b)
 			end
 		end
-		return buyPair(c, UDim.new(0, 10), UDim.new(1, -62), w - 20, 52, caption, color, onClick, icon, gift, 6)
+		return out
+	end
+
+	-- A Robux buy (gift + green R$ button) at `price` ("Buy" while there is no price), asking the server for `request`.
+	local function robuxBuy(price: number, id: number, request: string, caption: string?): Buy
+		return {
+			text = if price > 0 then Format.commas(price) else "Buy", color = robuxColor(id, ROBUX_GREEN), robux = price > 0, gift = true, caption = caption,
+			onClick = function()
+				RequestBuy:FireServer(request)
+			end,
+		}
 	end
 
 	----------------------------------------------------------------------------------------------------
@@ -1235,39 +1229,38 @@ do
 		return "Mutations: " .. table.concat(parts, "  ·  ")
 	end
 
-	-- One reward tile: the flower in 3D, its rarity, its chance. The featured (Legendary) one is big, in a
-	-- rainbow frame, turning slowly.
+	-- One reward tile: square, a thin dark outline, the flower in 3D, its rarity, its chance at the bottom
+	-- right in white relief. The featured (Legendary) one is big, in a rainbow frame, turning slowly.
 	local function rewardTile(c: Frame, zone: number, tile: SeedPacks.Tile, pos: UDim2, w: number, h: number)
 		local rarity = Config.RARITIES[tile.rarity]
 		local featured = tile.featured
 		local f = new("Frame", {
-			Name = "Tile_" .. tile.id, Position = pos, Size = UDim2.fromOffset(w, h), BackgroundColor3 = WHITE, ZIndex = 3, Parent = c,
-		}, { new("UICorner", { CornerRadius = UDim.new(0, 12) }) })
-		local stroke = new("UIStroke", {
-			Thickness = if featured then 6 else 3, Color = if featured then WHITE else rarity.color:Lerp(FRAME_INK, 0.15),
-			ApplyStrokeMode = Enum.ApplyStrokeMode.Border, Parent = f,
+			Name = "Tile_" .. tile.id, Position = pos, Size = UDim2.fromOffset(w, h), BackgroundColor3 = WHITE, BorderSizePixel = 0, ZIndex = 3, Parent = c,
 		})
+		local stroke = outline(if featured then 5 else 2, if featured then WHITE else FRAME_INK)
+		stroke.Parent = f
 		if featured then
 			f:SetAttribute("Featured", true)
 			new("UIGradient", { Name = "Rainbow", Rotation = 35, Color = RAINBOW, Parent = stroke }) -- the rainbow frame
 			new("UIGradient", { Rotation = 90, Color = ColorSequence.new(Color3.fromRGB(150, 80, 255), Color3.fromRGB(40, 20, 110)), Parent = f })
 		else
-			new("UIGradient", { Rotation = 90, Color = ColorSequence.new(rarity.color:Lerp(FRAME_INK, 0.3), FRAME_INK:Lerp(rarity.color, 0.12)), Parent = f })
+			new("UIGradient", { Rotation = 90, Color = ColorSequence.new(rarity.color:Lerp(WHITE, 0.1), rarity.color:Lerp(FRAME_INK, 0.55)), Parent = f })
+			f.BackgroundTransparency = 0.15 -- the card's picture shows a little through
 		end
-		local top = if featured then 36 else 24
+		local top = if featured then 38 else 24
 		FlowerView.show(f, FlowerView.flower(zone, tile.rarity, tile.flower), {
 			size = UDim2.new(1, -8, 1, -(top + 4)), position = UDim2.fromOffset(4, top), zindex = 4, spin = featured, zoom = 1.25,
 		})
 		local name = bold(f, if featured then 4 else 2, {
 			Text = if featured then "LEGENDARY" else rarity.id, Size = UDim2.new(1, -12, 0, top - 6), Position = UDim2.fromOffset(6, 4), ZIndex = 5,
-			TextColor3 = if featured then COLORS.gold else rarity.color:Lerp(WHITE, 0.35),
+			TextColor3 = if featured then COLORS.gold else WHITE,
 		})
 		if featured then
 			UiFx.relief(name, 3, 4)
 		end
 		UiFx.relief(bold(f, 3, {
-			Text = SeedPacks.percent(tile.pct), Size = UDim2.new(1, -12, 0, if featured then 34 else 26), AnchorPoint = Vector2.new(0, 1),
-			Position = UDim2.new(0, 6, 1, -4), TextXAlignment = Enum.TextXAlignment.Right, ZIndex = 5,
+			Text = SeedPacks.percent(tile.pct), Size = UDim2.new(1, -10, 0, if featured then 36 else 28), AnchorPoint = Vector2.new(0, 1),
+			Position = UDim2.new(0, 4, 1, -4), TextXAlignment = Enum.TextXAlignment.Right, ZIndex = 5,
 			TextColor3 = if featured then COLORS.gold else WHITE,
 		}), 3, 3)
 	end
@@ -1276,107 +1269,116 @@ do
 	local function packCard(order: number, productName: string, product: Config.DevProduct, bagFull: boolean)
 		local pack = SeedPacks.packForProduct(product)
 		local zone = Config.ZONES[pack.zone]
-		local c = cardFrame(modalBody, order, { Name = "Pack_" .. productName, Size = UDim2.new(1, -8, 0, PACK_H) })
+		local c = cardFrame(modalBody, order, zone.ui, { Name = "Pack_" .. productName, Size = UDim2.new(1, -8, 0, L.PACK_H) })
 		local stroke = c:FindFirstChildOfClass("UIStroke") :: UIStroke
-		stroke.Color, stroke.Thickness = COLORS.gold, 5
-		paint(c, zone.ui)
-		sunburst(c, 0.86, 0.42, 520)
-		sunburst(c, 0.3, 0.55, 520)
+		stroke.Color = COLORS.gold
+		-- The owner's picture for the pack once it is uploaded (Icons.TEXTURES "<product>Bg"), cropped to the
+		-- card and darkened at the top and the bottom so the title, the % and the buttons stay readable; the
+		-- zone's colours and two sunbursts until then.
+		local picture = Icons.image(productName .. "Bg")
+		if picture then
+			new("ImageLabel", {
+				Name = "Background", Image = picture, ScaleType = Enum.ScaleType.Crop, Size = UDim2.fromScale(1, 1), BackgroundTransparency = 1,
+				ZIndex = 1, Parent = c,
+			})
+			new("Frame", { Name = "Darken", Size = UDim2.fromScale(1, 1), BackgroundColor3 = Color3.new(0, 0, 0), BorderSizePixel = 0, ZIndex = 1, Parent = c }, {
+				new("UIGradient", { Rotation = 90, Transparency = NumberSequence.new({
+					NumberSequenceKeypoint.new(0, 0.5), NumberSequenceKeypoint.new(0.25, 0.85), NumberSequenceKeypoint.new(0.55, 0.8),
+					NumberSequenceKeypoint.new(1, 0.15),
+				}) }),
+			})
+		else
+			sunburst(c, 0.86, 0.42, 560)
+			sunburst(c, 0.3, 0.55, 560)
+		end
 		table.insert(packShines, new("Frame", { Size = UDim2.new(0, 90, 1, 0), BackgroundColor3 = WHITE, BorderSizePixel = 0, ZIndex = 2, Parent = c }, {
 			new("UIGradient", { Transparency = NumberSequence.new({
 				NumberSequenceKeypoint.new(0, 1), NumberSequenceKeypoint.new(0.5, 0.7), NumberSequenceKeypoint.new(1, 1),
 			}) }),
 		}))
 
-		-- The red PREMIUM tag, the pack's name in gold relief, where its seed comes from
-		local tag = new("Frame", { Position = UDim2.fromOffset(16, 14), Size = UDim2.fromOffset(132, 38), BackgroundColor3 = WHITE, ZIndex = 3, Parent = c }, deco(8, 3))
-		new("UIGradient", { Rotation = 90, Color = ColorSequence.new(Color3.fromRGB(255, 80, 80), Color3.fromRGB(200, 20, 35)), Parent = tag })
-		UiFx.relief(bold(tag, 3, { Text = "PREMIUM", Size = UDim2.new(1, -12, 1, -10), Position = UDim2.fromOffset(6, 4), ZIndex = 4 }), 2, 3)
+		-- The red "New!" tag, the pack's name in gold relief, where its seed comes from
+		UiFx.relief(ShopUi.tag(c, "New!", UDim2.fromOffset(18, 16), UDim2.fromOffset(116, 44), 4), 3, 3)
 		UiFx.relief(bold(c, 5, {
-			Name = "Title", Text = string.upper(pack.name), Size = UDim2.new(1, -184, 0, 52), Position = UDim2.fromOffset(162, 6),
+			Name = "Title", Text = string.upper(pack.name), Size = UDim2.new(1, -184, 0, 54), Position = UDim2.fromOffset(150, 8),
 			TextXAlignment = Enum.TextXAlignment.Left, TextColor3 = Color3.fromRGB(255, 220, 50), ZIndex = 4,
 		}), 4, 5)
 		bold(c, 3, {
-			Text = `{zone.name} seed · no Speed needed`, Size = UDim2.new(1, -184, 0, 24), Position = UDim2.fromOffset(164, 58),
+			Text = `{zone.name} seed · no Speed needed`, Size = UDim2.new(1, -184, 0, 24), Position = UDim2.fromOffset(152, 62),
 			TextXAlignment = Enum.TextXAlignment.Left, TextColor3 = Color3.fromRGB(255, 245, 210), ZIndex = 3,
 		})
 
 		-- The rewards: Common..Epic growing a little left to right, the Legendary big at the right
 		local tiles = SeedPacks.showcase(pack, stats.catalog)
-		local bottom, featuredW, gap = 252, 196, 10
+		local bottom, featuredW, gap = 262, 220, 12
 		local small = 0
 		for _, tile in tiles do
 			small += if tile.featured then 0 else 1
 		end
-		local smallW = math.floor((PACK_W - 32 - featuredW - 16 - (small - 1) * gap) / math.max(small, 1))
-		local x = 16
+		local smallW = math.floor((PACK_W - 36 - featuredW - 18 - (small - 1) * gap) / math.max(small, 1))
+		local x = 18
 		local n = 0
 		for _, tile in tiles do
 			if tile.featured then
-				rewardTile(c, pack.zone, tile, UDim2.new(1, -(16 + featuredW), 0, 88), featuredW, bottom - 88) -- at the right edge
+				rewardTile(c, pack.zone, tile, UDim2.new(1, -(18 + featuredW), 0, 94), featuredW, bottom - 94) -- at the right edge
 			else
 				n += 1
-				local h = 120 + (n - 1) * 8
+				local h = 124 + (n - 1) * 8
 				rewardTile(c, pack.zone, tile, UDim2.fromOffset(x, bottom - h), smallW, h)
 				x += smallW + gap
 			end
 		end
 
-		-- Mutations and income, then the grey tray with the buttons
-		bold(c, 2, { RichText = true, Text = mutationLine(pack), Size = UDim2.new(1, -32, 0, 22), Position = UDim2.fromOffset(16, bottom + 6), ZIndex = 3 })
+		-- Mutations and income, then the gift + R$ buttons straight on the art. Robux only: with id = 0 the
+		-- server answers "coming soon"; with a full bag it won't prompt.
+		bold(c, 2, { RichText = true, Text = mutationLine(pack), Size = UDim2.new(1, -36, 0, 22), Position = UDim2.fromOffset(18, bottom + 8), ZIndex = 3 })
 		local exclusive = Config.mutationById(pack.exclusive)
 		bold(c, 2, {
 			Text = `{Format.money(Config.seedIncome(pack.zone))}/s per Common sprout`
 				.. (if exclusive then ` · {exclusive.id} x{exclusive.income} income, only from packs` else ""),
-			Size = UDim2.new(1, -32, 0, 20), Position = UDim2.fromOffset(16, bottom + 30), TextColor3 = Color3.fromRGB(255, 245, 210), ZIndex = 3,
+			Size = UDim2.new(1, -36, 0, 20), Position = UDim2.fromOffset(18, bottom + 32), TextColor3 = Color3.fromRGB(255, 245, 210), ZIndex = 3,
 		})
-		local tray = new("Frame", {
-			Name = "Tray", Position = UDim2.new(0, 8, 1, -(TRAY_H + 8)), Size = UDim2.new(1, -16, 0, TRAY_H), BackgroundColor3 = WHITE, ZIndex = 3, Parent = c,
-		}, deco(12, 3))
-		new("UIGradient", { Rotation = 90, Color = ColorSequence.new(TRAY_GREY:Lerp(WHITE, 0.12), TRAY_GREY:Lerp(Color3.new(0, 0, 0), 0.25)), Parent = tray })
-		-- Robux only. With id = 0 the server answers "coming soon"; with a full bag it won't prompt.
-		local price = Format.robux(robuxPrice(product))
-		local pairW = 380
-		buyPair(tray, UDim.new(0.5, -pairW / 2), UDim.new(0, 5), pairW, TRAY_H - 10, if bagFull then `Bag full · {price}` else price,
-			if bagFull then COLORS.disabled else robuxColor(product.id, ROBUX_GREEN), function()
-				RequestBuy:FireServer("Product:" .. productName)
-			end, { "Robux" }, true, 4)
+		local buy = robuxBuy(robuxPrice(product), product.id, "Product:" .. productName, if bagFull then "Bag full!" else "1 Seed")
+		if bagFull then
+			buy.color = COLORS.disabled
+		end
+		buttonRow(c, PACK_W, L.PACK_H, L.bottomY(L.PACK_H, true), { buy })
 	end
 
 	----------------------------------------------------------------------------------------------------
 	-- The other cards
 	----------------------------------------------------------------------------------------------------
-	-- A grid of cards (`w` x `h` cells, three 252 x 236 cells a row by default), auto-sized to its contents.
+	-- A grid of cards (`w` x `h` cells, three a row by default), auto-sized to its contents.
 	local function cardGrid(order: number, w: number?, h: number?): Frame
 		return new("Frame", {
 			BackgroundTransparency = 1, Size = UDim2.new(1, -8, 0, 0), AutomaticSize = Enum.AutomaticSize.Y, LayoutOrder = order, Parent = modalBody,
 		}, {
 			new("UIGridLayout", {
-				CellSize = UDim2.fromOffset(w or SHOP_CARD_W, h or SHOP_CARD_H), CellPadding = UDim2.fromOffset(14, 14), SortOrder = Enum.SortOrder.LayoutOrder,
+				CellSize = UDim2.fromOffset(w or L.CARD_W, h or L.CARD_H), CellPadding = UDim2.fromOffset(L.GAP, L.GAP), SortOrder = Enum.SortOrder.LayoutOrder,
 				HorizontalAlignment = Enum.HorizontalAlignment.Center,
 			}),
 		})
 	end
 
-	-- A three-a-row card: `color` (lighter at the top), light rays behind a big icon (or `art`), the amount in
-	-- big outlined rich text ("+150K" can be green) and, only when `sub` isn't "", a short line under it. The
-	-- caller adds the buttons (buyRow). Returns the card and its amount label.
+	-- A three-a-row card: `color`, light rays behind a big icon (or `art`), the amount in big relief rich
+	-- text ("+150K" can be green) and, only when `sub` isn't "", a short line under it. The caller adds the
+	-- buttons (buttonRow). Returns the card and its amount label.
 	local function shopCard(grid: Instance, order: number, color: Color3, amount: string, sub: string, icon: string, art: ((c: Frame, size: number) -> ())?): (Frame, TextLabel)
-		local c = cardFrame(grid, order)
-		shade(c, color, 0.35, 0.12)
+		local c = cardFrame(grid, order, color)
 		local short = sub ~= ""
-		local iconSize = if short then 104 else 124
-		sunburst(c, 0.5, (6 + iconSize / 2) / SHOP_CARD_H, SHOP_CARD_W)
+		local artSize = if short then 128 else 152
+		sunburst(c, 0.5, (6 + artSize / 2) / L.CARD_H, L.CARD_W)
 		if art then
-			art(c, iconSize)
+			art(c, artSize)
 		elseif icon ~= "" then
-			bigIcon(c, icon, { Size = UDim2.fromOffset(iconSize, iconSize), AnchorPoint = Vector2.new(0.5, 0), Position = UDim2.new(0.5, 0, 0, 6), ZIndex = 2 })
+			bigIcon(c, icon, { Size = UDim2.fromOffset(artSize, artSize), AnchorPoint = Vector2.new(0.5, 0), Position = UDim2.new(0.5, 0, 0, 6), ZIndex = 2 })
 		end
 		local amountLabel = bold(c, 4, {
-			Text = amount, RichText = true, Size = UDim2.new(1, -16, 0, 44), Position = UDim2.fromOffset(8, iconSize + 4), ZIndex = 6,
+			Name = "Amount", Text = amount, RichText = true, Size = UDim2.new(1, -20, 0, 48), Position = UDim2.fromOffset(10, artSize + 8), ZIndex = 5,
 		})
+		UiFx.relief(amountLabel, 4, 4)
 		if short then
-			bold(c, 2, { Text = sub, Size = UDim2.new(1, -16, 0, 22), Position = UDim2.fromOffset(8, iconSize + 48), ZIndex = 6 })
+			bold(c, 2, { Text = sub, Size = UDim2.new(1, -20, 0, 22), Position = UDim2.fromOffset(10, artSize + 56), ZIndex = 5 })
 		end
 		return c, amountLabel
 	end
@@ -1384,44 +1386,45 @@ do
 	-- A Speed or Money pack (developer product `name`): its art grows with the pack (`level`, ShopArt).
 	local function productCard(grid: Instance, order: number, name: string, product: Config.DevProduct, color: Color3, amount: string, level: number, key: string): (Frame, TextLabel)
 		local c, amountLabel = shopCard(grid, order, color, amount, "", "", function(c: Frame, size: number)
-			ShopArt.build(c, level, UDim2.new(0.5, 0, 0, 2), size + 4, { key = key, sackColor = SACKS[key] or color, zindex = 2 })
+			ShopArt.build(c, level, UDim2.new(0.5, 0, 0, 4), size, { key = key, sackColor = SACKS[key] or color, zindex = 2 })
 		end)
-		buyRow(c, Format.robux(robuxPrice(product)), robuxColor(product.id, ROBUX_GREEN), function()
-			RequestBuy:FireServer("Product:" .. name)
-		end, { "Robux" }, true)
+		buttonRow(c, L.CARD_W, L.CARD_H, L.bottomY(L.CARD_H, true), { robuxBuy(robuxPrice(product), product.id, "Product:" .. name, "Instant") })
 		return c, amountLabel
 	end
 
-	-- A card with a $ button (gold while affordable) and, while there's a product for it, a green R$ one.
+	-- A card's $ button (gold while affordable) and, while there's a product for it, a green R$ one.
 	local function upgradeButtons(c: Frame, price: number?, buy: string, productName: string?, product: Config.DevProduct?)
-		local b = buyRow(c, if price then Format.money(price) else "Maxed", COLORS.disabled, function()
-			RequestBuy:FireServer(buy)
-		end, nil, false)
-		watchMoney(function()
-			b.BackgroundColor3 = if price and stats.money >= price then COLORS.shop else COLORS.disabled
-		end)
+		local buys: { Buy } = {
+			{
+				text = if price then Format.money(price) else "Maxed", color = COLORS.disabled, robux = false, gift = false, caption = if price then "Cash" else nil,
+				still = price == nil,
+				onClick = function()
+					RequestBuy:FireServer(buy)
+				end,
+			},
+		}
 		if price and productName and product then
-			b.Size = UDim2.new(0.5, -14, 0, 52)
-			local r = chunky(c, Format.robux(robuxPrice(product)), robuxColor(product.id, ROBUX_GREEN), UDim2.new(0.5, -14, 0, 52), function()
-				RequestBuy:FireServer("Product:" .. productName)
-			end, { "Robux" }, ICON.small)
-			r.Position, r.ZIndex = UDim2.new(0.5, 4, 1, -62), 6
-			r:SetAttribute("PopScale", SIDE_POP)
+			local r = robuxBuy(robuxPrice(product), product.id, "Product:" .. productName, "Instant")
+			r.gift = false
+			table.insert(buys, r)
 		end
+		local money = buttonRow(c, L.CARD_W, L.CARD_H, L.bottomY(L.CARD_H, true), buys)[1]
+		watchMoney(function()
+			money.BackgroundColor3 = if price and stats.money >= price then COLORS.shop else COLORS.disabled
+		end)
 	end
 
-	-- A pass's wide card: its vivid colours, a big round icon (VIP: a gold relief badge), the name, the
-	-- benefit with its number in green; gold outline once owned.
+	-- A pass's wide card: its vivid colours, a big square badge with its icon (VIP: a gold relief "VIP"),
+	-- the name, the benefit with its number in green; gold outline once owned.
 	local function passCard(g: Instance, i: number, view: PassCards.Card): Frame
-		local c = cardFrame(g, i)
-		paint(c, view.color, view.rainbow)
-		sunburst(c, 74 / WIDE_W, 0.36, WIDE_W)
-		shine(c, 14)
-		local badge = new("Frame", { Name = "Badge", Position = UDim2.fromOffset(14, 14), Size = UDim2.fromOffset(116, 116), BackgroundColor3 = WHITE, ZIndex = 2, Parent = c }, {
-			new("UICorner", { CornerRadius = UDim.new(1, 0) }),
-			new("UIStroke", { Thickness = 4, Color = FRAME_INK }),
+		local c = cardFrame(g, i, view.color, nil, view.rainbow)
+		sunburst(c, 74 / L.WIDE_W, 0.36, L.WIDE_W)
+		shine(c)
+		local badge = new("Frame", { Name = "Badge", Position = UDim2.fromOffset(14, 14), Size = UDim2.fromOffset(112, 112), BackgroundColor3 = WHITE, BorderSizePixel = 0, ZIndex = 2, Parent = c }, {
+			outline(4),
 			new("UIGradient", { Rotation = 90, Color = ColorSequence.new(WHITE:Lerp(view.color, 0.15), view.color:Lerp(Color3.new(0, 0, 0), 0.2)) }),
 		})
+		ShopUi.bevel(badge)
 		if view.icon then
 			bigIcon(badge, view.icon, { Size = UDim2.fromOffset(88, 88), AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.5), ZIndex = 3 })
 		else -- VIP: a gold relief badge where the icon goes
@@ -1432,10 +1435,10 @@ do
 		end
 		local pass = Config.GAMEPASSES[view.name]
 		UiFx.relief(bold(c, 4, {
-			Name = "Title", Text = if pass then pass.label else view.title, Size = UDim2.new(1, -152, 0, 40), Position = UDim2.fromOffset(140, 12), ZIndex = 3,
+			Name = "Title", Text = if pass then pass.label else view.title, Size = UDim2.new(1, -156, 0, 44), Position = UDim2.fromOffset(142, 10), ZIndex = 3,
 		}), 3, 4)
 		bold(c, 3, {
-			Name = "About", RichText = true, Text = emphasize(view.about), TextWrapped = true, Size = UDim2.new(1, -152, 0, 68), Position = UDim2.fromOffset(140, 56),
+			Name = "About", RichText = true, Text = emphasize(view.about), TextWrapped = true, Size = UDim2.new(1, -156, 0, 60), Position = UDim2.fromOffset(142, 58),
 			ZIndex = 3,
 		})
 		if view.owned then
@@ -1451,31 +1454,28 @@ do
 			return
 		end
 		local owned = stats.passes ~= nil and stats.passes[passName] == true
-		local c = cardFrame(modalBody, order, { Name = "Banner_" .. passName, Size = UDim2.new(1, -8, 0, 124) })
-		paint(c, color)
+		local c = cardFrame(modalBody, order, color, { Name = "Banner_" .. passName, Size = UDim2.new(1, -8, 0, L.BANNER_H) })
 		sunburst(c, 0.08, 0.5, 700)
-		shine(c, 14)
-		bigIcon(c, icon, { Size = UDim2.fromOffset(100, 100), Position = UDim2.fromOffset(18, 12), Rotation = -8, ZIndex = 3 })
-		bold(c, 5, {
-			RichText = true, Text = `<font color="{NUMBER_GREEN}">DOUBLE</font> Your {word}`, Size = UDim2.new(1, -540, 0, 62), Position = UDim2.fromOffset(132, 12),
+		shine(c)
+		bigIcon(c, icon, { Size = UDim2.fromOffset(104, 104), Position = UDim2.fromOffset(18, 14), Rotation = -8, ZIndex = 3 })
+		UiFx.relief(bold(c, 5, {
+			RichText = true, Text = `<font color="{NUMBER_GREEN}">DOUBLE</font> Your {word}`, Size = UDim2.new(1, -560, 0, 62), Position = UDim2.fromOffset(136, 12),
 			TextXAlignment = Enum.TextXAlignment.Left, ZIndex = 3,
-		})
+		}), 4, 5)
 		bold(c, 3, {
-			RichText = true, Text = emphasize(pass.about), Size = UDim2.new(1, -540, 0, 30), Position = UDim2.fromOffset(134, 78),
+			RichText = true, Text = emphasize(pass.about), Size = UDim2.new(1, -560, 0, 30), Position = UDim2.fromOffset(138, 80),
 			TextXAlignment = Enum.TextXAlignment.Left, ZIndex = 3,
 		})
-		local caption = if owned then "Owned" else Format.robux(robuxPrice(pass, Enum.InfoType.GamePass))
-		buyPair(c, UDim.new(1, -392), UDim.new(0.5, -28), 372, 56, caption, if owned then COLORS.disabled else robuxColor(pass.id, ROBUX_GREEN), function()
-			if not owned then
-				RequestBuy:FireServer("Pass:" .. passName)
-			end
-		end, if owned then nil else { "Robux" }, not owned, 4)
+		local buy = if owned
+			then { text = "Owned", color = COLORS.disabled, robux = false, gift = false, still = true, onClick = function() end } :: Buy
+			else robuxBuy(robuxPrice(pass, Enum.InfoType.GamePass), pass.id, "Pass:" .. passName, "Forever")
+		buttonRow(c, PACK_W, L.BANNER_H, math.floor((L.BANNER_H - L.BUTTON_H - L.CAPTION_H) / 2), { buy }, PACK_W - 420, PACK_W - 16)
 	end
 
 	-- Returns true when it scrolled to a section (openShopAt), so renderModal doesn't restore the old scroll.
 	function renderShop(): boolean
 		clearModal(12)
-		moneySubtitle()
+		cardSeed = 0
 		local order = 0
 		local function nextOrder(): number
 			order += 1
@@ -1495,12 +1495,16 @@ do
 		-- Gamepasses (Robux): a wide card per pass (Shared/PassCards decides what's on them), "Owned" once the
 		-- server says so
 		section("PASSES", nextOrder(), HEADING_CYAN)
-		PassCards.render(cardGrid(nextOrder(), WIDE_W, WIDE_H), stats.passes, {
+		PassCards.render(cardGrid(nextOrder(), L.WIDE_W, L.WIDE_H), stats.passes, {
 			card = passCard,
 			button = function(c: Frame, view: PassCards.Card, onClick: () -> ()): GuiObject
 				local pass = Config.GAMEPASSES[view.name]
-				return buyRow(c, view.caption, if view.owned then COLORS.disabled else robuxColor(pass.id, ROBUX_GREEN), onClick,
-					if view.owned then nil else { "Robux" }, not view.owned)
+				local buy: Buy = {
+					text = if view.caption == "Owned" or view.caption == "Buy" then view.caption else Format.commas(robuxPrice(pass, Enum.InfoType.GamePass)),
+					color = if view.owned then COLORS.disabled else robuxColor(pass.id, ROBUX_GREEN), robux = not view.owned and view.caption ~= "Buy",
+					gift = not view.owned, caption = if view.owned then nil else "Forever", still = view.owned, onClick = onClick,
+				}
+				return buttonRow(c, L.WIDE_W, L.WIDE_H, L.bottomY(L.WIDE_H, true), { buy }, 142, L.WIDE_W - L.MARGIN)[1]
 			end,
 			price = function(pass: Config.Gamepass): number
 				return robuxPrice(pass, Enum.InfoType.GamePass)
@@ -1585,7 +1589,6 @@ do
 		local owned = stats.trails[t.id] == true
 		local equipped = stats.equippedTrail == t.id
 		local c = new("Frame", { Size = UDim2.fromOffset(TRAIL_W, TRAIL_H), BackgroundColor3 = WHITE, LayoutOrder = order, Parent = parent }, {
-			new("UICorner", { CornerRadius = UDim.new(0, 14) }),
 			new("UIStroke", { Thickness = if equipped then 6 else 4, Color = if equipped then COLORS.gold else FRAME_INK, ApplyStrokeMode = Enum.ApplyStrokeMode.Border }),
 		})
 		if t.rainbow then
@@ -1601,7 +1604,7 @@ do
 				Parent = c,
 			})
 		end
-		shine(c, 14)
+		shine(c)
 		bold(c, 4, { Text = t.name, Size = UDim2.new(1, -16, 0, 42), Position = UDim2.fromOffset(8, 12) })
 		bold(c, 3, { Text = t.rarity, Size = UDim2.new(1, -16, 0, 24), Position = UDim2.fromOffset(8, 54) })
 
@@ -1609,12 +1612,12 @@ do
 		new("Frame", {
 			AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.new(0.5, 0, 0, 196), Size = UDim2.fromOffset(186, 186), BackgroundColor3 = WHITE,
 			BackgroundTransparency = 0.78, Parent = c,
-		}, { new("UICorner", { CornerRadius = UDim.new(1, 0) }) })
+		}, { new("UICorner", { CornerRadius = UDim.new(1, 0) }) }) -- round: the glow behind the art
 		new("Frame", {
 			AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.new(0.5, -8, 0, 214), Size = UDim2.new(1, -34, 0, 62), Rotation = -14,
 			BackgroundColor3 = WHITE, BorderSizePixel = 0, Parent = c,
 		}, {
-			new("UICorner", { CornerRadius = UDim.new(1, 0) }),
+			new("UICorner", { CornerRadius = UDim.new(1, 0) }), -- round: the trail ribbon (art)
 			new("UIGradient", {
 				Color = if t.rainbow then Config.trailColors(t) else ColorSequence.new(t.color:Lerp(WHITE, 0.6), t.color:Lerp(Color3.new(0, 0, 0), 0.3)),
 				Transparency = NumberSequence.new(0.9, 0),
@@ -1633,7 +1636,7 @@ do
 		-- "x2 Speed" pill, the number in bright green
 		local pill = new("Frame", {
 			Position = UDim2.new(0, 12, 1, -126), Size = UDim2.new(1, -24, 0, 50), BackgroundColor3 = Color3.fromRGB(20, 24, 34), BackgroundTransparency = 0.3, Parent = c,
-		}, { new("UICorner", { CornerRadius = UDim.new(0, 10) }), new("UIStroke", { Thickness = 3, Color = FRAME_INK, Transparency = 0.4 }) })
+		}, { new("UIStroke", { Thickness = 3, Color = FRAME_INK, Transparency = 0.4 }) })
 		bold(pill, 3, { RichText = true, Text = `<font color="{NUMBER_GREEN}">x{t.mult}</font> Speed`, Size = UDim2.new(1, -16, 1, -8), Position = UDim2.fromOffset(8, 4) })
 
 		local y = TRAIL_H - 66
@@ -1665,8 +1668,8 @@ do
 	function renderTrails()
 		clearModal(TRAIL_GAP, true)
 		modalSubtitle.TextColor3 = WHITE
-		watchMoney(function() -- the Speed one step pays right now (it grows with your Speed and trail), and your money
-			Icons.set(modalSubtitle, { "Speed", "Money" }, `⚡ {perStepText()}/step  💰 {Format.money(stats.money)}`, ICON.big, 26)
+		watchMoney(function() -- the Speed one step pays right now (it grows with your Speed and trail)
+			Icons.set(modalSubtitle, "Speed", `⚡ {perStepText()}/step`, ICON.big, 26)
 		end)
 		for i, t in Config.TRAILS do
 			table.insert(trailCards, trailCard(modalBody, i, t))
@@ -1716,11 +1719,10 @@ local function renderIndex()
 			tallest = math.max(tallest, #cellsOf(k, r))
 		end
 		local row = new("Frame", { Size = UDim2.new(1, -12, 0, 76 + tallest * (CELL_H + CELL_GAP)), LayoutOrder = k, Parent = modalBody }, {
-			new("UICorner", { CornerRadius = UDim.new(0, 14) }),
 			new("UIStroke", { Thickness = 4, Color = FRAME_INK, ApplyStrokeMode = Enum.ApplyStrokeMode.Border }),
 		})
 		shade(row, zone.ui, 0.25, 0.3)
-		shine(row, 14)
+		shine(row)
 		-- The zone's name, then the mutations found there in their colours
 		local title = zone.name
 		for _, m in Config.MUTATIONS do
@@ -1740,7 +1742,7 @@ local function renderIndex()
 				local got = stats.index[c.key] == true
 				local cell = new("Frame", {
 					Size = UDim2.new(1, 0, 0, CELL_H), BackgroundColor3 = zone.ui:Lerp(WHITE, 0.5), LayoutOrder = i, Parent = column,
-				}, deco(8, 2))
+				}, { outline(2) })
 				if got then
 					shade(cell, rarity.color, 0.3, 0.2)
 				end
@@ -1771,7 +1773,7 @@ local sellChanged: (changed: { [string]: any }) -> ()
 do
 	local FlowerView = require(Shared:WaitForChild("FlowerView"))
 	local SellPlants = remotes:WaitForChild("SellPlants") :: RemoteEvent
-	WINDOWS.Sell = { title = "Sell", icon = "Money", from = Color3.fromRGB(255, 70, 45), to = Color3.fromRGB(255, 150, 30) }
+	WINDOWS.Sell = { title = "Sell", bar = Color3.fromRGB(255, 95, 40) }
 	local SELL_RED = Color3.fromRGB(235, 60, 50)
 	local SELL_ORANGE = Color3.fromRGB(255, 140, 30)
 	local SELL_CARD = Color3.fromRGB(85, 125, 235) -- the cards' body under the rarity band
@@ -1873,13 +1875,12 @@ do
 		local rarity = Config.RARITIES[p.rarity]
 		local mut = Config.mutationById(p.mutation)
 		local c = new("Frame", { BackgroundColor3 = SELL_CARD, LayoutOrder = order, Parent = grid }, {
-			new("UICorner", { CornerRadius = UDim.new(0, 14) }),
 			new("UIStroke", { Thickness = 4, Color = if mut then mut.color else FRAME_INK, ApplyStrokeMode = Enum.ApplyStrokeMode.Border }),
 		})
 		-- The rarity band: the plant's name and rarity
-		local band = new("Frame", { Size = UDim2.new(1, 0, 0, 70), BorderSizePixel = 0, Parent = c }, { new("UICorner", { CornerRadius = UDim.new(0, 14) }) })
+		local band = new("Frame", { Size = UDim2.new(1, 0, 0, 70), BorderSizePixel = 0, Parent = c })
 		shade(band, rarity.color, 0.25, 0.25)
-		shine(band, 14)
+		shine(band)
 		bold(band, 3, { Text = p.name or SeedPacks.seedName(p.zone, p.rarity, p.mutation), Size = UDim2.new(1, -14, 0, 32), Position = UDim2.fromOffset(7, 6) })
 		bold(band, 3, { Text = rarity.id, Size = UDim2.new(1, -14, 0, 24), Position = UDim2.fromOffset(7, 40) })
 		-- The plant itself, turning slowly
@@ -1915,7 +1916,6 @@ do
 
 	renderSell = function()
 		clearModal(10)
-		moneySubtitle()
 		table.clear(sellUpdaters)
 		sellShown = sellSignature()
 		local plants = sellables()
@@ -1953,7 +1953,7 @@ do
 			sellPending, pending, group = nil, nil, nil -- nothing left to sell
 		end
 		if pending and group then
-			local bar = new("Frame", { Size = UDim2.new(1, -12, 0, 72), BackgroundColor3 = FRAME_INK, BackgroundTransparency = 0.15, LayoutOrder = 4, Parent = modalBody }, deco(12, 3))
+			local bar = new("Frame", { Size = UDim2.new(1, -12, 0, 72), BackgroundColor3 = FRAME_INK, BackgroundTransparency = 0.15, LayoutOrder = 4, Parent = modalBody }, { outline(3) })
 			local question = bold(bar, 3, {
 				Size = UDim2.new(1, -350, 1, -18), Position = UDim2.fromOffset(16, 9), TextXAlignment = Enum.TextXAlignment.Left, TextColor3 = HEADING_GOLD,
 			})
