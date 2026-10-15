@@ -123,4 +123,116 @@ function SellPick.sale(items: { Item }, pick: Pick): Sale
 	return out
 end
 
+-- Sold but not confirmed yet (owner bug report 2026-10-15: "spam Sell and you sell the same plant/seed
+-- several times"): the window drops what it has asked the server to sell at once, instead of showing it
+-- until the server's next push. A planted slot or an inventory id stays hidden until the push no longer
+-- has it; a seed label's count stays lowered by what is still outstanding: `count` asked for out of the
+-- `held` the bag had when first asked, so once the bag holds `held - count` (or fewer) it is all
+-- confirmed. Anything the server hasn't confirmed after PENDING_SECONDS (refused: too far from the stall)
+-- shows again.
+SellPick.PENDING_SECONDS = 6
+
+export type Pending = {
+	slots: { [number]: number }, -- slot -> when asked (os.clock)
+	ids: { [number]: number }, -- inventory id -> when asked
+	seeds: { [string]: { count: number, held: number, at: number } }, -- label -> asked out of held
+}
+
+function SellPick.newPending(): Pending
+	return { slots = {}, ids = {}, seeds = {} }
+end
+
+-- How many of a seed label are still outstanding, against the bag holding `heldNow`.
+local function outstanding(entry: { count: number, held: number }, heldNow: number): number
+	return math.max(0, entry.count - math.max(0, entry.held - heldNow))
+end
+
+-- `items` (SellPick.items, as the server last pushed them) without what is pending.
+function SellPick.unsold(items: { Item }, pending: Pending): { Item }
+	local out: { Item } = {}
+	for _, item in items do
+		if item.kind == "plant" then
+			if not pending.slots[item.slot :: number] then
+				table.insert(out, item)
+			end
+		elseif item.kind == "inv" then
+			if not pending.ids[item.id :: number] then
+				table.insert(out, item)
+			end
+		else
+			local entry = pending.seeds[item.label :: string]
+			local left = if entry then item.count - outstanding(entry, item.count) else item.count
+			if left > 0 then
+				local copy = table.clone(item)
+				copy.count = left
+				table.insert(out, copy)
+			end
+		end
+	end
+	return out
+end
+
+-- Marks `sale` (SellPick.sale of the unsold items) as asked at `now`. `items`: SellPick.items (the bag's
+-- counts as pushed).
+function SellPick.markSold(pending: Pending, items: { Item }, sale: Sale, now: number)
+	for _, slot in sale.slots do
+		pending.slots[slot] = now
+	end
+	for _, id in sale.ids do
+		pending.ids[id] = now
+	end
+	for label, n in sale.seeds do
+		local held = 0
+		for _, item in items do
+			if item.kind == "seed" and item.label == label then
+				held = item.count
+			end
+		end
+		local entry = pending.seeds[label]
+		if entry then
+			entry.count += n -- (still out of what the bag held when first asked)
+			entry.at = now
+		else
+			pending.seeds[label] = { count = n, held = held, at = now }
+		end
+	end
+end
+
+-- Drops what the server has confirmed (`items`: SellPick.items of its latest push; call it on every push,
+-- so seeds that arrive meanwhile, a pack, aren't taken for the sale) or not confirmed after
+-- PENDING_SECONDS. Returns whether anything was dropped.
+function SellPick.settle(pending: Pending, items: { Item }, now: number): boolean
+	local slots, ids, held = {}, {}, {}
+	for _, item in items do
+		if item.kind == "plant" then
+			slots[item.slot :: number] = true
+		elseif item.kind == "inv" then
+			ids[item.id :: number] = true
+		else
+			held[item.label :: string] = item.count
+		end
+	end
+	local dropped = false
+	for slot, at in pending.slots do
+		if not slots[slot] or now - at >= SellPick.PENDING_SECONDS then
+			pending.slots[slot] = nil
+			dropped = true
+		end
+	end
+	for id, at in pending.ids do
+		if not ids[id] or now - at >= SellPick.PENDING_SECONDS then
+			pending.ids[id] = nil
+			dropped = true
+		end
+	end
+	for label, entry in pending.seeds do
+		entry.held = math.max(entry.held, held[label] or 0) -- (more than when asked: new seeds came in meanwhile)
+		if outstanding(entry, held[label] or 0) == 0 or now - entry.at >= SellPick.PENDING_SECONDS then
+			pending.seeds[label] = nil
+			dropped = true
+		end
+	end
+	return dropped
+end
+
 return SellPick

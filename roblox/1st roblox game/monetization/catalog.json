@@ -5,6 +5,7 @@
     "name": "2x Money",
     "description": "Doubles the money all your plants make. Works offline and when you sell, too.",
     "price": 349,
+    "isForSale": true,
     "image": "icons/Money.png"
   },
   {
@@ -13,6 +14,7 @@
     "name": "2x Speed",
     "description": "Doubles all the Speed you get from walking and from the treadmill.",
     "price": 299,
+    "isForSale": true,
     "image": "icons/Speed.png"
   },
   {
@@ -21,6 +23,7 @@
     "name": "2x Luck",
     "description": "The seeds you steal roll with double luck, so rare ones show up a lot more often.",
     "price": 249,
+    "isForSale": true,
     "image": "icons/Star.png"
   },
   {
@@ -29,6 +32,7 @@
     "name": "VIP",
     "description": "A gold VIP tag over your head and in chat, plus 1.25x money and 1.25x Speed.",
     "price": 399,
+    "isForSale": true,
     "image": "icons/Vip.png"
   },
   {
@@ -37,6 +41,7 @@
     "name": "Fast Grow",
     "description": "Your plants grow twice as fast, even while you're offline.",
     "price": 149,
+    "isForSale": true,
     "image": "icons/Seeds.png"
   },
   {
@@ -45,6 +50,7 @@
     "name": "+10 Plant Slots",
     "description": "10 more plant slots on your plot, on top of the ones your plot level gives you.",
     "price": 199,
+    "isForSale": true,
     "image": "icons/ExtraSlots.png"
   },
   {
@@ -53,6 +59,7 @@
     "name": "Starpetal Pack",
     "description": "One Deep Space seed for your seed bag, rolled with double luck. It has a small chance of the pack-only Celestial mutation.",
     "price": 200,
+    "isForSale": true,
     "image": "icons/SeedPack.png"
   },
   {
@@ -61,6 +68,7 @@
     "name": "Lotus Wyrm Pack",
     "description": "One Spirit Garden seed for your seed bag, rolled with double luck. It has a small chance of the pack-only Celestial mutation.",
     "price": 300,
+    "isForSale": false,
     "image": "icons/SeedPack.png"
   },
   {
@@ -69,6 +77,7 @@
     "name": "Starpetal Pack x10",
     "description": "10 Deep Space seeds for your seed bag at once, each rolled with double luck. Each has a small chance of the pack-only Celestial mutation. Needs 10 free spaces in your bag.",
     "price": 1500,
+    "isForSale": true,
     "image": "icons/SeedPack.png"
   },
   {
@@ -77,6 +86,7 @@
     "name": "Lotus Wyrm Pack x10",
     "description": "10 Spirit Garden seeds for your seed bag at once, each rolled with double luck. Each has a small chance of the pack-only Celestial mutation. Needs 10 free spaces in your bag.",
     "price": 2299,
+    "isForSale": false,
     "image": "icons/SeedPack.png"
   },
   {
@@ -85,6 +95,7 @@
     "name": "+25K Speed",
     "description": "Adds 25,000 Speed right away, so you can reach farther zones.",
     "price": 9,
+    "isForSale": true,
     "image": "icons/Speed.png"
   },
   {
@@ -93,6 +104,7 @@
     "name": "+150K Speed",
     "description": "Adds 150,000 Speed right away, so you can reach farther zones.",
     "price": 36,
+    "isForSale": true,
     "image": "icons/Speed.png"
   },
   {
@@ -101,6 +113,7 @@
     "name": "+250K Speed",
     "description": "Adds 250,000 Speed right away, so you can reach farther zones.",
     "price": 64,
+    "isForSale": true,
     "image": "icons/Speed.png"
   },
   {
@@ -109,6 +122,7 @@
     "name": "+750K Speed",
     "description": "Adds 750,000 Speed right away, so you can reach farther zones.",
     "price": 76,
+    "isForSale": true,
     "image": "icons/Speed.png"
   },
   {
@@ -117,6 +131,7 @@
     "name": "+3M Speed",
     "description": "Adds 3,000,000 Speed right away, so you can reach farther zones.",
     "price": 560,
+    "isForSale": true,
     "image": "icons/Speed.png"
   },
   {
@@ -125,6 +140,7 @@
     "name": "+10M Speed",
     "description": "Adds 10,000,000 Speed right away, so you can reach farther zones.",
     "price": 1200,
+    "isForSale": true,
     "image": "icons/Speed.png"
   },
   {
@@ -133,6 +149,7 @@
     "name": "+25M Speed",
     "description": "Adds 25,000,000 Speed right away, so you can reach farther zones.",
     "price": 1600,
+    "isForSale": true,
     "image": "icons/Speed.png"
   },
   {
@@ -141,6 +158,7 @@
     "name": "+50M Speed",
     "description": "Adds 50,000,000 Speed right away, so you can reach farther zones.",
     "price": 2400,
+    "isForSale": true,
     "image": "icons/Speed.png"
   },
   {
@@ -149,6 +167,7 @@
     "name": "Pocket Cash",
     "description": "Gives you $24K right away.",
     "price": 40,
+    "isForSale": true,
     "image": "icons/Money.png"
   },
   {
@@ -157,6 +176,7 @@
     "name": "Cash Bag",
     "description": "Gives you $200K right away.",
     "price": 80,
+    "isForSale": true,
     "image": "icons/Money.png"
   },
   {
@@ -165,6 +185,7 @@
     "name": "Cash Stack",
     "description": "Gives you $800K right away.",
     "price": 200,
+    "isForSale": true,
     "image": "icons/Money.png"
   },
   {
@@ -173,6 +194,7 @@
     "name": "Cash Crate",
     "description": "Gives you $4M right away.",
     "price": 400,
+    "isForSale": true,
     "image": "icons/Money.png"
   },
   {
@@ -181,6 +203,7 @@
     "name": "Cash Vault",
     "description": "Gives you $8M right away.",
     "price": 640,
+    "isForSale": true,
     "image": "icons/Money.png"
   },
   {
@@ -189,6 +212,7 @@
     "name": "Treadmill Upgrade (Lv 2-4)",
     "description": "Upgrades your treadmill by one level. This one covers levels 2 to 4.",
     "price": 19,
+    "isForSale": true,
     "image": "icons/Treadmill.png"
   },
   {
@@ -197,6 +221,7 @@
     "name": "Treadmill Upgrade (Lv 5-7)",
     "description": "Upgrades your treadmill by one level. This one covers levels 5 to 7.",
     "price": 39,
+    "isForSale": true,
     "image": "icons/Treadmill.png"
   },
   {
@@ -205,6 +230,7 @@
     "name": "Treadmill Upgrade (Lv 8-10)",
     "description": "Upgrades your treadmill by one level. This one covers levels 8 to 10.",
     "price": 79,
+    "isForSale": true,
     "image": "icons/Treadmill.png"
   },
   {
@@ -213,6 +239,7 @@
     "name": "Green Trail",
     "description": "Unlocks and equips the Green Trail. While it's on, walking and the treadmill give you 1.25x Speed.",
     "price": 16,
+    "isForSale": true,
     "image": "icons/TrailShop.png"
   },
   {
@@ -221,6 +248,7 @@
     "name": "Blue Trail",
     "description": "Unlocks and equips the Blue Trail. While it's on, walking and the treadmill give you 1.5x Speed.",
     "price": 24,
+    "isForSale": true,
     "image": "icons/TrailShop.png"
   },
   {
@@ -229,6 +257,7 @@
     "name": "Purple Trail",
     "description": "Unlocks and equips the Purple Trail. While it's on, walking and the treadmill give you 1.75x Speed.",
     "price": 40,
+    "isForSale": true,
     "image": "icons/TrailShop.png"
   },
   {
@@ -237,6 +266,7 @@
     "name": "Golden Trail",
     "description": "Unlocks and equips the Golden Trail. While it's on, walking and the treadmill give you 2x Speed.",
     "price": 64,
+    "isForSale": true,
     "image": "icons/TrailShop.png"
   },
   {
@@ -245,6 +275,7 @@
     "name": "Red Trail",
     "description": "Unlocks and equips the Red Trail. While it's on, walking and the treadmill give you 2.5x Speed.",
     "price": 100,
+    "isForSale": true,
     "image": "icons/TrailShop.png"
   },
   {
@@ -253,6 +284,7 @@
     "name": "Rainbow Trail",
     "description": "Unlocks and equips the Rainbow Trail. While it's on, walking and the treadmill give you 3x Speed.",
     "price": 180,
+    "isForSale": true,
     "image": "icons/TrailShop.png"
   },
   {
@@ -261,6 +293,7 @@
     "name": "Plot Upgrade (Lv 2-5)",
     "description": "Upgrades your plot by one level. This one covers levels 2 to 5.",
     "price": 25,
+    "isForSale": true,
     "image": "icons/PlotUpgrade.png"
   },
   {
@@ -269,6 +302,7 @@
     "name": "Plot Upgrade (Lv 6-9)",
     "description": "Upgrades your plot by one level. This one covers levels 6 to 9.",
     "price": 49,
+    "isForSale": true,
     "image": "icons/PlotUpgrade.png"
   },
   {
@@ -277,6 +311,7 @@
     "name": "Plot Upgrade (Lv 10-13)",
     "description": "Upgrades your plot by one level. This one covers levels 10 to 13.",
     "price": 99,
+    "isForSale": true,
     "image": "icons/PlotUpgrade.png"
   },
   {
@@ -285,6 +320,7 @@
     "name": "Plot Upgrade (Lv 14-17)",
     "description": "Upgrades your plot by one level. This one covers levels 14 to 17.",
     "price": 199,
+    "isForSale": true,
     "image": "icons/PlotUpgrade.png"
   },
   {
@@ -293,6 +329,7 @@
     "name": "Plot Upgrade (Lv 18-21)",
     "description": "Upgrades your plot by one level. This one covers levels 18 to 21.",
     "price": 399,
+    "isForSale": true,
     "image": "icons/PlotUpgrade.png"
   },
   {
@@ -301,6 +338,7 @@
     "name": "Plot Upgrade (Lv 22-26)",
     "description": "Upgrades your plot by one level. This one covers levels 22 to 26.",
     "price": 799,
+    "isForSale": true,
     "image": "icons/PlotUpgrade.png"
   },
   {
@@ -309,6 +347,7 @@
     "name": "Grow Now (10 min)",
     "description": "Your sprouting plant finishes growing right away and starts earning (up to 10 minutes left).",
     "price": 9,
+    "isForSale": true,
     "image": "icons/Seeds.png"
   },
   {
@@ -317,6 +356,7 @@
     "name": "Grow Now (30+ min)",
     "description": "Your sprouting plant finishes growing right away and starts earning, however long it had left.",
     "price": 29,
+    "isForSale": true,
     "image": "icons/Seeds.png"
   }
 ]

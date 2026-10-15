@@ -47,6 +47,7 @@ function fakeRoblox({ products = [], passes = [], rateLimits = 0, failNames = []
 				[idField]: x.id,
 				name: x.name,
 				...(x.price !== undefined ? { priceInformation: { defaultPriceInRobux: x.price, enabledFeatures: [] } } : {}),
+				...(x.forSale !== undefined ? { isForSale: x.forSale } : {}),
 			}));
 			const next = start + 2 < list.length ? String(start + 2) : "";
 			return reply(200, { [isPass ? "gamePasses" : "developerProducts"]: page, nextPageToken: next });
@@ -55,17 +56,23 @@ function fakeRoblox({ products = [], passes = [], rateLimits = 0, failNames = []
 			const id = Number(u.pathname.split("/").pop());
 			const form = init.body;
 			assert.ok(form instanceof FormData, "multipart");
-			assert.deepEqual([...form.keys()], ["price"], "only the price is sent");
+			const keys = [...form.keys()];
+			assert.ok(keys.length > 0 && keys.every((k) => k === "price" || k === "isForSale"), `only price / isForSale are sent (${keys})`);
 			const item = list.find((x) => x.id === id);
 			if (!item) return reply(404, "not found");
 			if (failPatchIds.includes(id)) return reply(400, `bad price, key was ${KEY}`);
-			item.price = Number(form.get("price"));
-			state.patched = [...(state.patched ?? []), { id, price: item.price, pass: isPass }];
+			const patch = { id, pass: isPass };
+			if (form.has("price")) patch.price = item.price = Number(form.get("price"));
+			if (form.has("isForSale")) {
+				assert.ok(["true", "false"].includes(form.get("isForSale")), "isForSale is true / false");
+				patch.isForSale = item.forSale = form.get("isForSale") === "true";
+			}
+			state.patched = [...(state.patched ?? []), patch];
 			return reply(204, "");
 		}
 		const form = init.body;
 		assert.ok(form instanceof FormData);
-		assert.equal(form.get("isForSale"), "true");
+		assert.equal(form.get("isForSale"), "true", "a retired item is never created");
 		assert.ok(Number(form.get("price")) > 0);
 		assert.ok(form.get("imageFile") instanceof Blob);
 		if (failNames.includes(form.get("name"))) return reply(400, `bad name, key was ${KEY}`);
@@ -276,4 +283,103 @@ test("--update-prices --dry-run: says what would change, sends nothing, needs no
 	assert.equal(await M.run(["--dry-run", "--update-prices"], {}, d), 0);
 	assert.equal(roblox.calls.length, 0);
 	assert.match(d.out.join("\n"), /price would be set to R\$ 399/);
+});
+
+// Retired items (catalog "isForSale": false; owner 2026-10-15: the Lotus Wyrm pack): kept on Roblox, off sale.
+const retired = (key, name, price) => ({ ...entry(key, "product", name, price), isForSale: false });
+const RETIRED_CATALOG = [
+	{ ...entry("Speed25K", "product", "+25K Speed", 9), isForSale: true },
+	retired("PackSpirit", "Lotus Wyrm Pack", 300),
+	retired("PackSpirit10", "Lotus Wyrm Pack x10", 2299),
+	retired("PackOld", "Old Pack", 50),
+];
+const retiredFiles = (ids) => ({ [M.CATALOG_FILE]: JSON.stringify(RETIRED_CATALOG), [M.IDS_FILE]: M.encodeIds(M.normalizeIds(ids)) });
+
+test("changes: price where it differs, isForSale false for retired (unless known off sale), true for a sold one known off sale", () => {
+	const sold = entry("A", "product", "A", 10);
+	const gone = { ...sold, isForSale: false };
+	assert.deepEqual(M.changes(sold, { price: 10, forSale: true }), {});
+	assert.deepEqual(M.changes(sold, { price: 10, forSale: null }), {}, "a sold item with an unknown sale state is left alone");
+	assert.deepEqual(M.changes(sold, { price: 9, forSale: null }), { price: 10 });
+	assert.deepEqual(M.changes(sold, { price: 10, forSale: false }), { isForSale: true }, "brought back: put on sale again");
+	assert.deepEqual(M.changes(gone, { price: 10, forSale: true }), { isForSale: false });
+	assert.deepEqual(M.changes(gone, { price: 10, forSale: null }), { isForSale: false }, "unknown: taken off sale to be sure");
+	assert.deepEqual(M.changes(gone, { price: 10, forSale: false }), {}, "already off sale");
+	assert.deepEqual(M.changes(gone, { price: 7, forSale: true }), { price: 10, isForSale: false }, "both in one PATCH");
+	assert.deepEqual(M.changes(gone, undefined), { price: 10, isForSale: false });
+	assert.equal(M.forSale({}), true, "no isForSale field: sold");
+	assert.equal(M.listedForSale({ isForSale: false }), false);
+	assert.equal(M.listedForSale({ isForSale: "false" }), null);
+	assert.equal(M.listedForSale({}), null);
+});
+
+test("--update-prices: retired items are PATCHed isForSale=false (same endpoints), never created; a second run sends nothing", async () => {
+	const roblox = fakeRoblox({
+		products: [
+			{ id: 51, name: "+25K Speed", price: 9, forSale: true },
+			{ id: 3718769580, name: "Lotus Wyrm Pack", price: 300, forSale: true },
+			{ id: 3718799418, name: "Lotus Wyrm Pack x10", price: 2000 }, // (sale state not listed)
+		],
+	});
+	const d = deps(roblox, retiredFiles({ products: { Speed25K: 51, PackSpirit: 3718769580, PackSpirit10: 3718799418 } }));
+	const code = await M.run(["--universe", UNIVERSE, "--update-prices"], { ROBLOX_API_KEY: KEY }, d);
+	assert.equal(code, 0, d.out.join("\n"));
+	const patched = Object.fromEntries((roblox.patched ?? []).map((p) => [p.id, p]));
+	assert.deepEqual(Object.keys(patched).sort(), ["3718769580", "3718799418"], "only the retired ones");
+	assert.deepEqual(patched[3718769580], { id: 3718769580, pass: false, isForSale: false }, "off sale, price untouched");
+	assert.deepEqual(patched[3718799418], { id: 3718799418, pass: false, price: 2299, isForSale: false }, "price and off sale in one PATCH");
+	const patches = roblox.calls.filter((c) => c.method === "PATCH");
+	assert.equal(patches.length, 2);
+	assert.ok(patches.every((c) => c.url.startsWith(`https://apis.roblox.com/developer-products/v2/universes/${UNIVERSE}/developer-products/`)), "the developer product endpoint");
+	assert.equal(roblox.calls.filter((c) => c.method === "POST").length, 0, "the retired Old Pack (no id, not on Roblox) is never created");
+	const out = d.out.join("\n");
+	assert.match(out, /sale product PackSpirit: taken off sale \(retired\)/);
+	assert.match(out, /PackOld .* skipped +retired: not created/);
+	assert.match(out, /0 created, 3 existing, 0 failed, 1 retired \(not created\)\./);
+	assert.match(out, /Prices: 2 updated, 1 already right, 0 failed\. 2 retired taken off sale\./);
+	assert.ok(!out.includes(KEY));
+	assert.equal(idsOf(d).products.PackOld, 0, "its ids.json slot stays 0");
+	assert.equal(idsOf(d).products.PackSpirit, 3718769580, "the retired ids are kept (receipts still grant)");
+
+	roblox.calls.length = 0;
+	const again = deps(roblox, { ...d.files });
+	assert.equal(await M.run(["--universe", UNIVERSE, "--update-prices"], { ROBLOX_API_KEY: KEY }, again), 0);
+	assert.equal(roblox.calls.filter((c) => c.method !== "GET").length, 0, "already off sale: nothing sent");
+	assert.match(again.out.join("\n"), /Prices: 0 updated, 3 already right, 0 failed\./);
+});
+
+test("--update-prices: a retired item brought back (isForSale true again) is put on sale; without the flag nothing is patched", async () => {
+	const roblox = fakeRoblox({ products: [{ id: 70, name: "Lotus Wyrm Pack", price: 300, forSale: false }] });
+	const files = { [M.CATALOG_FILE]: JSON.stringify([{ ...entry("PackSpirit", "product", "Lotus Wyrm Pack", 300), isForSale: true }]), [M.IDS_FILE]: M.encodeIds(M.normalizeIds({ products: { PackSpirit: 70 } })) };
+	const plain = deps(roblox, { ...files });
+	assert.equal(await M.run(["--universe", UNIVERSE], { ROBLOX_API_KEY: KEY }, plain), 0);
+	assert.equal(roblox.calls.filter((c) => c.method === "PATCH").length, 0, "no flag, no PATCH");
+	const d = deps(roblox, { ...files });
+	assert.equal(await M.run(["--universe", UNIVERSE, "--update-prices"], { ROBLOX_API_KEY: KEY }, d), 0);
+	assert.deepEqual(roblox.patched, [{ id: 70, pass: false, isForSale: true }]);
+	assert.match(d.out.join("\n"), /sale product PackSpirit: put on sale/);
+});
+
+test("--update-prices: a failed off-sale PATCH is reported (redacted) and exits 1; --dry-run says it would take them off sale", async () => {
+	const roblox = fakeRoblox({ products: [{ id: 80, name: "Lotus Wyrm Pack", price: 300, forSale: true }], failPatchIds: [80] });
+	const files = retiredFiles({ products: { PackSpirit: 80 } });
+	const d = deps(roblox, { ...files });
+	assert.equal(await M.run(["--universe", UNIVERSE, "--update-prices"], { ROBLOX_API_KEY: KEY }, d), 1);
+	const out = d.out.join("\n");
+	assert.match(out, /FAILED sale product PackSpirit: sale update failed: HTTP 400/);
+	assert.ok(!out.includes(KEY), "the key is redacted");
+
+	const dry = deps(fakeRoblox(), { ...files });
+	assert.equal(await M.run(["--dry-run", "--update-prices"], {}, dry), 0);
+	const dryOut = dry.out.join("\n");
+	assert.match(dryOut, /PackSpirit .*would be taken off sale \(retired\)/);
+	assert.match(dryOut, /PackOld .* skipped +retired: not created/);
+});
+
+test("catalog.json: the retired Lotus Wyrm packs are off sale, every other item for sale", () => {
+	const catalog = JSON.parse(readFileSync(M.CATALOG_FILE, "utf8"));
+	for (const e of catalog) {
+		assert.equal(typeof e.isForSale, "boolean", `${e.key} says isForSale`);
+		assert.equal(e.isForSale, !["PackSpirit", "PackSpirit10"].includes(e.key), e.key);
+	}
 });

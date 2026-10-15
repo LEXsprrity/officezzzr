@@ -290,3 +290,148 @@ H.test("sell: the committed map/World.rbxm has the SELL stall", function()
 	H.ok(world.ShopPlaza:FindFirstChild("SellCircle"), "with its circle")
 	H.ok(world.ShopPlaza:FindFirstChild("ShopStall_Sell"), "and its stall")
 end)
+
+----------------------------------------------------------------------------------------------------
+-- Spamming Sell (owner bug report 2026-10-15: "spam Sell too fast and you sell the same plant/seed several
+-- times till it disappears"): the server pays once (security.spec drives the real handler), and the window
+-- drops what it has asked to sell at once (SellPick's pending), instead of showing it until the next push.
+----------------------------------------------------------------------------------------------------
+local SellPick = H.shared("SellPick")
+local fs = require("@lune/fs")
+
+local function sellStats(): any
+	return {
+		plotLevel = 1, passes = {},
+		plants = { { slot = 1, zone = 1, rarity = 1, sell = 10 }, { slot = 2, zone = 1, rarity = 2, sell = 20 } },
+		inventory = { { id = 7, zone = 1, rarity = 1, sell = 5 } },
+		seedBag = { ["1:1#5"] = 2, ["1:1#9"] = 1, ["2:2#3"] = 1 },
+	}
+end
+
+local function find(items: { any }, key: string): any
+	for _, it in items do
+		if it.key == key then
+			return it
+		end
+	end
+	return nil
+end
+
+H.test("sell spam: what was asked to sell drops out of the window at once; a repeat click sells nothing", function()
+	local stats = sellStats()
+	local pending = SellPick.newPending()
+	local T = 100
+	-- what HUD's sellNow does: sale of the unsold items, mark it, fire
+	local fired = {}
+	local function click(pick: any)
+		local items = SellPick.items(stats)
+		local sale = SellPick.sale(SellPick.unsold(items, pending), pick)
+		if sale.count > 0 then
+			SellPick.markSold(pending, items, sale, T)
+			table.insert(fired, sale)
+		end
+		return sale
+	end
+	-- a plant: ten fast clicks, one request
+	for _ = 1, 10 do
+		click({ key = "p1" })
+	end
+	H.eq(#fired, 1, "the plant is asked for once")
+	H.deepEq(fired[1].slots, { 1 })
+	H.eq(find(SellPick.unsold(SellPick.items(stats), pending), "p1"), nil, "its card is gone at once")
+	-- an inventory plant
+	for _ = 1, 10 do
+		click({ key = "i7" })
+	end
+	H.eq(#fired, 2, "the inventory plant once")
+	H.eq(find(SellPick.unsold(SellPick.items(stats), pending), "i7"), nil)
+	-- seeds: Sell 1 three times sells the three there are, then nothing; the card counts down and goes
+	click({ key = "s1:1", count = 1 })
+	H.eq(find(SellPick.unsold(SellPick.items(stats), pending), "s1:1").count, 2, "x3 -> x2 at once")
+	click({ key = "s1:1", count = 1 })
+	click({ key = "s1:1", count = 1 })
+	H.eq(find(SellPick.unsold(SellPick.items(stats), pending), "s1:1"), nil, "all three asked: the card is gone")
+	for _ = 1, 10 do
+		click({ key = "s1:1", count = 1 })
+		click({ key = "s1:1" })
+	end
+	H.eq(#fired, 5, "never more seeds asked than the bag holds")
+	local asked = 0
+	for _, sale in fired do
+		asked += sale.seeds["1:1"] or 0
+	end
+	H.eq(asked, 3)
+	-- quick sells count from the pending-adjusted list
+	local quick = SellPick.sale(SellPick.unsold(SellPick.items(stats), pending), { group = "All" })
+	H.deepEq(quick.slots, { 2 }, "the quick sell leaves out the pending plant")
+	H.deepEq(quick.ids, {}, "and the pending inventory plant")
+	H.deepEq(quick.seeds, { ["2:2"] = 1 }, "and the pending seeds")
+	H.eq(quick.count, 2)
+	-- the server's push confirms part of it: the seeds still outstanding stay hidden
+	stats.seedBag = { ["1:1#9"] = 1, ["2:2#3"] = 1 } -- two of the three sold so far
+	stats.plants = { { slot = 2, zone = 1, rarity = 2, sell = 20 } } -- the plant is gone
+	SellPick.settle(pending, SellPick.items(stats), T + 0.5)
+	H.eq(pending.slots[1], nil, "the plant's sale is confirmed")
+	H.ok(pending.ids[7] ~= nil, "the inventory plant still pending (the push still has it)")
+	H.eq(find(SellPick.unsold(SellPick.items(stats), pending), "i7"), nil, "so still hidden")
+	H.ok(pending.seeds["1:1"] ~= nil, "one seed still outstanding")
+	H.eq(find(SellPick.unsold(SellPick.items(stats), pending), "s1:1"), nil, "the last seed stays hidden")
+	stats.seedBag = { ["2:2#3"] = 1 }
+	stats.inventory = {}
+	H.ok(SellPick.settle(pending, SellPick.items(stats), T + 1), "everything confirmed")
+	H.eq(next(pending.slots), nil)
+	H.eq(next(pending.ids), nil)
+	H.eq(next(pending.seeds), nil)
+	-- a new seed of that kind later shows and sells normally
+	stats.seedBag["1:1#4"] = 1
+	H.eq(find(SellPick.unsold(SellPick.items(stats), pending), "s1:1").count, 1, "a new seed shows")
+end)
+
+H.test("sell spam: what the server never confirms (refused: too far) shows again after a few seconds; a new seed mid-sale counts", function()
+	local stats = sellStats()
+	local pending = SellPick.newPending()
+	local items = SellPick.items(stats)
+	SellPick.markSold(pending, items, SellPick.sale(items, { key = "p2" }), 10)
+	SellPick.markSold(pending, items, SellPick.sale(items, { key = "s2:2" }), 10)
+	H.ok(not SellPick.settle(pending, SellPick.items(stats), 10 + SellPick.PENDING_SECONDS - 0.5), "waiting for the push")
+	H.eq(find(SellPick.unsold(SellPick.items(stats), pending), "p2"), nil)
+	H.ok(SellPick.settle(pending, SellPick.items(stats), 10 + SellPick.PENDING_SECONDS), "not confirmed in time")
+	H.ok(find(SellPick.unsold(SellPick.items(stats), pending), "p2") ~= nil, "the plant shows again")
+	H.ok(find(SellPick.unsold(SellPick.items(stats), pending), "s2:2") ~= nil, "the seed too")
+	H.ok(SellPick.PENDING_SECONDS >= 3 and SellPick.PENDING_SECONDS <= 10, "a few seconds")
+	-- selling 2 of 3 seeds while a pack adds one: the count is right throughout, then confirmed
+	stats = sellStats()
+	pending = SellPick.newPending()
+	items = SellPick.items(stats)
+	SellPick.markSold(pending, items, SellPick.sale(items, { key = "s1:1", count = 2 }), 20)
+	stats.seedBag["1:1#5"] = 3 -- a pack's seed arrives before the sale lands: 4 held
+	SellPick.settle(pending, SellPick.items(stats), 20.2) -- (the push)
+	H.eq(find(SellPick.unsold(SellPick.items(stats), pending), "s1:1").count, 2, "4 held, 2 being sold")
+	stats.seedBag["1:1#5"] = 1 -- the sale lands: 2 held
+	H.ok(SellPick.settle(pending, SellPick.items(stats), 20.5), "confirmed")
+	H.eq(find(SellPick.unsold(SellPick.items(stats), pending), "s1:1").count, 2, "2 left")
+	H.eq(next(pending.seeds), nil)
+end)
+
+H.test("sell spam: the HUD's Sell window lists, sells and counts its quick sells from the pending-adjusted items", function()
+	local hud = string.gsub(fs.readFile("src/client/HUD.client.luau"), "\r", "")
+	local a = string.find(hud, "-- SELL window (TODO 9", 1, true)
+	local b = string.find(hud, "end of SELL", 1, true)
+	local block = string.sub(hud, a :: number, b :: number)
+	H.ok(string.find(block, "local sellSold = SellPick.newPending()", 1, true) ~= nil, "a pending list")
+	H.ok(string.find(block, "return SellPick.unsold(SellPick.items(stats), sellSold)", 1, true) ~= nil, "sellItems: without what is pending")
+	local sellNow = string.match(block, "local function sellNow%(pick: any%).-\n\tend\n") or ""
+	H.ok(string.find(sellNow, "local sale = SellPick.sale(SellPick.unsold(items, sellSold), pick)", 1, true) ~= nil, "a repeat click on a pending item sells nothing")
+	local mark = string.find(sellNow, "SellPick.markSold(sellSold, items, sale, os.clock())", 1, true)
+	local fire = string.find(sellNow, "SellPlants:FireServer(sale.slots, sale.ids, sale.seeds)", 1, true)
+	H.ok(mark and fire and mark < fire, "marked pending as it is sent")
+	H.ok(string.find(sellNow, "task.delay(SellPick.PENDING_SECONDS + 0.1, function()", 1, true) ~= nil, "unconfirmed: shown again")
+	H.ok(string.find(block, "local list = sellItems() -- (the quick sells count from it too)", 1, true) ~= nil, "the window lists the unsold items")
+	H.ok(string.find(block, "quickButton(row, group, list)", 1, true) ~= nil, "quick sells from that list")
+	H.ok(string.find(block, "local sale = SellPick.sale(sellItems(), pending)", 1, true) ~= nil, "the confirm bar too")
+	H.ok(string.find(block, "SellPick.settle(sellSold, SellPick.items(stats), os.clock()) -- (what the push confirms is sold)", 1, true) ~= nil,
+		"each push settles what it confirms")
+	-- nothing in the window reads the raw items except through sellItems / settle / sellNow
+	local _, raw = string.gsub(block, "SellPick%.items%(stats%)", "")
+	H.eq(raw, 4, "sellItems, sellNow, its timeout and the push's settle")
+end)

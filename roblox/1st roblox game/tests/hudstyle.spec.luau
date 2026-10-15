@@ -378,32 +378,127 @@ H.test("seed packs: each reward tile's rarity name and % in its rarity's colour,
 	H.ok(not string.find(tile, "else WHITE", 1, true), "no white name / % any more")
 end)
 
-H.test("right edge: Featured / Speed / Money shortcuts above the Plants button open the Shop at their section", function()
-	local column = block(HUD, "local ICON, WORD, GAP = ", "\nend\n")
-	H.ok(string.find(column, "Name = \"ShopShortcuts\"", 1, true) and string.find(column, "AnchorPoint = Vector2.new(1, 1), Position = UDim2.new(1, -10, 0.45, -48)", 1, true),
-		"on the right edge, its bottom just above the Plants button (centred at 0.45, 70 tall)")
-	-- the Plants button: 70 tall, centred on 0.45 -> its top 35 above; the column ends 48 above: never over it
-	H.ok(48 > 70 / 2, "clear of the Plants button")
-	local icon, word, gap = string.match(column, "local ICON, WORD, GAP = (%d+), (%d+), (%d+)")
-	icon, word, gap = tonumber(icon), tonumber(word), tonumber(gap)
-	H.ok(icon and icon >= 60, "big icons")
-	-- the column's top stays under the day/night timer (top right, 6 + 46) on the design screen (900 tall)
-	H.ok(900 * 0.45 - 48 - (3 * ((icon :: number) + (word :: number)) + 2 * (gap :: number)) > 6 + 46, "clear of the day/night timer")
-	for _, s in { { "Featured", "Featured", "drawTag" }, { "Speed", "Speed", "function" }, { "Money", "Money", "function" } } do
-		H.ok(string.find(column, `shortcut%(%d, "{s[1]}", "{s[2]}", {s[3]}`) ~= nil, `{s[1]} opens the Shop at {s[2]}`)
+-- Whether two rects { x, y, w, h } don't overlap
+local function apart(a: any, b: any): boolean
+	return a.x + a.w <= b.x or b.x + b.w <= a.x or a.y + a.h <= b.y or b.y + b.h <= a.y
+end
+
+H.test("Shop tabs: Featured / Speed / Money belong to the Shop window (outside its right edge), only while it is open", function()
+	local ShopLayout = H.shared("ShopLayout")
+	local L = ShopLayout
+	local column = block(HUD, "local shopTabs: Frame\n", "\n-- Money-dependent bits of the open window")
+	H.ok(column ~= "", "the tabs' block")
+	-- a child of the modal: modalScale scales them, they move with it; hidden until the Shop opens
+	H.ok(string.find(column, "Name = \"ShopShortcuts\", BackgroundTransparency = 1, Position = UDim2.new(1, L.TAB_GAP, 0, L.TAB_TOP)", 1, true) ~= nil,
+		"just outside the window's right edge, from its top")
+	H.ok(string.find(column, "Size = UDim2.fromOffset(L.TAB_W, L.TAB_H), Visible = false, Parent = modal,", 1, true) ~= nil, "a child of the modal, hidden")
+	H.ok(not string.find(HUD, "Position = UDim2.new(1, -10, 0.45, -48)", 1, true), "no longer on the screen's right edge by the Plants button")
+	H.ok(string.find(HUD, "local modal = new(", 1, true) < string.find(HUD, "local shopTabs: Frame", 1, true), "(built after the modal)")
+	local openModal = block(HUD, "openModal = function(name: string)", "\nend\n")
+	H.ok(string.find(openModal, "modalName = name\n\tshopTabs.Visible = name == \"Shop\"", 1, true) ~= nil, "shown only on the Shop")
+	H.ok(string.find(openModal, "markShopTab(shopFocus or \"Featured\")", 1, true) ~= nil, "opens with FEATURED lit (or the section it opens at)")
+	local closeModal = block(HUD, "local function closeModal()", "\nend\n")
+	H.ok(string.find(closeModal, "shopTabs.Visible = false", 1, true) ~= nil, "hidden when the window closes")
+	-- fitModal places them: outside, or tucked inside the wider window's right margin (the body keeps its width)
+	local fit = block(HUD, "local function fitModal()", "\nend\n")
+	H.ok(string.find(fit, "local mw, mh, scale, tabs = ShopLayout.fit(modalName, w, h - TOP - BOTTOM)", 1, true) ~= nil, "ShopLayout.fit")
+	H.ok(string.find(fit, "bodyHolder.Size = UDim2.new(1, -2 * MODAL_PAD - tucked, 1, -TITLE_H - 10 - MODAL_PAD)", 1, true) ~= nil, "the body narrows by the tucked tabs")
+	H.ok(string.find(fit, "shopTabs.Position = if tabs == \"inside\" then UDim2.new(1, -ShopLayout.TAB_W - MODAL_PAD / 2, 0, TITLE_H + 10)", 1, true) ~= nil
+		and string.find(fit, "else UDim2.new(1, ShopLayout.TAB_GAP, 0, ShopLayout.TAB_TOP)", 1, true) ~= nil, "inside under the title bar, or outside")
+	local bodyHolder = string.match(HUD, "local bodyHolder = new%(\"Frame\", {.-}%)") or ""
+	H.ok(string.find(bodyHolder, "Size = UDim2.new(1, -2 * MODAL_PAD, 1, -TITLE_H - 10 - MODAL_PAD)", 1, true) ~= nil, "fitModal's body size matches the built one")
+	H.eq(L.TAB_H, 3 * (L.TAB_ICON + L.TAB_WORD) + 2 * L.TAB_PAD, "three tabs")
+	H.ok(L.TAB_ICON >= 60 and L.TAB_ICON * L.TAB_ACTIVE <= L.TAB_W, "big icons; a lit one still inside the column")
+
+	-- The geometry on phones, tablets and desktops: never over the window, never off the screen
+	local TOP, BOTTOM = 44, 112 -- fitModal's
+	local ws = ShopLayout.window("Shop")
+	local outside, inside = 0, 0
+	for _, screen in { { 844, 390 }, { 667, 375 }, { 932, 430 }, { 1024, 600 }, { 1280, 720 }, { 1366, 768 }, { 1920, 1080 }, { 2560, 1440 },
+		{ 390, 844 }, { 375, 667 }, { 768, 1024 }, { 600, 960 } } do
+		local ui = math.clamp(screen[2] / 900, 0.55, 1.25)
+		local dw, dh = screen[1] / ui, screen[2] / ui
+		local fw, fh, s, tabs = ShopLayout.fit("Shop", dw, dh - TOP - BOTTOM)
+		local name = `{screen[1]}x{screen[2]}`
+		local x0, y0 = dw / 2 - fw * s / 2, dh / 2 + (TOP - BOTTOM) / 2 - fh * s / 2
+		local win = { x = x0, y = y0, w = fw * s, h = fh * s }
+		H.ok(win.x >= 0 and win.x + win.w <= dw and win.y >= 0 and win.y + win.h <= dh, `{name}: the window on the screen`)
+		local col
+		if tabs == "outside" then
+			outside += 1
+			H.eq(fw, ws, `{name}: the window keeps its width`)
+			col = { x = x0 + (fw + L.TAB_GAP) * s, y = y0 + L.TAB_TOP * s, w = L.TAB_W * s, h = L.TAB_H * s }
+			H.ok(apart(col, win), `{name}: beside the window, not over it`)
+			-- a hovered tab pops 1.1 (UiFx.HOVER) and still stays on the screen
+			H.ok(col.x + col.w + (L.TAB_W * 0.05) * s <= dw, `{name}: on the screen`)
+		else
+			inside += 1
+			H.eq(tabs, "inside", `{name}: tucked`)
+			H.eq(fw, ws + L.TAB_W, `{name}: the window grows by the tabs`)
+			H.eq(fw - 2 * ShopLayout.PAD - L.TAB_W, ws - 2 * ShopLayout.PAD, `{name}: the body keeps its width (the cards fit)`)
+			col = { x = x0 + (fw - L.TAB_W - ShopLayout.PAD / 2) * s, y = y0 + (ShopLayout.TITLE_H + 10) * s, w = L.TAB_W * s, h = L.TAB_H * s }
+			local body = { x = x0 + ShopLayout.PAD * s, y = y0 + (ShopLayout.TITLE_H + 10) * s, w = (fw - 2 * ShopLayout.PAD - L.TAB_W) * s,
+				h = (fh - ShopLayout.TITLE_H - 10 - ShopLayout.PAD) * s }
+			H.ok(apart(col, body), `{name}: not over the cards`)
+			H.ok(col.x + col.w <= win.x + win.w and col.y + col.h <= win.y + win.h, `{name}: inside the window`)
+		end
+		H.ok(col.y >= win.y and col.y + col.h <= win.y + win.h, `{name}: along the window's height`)
+		H.ok(col.y >= 0 and col.y + col.h <= dh, `{name}: on the screen`)
 	end
+	H.ok(outside >= 6 and inside >= 3, `landscape screens outside ({outside}), portrait phones tucked ({inside})`)
+	H.eq(select(4, ShopLayout.fit("Trails", 1600, 744)), nil, "only the Shop has tabs")
+	H.eq(select(4, ShopLayout.fit("Index", 400, 744)), nil, "(even on a narrow screen)")
+	H.eq(select(1, ShopLayout.fit("Trails", 400, 744)), ShopLayout.DEFAULT_W, "the other windows keep their width")
+end)
+
+H.test("Shop tabs: a click scrolls the open Shop to its section; the lit tab follows the scroll", function()
+	local ShopLayout = H.shared("ShopLayout")
+	local column = block(HUD, "local shopTabs: Frame\n", "\n-- Money-dependent bits of the open window")
+	for _, s in { { "Featured", "Featured", "drawTag" }, { "Speed", "Speed", "function" }, { "Money", "Money", "function" } } do
+		H.ok(string.find(column, `shortcut%(%d, "{s[1]}", "{s[2]}", {s[3]}`) ~= nil, `{s[1]} goes to {s[2]}`)
+		H.ok(table.find(ShopLayout.TAB_SECTIONS, s[2]) ~= nil, `{s[2]} is a tab section`)
+	end
+	H.ok(string.find(column, "b.Activated:Connect(function()\n\t\t\topenShopAt(section)", 1, true) ~= nil, "a click: openShopAt")
 	H.ok(string.find(column, "iconLabel(art, \"Speed\", \"⚡\"", 1, true) and string.find(column, "iconLabel(art, \"Money\", \"💰\"", 1, true), "the sneaker and the cash")
-	H.ok(string.find(column, "openShopAt(section)", 1, true) ~= nil, "openShopAt")
 	H.ok(string.find(column, "Name = word, BackgroundTransparency = 1", 1, true) ~= nil, "no box behind them")
-	H.ok(string.find(column, "UiFx.relief(bold(b, 4, { Name = \"Word\", Text = word", 1, true) ~= nil, "the word in white relief under the icon")
-	-- the Featured tag: drawn red with a yellow % in relief
+	H.ok(string.find(column, "local label = bold(b, 4, { Name = \"Word\", Text = word", 1, true) and string.find(column, "UiFx.relief(label, 3, 3)", 1, true),
+		"the word in white relief under the icon")
 	H.ok(string.find(column, "Name = \"Tag\"", 1, true) and string.find(column, "Name = \"Point\"", 1, true) and string.find(column, "Text = \"%\"", 1, true), "a red tag with a %")
-	-- the Shop has those sections
+	-- openShopAt: an open Shop scrolls to the section's title row (nothing rebuilt); a closed one opens there
+	local open = block(HUD, "openShopAt = function(sectionName: string)", "\nend\n")
+	H.ok(string.find(open, "markShopTab(sectionName)", 1, true) ~= nil, "lights the clicked tab")
+	H.ok(string.find(open, "modal.Visible and modalName == \"Shop\" and modalBody:FindFirstChild(\"Section_\" .. string.upper(sectionName))", 1, true)
+		and string.find(open, "scrollModalTo(row :: GuiObject)\n\t\treturn", 1, true), "the open Shop scrolls there")
+	H.ok(string.find(open, "shopFocus = sectionName", 1, true) and string.find(open, "openModal(\"Shop\")", 1, true), "a closed Shop opens there")
+	H.ok(string.find(HUD, "local function scrollModalTo(target: GuiObject)", 1, true) < string.find(HUD, "openShopAt = function(", 1, true), "(scrollModalTo in scope)")
+	-- the title rows are named after the tabs' sections
+	H.ok(string.find(HUD, "local row = new(\"Frame\", { Name = \"Section_\" .. label", 1, true) ~= nil, "section rows are named")
 	local renderShop = block(HUD, "function renderShop(): boolean", "\n\tend\nend")
 	H.ok(string.find(renderShop, "shopSections.Featured = section(\"FEATURED\"", 1, true) ~= nil, "-- FEATURED -- (the seed packs)")
 	H.ok(string.find(renderShop, "shopSections.Speed = section(\"SPEED\"", 1, true) ~= nil, "-- SPEED --")
 	H.ok(string.find(renderShop, "shopSections.Money = section(\"MONEY\"", 1, true) ~= nil, "-- MONEY --")
 	H.ok(not string.find(renderShop, "\"SEED PACKS\"", 1, true), "the old SEED PACKS title is renamed")
+	-- the lit tab follows the scroll: markShopTab on every scroll, ShopLayout.litTab decides
+	H.ok(string.find(column, "for _, prop in { \"CanvasPosition\", \"AbsoluteCanvasSize\", \"AbsoluteWindowSize\" } do\n\t\tmodalBody:GetPropertyChangedSignal(prop):Connect(function()\n\t\t\tmarkShopTab()", 1, true) ~= nil,
+		"re-checked on every scroll")
+	H.ok(string.find(column, "local found = L.litTab(tops, modalBody.AbsolutePosition.Y, modalBody.AbsoluteWindowSize.Y)", 1, true) ~= nil, "ShopLayout.litTab")
+	H.ok(string.find(column, "{ Scale = if on then L.TAB_ACTIVE else 1 }", 1, true) and string.find(column, "t.glow.Visible = on", 1, true)
+		and string.find(column, "t.word.TextColor3 = if on then LIT_GOLD else WHITE", 1, true), "lit: bigger, a glow, a gold word")
+	-- litTab: a body at y 100, 500 tall (its line at 300); the titles 1000 px apart as the canvas scrolls
+	local function at(scroll: number): string?
+		return ShopLayout.litTab({ Featured = 104 - scroll, Speed = 1904 - scroll, Money = 2904 - scroll }, 100, 500)
+	end
+	H.eq(at(0), "Featured", "at the top")
+	H.eq(at(1000), "Featured", "in the PASSES")
+	H.eq(at(1550), "Featured", "SPEED's title still low in the body")
+	H.eq(at(1604), "Speed", "SPEED's title up past 40%")
+	H.eq(at(1804), "Speed", "SPEED at the top")
+	H.eq(at(2700), "Money", "MONEY")
+	H.eq(at(3600), "Money", "UPGRADES keep MONEY lit")
+	H.eq(at(1700), "Speed", "scrolling back up")
+	H.eq(at(200), "Featured", "and back to the top")
+	H.eq(ShopLayout.litTab({}, 100, 500), nil, "nothing laid out: unchanged")
+	H.eq(ShopLayout.litTab({ Money = 120 }, 100, 500), "Money", "only the laid-out titles count")
 end)
 
 return nil

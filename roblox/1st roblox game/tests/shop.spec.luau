@@ -355,10 +355,10 @@ end)
 
 H.test("robux: id = 0 products say coming soon; only the treadmill's own upgrade tier is prompted", function()
 	local p = ProfileStore.defaultProfile()
-	for name in Config.DEVELOPER_PRODUCTS do
+	for name, item in Config.DEVELOPER_PRODUCTS do
 		local product, why = Shop.canPrompt(p, name)
 		H.eq(product, nil, name)
-		H.ok(why and string.find(why, "coming soon"), why)
+		H.ok(why and string.find(why, if item.retired then "isn't sold any more" else "coming soon", 1, true), why)
 	end
 	withIds({ TreadmillT1 = 301, TreadmillT2 = 302, TreadmillT3 = 304, Speed50M = 303 }, function()
 		H.ok((Shop.canPrompt(p, "TreadmillT1")), "tier 1 -> T1")

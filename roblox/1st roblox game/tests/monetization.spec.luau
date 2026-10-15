@@ -90,6 +90,8 @@ H.test("monetization: catalog.json is up to date and covers every pass and produ
 		H.ok(not seen[e.kind][e.key], `{e.key} listed once`)
 		seen[e.kind][e.key] = true
 		H.ok(e.price > 0 and e.price == math.floor(e.price), `{e.key} price {e.price}`)
+		-- a retired product (the Lotus Wyrm packs) stays in the catalog, off sale (create_monetization --update-prices)
+		H.eq(e.isForSale, not (source and source[e.key].retired == true), `{e.key} isForSale`)
 		if source and source[e.key].robux > 0 then
 			H.eq(e.price, source[e.key].robux, `{e.key} price is Config's robux`)
 		end

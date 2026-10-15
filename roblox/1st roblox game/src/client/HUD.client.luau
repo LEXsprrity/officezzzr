@@ -490,68 +490,6 @@ button(rightTabs, "🪴", Color3.fromRGB(110, 235, 80), UDim2.fromOffset(70, 70)
 	renderSide()
 end, "Plants")
 
--- Shop shortcuts (owner reference 2026-10-15): a column of three big icons on the right edge, above the
--- Plants button: Featured (a red price tag with a "%", drawn), Speed (the sneaker), Money (the cash), each
--- with its word in white relief under it, no box; they pop on hover (UiFx.watch) and open the Shop at
--- their section (openShopAt: FEATURED = the seed packs, SPEED, MONEY).
-do
-	local ICON, WORD, GAP = 66, 24, 4 -- design pixels
-	local column = new("Frame", {
-		Name = "ShopShortcuts", BackgroundTransparency = 1, AnchorPoint = Vector2.new(1, 1), Position = UDim2.new(1, -10, 0.45, -48),
-		Size = UDim2.fromOffset(96, 3 * (ICON + WORD) + 2 * GAP), Parent = gui,
-	}, { new("UIListLayout", { Padding = UDim.new(0, GAP), SortOrder = Enum.SortOrder.LayoutOrder, HorizontalAlignment = Enum.HorizontalAlignment.Center }) })
-	-- The Featured icon: a red tag tilted up, its point on the left with a white hole, a yellow "%" in relief
-	local function drawTag(parent: GuiObject)
-		local RED, DARK_RED = Color3.fromRGB(235, 45, 55), Color3.fromRGB(150, 15, 30)
-		local tag = new("Frame", {
-			Name = "Tag", AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.56, 0.5), Size = UDim2.fromOffset(44, 34), Rotation = -32,
-			BackgroundColor3 = RED, BorderSizePixel = 0, ZIndex = 3, Parent = parent,
-		}, {
-			new("UIStroke", { Thickness = 3, Color = INK, LineJoinMode = Enum.LineJoinMode.Round }),
-			new("UIGradient", { Rotation = 90, Color = ColorSequence.new(RED:Lerp(WHITE, 0.15), RED:Lerp(DARK_RED, 0.5)) }),
-		})
-		new("Frame", { -- the point: a square turned 45 degrees behind the tag's left end
-			Name = "Point", AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.new(0, 0, 0.5, 0), Size = UDim2.fromOffset(24, 24), Rotation = 45,
-			BackgroundColor3 = RED, BorderSizePixel = 0, ZIndex = 2, Parent = tag,
-		}, {
-			new("UIStroke", { Thickness = 3, Color = INK, LineJoinMode = Enum.LineJoinMode.Round }),
-			new("UIGradient", { Rotation = 45, Color = ColorSequence.new(RED:Lerp(WHITE, 0.15), RED:Lerp(DARK_RED, 0.5)) }),
-		})
-		new("Frame", { -- hides the tag's outline where the point joins it
-			Name = "Join", AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.new(0, 0, 0.5, 0), Size = UDim2.new(0, 8, 1, -4),
-			BackgroundColor3 = RED, BorderSizePixel = 0, ZIndex = 4, Parent = tag,
-		})
-		new("Frame", { -- the hole
-			Name = "Hole", AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.new(0, -2, 0.5, 0), Size = UDim2.fromOffset(9, 9),
-			BackgroundColor3 = WHITE, ZIndex = 5, Parent = tag,
-		}, { new("UICorner", { CornerRadius = UDim.new(0.5, 0) }), new("UIStroke", { Thickness = 2, Color = INK }) }) -- round: a hole (art)
-		UiFx.relief(bold(tag, 3, {
-			Name = "Percent", Text = "%", Size = UDim2.new(1, -6, 1, -2), Position = UDim2.fromOffset(6, 0), ZIndex = 6,
-			TextColor3 = Color3.fromRGB(255, 225, 60),
-		}), 2, 3)
-	end
-	local function shortcut(order: number, word: string, section: string, draw: (GuiObject) -> ())
-		local b = new("TextButton", {
-			Name = word, BackgroundTransparency = 1, Text = "", Size = UDim2.fromOffset(96, ICON + WORD), LayoutOrder = order, Parent = column,
-		})
-		local art = new("Frame", {
-			Name = "Art", BackgroundTransparency = 1, AnchorPoint = Vector2.new(0.5, 0), Position = UDim2.fromScale(0.5, 0), Size = UDim2.fromOffset(ICON, ICON), Parent = b,
-		})
-		draw(art)
-		UiFx.relief(bold(b, 4, { Name = "Word", Text = word, Size = UDim2.new(1, 0, 0, WORD + 2), Position = UDim2.fromOffset(0, ICON - 4), ZIndex = 6 }), 3, 3)
-		b.Activated:Connect(function()
-			openShopAt(section)
-		end)
-	end
-	shortcut(1, "Featured", "Featured", drawTag)
-	shortcut(2, "Speed", "Speed", function(art: GuiObject)
-		iconLabel(art, "Speed", "⚡", { Size = UDim2.fromScale(1, 1), ZIndex = 3 })
-	end)
-	shortcut(3, "Money", "Money", function(art: GuiObject)
-		iconLabel(art, "Money", "💰", { Size = UDim2.fromScale(1, 1), ZIndex = 3 })
-	end)
-end
-
 ----------------------------------------------------------------------------------------------------
 -- Modals: Shop, Trail Shop, Index and Sell share one window, like the reference (owner 2026-10-15, round
 -- 2: "premium, more squared, no edges"): nothing is rounded. A flat bright title bar in the window's
@@ -692,6 +630,126 @@ local modalBody = new("ScrollingFrame", {
 local modalName: string? = nil
 local renderModal: () -> ()
 
+-- The Shop's section tabs (owner reference 2026-10-15): Featured (a red price tag with a "%", drawn), Speed
+-- (the sneaker) and Money (the cash), each with its word in white relief under it, no box. They belong to
+-- the Shop window (children of the modal: modalScale scales them, they move with it): stacked down from
+-- its top just outside its right edge, or tucked inside its right margin when the screen has no room
+-- there (ShopLayout.fit; fitModal places them). Shown only while the Shop is open (openModal). A click
+-- scrolls the Shop to its section (openShopAt: FEATURED = the seed packs, SPEED, MONEY); the tab of the
+-- section scrolled to is lit: its icon a little bigger on a soft gold glow, its word gold (markShopTab).
+local shopTabs: Frame
+local markShopTab: (section: string?) -> ()
+do
+	local L = ShopLayout
+	local LIT_GOLD = Color3.fromRGB(255, 225, 60)
+	shopTabs = new("Frame", {
+		Name = "ShopShortcuts", BackgroundTransparency = 1, Position = UDim2.new(1, L.TAB_GAP, 0, L.TAB_TOP),
+		Size = UDim2.fromOffset(L.TAB_W, L.TAB_H), Visible = false, Parent = modal,
+	}, { new("UIListLayout", { Padding = UDim.new(0, L.TAB_PAD), SortOrder = Enum.SortOrder.LayoutOrder, HorizontalAlignment = Enum.HorizontalAlignment.Center }) })
+	-- The Featured icon: a red tag tilted up, its point on the left with a white hole, a yellow "%" in relief
+	local function drawTag(parent: GuiObject)
+		local RED, DARK_RED = Color3.fromRGB(235, 45, 55), Color3.fromRGB(150, 15, 30)
+		local tag = new("Frame", {
+			Name = "Tag", AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.56, 0.5), Size = UDim2.fromOffset(44, 34), Rotation = -32,
+			BackgroundColor3 = RED, BorderSizePixel = 0, ZIndex = 3, Parent = parent,
+		}, {
+			new("UIStroke", { Thickness = 3, Color = INK, LineJoinMode = Enum.LineJoinMode.Round }),
+			new("UIGradient", { Rotation = 90, Color = ColorSequence.new(RED:Lerp(WHITE, 0.15), RED:Lerp(DARK_RED, 0.5)) }),
+		})
+		new("Frame", { -- the point: a square turned 45 degrees behind the tag's left end
+			Name = "Point", AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.new(0, 0, 0.5, 0), Size = UDim2.fromOffset(24, 24), Rotation = 45,
+			BackgroundColor3 = RED, BorderSizePixel = 0, ZIndex = 2, Parent = tag,
+		}, {
+			new("UIStroke", { Thickness = 3, Color = INK, LineJoinMode = Enum.LineJoinMode.Round }),
+			new("UIGradient", { Rotation = 45, Color = ColorSequence.new(RED:Lerp(WHITE, 0.15), RED:Lerp(DARK_RED, 0.5)) }),
+		})
+		new("Frame", { -- hides the tag's outline where the point joins it
+			Name = "Join", AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.new(0, 0, 0.5, 0), Size = UDim2.new(0, 8, 1, -4),
+			BackgroundColor3 = RED, BorderSizePixel = 0, ZIndex = 4, Parent = tag,
+		})
+		new("Frame", { -- the hole
+			Name = "Hole", AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.new(0, -2, 0.5, 0), Size = UDim2.fromOffset(9, 9),
+			BackgroundColor3 = WHITE, ZIndex = 5, Parent = tag,
+		}, { new("UICorner", { CornerRadius = UDim.new(0.5, 0) }), new("UIStroke", { Thickness = 2, Color = INK }) }) -- round: a hole (art)
+		UiFx.relief(bold(tag, 3, {
+			Name = "Percent", Text = "%", Size = UDim2.new(1, -6, 1, -2), Position = UDim2.fromOffset(6, 0), ZIndex = 6,
+			TextColor3 = Color3.fromRGB(255, 225, 60),
+		}), 2, 3)
+	end
+	type Tab = { grow: UIScale, glow: Frame, word: TextLabel }
+	local tabs: { [string]: Tab } = {}
+	local lit: string? = nil
+	local function light(section: string)
+		if section == lit then
+			return
+		end
+		lit = section
+		for name, t in tabs do
+			local on = name == section
+			TweenService:Create(t.grow, TweenInfo.new(0.2, Enum.EasingStyle.Back, Enum.EasingDirection.Out), { Scale = if on then L.TAB_ACTIVE else 1 }):Play()
+			t.glow.Visible = on
+			t.word.TextColor3 = if on then LIT_GOLD else WHITE
+		end
+	end
+	local function shortcut(order: number, word: string, section: string, draw: (GuiObject) -> ())
+		local b = new("TextButton", {
+			Name = word, BackgroundTransparency = 1, Text = "", Size = UDim2.fromOffset(L.TAB_W, L.TAB_ICON + L.TAB_WORD), LayoutOrder = order, Parent = shopTabs,
+		})
+		local art = new("Frame", {
+			Name = "Art", BackgroundTransparency = 1, AnchorPoint = Vector2.new(0.5, 0), Position = UDim2.fromScale(0.5, 0), Size = UDim2.fromOffset(L.TAB_ICON, L.TAB_ICON), Parent = b,
+		})
+		local grow = new("UIScale", { Name = "Lit", Parent = art }) -- (on the art, not the button: its hover pop is its own)
+		local glow = new("Frame", { -- the lit tab's soft gold glow behind its icon
+			Name = "Glow", AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.5), Size = UDim2.fromScale(1.1, 1.1),
+			BackgroundColor3 = LIT_GOLD, BackgroundTransparency = 0.55, BorderSizePixel = 0, Visible = false, ZIndex = 1, Parent = art,
+		}, { new("UICorner", { CornerRadius = UDim.new(0.5, 0) }), new("UIStroke", { Thickness = 8, Color = LIT_GOLD, Transparency = 0.75 }) }) -- round: a glow (art)
+		draw(art)
+		local label = bold(b, 4, { Name = "Word", Text = word, Size = UDim2.new(1, 0, 0, L.TAB_WORD + 2), Position = UDim2.fromOffset(0, L.TAB_ICON - 4), ZIndex = 6 })
+		UiFx.relief(label, 3, 3)
+		tabs[section] = { grow = grow, glow = glow, word = label }
+		b.Activated:Connect(function()
+			openShopAt(section)
+		end)
+	end
+	shortcut(1, "Featured", "Featured", drawTag)
+	shortcut(2, "Speed", "Speed", function(art: GuiObject)
+		iconLabel(art, "Speed", "⚡", { Size = UDim2.fromScale(1, 1), ZIndex = 3 })
+	end)
+	shortcut(3, "Money", "Money", function(art: GuiObject)
+		iconLabel(art, "Money", "💰", { Size = UDim2.fromScale(1, 1), ZIndex = 3 })
+	end)
+	light("Featured")
+
+	-- Lights `section`'s tab (openModal: the Shop opens at its top, FEATURED; openShopAt: the section it
+	-- jumps to), or else the tab of the section the Shop is scrolled to (ShopLayout.litTab). Titles not laid
+	-- out yet (a rebuild this frame) don't count; with none laid out it waits for the next change.
+	markShopTab = function(section: string?)
+		if section then
+			light(section)
+			return
+		end
+		if modalName ~= "Shop" or not modal.Visible then
+			return
+		end
+		local tops: { [string]: number } = {}
+		for _, name in L.TAB_SECTIONS do
+			local row = modalBody:FindFirstChild("Section_" .. string.upper(name)) :: GuiObject?
+			if row and row.AbsoluteSize.Y > 0 then
+				tops[name] = row.AbsolutePosition.Y
+			end
+		end
+		local found = L.litTab(tops, modalBody.AbsolutePosition.Y, modalBody.AbsoluteWindowSize.Y)
+		if found then
+			light(found)
+		end
+	end
+	for _, prop in { "CanvasPosition", "AbsoluteCanvasSize", "AbsoluteWindowSize" } do
+		modalBody:GetPropertyChangedSignal(prop):Connect(function()
+			markShopTab()
+		end)
+	end
+end
+
 -- Money-dependent bits of the open window (buy buttons' colours, the money in the title bar, the Money
 -- packs' amounts). Money ticks constantly: these update in place instead of rebuilding the window, so
 -- a click or a drag in progress is never cut short.
@@ -704,6 +762,7 @@ end
 local function closeModal()
 	modal.Visible = false
 	modalName = nil
+	shopTabs.Visible = false
 end
 modalClose.Activated:Connect(closeModal)
 
@@ -711,11 +770,18 @@ modalClose.Activated:Connect(closeModal)
 local function fitModal()
 	local s = uiScale.Scale
 	local w, h = gui.AbsoluteSize.X / s, gui.AbsoluteSize.Y / s
-	local mw, mh = modal.Size.X.Offset, modal.Size.Y.Offset -- the open window's size (ShopLayout.window)
 	-- Windows sit between Roblox's top bar (TOP) and the hotbar (BOTTOM), never over the Bat / Seeds slots.
 	local TOP, BOTTOM = 44, 112
 	modal.Position = UDim2.new(0.5, 0, 0.5, (TOP - BOTTOM) / 2)
-	modalScale.Scale = math.clamp(math.min((w - 24) / (mw + 12), (h - TOP - BOTTOM - 12) / (mh + 12)), 0.3, 1)
+	-- The open window's size and scale; the Shop's tabs outside its right edge, or tucked inside a wider
+	-- right margin (the body keeps its width) when the screen has no room for them there.
+	local mw, mh, scale, tabs = ShopLayout.fit(modalName, w, h - TOP - BOTTOM)
+	modal.Size = UDim2.fromOffset(mw, mh)
+	modalScale.Scale = scale
+	local tucked = if tabs == "inside" then ShopLayout.TAB_W else 0
+	bodyHolder.Size = UDim2.new(1, -2 * MODAL_PAD - tucked, 1, -TITLE_H - 10 - MODAL_PAD)
+	shopTabs.Position = if tabs == "inside" then UDim2.new(1, -ShopLayout.TAB_W - MODAL_PAD / 2, 0, TITLE_H + 10)
+		else UDim2.new(1, ShopLayout.TAB_GAP, 0, ShopLayout.TAB_TOP)
 end
 
 ----------------------------------------------------------------------------------------------------
@@ -1074,6 +1140,7 @@ local function clearModal(padding: number, horizontal: boolean?)
 	})
 end
 
+local shopFocus: string? = nil -- the section the Shop opens scrolled to (openShopAt, renderShop)
 openModal = function(name: string)
 	if modalName == name then
 		closeModal()
@@ -1081,6 +1148,7 @@ openModal = function(name: string)
 	end
 	local window = WINDOWS[name]
 	modalName = name
+	shopTabs.Visible = name == "Shop" -- (the Shop's section tabs: only on the Shop)
 	local w, h = ShopLayout.window(name) -- the Shop is wider
 	modal.Size = UDim2.fromOffset(w, h)
 	fitModal()
@@ -1090,19 +1158,10 @@ openModal = function(name: string)
 	Icons.set(modalSubtitle, {}, "") -- the window's render may fill it
 	modal.Visible = true
 	modalBody.CanvasPosition = Vector2.zero
+	markShopTab(shopFocus or "Featured") -- (at its top, or the section it's opening at)
 	renderModal()
 end
 
--- Opens the Shop (or re-renders it) scrolled to a section (see renderShop's `shopSections`).
-local shopFocus: string? = nil
-openShopAt = function(sectionName: string)
-	shopFocus = sectionName
-	if modalName == "Shop" then
-		renderModal()
-	else
-		openModal("Shop")
-	end
-end
 
 -- Walk-up stalls in the base's shop plaza: their prompts say which menu to open ("Shop", "Trails" or
 -- "Index"; the SELL stall's "Sell" is handled in the SELL window's block). Always opens (never toggles shut).
@@ -1156,6 +1215,23 @@ local function scrollModalTo(target: GuiObject)
 			ratio = moved / applied
 		end
 	end)
+end
+
+-- Opens the Shop scrolled to a section (renderShop's `shopSections`: its "Section_FEATURED" title rows);
+-- an open Shop just scrolls there, nothing rebuilt. Lights the section's tab.
+openShopAt = function(sectionName: string)
+	markShopTab(sectionName)
+	local row = modal.Visible and modalName == "Shop" and modalBody:FindFirstChild("Section_" .. string.upper(sectionName))
+	if row then
+		scrollModalTo(row :: GuiObject)
+		return
+	end
+	shopFocus = sectionName
+	if modalName == "Shop" then
+		renderModal()
+	else
+		openModal("Shop")
+	end
 end
 
 -- Robux prices. Developer products' real prices are set on the Creator Dashboard, so each is fetched
@@ -1662,7 +1738,7 @@ do
 		local shopSections: { [string]: GuiObject } = {}
 
 		-- Seed packs (Robux)
-		-- (the right edge's Featured shortcut opens the Shop here; owner 2026-10-15: "-- FEATURED --")
+		-- (the Shop's Featured tab scrolls here; owner 2026-10-15: "-- FEATURED --")
 		shopSections.Featured = section("FEATURED", nextOrder(), HEADING_GOLD)
 		local bagCount = SeedPacks.bagCount(stats.seedBag or {})
 		local bagFull = bagCount >= Config.SEED_BAG_MAX
@@ -1693,11 +1769,11 @@ do
 			end,
 		})
 
-		-- Speed (Robux), blue; the HUD's "+" by the Speed number and the right edge's Speed shortcut open the Shop here
+		-- Speed (Robux), blue; the HUD's "+" by the Speed number and the Shop's Speed tab scroll here
 		shopSections.Speed = section("SPEED", nextOrder(), HEADING_GOLD)
 		banner(nextOrder(), "DoubleSpeed", "SPEED", CARD_COLORS.Speed, "Speed")
 		local grid = cardGrid(nextOrder())
-		local speeds = Config.products("Speed")
+		local speeds = Config.forSale("Speed")
 		for i, entry in speeds do
 			local level = ShopArt.level(i, #speeds)
 			local amount, rest = string.match(string.upper(entry.product.label), "^(%S+)%s+(.+)$")
@@ -1707,10 +1783,10 @@ do
 		end
 
 		-- Money (Robux), gold: each card's fixed amount (owner 2026-10-15: $24K ... $8M, whatever you earn)
-		shopSections.Money = section("MONEY", nextOrder(), HEADING_CYAN) -- (the right edge's Money shortcut opens it here)
+		shopSections.Money = section("MONEY", nextOrder(), HEADING_CYAN) -- (the Shop's Money tab scrolls here)
 		banner(nextOrder(), "DoubleMoney", "MONEY", CARD_COLORS.Money, "Money")
 		grid = cardGrid(nextOrder())
-		local monies = Config.products("Money")
+		local monies = Config.forSale("Money")
 		for i, entry in monies do
 			productCard(grid, i, entry.name, entry.product, CARD_COLORS.Money,
 				`<font color="{NUMBER_GREEN}">+{Format.money(Config.moneyPackAmount(entry.product))}</font> CASH`, ShopArt.level(i, #monies), "Money")
@@ -1971,12 +2047,20 @@ do
 	local sellMutated = false -- the quick sells' "Include mutated" toggle
 	local sellUpdaters: { () -> () } = {} -- the open window's prices and $/s, updated in place on payouts
 	local sellShown = "" -- which things the window shows (sellSignature)
+	-- What this window has asked the server to sell and its push hasn't confirmed yet (Shared/SellPick):
+	-- hidden (a seed's count lowered) at once, so a fast second click can't sell it "again".
+	local sellSold = SellPick.newPending()
+
+	-- What the window lists: what the server last pushed, without what is already being sold.
+	local function sellItems(): { any }
+		return SellPick.unsold(SellPick.items(stats), sellSold)
+	end
 
 	-- Which things there are (key, kind and a seed's count), so a payout tick (same things, new numbers)
 	-- doesn't rebuild the window under the player's finger, but a sale or a new plant or seed does.
 	local function sellSignature(): string
 		local keys = {}
-		for _, it in SellPick.items(stats) do
+		for _, it in sellItems() do
 			local src = it.src or {}
 			table.insert(keys, `{it.key}:{it.zone}:{it.rarity}:{it.mutation or ""}:{src.flower or ""}:{it.count}:{if src.sproutUntil then "s" else ""}`)
 		end
@@ -1985,7 +2069,7 @@ do
 	end
 
 	local function itemOf(key: string): any
-		for _, it in SellPick.items(stats) do
+		for _, it in sellItems() do
 			if it.key == key then
 				return it
 			end
@@ -1993,11 +2077,21 @@ do
 		return nil
 	end
 
+	-- Sells `pick` out of what isn't being sold already (a repeat click on a pending item sells nothing),
+	-- marks it pending (sellSold) and redraws without it. Shown again if the server hasn't confirmed it
+	-- in SellPick.PENDING_SECONDS (it refused: too far from the stall).
 	local function sellNow(pick: any)
-		local sale = SellPick.sale(SellPick.items(stats), pick)
+		local items = SellPick.items(stats)
+		local sale = SellPick.sale(SellPick.unsold(items, sellSold), pick)
 		sellPending = nil
 		if sale.count > 0 then
+			SellPick.markSold(sellSold, items, sale, os.clock())
 			SellPlants:FireServer(sale.slots, sale.ids, sale.seeds)
+			task.delay(SellPick.PENDING_SECONDS + 0.1, function()
+				if SellPick.settle(sellSold, SellPick.items(stats), os.clock()) and modal.Visible and modalName == "Sell" then
+					renderModal()
+				end
+			end)
 		end
 		renderModal()
 	end
@@ -2112,7 +2206,7 @@ do
 		clearModal(10)
 		table.clear(sellUpdaters)
 		sellShown = sellSignature()
-		local list = SellPick.items(stats)
+		local list = sellItems() -- (the quick sells count from it too)
 		table.sort(list, function(a, b)
 			if a.sell ~= b.sell then
 				return a.sell < b.sell
@@ -2161,7 +2255,7 @@ do
 				Size = UDim2.new(1, -350, 1, -18), Position = UDim2.fromOffset(16, 9), TextXAlignment = Enum.TextXAlignment.Left, TextColor3 = HEADING_GOLD,
 			})
 			local function update()
-				local sale = SellPick.sale(SellPick.items(stats), pending)
+				local sale = SellPick.sale(sellItems(), pending)
 				local what = if group.rarity then `{group.id} ` else ""
 				question.Text = `Sell {sale.count} {what}item{if sale.count == 1 then "" else "s"}{if pending.mutated then " (mutated too)" else ""} for {Format.money(sale.total)}?`
 			end
@@ -2209,6 +2303,7 @@ do
 	-- The plants view arrives with every payout: rebuild only when the things themselves changed.
 	sellChanged = function(changed: { [string]: any })
 		if changed.plants or changed.inventory or changed.seedBag or changed.plotLevel or changed.passes then
+			SellPick.settle(sellSold, SellPick.items(stats), os.clock()) -- (what the push confirms is sold)
 			if sellSignature() ~= sellShown then
 				renderModal()
 			else

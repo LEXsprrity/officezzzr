@@ -6,7 +6,11 @@
 //   node tools/create_monetization.mjs --dry-run                 # what would be created; no key, no network
 //   node tools/create_monetization.mjs --universe <universeId>   # creates the missing ones
 //   node tools/create_monetization.mjs --universe <universeId> --update-prices
-//       # also sets the price of every EXISTING item to its catalog price (PATCH, only where it differs)
+//       # also sets the price of every EXISTING item to its catalog price, and takes the retired ones
+//       # (catalog isForSale: false) off sale (one PATCH per item, only where something differs)
+//
+// A retired item (catalog "isForSale": false, Config `retired`) is never created; one that exists stays
+// (its receipts still grant), off sale.
 //
 // The API key is read ONLY from the environment variable ROBLOX_API_KEY (Open Cloud key with Developer
 // Products read + write and Game Passes read + write for this experience). It is never printed, written or
@@ -100,10 +104,14 @@ export function withCatalogKeys(ids, catalog) {
 
 const nameKey = (s) => String(s ?? "").trim().toLowerCase();
 
+// Whether a catalog entry is sold: every one but a retired item ("isForSale": false).
+export const forSale = (e) => e.isForSale !== false;
+
 // What to do with each catalog entry, given ids.json and (unless dry-run: null) what the universe already
 // has: { product: [{ id, name }], pass: [{ id, name }] }. Returns one row per entry:
 //   existing  id known (ids.json, or an item with the same name in the universe): nothing to create
 //   create    to be created
+//   skipped   retired (isForSale false) and not on Roblox: never created
 //   failed    ids.json has an id the universe doesn't have (wrong universe?): left alone, never re-created
 export function plan(catalog, ids, existing) {
 	const byName = {};
@@ -133,6 +141,7 @@ export function plan(catalog, ids, existing) {
 		}
 		const found = existing ? byName[e.kind].get(nameKey(e.name)) : undefined;
 		if (found) return { entry: e, status: "existing", id: found, note: "found by name on Roblox" };
+		if (!forSale(e)) return { entry: e, status: "skipped", id: 0, note: "retired: not created" };
 		return { entry: e, status: "create", id: 0, note: "" };
 	});
 }
@@ -196,7 +205,12 @@ export function listedPrice(item) {
 	return Number.isSafeInteger(p) && p >= 0 ? p : null;
 }
 
-// Everything of one kind in the universe: [{ id, name, price }].
+// Whether a listed item is on sale now, or null when the listing doesn't say.
+export function listedForSale(item) {
+	return typeof item?.isForSale === "boolean" ? item.isForSale : null;
+}
+
+// Everything of one kind in the universe: [{ id, name, price, forSale }].
 export async function listAll(deps, kindName, universe, apiKey) {
 	const kind = KINDS[kindName];
 	const out = [];
@@ -206,7 +220,7 @@ export async function listAll(deps, kindName, universe, apiKey) {
 		const body = await call(deps, url, { method: "GET", headers: { "x-api-key": apiKey } });
 		for (const item of body[kind.listField] ?? []) {
 			const id = validId(Number(item[kind.idField]));
-			if (id) out.push({ id, name: item.name, price: listedPrice(item) });
+			if (id) out.push({ id, name: item.name, price: listedPrice(item), forSale: listedForSale(item) });
 		}
 		token = body.nextPageToken;
 		if (!token) return out;
@@ -222,7 +236,7 @@ export async function create(deps, entry, universe, apiKey) {
 		const form = new FormData();
 		form.append("name", entry.name);
 		form.append("description", entry.description);
-		form.append("isForSale", "true");
+		form.append("isForSale", String(forSale(entry)));
 		form.append("price", String(entry.price));
 		form.append("imageFile", new Blob([image], { type: "image/png" }), basename(entry.image));
 		return form;
@@ -233,40 +247,68 @@ export async function create(deps, entry, universe, apiKey) {
 	return id;
 }
 
-// Sets an existing item's price (Open Cloud: PATCH <collection>/<id>, multipart, only `price`; 204 No Content).
-export async function updatePrice(deps, kindName, id, price, universe, apiKey) {
+// Changes an existing item (Open Cloud: PATCH <collection>/<id>, multipart; 204 No Content): `fields` is
+// { price?, isForSale? }, only those are sent.
+export async function updateItem(deps, kindName, id, fields, universe, apiKey) {
 	const kind = KINDS[kindName];
 	const body = () => {
 		const form = new FormData();
-		form.append("price", String(price));
+		if (fields.price !== undefined) form.append("price", String(fields.price));
+		if (fields.isForSale !== undefined) form.append("isForSale", String(fields.isForSale));
 		return form;
 	};
 	await call(deps, `${kind.base(universe)}/${id}`, { method: "PATCH", headers: { "x-api-key": apiKey }, body });
 }
 
-// --update-prices: every existing row whose price on Roblox isn't the catalog's (or isn't known) is patched.
-// Rows get `price` = "ok" | "updated" | "failed" (and a note on failure).
+// Sets an existing item's price (only `price` is sent).
+export async function updatePrice(deps, kindName, id, price, universe, apiKey) {
+	await updateItem(deps, kindName, id, { price }, universe, apiKey);
+}
+
+// What --update-prices changes on an existing item, given what the listing says ({ price, forSale }, each
+// null when unknown): its price where it differs from the catalog's (or is unknown); isForSale false for a
+// retired item unless it is known to be off sale already, true for a sold one known to be off sale (a
+// retired item brought back). {} when nothing needs to change.
+export function changes(entry, listed) {
+	const out = {};
+	if ((listed?.price ?? null) !== entry.price) out.price = entry.price;
+	const want = forSale(entry);
+	const now = listed?.forSale ?? null;
+	if (!want && now !== false) out.isForSale = false;
+	else if (want && now === false) out.isForSale = true;
+	return out;
+}
+
+// --update-prices: every existing row that `changes` says differs gets one PATCH. Rows get `price` =
+// "ok" | "updated" | "failed" (and a note).
 async function updatePrices(deps, rows, existing, universe, apiKey) {
-	const priceOf = {};
+	const listedOf = {};
 	for (const kind of Object.keys(KINDS)) {
-		priceOf[kind] = new Map((existing[kind] ?? []).map((item) => [item.id, item.price]));
+		listedOf[kind] = new Map((existing[kind] ?? []).map((item) => [item.id, item]));
 	}
 	for (const r of rows) {
 		if (r.status !== "existing" || !validId(r.id)) continue;
-		const now = priceOf[r.entry.kind].get(r.id);
-		if (now === r.entry.price) {
+		const listed = listedOf[r.entry.kind].get(r.id);
+		const fields = changes(r.entry, listed);
+		if (Object.keys(fields).length === 0) {
 			r.price = "ok";
 			continue;
 		}
+		const now = listed?.price ?? null;
+		const what = [];
+		if (fields.price !== undefined) what.push(`price ${now ?? "?"} -> ${fields.price}`);
+		if (fields.isForSale !== undefined) what.push(fields.isForSale ? "put on sale" : "taken off sale");
+		const label = fields.price !== undefined ? "price" : "sale";
 		try {
-			await updatePrice(deps, r.entry.kind, r.id, r.entry.price, universe, apiKey);
+			await updateItem(deps, r.entry.kind, r.id, fields, universe, apiKey);
 			r.price = "updated";
-			r.note = `price ${now ?? "?"} -> ${r.entry.price}`;
-			deps.print(`price ${r.entry.kind} ${r.entry.key}: R$ ${now ?? "?"} -> R$ ${r.entry.price}`);
+			r.note = what.join(", ");
+			if (fields.price !== undefined) deps.print(`price ${r.entry.kind} ${r.entry.key}: R$ ${now ?? "?"} -> R$ ${fields.price}`);
+			if (fields.isForSale !== undefined) deps.print(`sale ${r.entry.kind} ${r.entry.key}: ${fields.isForSale ? "put on sale" : "taken off sale (retired)"}`);
 		} catch (err) {
 			r.price = "failed";
-			r.note = `price update failed: ${redact(err.message, apiKey)}`;
-			deps.print(`FAILED price ${r.entry.kind} ${r.entry.key}: ${r.note}`);
+			r.note = `${label} update failed: ${redact(err.message, apiKey)}`;
+			deps.print(`FAILED ${label} ${r.entry.kind} ${r.entry.key}: ${r.note}`);
 		}
 	}
 }
@@ -290,7 +332,10 @@ export async function run(argv, env, deps) {
 		const rows = plan(catalog, ids, null);
 		for (const r of rows) if (r.status === "create") r.note = "would be created (unless one with this name exists)";
 		if (opts.updatePrices) {
-			for (const r of rows) if (r.status === "existing") r.note = `price would be set to R$ ${r.entry.price} (where it differs)`;
+			for (const r of rows) {
+				if (r.status !== "existing") continue;
+				r.note = `price would be set to R$ ${r.entry.price} (where it differs)${forSale(r.entry) ? "" : "; would be taken off sale (retired)"}`;
+			}
 		}
 		deps.print(`DRY RUN: nothing is sent to Roblox. ${rows.filter((r) => r.status === "create").length} of ${rows.length} items have no id in ${IDS_FILE} yet.\n`);
 		deps.print(table(rows));
@@ -342,9 +387,13 @@ export async function run(argv, env, deps) {
 
 	deps.print("\n" + table(rows));
 	const count = (s) => rows.filter((r) => r.status === s).length;
-	deps.print(`\n${count("created")} created, ${count("existing")} existing, ${count("failed")} failed. Ids written to ${IDS_FILE}.`);
+	const retired = count("skipped") > 0 ? `, ${count("skipped")} retired (not created)` : "";
+	deps.print(`\n${count("created")} created, ${count("existing")} existing, ${count("failed")} failed${retired}. Ids written to ${IDS_FILE}.`);
 	const prices = (s) => rows.filter((r) => r.price === s).length;
-	if (opts.updatePrices) deps.print(`Prices: ${prices("updated")} updated, ${prices("ok")} already right, ${prices("failed")} failed.`);
+	if (opts.updatePrices) {
+		const offSale = rows.filter((r) => r.price === "updated" && r.note.includes("taken off sale")).length;
+		deps.print(`Prices: ${prices("updated")} updated, ${prices("ok")} already right, ${prices("failed")} failed.${offSale ? ` ${offSale} retired taken off sale.` : ""}`);
+	}
 	return count("failed") > 0 || prices("failed") > 0 ? 1 : 0;
 }
 
