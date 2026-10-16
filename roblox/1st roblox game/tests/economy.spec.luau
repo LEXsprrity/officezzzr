@@ -174,33 +174,21 @@ H.test("day/night plants: every zone is a day or a night plant (Meadow/Desert/La
 	end
 end)
 
-H.test("day/night plants: timeMult is 1 during the plant's phase and 0.8 during the other one", function()
+H.test("day/night plants: every plant earns x1 by day and at night (owner 2026-10-16)", function()
 	H.eq(Config.ACTIVE_TIME_MULT, 1)
-	H.eq(Config.OFF_TIME_MULT, 0.8)
+	H.eq(Config.OFF_TIME_MULT, 1)
 	for k, zone in Config.ZONES do
-		local day, night = Config.timeMult(k, false), Config.timeMult(k, true)
-		if zone.active == "day" then
-			H.eq(day, 1, zone.id .. " by day")
-			H.eq(night, 0.8, zone.id .. " at night")
-		else
-			H.eq(day, 0.8, zone.id .. " by day")
-			H.eq(night, 1, zone.id .. " at night")
-		end
+		H.eq(Config.timeMult(k, false), 1, zone.id .. " by day")
+		H.eq(Config.timeMult(k, true), 1, zone.id .. " at night")
+		H.eq(Config.averageTimeMult(k), 1, zone.id .. " offline")
 	end
-	-- driven by the shared clock
-	local meadow, jungle = 1, 3
-	H.eq(Config.timeMult(meadow, (Config.dayPhase(10))), 1)
-	H.eq(Config.timeMult(meadow, (Config.dayPhase(Config.DAY_SECONDS + 10))), 0.8)
-	H.eq(Config.timeMult(jungle, (Config.dayPhase(10))), 0.8)
-	H.eq(Config.timeMult(jungle, (Config.dayPhase(Config.DAY_SECONDS + 10))), 1)
 end)
 
-H.test("day/night plants: the label shows only the x0.8 penalty (\"Night x0.8\"), nothing at x1", function()
-	local meadow, jungle = 1, 3
-	H.eq(Config.bonusLabel(meadow, false), nil, "a day plant by day: x1, nothing extra")
-	H.eq(Config.bonusLabel(meadow, true), "Night x0.8")
-	H.eq(Config.bonusLabel(jungle, false), "Day x0.8")
-	H.eq(Config.bonusLabel(jungle, true), nil, "a night plant at night: x1, nothing extra")
+H.test("day/night plants: no Day/Night note on any label while both are x1", function()
+	for k in Config.ZONES do
+		H.eq(Config.bonusLabel(k, false), nil)
+		H.eq(Config.bonusLabel(k, true), nil)
+	end
 	H.ok(typeof(Config.OFF_TIME_COLOR) == "Color3", "a muted colour for the penalty")
 	local fs = require("@lune/fs")
 	local plot = fs.readFile("src/server/PlotService.luau")
@@ -214,7 +202,8 @@ end)
 H.test("day/night plants: offline income uses the time-weighted average multiplier", function()
 	local D, N = Config.DAY_SECONDS, Config.NIGHT_SECONDS
 	for k, zone in Config.ZONES do
-		local want = if zone.active == "day" then (D + N * 0.8) / (D + N) else (D * 0.8 + N) / (D + N)
+		local off = Config.OFF_TIME_MULT
+		local want = if zone.active == "day" then (D + N * off) / (D + N) else (D * off + N) / (D + N)
 		H.near(Config.averageTimeMult(k), want, 1e-9, zone.id)
 		-- matches what the payout loop pays over one full cycle, second by second
 		local sum = 0
@@ -223,8 +212,6 @@ H.test("day/night plants: offline income uses the time-weighted average multipli
 		end
 		H.near(Config.averageTimeMult(k), sum / (D + N), 1e-9, zone.id .. " integrated")
 	end
-	H.near(Config.averageTimeMult(1), 14 / 15, 1e-9, "day plants: 300 s x1 + 150 s x0.8")
-	H.near(Config.averageTimeMult(3), 13 / 15, 1e-9, "night plants: 300 s x0.8 + 150 s x1")
 end)
 
 ----------------------------------------------------------------------------------------------------

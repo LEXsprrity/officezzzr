@@ -1148,10 +1148,11 @@ function Config.dayPhase(now: number): (boolean, number)
 end
 
 -- Day and night plants: each zone's plants (Zone.active) earn ACTIVE_TIME_MULT (x1) during their phase and
--- OFF_TIME_MULT (x0.8) during the other one. plantIncome stays the plain base; PlotService applies this on
--- payout.
+-- OFF_TIME_MULT during the other one. plantIncome stays the plain base; PlotService applies this on payout.
+-- Both x1 now (owner 2026-10-16: "remove the day and night 0.8x and 1x let it always be 1x everytime for
+-- every plant"): every plant earns the same day and night, and no label mentions it.
 Config.ACTIVE_TIME_MULT = 1
-Config.OFF_TIME_MULT = 0.8
+Config.OFF_TIME_MULT = 1
 Config.ACTIVE_ICONS = { day = "☀️", night = "🌙" } :: { [string]: string }
 -- The muted colour of the "Night x0.8" note while a plant is out of its phase (billboard, Plants panel, Sell).
 Config.OFF_TIME_COLOR = Color3.fromRGB(170, 175, 195)
@@ -1163,7 +1164,7 @@ end
 -- "Night x0.8" / "Day x0.8" while zone `k`'s plants are out of their phase (earning less), else nil: at x1
 -- nothing extra is shown (plant labels: words, no emoji).
 function Config.bonusLabel(k: number, isNight: boolean): string?
-	if Config.isActiveTime(k, isNight) then
+	if Config.isActiveTime(k, isNight) or Config.OFF_TIME_MULT == Config.ACTIVE_TIME_MULT then
 		return nil
 	end
 	return string.format("%s x%g", if isNight then "Night" else "Day", Config.OFF_TIME_MULT)
