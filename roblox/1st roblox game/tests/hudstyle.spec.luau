@@ -275,7 +275,7 @@ H.test("toasts: each message names its icon (the Free Gift's +Speed shows the sn
 		"the gift claim passes it")
 	H.ok(string.find(HUD, "toast(data.text, data.color, nil, data.icon)", 1, true) ~= nil, "the HUD shows the server's icon")
 	H.ok(string.find(HUD, "toast(\"Gifting is coming soon!\", \"blue\", nil, \"Gift\")", 1, true) ~= nil, "gifting: the gift")
-	H.ok(string.find(HUD, "\"gold\", 6, \"Money\")", 1, true) ~= nil, "offline earnings: the cash")
+	H.ok(string.find(HUD, "\"gold\", 7, \"Money\", true)", 1, true) ~= nil, "offline earnings: the cash, as a big welcome-back plate")
 	-- every gold / green toast the server sends names its icon (red brings the lock, blue news may go bare)
 	for _, file in fs.readDir("src/server") do
 		if string.sub(file, -5) == ".luau" then

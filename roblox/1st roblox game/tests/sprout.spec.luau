@@ -168,7 +168,7 @@ H.test("sprout: sprouting goes on offline, and offline pay counts only the time 
 	H.eq(Config.sproutLeft(p, now), 0, "done while they were away")
 	local amount = PlotService.grantOffline(s)
 	local _, income = PlotService.plantStats(p, now)
-	H.near(amount, income * Config.averageTimeMult(2) * (away - sprout) * Sessions.moneyMult(s), amount * 1e-9, "paid for the last 600 s only")
+	H.near(amount, income * Config.averageTimeMult(2) * Config.OFFLINE_MULT * (away - sprout) * Sessions.moneyMult(s), amount * 1e-9, "paid for the last 600 s only, at the offline share")
 	-- still sprouting when they come back: nothing
 	local s2 = session()
 	s2.profile.lastSeen = now - 100
@@ -570,4 +570,17 @@ H.test("sell: a quick sell goes through the remote and sells (a player at the st
 	H.near(p.money, sale.total, sale.total * 1e-6, "paid what the window said")
 end)
 
+
+H.test("offline: time away pays 0.2x of playing, and the welcome-back plate gets the amount", function()
+	H.eq(Config.OFFLINE_MULT, 0.2, "owner 2026-10-16")
+	local s = session()
+	local now = os.time()
+	s.profile.lastSeen = now - 600
+	s.profile.plants = { { slot = 1, zone = 2, rarity = 3, plantedAt = now - 5000, x = 0, z = 0, variance = 1 } }
+	local _, income = PlotService.plantStats(s.profile.plants[1], now)
+	local amount = PlotService.grantOffline(s)
+	H.near(amount, income * Config.averageTimeMult(2) * 0.2 * 600 * Sessions.moneyMult(s), amount * 1e-9, "a fifth of the in-game pay")
+	H.near(s.player:GetAttribute("OfflineEarned"), amount, 1e-9, "the HUD reads it on join")
+	H.eq(s.player:GetAttribute("OfflineSeconds"), 600)
+end)
 return nil

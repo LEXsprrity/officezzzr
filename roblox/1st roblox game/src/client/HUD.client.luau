@@ -2777,8 +2777,6 @@ LootEvent.OnClientEvent:Connect(function(kind: string, data: any)
 		toast(`The {data.guard} caught you! The seed went back to its nest.`, "red", 4)
 	elseif kind == "Bat" then
 		batCooldownUntil = os.clock() + (data.cooldown or Config.BAT_COOLDOWN)
-	elseif kind == "Offline" then
-		toast(`While you were away ({Format.clock(data.seconds)}): +{Format.money(data.amount)}`, "gold", 6, "Money")
 	elseif kind == "PackRoll" then
 		queueReveal(data)
 	elseif kind == "DayNight" then
@@ -2786,6 +2784,23 @@ LootEvent.OnClientEvent:Connect(function(kind: string, data: any)
 			if data.night then "Moon" else "Sun")
 	end
 end)
+
+-- Welcome back: what the plants made while the player was away (PlotService.grantOffline sets these
+-- attributes on join; read here, whenever the HUD gets going, so the announcement is never missed).
+do
+	local shown = false
+	local function welcomeBack()
+		local amount = Players.LocalPlayer:GetAttribute("OfflineEarned")
+		local seconds = Players.LocalPlayer:GetAttribute("OfflineSeconds")
+		if shown or type(amount) ~= "number" or amount <= 0 then
+			return
+		end
+		shown = true
+		toast(`Welcome back! You made +{Format.money(amount)} while away ({Format.clock(seconds or 0)})`, "gold", 7, "Money", true)
+	end
+	Players.LocalPlayer:GetAttributeChangedSignal("OfflineEarned"):Connect(welcomeBack)
+	task.delay(2, welcomeBack) -- after the first frames, so it isn't lost under the loading screen
+end
 
 -- Server-wide announcements (Net.announce), e.g. "Alex got a LEGENDARY Starpetal!"
 LootEvent.OnClientEvent:Connect(function(kind: string, data: any)

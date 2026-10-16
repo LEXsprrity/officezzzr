@@ -87,14 +87,15 @@ function PlotService.liveIncomeOf(profile: ProfileStore.Profile, now: number, gr
 	return total
 end
 
--- Offline $/s: base income times the day/night multiplier averaged over a full cycle.
+-- Offline $/s: base income times the day/night multiplier averaged over a full cycle, times
+-- Config.OFFLINE_MULT (away pays a fifth of playing).
 function PlotService.offlineIncomeOf(profile: ProfileStore.Profile, now: number, growMult: number?): number
 	local total = 0
 	for _, plant in profile.plants do
 		local _, income = PlotService.plantStats(plant, now, growMult)
 		total += income * Config.averageTimeMult(plant.zone)
 	end
-	return total
+	return total * Config.OFFLINE_MULT
 end
 
 -- What the plants earned over the last `away` seconds before `now` (before money multipliers): each one
@@ -109,7 +110,7 @@ function PlotService.offlineEarnings(profile: ProfileStore.Profile, now: number,
 			total += income * Config.averageTimeMult(plant.zone) * earning
 		end
 	end
-	return total
+	return total * Config.OFFLINE_MULT
 end
 
 ----------------------------------------------------------------------------------------------------
@@ -1019,7 +1020,10 @@ function PlotService.grantOffline(s: Sessions.Session): number
 	local amount = PlotService.offlineEarnings(s.profile, now, away, Sessions.growMult(s)) * Sessions.moneyMult(s)
 	if amount > 0 then
 		s.profile.money += amount
-		Net.LootEvent:FireClient(s.player, "Offline", { amount = amount, seconds = away })
+		-- The welcome-back plate (OfflineNotice.client) reads these. Attributes, not a LootEvent: on join
+		-- the event reached whichever client script connected first, so the HUD never showed it.
+		s.player:SetAttribute("OfflineEarned", amount)
+		s.player:SetAttribute("OfflineSeconds", away)
 	end
 	return amount
 end
