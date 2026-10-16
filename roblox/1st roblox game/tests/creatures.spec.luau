@@ -162,15 +162,11 @@ H.test("creatures: the biggest creatures fit the planting spacing and the plot",
 	for i, c in Planting.candidates() do
 		H.ok(math.abs(c[1]) + reach <= half - 0.5 and math.abs(c[2]) + reach <= half - 0.5, `spot {i} ({c[1]}, {c[2]}) fits inside the fence`)
 	end
-	-- the bigger ones (Epic, Legendary) must stand further inside the bed, so they reach at most
-	-- Planting.fenceOverhang past the fence line from anywhere planting allows
-	local outer = half - Config.BED_FENCE_GAP
+	-- every rarity may stand right by the fence (owner 2026-10-16: "also closer to the fence"): the same small
+	-- margin for all, a big plant's leaves reaching over the fence
 	for r = 1, L do
-		H.ok(outer - Planting.bedMargin(r) + Planting.radius(r) <= half + Planting.fenceOverhang(r) + 1e-6, `rarity {r} stays off the fence`)
-		H.ok(Planting.fenceOverhang(r) <= Config.PLANT_FENCE_OVERHANG * 1.5 + 1e-9, `rarity {r}: overhangs the fence a little at most`)
-		H.ok(Planting.bedMargin(r) >= Config.PLANT_BED_MARGIN, `rarity {r} margin`)
+		H.eq(Planting.bedMargin(r), Config.PLANT_BED_MARGIN, `rarity {r} margin`)
 	end
-	H.ok(Planting.bedMargin(L) > Planting.bedMargin(1), "Legendaries stand further inside the bed")
 end)
 
 H.test("creatures: applyScale keeps an uploaded template's fit (BaseScale)", function()

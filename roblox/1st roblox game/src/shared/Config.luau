@@ -45,12 +45,15 @@ Config.SLOT_SPACING = 8 -- the default planting grid (old saves, auto-placing); 
 -- Spacing (owner 2026-10-15: "gardens look sparse", then "let them touch and nearly stack"): plants may touch,
 -- their leaves overlapping freely; a spot is refused only when it would all but hide a neighbour's centre:
 -- centre to centre at least PLANT_SPACING_SHARE x (reachA + reachB), never under PLANT_MIN_GAP
--- (Planting.minDistance; two Commons ~1.4 studs apart). The server and the preview share it (Shared/Planting).
-Config.PLANT_SPACING_SHARE = 0.2 -- the tiny core two plants may not share: this share of their full-grown reaches
+-- (Planting.minDistance). The server and the preview share it (Shared/Planting). Owner 2026-10-16: "i want to
+-- be able to grow them close" (two Legendaries were kept 3.9 studs apart): now ~0.8 studs for small plants and
+-- ~1.2 for two Legendaries.
+Config.PLANT_SPACING_SHARE = 0.06 -- the tiny core two plants may not share: this share of their full-grown reaches
 Config.PLANT_MIN_GAP = 0.8 -- ...but never closer than this (studs, centre to centre)
 Config.PLANT_CORE_SHARE = 0.45 -- a plant's core (kept on the dirt, Planting.bedMargin): this share of its full-grown reach
-Config.PLANT_BED_MARGIN = 1 -- a plant's centre stays at least this far inside its bed (its core, if bigger)
-Config.PLANT_FENCE_OVERHANG = 2.5 -- a big full-grown plant may reach this far past its bed's fence gap (Planting.bedMargin), x its creatureSizeMult
+Config.PLANT_BED_MARGIN = 1 -- a plant's centre stays at least this far inside its bed, whatever its size (owner
+-- 2026-10-16: "also closer to the fence"; a big plant's leaves may reach over the fence)
+Config.PLANT_FENCE_OVERHANG = 2.5 -- (no longer limits planting: Planting.bedMargin is PLANT_BED_MARGIN for every rarity)
 Config.PLANT_YAW_STEP = 15 -- the planting ghost turns this many degrees a wheel notch / button press (Planting.client)
 Config.PLANT_REACH = 28 -- you plant within this many studs (flat) of where you stand
 

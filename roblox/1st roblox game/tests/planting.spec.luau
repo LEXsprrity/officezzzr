@@ -64,7 +64,7 @@ H.test("planting: only YOUR plot's beds (a spot on another plot is refused)", fu
 	H.ok(string.find(source, "local state = plotOf(player)", 1, true) ~= nil, "...of the plot the player owns")
 end)
 
-H.test("planting: spacing by the plants' cores (bigger rarities need more room)", function()
+H.test("planting: spacing by the plants' cores (a little more for bigger rarities)", function()
 	local plot = plots()[2]
 	local planted = { { x = 20, z = 0, rarity = 1, slot = 1 } }
 	local need = Planting.minDistance(1, 1)
@@ -72,11 +72,11 @@ H.test("planting: spacing by the plants' cores (bigger rarities need more room)"
 	local ok, why = Planting.check(query(plot, onBed(plot, 20, need - 0.1), { plants = planted }))
 	H.eq(ok, false)
 	H.eq(why, "close")
-	-- a Legendary next to it needs more room than a Common
-	H.ok(Planting.minDistance(1, 5) > Planting.minDistance(1, 1), "Legendary reach is bigger")
-	H.eq(select(2, Planting.check(query(plot, onBed(plot, 20, need + 0.01), { plants = planted, rarity = 5 }))), "close")
+	-- a Legendary next to it needs a little more room than a Common, still close (owner 2026-10-16)
+	H.ok(Planting.minDistance(1, 5) >= Planting.minDistance(1, 1), "Legendary reach is not smaller")
+	H.ok(Planting.minDistance(5, 5) <= 1.5, `two Legendaries may stand close ({Planting.minDistance(5, 5)})`)
 	-- spacing is flat (x/z in the plot's space), whatever the height
-	H.eq(select(2, Planting.check(query(plot, onBed(plot, 20, 1) + Vector3.new(0, 1, 0), { plants = planted }))), "close")
+	H.eq(select(2, Planting.check(query(plot, onBed(plot, 20, 0.5) + Vector3.new(0, 1, 0), { plants = planted }))), "close")
 	-- re-placing a plant ignores itself
 	H.ok(Planting.check(query(plot, onBed(plot, 20, 0.5), { plants = planted, ignore = 1 })), "ignore")
 end)
@@ -143,14 +143,13 @@ H.test("planting: every old slot lands on a bed, spaced, keeping the old arrange
 	end
 end)
 
-H.test("planting: Legendaries (the big plants) stand further inside the bed and take more room", function()
+H.test("planting: Legendaries (the big plants) may stand by the fence too (owner 2026-10-16)", function()
 	local plot = plots()[1]
 	local L = #Config.RARITIES
-	local edge = Config.PLOT_SIZE / 2 - Config.BED_FENCE_GAP - Planting.bedMargin(1)
+	local edge = Config.PLOT_SIZE / 2 - Config.BED_FENCE_GAP - Config.PLANT_BED_MARGIN
 	H.ok(Planting.check(query(plot, onBed(plot, edge - 0.1, 0))), "a Common by the fence")
-	H.eq(select(2, Planting.check(query(plot, onBed(plot, edge - 0.1, 0), { rarity = L }))), "bed", "a Legendary by the fence")
-	local inside = Config.PLOT_SIZE / 2 - Config.BED_FENCE_GAP - Planting.bedMargin(L)
-	H.ok(Planting.check(query(plot, onBed(plot, inside - 0.1, 0), { rarity = L })), "a Legendary further in")
+	H.ok(Planting.check(query(plot, onBed(plot, edge - 0.1, 0), { rarity = L })), "a Legendary by the fence")
+	H.eq(select(2, Planting.check(query(plot, onBed(plot, edge + 0.2, 0), { rarity = L }))), "bed", "...but on the dirt")
 	-- even auto-placing on the old grid (settle) still fits a good number of them on one plot
 	local placed = {}
 	while #placed < 100 do
@@ -162,12 +161,10 @@ H.test("planting: Legendaries (the big plants) stand further inside the bed and 
 	end
 	print(`        a plot's beds fit {#placed} full-grown Legendaries on the old grid`)
 	H.ok(#placed >= 10, `{#placed} Legendaries`)
-	-- 1.5x bigger Legendaries (owner 2026-10-15) still leave the grass path walkable with one on each
-	-- side at the beds' inner edges, and reach past the front fence well short of the treadmill (its near
-	-- end is 12 - 9/2 = 7.5 studs out, WorldBuilder's TREADMILL)
-	local intoPath = Planting.radius(L) - Planting.bedMargin(L)
-	H.ok(Config.PLOT_PATH_WIDTH - 2 * intoPath >= 8, `path left clear between two Legendaries ({Config.PLOT_PATH_WIDTH - 2 * intoPath} studs)`)
-	H.ok(Planting.fenceOverhang(L) <= 7.5 - 3, `past the fence {Planting.fenceOverhang(L)} studs`)
+	-- Legendaries at the beds' edges reach over the grass path and the fence (owner 2026-10-16), but plants
+	-- never collide, so the path stays walkable
+	local creatures = fs.readFile("src/server/CreatureModels.luau")
+	H.ok(string.find(creatures, "d.CanCollide = false", 1, true) ~= nil, "plants don't block the path")
 end)
 
 H.test("planting: settle moves only the plants that don't fit (off a bed, overlapping), oldest id first", function()
@@ -309,23 +306,21 @@ H.test("planting: plants may touch and nearly stack; only a spot over a neighbou
 			-- owner 2026-10-15 (round 2): "they must be able to TOUCH": far closer than their leaves' reach, so
 			-- leaves overlap freely (the round-1 rule was the cores side by side, (radiusA + radiusB) x 0.45)
 			H.ok(d <= (Planting.radius(a) + Planting.radius(b)) * 0.25, `{a}/{b}: leaves overlap freely ({d})`)
-			H.ok(d < Planting.coreRadius(a) + Planting.coreRadius(b), `{a}/{b}: closer than the round-1 cores`)
+			H.ok(d < Planting.coreRadius(a) + Planting.coreRadius(b) or d <= Config.PLANT_MIN_GAP + 1e-9, `{a}/{b}: closer than the round-1 cores`)
 			-- but never right on top of each other
 			H.ok(d >= Config.PLANT_MIN_GAP - 1e-9, `{a}/{b}: never on top of each other`)
 		end
 	end
 	H.ok(Config.PLANT_MIN_GAP >= 0.5 and Config.PLANT_MIN_GAP <= 1, "a tiny floor (~0.8 studs)")
-	H.ok(Config.PLANT_SPACING_SHARE >= 0.15 and Config.PLANT_SPACING_SHARE <= 0.25, "about 0.2")
+	H.ok(Config.PLANT_SPACING_SHARE > 0 and Config.PLANT_SPACING_SHARE <= 0.1, "a small share (owner 2026-10-16: grow them close)")
 	local commons = Planting.minDistance(1, 1)
-	H.ok(commons >= 1 and commons <= 1.6, `two Commons ~1.5 studs apart ({commons}; round 1 needed ~3, before that ~6)`)
+	H.ok(commons <= 1, `two Commons under a stud apart ({commons}; round 2 ~1.4, round 1 ~3, before that ~6)`)
+	H.ok(Planting.minDistance(L, L) <= 1.5, `two Legendaries ~1.2 studs apart ({Planting.minDistance(L, L)}; was 3.9)`)
 	-- the beds' margin is smaller too: a plant's core stays on the dirt, a big one's leaves at most
 	-- PLANT_FENCE_OVERHANG past the fence gap
 	H.ok(Config.PLANT_BED_MARGIN <= 1, "a smaller bed margin")
 	-- (Legendaries are 1.5x bigger since: their margin grew with them, 2.9 -> 4.5 studs)
-	H.ok(Planting.bedMargin(1) < 2 and Planting.bedMargin(L) < 5, "Commons and Legendaries may stand nearer the bed's edge than before")
-	for r = 1, L do
-		H.ok(Planting.bedMargin(r) >= Planting.coreRadius(r), `rarity {r}: its core on the dirt`)
-	end
+	H.ok(Planting.bedMargin(1) <= 1 and Planting.bedMargin(L) <= 1, "Commons and Legendaries may stand by the bed's edge (Legendaries: 4.5 -> 1)")
 	-- a block of Commons on one bed, a step apart: all pass, and one between them doesn't
 	local plot = plots()[1]
 	local step = Planting.minDistance(1, 1) + 0.01
