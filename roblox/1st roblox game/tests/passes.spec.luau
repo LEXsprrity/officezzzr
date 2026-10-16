@@ -560,4 +560,20 @@ H.test("Shop PASSES: a bright card per pass with its icon, name, benefit and gre
 	H.ok(not string.find(hud, "{ \"DoubleMoney\", \"ExtraSlots\" }", 1, true), "every pass, not a fixed two")
 end)
 
+H.test("Drop: the RUN screen's Drop button gives the carried seed back to its pod", function()
+	SeedService.buildPods(nestInfos())
+	local pod = SeedService.pods(1)[1]
+	local at = pod.part.CFrame.Position + Vector3.new(1, 0, 0)
+	local s = thief(nil, at)
+	pod.rarity, pod.gene, pod.luck = 2, 4242, 1
+	SeedService.steal(s.player, 1, 1)
+	H.ok(s.carry ~= nil and not pod.available, "stolen")
+	s.requests = {}
+	Net.RequestUseItem.OnServerEvent.fn(s.player, "Drop")
+	H.ok(s.carry == nil, "dropped")
+	H.ok(pod.available and pod.rarity == 2, "back in its pod as it was")
+	Net.RequestUseItem.OnServerEvent.fn(s.player, "Drop") -- nothing carried: nothing happens
+	H.ok(s.carry == nil)
+end)
+
 return nil

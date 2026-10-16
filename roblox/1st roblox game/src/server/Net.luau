@@ -2,7 +2,7 @@
 --   client -> server: RequestBuy(itemId), RequestUseItem(itemId)
 --     RequestBuy ids: "PlotUpgrade", "TreadmillUpgrade" and "Trail:<id>" (money), "Product:<name>"
 --       (developer products, Robux), "Pass:<name>" (gamepasses)
---     RequestUseItem ids: "Bat", "Seed:<bagKey>" (plant from the seed bag), "Seed:inv:<id>" (plant a plant
+--     RequestUseItem ids: "Bat", "Drop" (give the carried seed back to its pod), "Seed:<bagKey>" (plant from the seed bag), "Seed:inv:<id>" (plant a plant
 --       from the inventory again), "Equip:<trailId>"
 --   client -> server: SellPlants(slots, ids?, seeds?) (plant slots, inventory ids and seed-bag seeds as
 --     { ["zone:rarity[:Mutation]"]: count }, sold at the SELL stall; PlotService and Selling check)
