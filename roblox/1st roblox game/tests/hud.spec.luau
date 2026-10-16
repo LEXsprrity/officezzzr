@@ -212,7 +212,8 @@ H.test("HUD Index: zone names as row titles (no emoji), a cell per flower from t
 	local a = string.find(HUD, "local function renderIndex()", 1, true)
 	local b = string.find(HUD, "-- SELL window", 1, true)
 	local block = a and b and string.sub(HUD, a, b) or ""
-	H.ok(string.find(block, "local title = zone.name", 1, true), "the row title is the zone's name")
+	H.ok(string.find(block, "Text = zone.name,", 1, true), "the row title is the zone's name")
+	H.ok(not string.find(block, "Config.MUTATIONS", 1, true), "no mutation words next to the zone name (owner 2026-10-16)")
 	H.ok(string.find(block, "stats.catalog", 1, true) and string.find(block, "`{k}:{r}:{model}`", 1, true), "a cell per flower, lit by its Index key")
 	H.ok(string.find(block, "Format.plantName(model)", 1, true), "named like the plants")
 end)
