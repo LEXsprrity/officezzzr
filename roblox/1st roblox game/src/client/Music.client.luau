@@ -1,7 +1,8 @@
 -- Background music (a player's suggestion, owner 2026-10-16). In the base: a shuffled day list, or a calmer
 -- night list at night (Config.dayPhase, the same clock as the lighting). Out in the corridor the music fades
--- away and only the zone's nature sounds loop (owner: "when you go into the corridor the music should stop
--- and just be forest sounds"), Config.MUSIC_AMBIENCE by zone (Config.zoneAtX, like the zone banner).
+-- away and only nature sounds loop (owner: "when you go into the corridor the music should stop and just be
+-- forest sounds"): birds all the way (Config.MUSIC_BIRDS), with the zone's own loop on top where it has one
+-- (Config.MUSIC_AMBIENCE by zone, Config.zoneAtX like the zone banner).
 -- The HUD's Music switch sets our MusicMuted attribute: everything fades out.
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -15,6 +16,7 @@ local rng = Random.new()
 
 local current: Sound? = nil -- what plays now (fading in or at full volume)
 local currentKey: string? = nil -- "day", "night", "zone:<k>" or nil (silence)
+local birds: Sound? = nil -- the corridor's bird layer, under the zone's loop
 local order: { number } = {} -- the shuffled list being played
 local nextIndex = 1
 
@@ -66,7 +68,18 @@ function playNext()
 	end)
 end
 
+-- The birds play anywhere in the corridor, through every zone change.
+local function setBirds(on: boolean)
+	if on and not birds then
+		birds = start(Config.MUSIC_BIRDS, Config.MUSIC_BIRDS_VOLUME, true)
+	elseif not on and birds then
+		fadeOut(birds)
+		birds = nil
+	end
+end
+
 local function switchTo(key: string?)
+	setBirds(key ~= nil and string.sub(key, 1, 5) == "zone:")
 	if key == currentKey then
 		return
 	end
@@ -81,7 +94,7 @@ local function switchTo(key: string?)
 	local zone = tonumber(string.match(key, "^zone:(%d+)$"))
 	if zone then
 		local id = Config.MUSIC_AMBIENCE[zone]
-		if id then
+		if id and id > 0 then
 			current = start(id, Config.MUSIC_AMBIENCE_VOLUME, true)
 		end
 		return

@@ -531,11 +531,13 @@ H.test("music: day and night lists in the base, each zone's nature sounds in the
 	H.ok(#Config.MUSIC.day >= 2 and #Config.MUSIC.night >= 2, "a few tracks for day and for night")
 	H.eq(#Config.MUSIC_AMBIENCE, #Config.ZONES, "one nature loop per zone")
 	for _, id in { table.unpack(Config.MUSIC.day), table.unpack(Config.MUSIC.night), table.unpack(Config.MUSIC_AMBIENCE) } do
-		H.ok(type(id) == "number" and id > 0 and id == math.floor(id), tostring(id))
+		H.ok(type(id) == "number" and id >= 0 and id == math.floor(id), tostring(id))
 	end
 	local music = fs.readFile("src/client/Music.client.luau")
 	H.ok(string.find(music, "Config.zoneAtX(root.Position.X)", 1, true), "the corridor is told by the zone, like the banner")
 	H.ok(string.find(music, "Config.MUSIC_AMBIENCE[zone]", 1, true), "out there: only nature sounds")
+	H.ok(string.find(music, "setBirds(key ~= nil and string.sub(key, 1, 5) == \"zone:\")", 1, true), "birds all along the corridor, never in the base")
+	H.eq(Config.MUSIC_AMBIENCE[4], 0, "no lava sound (owner)")
 	H.ok(string.find(music, "GetAttribute(\"MusicMuted\")", 1, true), "the switch mutes it")
 end)
 
