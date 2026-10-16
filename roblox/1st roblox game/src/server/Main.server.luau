@@ -24,6 +24,7 @@ local AmbientService = require(Server:WaitForChild("AmbientService"))
 local RewardService = require(Server:WaitForChild("RewardService"))
 local PlantGhosts = require(Server:WaitForChild("PlantGhosts"))
 local FlowerPreviews = require(Server:WaitForChild("FlowerPreviews"))
+local AdminService = require(Server:WaitForChild("AdminService"))
 
 -- Guards pass through players (the catch is a distance check) and each other.
 PhysicsService:RegisterCollisionGroup("Guards")
@@ -41,6 +42,7 @@ SeedService.init(nestInfos)
 GuardService.init(nestInfos)
 ShopService.init()
 RewardService.init(workspace:FindFirstChild("World"))
+AdminService.init()
 SpeedService.start()
 PlotService.start()
 task.spawn(PlantGhosts.publish) -- the planting preview's 3D ghosts, for the clients
@@ -73,6 +75,7 @@ local function save(s: Sessions.Session, release: boolean?): boolean
 	return ok
 end
 ShopService.save = save
+AdminService.save = save
 
 ----------------------------------------------------------------------------------------------------
 -- Characters
@@ -148,6 +151,7 @@ local function onPlayerAdded(player: Player)
 	Sessions.pushFull(s)
 	Sessions.pushCore(s)
 	RewardService.playerReady(s)
+	task.spawn(AdminService.playerReady, s) -- the admin panel, and grants the owner sent while they were away
 	if not canSave then
 		Net.toast(player, if store then "⚠️ Couldn't load your save; progress this session won't be saved." else "⚠️ Saving is off (no DataStore access).", "red")
 	end

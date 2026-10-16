@@ -1198,6 +1198,12 @@ Config.FREE_GIFT_AUTO_OPEN = 20 -- seconds after joining: the window opens by it
 Config.MONEY_BOARD_STORE = "MostMoneyPerSecond_v1"
 Config.MONEY_BOARD_ROWS = 10
 Config.MONEY_BOARD_INTERVAL = 60
+-- The admin panel (AdminPanel.client, AdminService): who may open it, and the DataStore that holds grants for
+-- players who were not in the giver's server (they get them when they next join).
+Config.ADMIN_USER_IDS = { 9301943082 } -- the owner (LEXsprrity)
+Config.ADMIN_MIN_RANK = 254 -- and anyone this high in the community (255 = its owner)
+Config.ADMIN_GRANTS_STORE = "AdminGrants_v1"
+Config.ADMIN_PENDING_MAX = 50 -- grants waiting for one player
 
 ----------------------------------------------------------------------------------------------------
 -- Data
