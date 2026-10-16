@@ -318,4 +318,29 @@ H.test("plants: a plot full of them stays within the part budget", function()
 	end
 end)
 
+H.test("plants: each stands on its base, not floating on a leaf that pokes below it (owner: Aetheris floated)", function()
+	local function bottomOf(p: any): number
+		local c, s = p.CFrame, p.Size
+		return c.Position.Y - (math.abs(c.RightVector.Y) * s.X / 2 + math.abs(c.UpVector.Y) * s.Y / 2 + math.abs(c.LookVector.Y) * s.Z / 2)
+	end
+	local checked = 0
+	for k = 1, #Config.ZONES do
+		for r = 1, #Config.RARITIES do
+			for i, source in variants(k, r) do
+				if not source:GetAttribute("Sword") then
+					local model = CreatureModels.build(k, r, nil, i)
+					local base = model:FindFirstChild("PrimaryPart")
+					if base and base:IsA("BasePart") and base.Transparency >= 1 then
+						local y = bottomOf(base) -- (build pivots the plant at the origin, on the soil)
+						H.ok(y < 0.1 and y > -1, `{Config.ZONES[k].id} {source.Name}: its base {y} studs off the ground`) -- (a little sunk in the soil is fine)
+						checked += 1
+					end
+					model:Destroy()
+				end
+			end
+		end
+	end
+	H.ok(checked > 50, `checked {checked} plants`)
+end)
+
 return nil
