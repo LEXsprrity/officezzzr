@@ -102,7 +102,7 @@ local function run(k: number, walk: number, i: number, stance: Vector3, phase: n
 			nextGuard += 1 / Config.GUARD_HZ
 			local pos = seenPosition(t)
 			local safe = pos.X < Config.CORRIDOR_START_X
-			local cmd = GuardBrain.step(brain, t, guardPos, { { id = "thief", pos = pos, safe = safe } })
+			local cmd = GuardBrain.step(brain, t, guardPos, { { id = "thief", pos = pos, safe = safe, speed = o.speed } })
 			if cmd.caughtId then
 				return "caught", t
 			end

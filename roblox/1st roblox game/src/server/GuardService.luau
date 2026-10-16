@@ -139,7 +139,7 @@ local function step(g: Guard, now: number)
 			-- (where the server saw the thief get to: a teleport home doesn't make them safe)
 			local pos = SpeedService.seenPosition(player)
 			if pos then
-				table.insert(targets, { id = player, pos = pos, safe = pos.X < Config.CORRIDOR_START_X })
+				table.insert(targets, { id = player, pos = pos, safe = pos.X < Config.CORRIDOR_START_X, speed = s.profile.speed })
 			end
 		end
 	end

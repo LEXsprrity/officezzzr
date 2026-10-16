@@ -747,7 +747,9 @@ end
 ----------------------------------------------------------------------------------------------------
 local GIFT_POS = Vector3.new(Config.CORRIDOR_START_X - 10, GROUND, -(HALF_W + 28)) -- ground point under the gift box
 local GIFT_SPOT_SIZE = Vector3.new(4, 1, 4) -- the invisible marker part, resting on the ground
-local MONEY_BOARD_POS = Vector3.new(Config.CORRIDOR_START_X - 4, GROUND, -(HALF_W + 14)) -- ground point under the board
+-- The board stands out in the open by the corridor mouth, between the plaza and the corridor, facing the base
+-- (owner 2026-10-16: "too hidden back there" against the front wall, behind the plaza).
+local MONEY_BOARD_POS = Vector3.new(Config.CORRIDOR_START_X - 14, GROUND, -40) -- ground point under the board
 local MONEY_PANEL = Vector2.new(12, 18) -- the list panel (studs); its bottom edge is 4 studs up
 local MONEY_PPS = 40
 local BOARD_CYAN = Color3.fromRGB(95, 205, 255)

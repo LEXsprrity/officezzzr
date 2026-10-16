@@ -11,6 +11,7 @@ export type GuardState = "Sleeping" | "Waking" | "Chasing" | "Returning" | "Stun
 export type Brain = {
 	state: GuardState,
 	home: Vector3,
+	zone: number,
 	chaseSpeed: number,
 	returnSpeed: number,
 	wakeDelay: number, -- seconds from alert to chase (Config.wakeDelay)
@@ -22,7 +23,7 @@ export type Brain = {
 	lastChasePos: Vector3?, -- where the guard was on the previous chase tick (for the swept catch)
 }
 
-export type Target = { id: any, pos: Vector3, safe: boolean }
+export type Target = { id: any, pos: Vector3, safe: boolean, speed: number? } -- speed: the thief's Speed stat (Config.guardSpeedVs)
 
 export type Command = {
 	moveTo: Vector3?, -- nil = stand still
@@ -35,6 +36,7 @@ function GuardBrain.new(zoneIndex: number, home: Vector3): Brain
 	local chase = Config.guardChaseSpeed(zoneIndex)
 	return {
 		state = "Sleeping",
+		zone = zoneIndex,
 		home = home,
 		chaseSpeed = chase,
 		returnSpeed = math.max(Config.BASE_WALKSPEED, chase * Config.GUARD_RETURN_FACTOR),
@@ -170,7 +172,7 @@ function GuardBrain.step(brain: Brain, now: number, guardPos: Vector3, targets: 
 			brain.targetId = best.id
 			brain.lastChasePos = guardPos
 			cmd.moveTo = chasePoint(brain, guardPos, best.pos)
-			cmd.walkSpeed = brain.chaseSpeed
+			cmd.walkSpeed = Config.guardSpeedVs(brain.zone, best.speed) -- (faster after a thief below the sign)
 			return cmd
 		end
 	end

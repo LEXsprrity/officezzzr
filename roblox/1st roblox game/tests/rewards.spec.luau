@@ -304,7 +304,11 @@ H.test("rewards: the base has the gift's spot (where the free chest stood) and t
 		end
 		local p, ex, ez = cf.Position, extent(Vector3.xAxis), extent(Vector3.zAxis)
 		H.ok(p.X + ex <= Config.CORRIDOR_START_X and p.Z < 0, `{part.Name} in the base (in front of the wall), -Z side`)
-		H.ok(math.abs(p.Z) - ez > Config.CORRIDOR_WIDTH / 2, `{part.Name} clear of the walkway and the corridor mouth`)
+		if part == spot then
+			H.ok(math.abs(p.Z) - ez > Config.CORRIDOR_WIDTH / 2, `{part.Name} clear of the walkway and the corridor mouth`)
+		else -- the board stands out in the open by the corridor mouth (owner 2026-10-16), still off the walkway
+			H.ok(math.abs(p.Z) - ez > Config.WALKWAY_WIDTH / 2 + 10, `{part.Name} clear of the walkway`)
+		end
 		for i = 1, Config.MAX_PLAYERS + 1 do
 			local cx, cz = Config.spotXZ(i)
 			H.ok(math.abs(p.X - cx) > half + ex or math.abs(p.Z - cz) > half + ez, `{part.Name} clear of spot {i}`)
@@ -312,7 +316,6 @@ H.test("rewards: the base has the gift's spot (where the free chest stood) and t
 	end
 	H.ok(panel.CFrame.LookVector:Dot(-Vector3.xAxis) > 0.99, "the board faces into the base")
 	H.ok(panel.Size.Y <= 20 and panel.Size.X <= 14, "not too big")
-	H.ok((spot.CFrame.Position - panel.CFrame.Position).Magnitude < 30, "the gift stands by the board")
 	-- The board's rows get written
 	WorldBuilder.setMoneyBoard(board, { { name = "A", value = "$1K" } }, "This server")
 	H.eq(board.rows[1].frame.Visible, true)
@@ -354,7 +357,6 @@ local function checkGiftBox(world: any, label: string)
 	H.ok(math.abs(model.GiftCircle.CFrame.Position.Y - Config.GROUND_Y) < 0.5, "its circle on the ground")
 	H.ok(math.abs(body.CFrame.Position.Y - body.Size.Y / 2 - Config.GROUND_Y) < 0.5, "the box on the ground")
 	local panel = board.status.Parent.Parent
-	H.ok(((body.CFrame.Position - panel.CFrame.Position) * flat).Magnitude < 30, "by the board")
 	local p, r = body.CFrame.Position, GiftBox.CIRCLE / 2
 	H.ok(p.X + r <= Config.CORRIDOR_START_X and p.Z < 0, "in the base, -Z side")
 	H.ok(math.abs(p.Z) - r > Config.CORRIDOR_WIDTH / 2, "clear of the walkway and the corridor mouth")
