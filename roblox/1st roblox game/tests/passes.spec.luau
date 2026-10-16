@@ -38,7 +38,7 @@ local Marketplace = {
 }
 H.services.MarketplaceService = Marketplace
 H.services.Players = H.services.Players or { GetPlayerByUserId = function() return nil end }
-local Net = H.stubServer("Net", { StatsUpdate = { FireClient = function() end }, LootEvent = { FireClient = function() end }, toast = function() end })
+local Net = H.stubServer("Net", { StatsUpdate = { FireClient = function() end }, LootEvent = { FireClient = function() end, FireAllClients = function() end }, toast = function() end })
 for _, name in { "RequestBuy", "RequestUseItem", "SellPlants", "PlantSeed" } do
 	Net[name] = Net[name] or { OnServerEvent = signal() }
 end
@@ -574,6 +574,34 @@ H.test("Drop: the RUN screen's Drop button gives the carried seed back to its po
 	H.ok(pod.available and pod.rarity == 2, "back in its pod as it was")
 	Net.RequestUseItem.OnServerEvent.fn(s.player, "Drop") -- nothing carried: nothing happens
 	H.ok(s.carry == nil)
+end)
+
+H.test("Bat: a real Tool from assets/Bat.rbxm (no scripts, weightless, touches nothing); it only swings in hand", function()
+	local BatTool = H.server("BatTool")
+	local tool = BatTool.make()
+	H.ok(tool:IsA("Tool") and tool.Name == "Bat" and tool:FindFirstChild("Handle") ~= nil, "a Tool named Bat with a Handle")
+	H.eq(tool.CanBeDropped, false)
+	for _, d in tool:GetDescendants() do
+		H.ok(not d:IsA("BaseScript") and not d:IsA("ModuleScript"), "no scripts from the model")
+		if d:IsA("BasePart") then
+			H.ok(d.Massless and not d.CanCollide and not d.CanTouch, d.Name .. ": weightless, touches nothing")
+		end
+	end
+	H.ok(tool.Handle:FindFirstChild("Swoosh") ~= nil, "the owner's model (its swoosh sound), not the plain fallback")
+	-- not in hand: RequestUseItem \"Bat\" does nothing (no cooldown spent); in hand: it swings
+	Net.LootEvent.FireAllClients = Net.LootEvent.FireAllClients or function() end -- (the others see the swing)
+	local Guards = H.server("GuardService")
+	local realHit = Guards.batHit
+	Guards.batHit = function() return false end -- (no guards in this world; only the gate is tested)
+	local s = thief(nil, Vector3.new(0, 3, 0))
+	s.requests = {}
+	Net.RequestUseItem.OnServerEvent.fn(s.player, "Bat")
+	H.eq(s.cooldowns.Bat, nil, "in the backpack: no swing")
+	tool.Parent = s.player.Character
+	H.ok(BatTool.equipped(s.player))
+	Net.RequestUseItem.OnServerEvent.fn(s.player, "Bat")
+	H.ok(s.cooldowns.Bat ~= nil, "in hand: it swings")
+	Guards.batHit = realHit
 end)
 
 return nil
