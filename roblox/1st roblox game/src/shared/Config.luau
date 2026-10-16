@@ -1234,8 +1234,9 @@ Config.SOUNDS = {
 -- Background music (a player's suggestion, owner 2026-10-16; Client/Music). Licensed APM tracks from the
 -- Creator Store (creator APMOfficial), free in every experience. Day and night each shuffle their own list,
 -- in the base only: out in the corridor the music fades away and only the zone's nature sounds play
--- (owner 2026-10-16), ProSoundEffects loops (MUSIC_AMBIENCE, by Config.ZONES order). The HUD's Music switch
--- mutes both.
+-- (owner 2026-10-16): birds all along it (MUSIC_BIRDS), with each zone's own loop on top (MUSIC_AMBIENCE, by
+-- Config.ZONES order; 0 = just the birds: the Meadow, and the Lava Fields by the owner's ask). ProSoundEffects
+-- loops. The HUD's Music switch mutes it all.
 Config.MUSIC = {
 	day = {
 		1845737125, -- Happy Town (Gerhard Trede)
@@ -1251,16 +1252,18 @@ Config.MUSIC = {
 	},
 }
 Config.MUSIC_AMBIENCE = {
-	9113444360, -- Meadow: Birds Park 2
+	0, -- Meadow: the birds alone
 	9114057128, -- Desert: Desert Wind Whistley Light Gusts 2
 	9114891624, -- Jungle: Jungle Ambience 4
-	9112823563, -- Lava Fields: Lava Rumble 2
+	0, -- Lava Fields: the birds alone (owner: no lava sound)
 	9114625552, -- Snow Peaks: Gods Wind 3
 	9119392620, -- Deep Space: Space Presence 2
 	9120750367, -- Spirit Garden: Wind Chimes 3
 }
 Config.MUSIC_VOLUME = 0.3
+Config.MUSIC_BIRDS = 9113444360 -- Birds Park 2: everywhere in the corridor
 Config.MUSIC_AMBIENCE_VOLUME = 0.5
+Config.MUSIC_BIRDS_VOLUME = 0.45
 Config.MUSIC_FADE = 1.5 -- seconds to fade between tracks
 
 return Config
