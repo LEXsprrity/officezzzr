@@ -503,6 +503,20 @@ end
 -- `slot` (untrusted: Inventory.take checks it is one of theirs) off the plot into their inventory, as it
 -- was. It never sells (owner request): plants are sold at the SELL stall, from the plot or the inventory.
 local REMOVES_PER_SECOND = 4
+-- The admin panel's TAKE (AdminService): plants already taken out of the profile (AdminGrant.take); this
+-- takes their models off the plot and redraws the income and the Plants panel.
+function PlotService.dropTaken(s: Sessions.Session, slots: { number })
+	local state = plotOf(s.player)
+	local now = os.time()
+	for _, id in slots do
+		if state then
+			removePlantModel(state, id) -- (the admin panel's TAKE)
+		end
+	end
+	refreshIncome(s, now)
+	pushPlants(s, now)
+end
+
 function PlotService.removePlant(player: Player, slot: any)
 	local s = Sessions.get(player)
 	local state = plotOf(player)
