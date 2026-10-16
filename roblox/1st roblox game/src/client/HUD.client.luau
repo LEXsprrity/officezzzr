@@ -1932,7 +1932,7 @@ do
 end
 
 ----------------------------------------------------------------------------------------------------
--- Index: one row per zone in the zone's colour (its name, the mutations found there), then a column per
+-- Index: one row per zone in the zone's colour (its name), then a column per
 -- rarity listing that rarity's flowers: lit with the flower's name once you've grown it, "???" until then.
 -- The flowers come from the server (stats.catalog[zone][rarity], the plant models' names); a zone or
 -- rarity without plant models shows one cell for the rarity itself.
@@ -1978,14 +1978,8 @@ local function renderIndex()
 		shade(row, zone.ui, 0.25, 0.3)
 		ShopUi.studs(row, zone.ui)
 		shine(row)
-		-- The zone's name, then the mutations found there in their colours
-		local title = zone.name
-		for _, m in Config.MUTATIONS do
-			if stats.index[`{k}:{m.id}`] then
-				title ..= `  <font color="#{m.color:ToHex()}">{m.id}</font>`
-			end
-		end
-		bold(row, 3, { Text = title, RichText = true, Size = UDim2.new(1, -20, 0, 32), Position = UDim2.fromOffset(12, 6), TextXAlignment = Enum.TextXAlignment.Left })
+		-- The zone's name only (owner 2026-10-16: no mutation words next to it)
+		bold(row, 3, { Text = zone.name, Size = UDim2.new(1, -20, 0, 32), Position = UDim2.fromOffset(12, 6), TextXAlignment = Enum.TextXAlignment.Left })
 		local columns = new("Frame", { BackgroundTransparency = 1, Position = UDim2.fromOffset(12, 42), Size = UDim2.new(1, -24, 1, -50), Parent = row },
 			{ new("UIListLayout", { FillDirection = Enum.FillDirection.Horizontal, Padding = UDim.new(0, 8), SortOrder = Enum.SortOrder.LayoutOrder }) })
 		for r, rarity in Config.RARITIES do
