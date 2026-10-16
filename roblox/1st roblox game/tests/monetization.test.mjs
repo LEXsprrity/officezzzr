@@ -307,6 +307,8 @@ test("changes: price where it differs, isForSale false for retired (unless known
 	assert.deepEqual(M.changes(gone, { price: 10, forSale: false }), {}, "already off sale");
 	assert.deepEqual(M.changes(gone, { price: 7, forSale: true }), { price: 10, isForSale: false }, "both in one PATCH");
 	assert.deepEqual(M.changes(gone, undefined), { price: 10, isForSale: false });
+	assert.deepEqual(M.changes(sold, { name: sold.name, price: 10, forSale: true }), {}, "same name: left alone");
+	assert.deepEqual(M.changes(sold, { name: "Old Name", price: 10, forSale: true }), { name: sold.name }, "renamed in the catalog");
 	assert.equal(M.forSale({}), true, "no isForSale field: sold");
 	assert.equal(M.listedForSale({ isForSale: false }), false);
 	assert.equal(M.listedForSale({ isForSale: "false" }), null);

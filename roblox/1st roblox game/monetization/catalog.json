@@ -344,7 +344,7 @@
   {
     "key": "GrowNow10",
     "kind": "product",
-    "name": "Grow Now (10 min)",
+    "name": "Skip (1)",
     "description": "Your sprouting plant finishes growing right away and starts earning (up to 10 minutes left).",
     "price": 9,
     "isForSale": true,
@@ -353,9 +353,9 @@
   {
     "key": "GrowNow30",
     "kind": "product",
-    "name": "Grow Now (30+ min)",
+    "name": "Skip (2)",
     "description": "Your sprouting plant finishes growing right away and starts earning, however long it had left.",
-    "price": 29,
+    "price": 19,
     "isForSale": true,
     "image": "icons/Seeds.png"
   }
