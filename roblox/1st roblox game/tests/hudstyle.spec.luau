@@ -108,7 +108,7 @@ H.test("studs: on every HUD element (left column, Plants panel, readout, windows
 	end
 	-- the left column and the Speed readout's "+"
 	has(HUD, "local function sideButton(", "\nend\n", "ShopUi.studs(b, color)", "Shop / Index buttons")
-	H.ok(string.find(HUD, "ShopUi.studs(slowTrack, nil)", 1, true) ~= nil, "Slow Mode switch")
+	H.ok(string.find(HUD, "ShopUi.studs(track, nil)", 1, true) ~= nil, "Slow Mode switch")
 	H.ok(string.find(HUD, "ShopUi.studs(plusBadge,", 1, true) ~= nil, "the Speed's + badge")
 	-- the Plants panel: its side button (button()), the panel, its tabs (chunky), its cards
 	has(HUD, "local function button(", "\nend\n", "ShopUi.studs(b, color)", "the Plants side button")

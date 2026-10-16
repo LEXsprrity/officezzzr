@@ -1,6 +1,6 @@
 -- The owner's admin panel (owner 2026-10-16: "make a admin panel", to pay players back for bug reports).
 -- Only built for admins: the server sets the player attribute IsAdmin (AdminService). An "ADMIN" button in
--- the bottom-left corner (or F2) opens a window: type a player's name (or tap someone in this server), then
+-- the bottom-right corner (or F2) opens a window: type a player's name (or tap someone in this server), then
 -- give them money, Speed or seeds of a zone and rarity. Amounts read like "50K" or "1.5M" (AdminGrant). The
 -- server answers with LootEvent "AdminResult", shown under the buttons. Someone not in this server gets it
 -- the next time they join.
@@ -76,8 +76,8 @@ local function rowName(parent: Instance, text: string, y: number)
 	UiFx.relief(ShopUi.label(parent, 3, { Text = text, Size = UDim2.fromOffset(100, 36), Position = UDim2.fromOffset(20, y + 6), TextXAlignment = Enum.TextXAlignment.Left, ZIndex = 4 }), 2, 3)
 end
 
--- The corner button
-local open = button(gui, "ADMIN", PANEL, UDim2.new(0, 14, 1, -60), UDim2.fromOffset(130, 46))
+-- The corner button (bottom-right: the Speed and money readout has the bottom-left)
+local open = button(gui, "ADMIN", PANEL, UDim2.new(1, -144, 1, -60), UDim2.fromOffset(130, 46))
 
 -- The window
 local window = plate("Frame", PANEL, { Name = "Window", Visible = false, AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.5), Size = UDim2.fromOffset(W, H), ZIndex = 2, Parent = gui })
