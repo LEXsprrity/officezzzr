@@ -123,6 +123,11 @@ local function tickPlayer(s: Sessions.Session, dt: number, now: number)
 	end
 	-- Only your own plot's belt pays; nobody can step onto somebody else's (Effects.client blocks it).
 	local onTreadmill = s.plot ~= nil and WorldBuilder.onBelt(s.plot.belt, pos)
+	-- Everyone sees them sprint on it (TreadmillRunners.client plays the run on other players' characters)
+	local char = s.player.Character
+	if typeof(char) == "Instance" and char:GetAttribute("OnTreadmill") ~= onTreadmill then
+		char:SetAttribute("OnTreadmill", onTreadmill)
+	end
 	local gain, verdict, back = SpeedLogic.step(s.tracker, pos, dt, {
 		walkSpeed = s.walkSpeed,
 		onTreadmill = onTreadmill,

@@ -248,11 +248,12 @@ export async function create(deps, entry, universe, apiKey) {
 }
 
 // Changes an existing item (Open Cloud: PATCH <collection>/<id>, multipart; 204 No Content): `fields` is
-// { price?, isForSale? }, only those are sent.
+// { name?, price?, isForSale? }, only those are sent.
 export async function updateItem(deps, kindName, id, fields, universe, apiKey) {
 	const kind = KINDS[kindName];
 	const body = () => {
 		const form = new FormData();
+		if (fields.name !== undefined) form.append("name", fields.name);
 		if (fields.price !== undefined) form.append("price", String(fields.price));
 		if (fields.isForSale !== undefined) form.append("isForSale", String(fields.isForSale));
 		return form;
@@ -266,11 +267,12 @@ export async function updatePrice(deps, kindName, id, price, universe, apiKey) {
 }
 
 // What --update-prices changes on an existing item, given what the listing says ({ price, forSale }, each
-// null when unknown): its price where it differs from the catalog's (or is unknown); isForSale false for a
+// null when unknown; `name` too when the listing has one): its store name where it was renamed in the catalog, its price where it differs from the catalog's (or is unknown); isForSale false for a
 // retired item unless it is known to be off sale already, true for a sold one known to be off sale (a
 // retired item brought back). {} when nothing needs to change.
 export function changes(entry, listed) {
 	const out = {};
+	if (listed?.name != null && listed.name !== entry.name) out.name = entry.name;
 	if ((listed?.price ?? null) !== entry.price) out.price = entry.price;
 	const want = forSale(entry);
 	const now = listed?.forSale ?? null;
@@ -296,6 +298,7 @@ async function updatePrices(deps, rows, existing, universe, apiKey) {
 		}
 		const now = listed?.price ?? null;
 		const what = [];
+		if (fields.name !== undefined) what.push(`renamed to "${fields.name}"`);
 		if (fields.price !== undefined) what.push(`price ${now ?? "?"} -> ${fields.price}`);
 		if (fields.isForSale !== undefined) what.push(fields.isForSale ? "put on sale" : "taken off sale");
 		const label = fields.price !== undefined ? "price" : "sale";

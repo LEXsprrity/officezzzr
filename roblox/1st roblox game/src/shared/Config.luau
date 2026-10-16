@@ -961,8 +961,8 @@ Config.DEVELOPER_PRODUCTS = {
 	-- Grow now: finish a sprouting plant right away (its hover info's and Plants card's button). Priced by
 	-- how much sprouting is left when it is prompted (Config.growNowProduct); the top one finishes any
 	-- sprout, however long (only deep Legendaries wait over 30 min).
-	GrowNow10 = { kind = "GrowNow", label = "Grow Now (10 min)", robux = 9, upTo = 10 * 60 },
-	GrowNow30 = { kind = "GrowNow", label = "Grow Now (30+ min)", robux = 29, upTo = math.huge },
+	GrowNow10 = { kind = "GrowNow", label = "Skip (1)", robux = 9, upTo = 10 * 60 },
+	GrowNow30 = { kind = "GrowNow", label = "Skip (2)", robux = 19, upTo = math.huge },
 } :: { [string]: DevProduct }
 
 -- The gamepass and developer product ids: monetization/ids.json ({ passes = { [key]: id }, products =
