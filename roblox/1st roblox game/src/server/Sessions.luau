@@ -30,6 +30,7 @@ export type Session = {
 	tracker: SpeedLogic.State,
 	carry: Carry?,
 	stunnedUntil: number,
+	knockedUntil: number, -- os.clock() until which a knockback flight is under way (SpeedService.knock)
 	walkSpeed: number,
 	income: number, -- cached $/s from plants, refreshed by PlotService
 	passes: { [string]: boolean },
@@ -49,6 +50,7 @@ function Sessions.create(player: Player, profile: ProfileStore.Profile, canSave:
 		tracker = SpeedLogic.newState(),
 		carry = nil,
 		stunnedUntil = 0,
+		knockedUntil = 0,
 		walkSpeed = Config.walkSpeedFor(profile.speed),
 		income = 0,
 		passes = {},

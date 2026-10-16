@@ -120,14 +120,9 @@ local function onCaught(g: Guard, player: Player)
 	if not s or not root then
 		return
 	end
-	-- Knock the player away from the guard (toward base), keep them inside the corridor.
+	-- The player flies a little way from the guard (SpeedService.knock; the corridor's walls stop them).
 	local away = root.Position - g.root.Position
-	away = Vector3.new(away.X, 0, away.Z)
-	local dir = if away.Magnitude > 0.1 then away.Unit else -Vector3.xAxis
-	local target = root.Position + dir * Config.KNOCKBACK_STUDS
-	local halfWidth = Config.CORRIDOR_WIDTH / 2 - 4
-	target = Vector3.new(target.X, root.Position.Y + 3, math.clamp(target.Z, -halfWidth, halfWidth))
-	SpeedService.teleport(player, CFrame.lookAt(target, target + dir))
+	SpeedService.knock(player, if Vector3.new(away.X, 0, away.Z).Magnitude > 0.1 then away else -Vector3.xAxis)
 	s.stunnedUntil = os.clock() + Config.CATCH_STUN
 	Net.LootEvent:FireClient(player, "Caught", { guard = Config.ZONES[g.zone].guard })
 end

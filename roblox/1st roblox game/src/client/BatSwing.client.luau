@@ -147,9 +147,26 @@ player.ChildAdded:Connect(function(c)
 	end
 end)
 
--- Someone else's swing (the server passes it on), and a hit: the bat's thwack
+-- A knock (fly a little way), someone else's swing (the server passes it on), and a hit: the bat's thwack
 LootEvent.OnClientEvent:Connect(function(kind: string, data: any)
-	if kind == "BatSwing" and type(data) == "table" and typeof(data.player) == "Instance" and data.player ~= player then
+	if kind == "Knock" and type(data) == "table" and typeof(data.velocity) == "Vector3" then
+		-- Caught by a boss or hit with a bat: fly a little way (SpeedService.knock). The humanoid lets go
+		-- (PlatformStand) so the fling isn't braked, then stands back up.
+		local char = player.Character
+		local hum = char and char:FindFirstChildOfClass("Humanoid")
+		local root = char and char:FindFirstChild("HumanoidRootPart") :: BasePart?
+		if hum and root and hum.Health > 0 then
+			hum.PlatformStand = true
+			root.AssemblyLinearVelocity = data.velocity
+			root.AssemblyAngularVelocity = Vector3.new(0, 0, 0)
+			task.delay(tonumber(data.seconds) or 0.7, function()
+				if hum.Parent then
+					hum.PlatformStand = false
+					hum:ChangeState(Enum.HumanoidStateType.GettingUp)
+				end
+			end)
+		end
+	elseif kind == "BatSwing" and type(data) == "table" and typeof(data.player) == "Instance" and data.player ~= player then
 		local char = (data.player :: Player).Character
 		local tool = char and char:FindFirstChild("Bat")
 		if char and tool then

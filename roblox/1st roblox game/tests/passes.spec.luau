@@ -604,4 +604,58 @@ H.test("Bat: a real Tool from assets/Bat.rbxm (no scripts, weightless, touches n
 	Guards.batHit = realHit
 end)
 
+H.test("Bat: a swing hits the nearest other player: they fly a little way, are stunned and drop their seed", function()
+	local BatTool = H.server("BatTool")
+	for p in Sessions.all() do -- (thieves left by the tests above)
+		Sessions.remove(p)
+	end
+	SeedService.buildPods(nestInfos())
+	local pod = SeedService.pods(1)[1]
+	local at = pod.part.CFrame.Position + Vector3.new(1, 0, 0)
+	local victim = thief(nil, at)
+	pod.rarity, pod.gene, pod.luck = 2, 99, 1
+	SeedService.steal(victim.player, 1, 1)
+	H.ok(victim.carry ~= nil, "carrying")
+	local hitter = thief(nil, at + Vector3.new(4, 0, 0))
+	local far = thief(nil, at + Vector3.new(60, 0, 0))
+	H.eq(BatTool.hitPlayer(hitter.player), victim.player, "the nearest one in reach")
+	H.eq(victim.carry, nil, "dropped")
+	H.ok(pod.available, "the seed is back in its pod")
+	H.ok(victim.knockedUntil > os.clock() and victim.stunnedUntil > os.clock(), "flying, stunned")
+	H.eq(far.knockedUntil, 0, "out of reach: untouched")
+	H.eq(BatTool.hitPlayer(far.player), nil, "nobody near: no hit")
+	for _, s in { victim, hitter, far } do
+		Sessions.remove(s.player)
+	end
+end)
+
+H.test("SolidProps: the map's big props (trees, volcanoes...) collide with players, not guards; small bits stay ghosts", function()
+	local SolidProps = H.server("SolidProps")
+	local Assets = H.server("Assets")
+	for slot in SolidProps.SLOTS do
+		H.ok(table.find(Assets.SLOTS, slot) ~= nil, slot .. " is a slot")
+	end
+	local MapTool = require("../tools/map_tool")
+	local world = MapTool.load(MapTool.PATH)
+	H.ok(SolidProps.apply(world) > 500, "the corridor's set pieces turn solid")
+	local volcano
+	for _, d in world:GetDescendants() do
+		if d:IsA("Model") and d:GetAttribute("AssetSlot") == "Lava_Volcano" then
+			volcano = d
+		end
+	end
+	local solid = 0
+	for _, p in volcano:GetDescendants() do
+		if p:IsA("BasePart") and p.CanCollide then
+			solid += 1
+			H.eq(p.CollisionGroup, "Decor", "guards pass through (Main: Guards x Decor off)")
+			H.ok(p.Material ~= roblox.Enum.Material.Neon, "glow stays a ghost")
+		end
+	end
+	H.ok(solid > 0, "the volcano is solid")
+	local main = fs.readFile("src/server/Main.server.luau")
+	H.ok(string.find(main, "CollisionGroupSetCollidable(\"Guards\", \"Decor\", false)", 1, true) ~= nil, "guards never snag")
+	H.ok(string.find(main, "CollisionGroupSetCollidable(\"Players\", \"Players\", false)", 1, true) ~= nil, "players walk through each other")
+end)
+
 return nil

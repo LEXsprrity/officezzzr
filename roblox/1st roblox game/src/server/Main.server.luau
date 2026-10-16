@@ -30,8 +30,12 @@ PhysicsService:RegisterCollisionGroup("Guards")
 PhysicsService:RegisterCollisionGroup("Players")
 PhysicsService:CollisionGroupSetCollidable("Guards", "Players", false)
 PhysicsService:CollisionGroupSetCollidable("Guards", "Guards", false)
+PhysicsService:CollisionGroupSetCollidable("Players", "Players", false) -- players walk through each other (owner 2026-10-16)
+PhysicsService:RegisterCollisionGroup("Decor")
+PhysicsService:CollisionGroupSetCollidable("Guards", "Decor", false) -- big props stop players, never the guards
 
 local plotInfos, nestInfos = WorldBuilder.load()
+require(Server:WaitForChild("SolidProps")).apply(workspace:FindFirstChild("World")) -- trees, volcanoes... stop players
 PlotService.init(plotInfos, WorldBuilder.sellPoints(workspace:FindFirstChild("World")))
 SeedService.init(nestInfos)
 GuardService.init(nestInfos)

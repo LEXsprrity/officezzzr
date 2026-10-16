@@ -4,7 +4,14 @@
 -- (BatTool.equipped). The model is assets/Bat.rbxm (the "Bat" slot, a Tool with a Handle); without
 -- it a plain wooden bat is built here.
 
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+
+local Config = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("Config"))
 local Assets = require(script.Parent:WaitForChild("Assets"))
+local Net = require(script.Parent:WaitForChild("Net"))
+local Sessions = require(script.Parent:WaitForChild("Sessions"))
+local SpeedService = require(script.Parent:WaitForChild("SpeedService"))
+local SeedService = require(script.Parent:WaitForChild("SeedService"))
 
 local BatTool = {}
 
@@ -77,6 +84,46 @@ function BatTool.equipped(player: Player): boolean
 	local char = player.Character
 	local tool = char and char:FindFirstChild(BatTool.NAME)
 	return tool ~= nil and tool:IsA("Tool")
+end
+
+-- A swing at players: the nearest other player within BAT_PLAYER_RANGE of where the hitter could have
+-- walked to (SpeedService.trustedRoot / seenPosition) is knocked away from them, stunned for a moment and
+-- drops a carried seed back to its pod. Returns the player hit, if any.
+function BatTool.hitPlayer(hitter: Player): Player?
+	local root = SpeedService.trustedRoot(hitter)
+	if not root then
+		return nil
+	end
+	local from = root.CFrame.Position
+	local best: Player?, bestDist = nil, Config.BAT_PLAYER_RANGE
+	for other in Sessions.all() do
+		if other ~= hitter then
+			local pos = SpeedService.seenPosition(other)
+			local d = pos and Vector3.new(pos.X - from.X, 0, pos.Z - from.Z).Magnitude
+			if d and d <= bestDist then
+				best, bestDist = other, d
+			end
+		end
+	end
+	local victim = best
+	if not victim then
+		return nil
+	end
+	local s = Sessions.get(victim)
+	local vroot = SpeedService.rootOf(victim)
+	local carried = s ~= nil and s.carry ~= nil
+	SeedService.returnCarry(victim)
+	if s and vroot then
+		local away = Vector3.new(vroot.CFrame.Position.X - from.X, 0, vroot.CFrame.Position.Z - from.Z)
+		local dir = if away.Magnitude > 0.1 then away.Unit else root.CFrame.LookVector * Vector3.new(1, 0, 1)
+		dir = if dir.Magnitude > 0.1 then dir.Unit else Vector3.xAxis
+		SpeedService.knock(victim, dir)
+		s.stunnedUntil = math.max(s.stunnedUntil, os.clock() + Config.BAT_PLAYER_STUN)
+		if carried then
+			Net.toast(victim, `{hitter.DisplayName} hit you with a bat! Your seed went back.`, "red")
+		end
+	end
+	return victim
 end
 
 return BatTool
