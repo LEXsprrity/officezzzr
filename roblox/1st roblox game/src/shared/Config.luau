@@ -579,6 +579,8 @@ end
 Config.CREATURE_ASSETS = {} :: { [number]: number }
 
 Config.OFFLINE_CAP_SECONDS = 3600
+-- Time away pays this share of what the plants would have made in game (owner 2026-10-16: "0.2x").
+Config.OFFLINE_MULT = 0.2
 -- The SELL stall in the shop plaza is the only place plants are sold (the Plants panel's Remove puts a
 -- plant in the inventory, for no money): 10x its $/s, i.e. 10 s of the plant's base income (no day/night)
 -- x the plot level / 2x Money multiplier (owner 2026-10-15: 2 min paid far too much). A plant keeps
