@@ -280,8 +280,8 @@ local function checkRewardsCorner(world: any, label: string)
 	return spot, board
 end
 
--- Where the free chest stood (WorldBuilder, before the owner removed it): the gift box takes its place.
-local CHEST_GROUND = Vector3.new(Config.CORRIDOR_START_X - 10, Config.GROUND_Y, -(Config.CORRIDOR_WIDTH / 2 + 28))
+-- Where the owner put the gift in Studio (2026-10-16; it first stood where the free chest was).
+local CHEST_GROUND = Vector3.new(54, Config.GROUND_Y, 101)
 
 H.test("rewards: the base has the gift's spot (where the free chest stood) and the MOST MONEY/s board, out of everyone's way", function()
 	local plots = WorldBuilder.build()
@@ -303,9 +303,9 @@ H.test("rewards: the base has the gift's spot (where the free chest stood) and t
 			return math.abs(cf.RightVector:Dot(axis)) * s.X + math.abs(cf.UpVector:Dot(axis)) * s.Y + math.abs(cf.LookVector:Dot(axis)) * s.Z + piece.margin
 		end
 		local p, ex, ez = cf.Position, extent(Vector3.xAxis), extent(Vector3.zAxis)
-		H.ok(p.X + ex <= Config.CORRIDOR_START_X and p.Z < 0, `{part.Name} in the base (in front of the wall), -Z side`)
+		H.ok(p.X + ex <= Config.CORRIDOR_START_X, `{part.Name} in the base (in front of the wall)`) -- either side: the owner places them (2026-10-16)
 		if part == spot then
-			H.ok(math.abs(p.Z) - ez > Config.CORRIDOR_WIDTH / 2, `{part.Name} clear of the walkway and the corridor mouth`)
+			H.ok(math.abs(p.Z) - ez > Config.WALKWAY_WIDTH / 2, `{part.Name} clear of the walkway`)
 		else -- the board stands out in the open by the corridor mouth (owner 2026-10-16), still off the walkway
 			H.ok(math.abs(p.Z) - ez > Config.WALKWAY_WIDTH / 2 + 10, `{part.Name} clear of the walkway`)
 		end
@@ -358,7 +358,7 @@ local function checkGiftBox(world: any, label: string)
 	H.ok(math.abs(body.CFrame.Position.Y - body.Size.Y / 2 - Config.GROUND_Y) < 0.5, "the box on the ground")
 	local panel = board.status.Parent.Parent
 	local p, r = body.CFrame.Position, GiftBox.CIRCLE / 2
-	H.ok(p.X + r <= Config.CORRIDOR_START_X and p.Z < 0, "in the base, -Z side")
+	H.ok(p.X + r <= Config.CORRIDOR_START_X, "in the base")
 	H.ok(math.abs(p.Z) - r > Config.CORRIDOR_WIDTH / 2, "clear of the walkway and the corridor mouth")
 	local sideWall: any = nil
 	for _, d in world.Base:GetChildren() do -- the base's -Z side wall: the box stays in front of it
