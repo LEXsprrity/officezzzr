@@ -13,6 +13,7 @@ local Sessions = require(script.Parent:WaitForChild("Sessions"))
 local Shop = require(script.Parent:WaitForChild("Shop"))
 local SpeedService = require(script.Parent:WaitForChild("SpeedService"))
 local GuardService = require(script.Parent:WaitForChild("GuardService"))
+local SeedService = require(script.Parent:WaitForChild("SeedService"))
 local PlotService = require(script.Parent:WaitForChild("PlotService"))
 local TrailService = require(script.Parent:WaitForChild("TrailService"))
 local VipService = require(script.Parent:WaitForChild("VipService"))
@@ -165,6 +166,11 @@ local function onUse(player: Player, itemId: any)
 		s.cooldowns.Bat = now + Config.BAT_COOLDOWN
 		local hit = GuardService.batHit(player)
 		Net.LootEvent:FireClient(player, "Bat", { hit = hit, cooldown = Config.BAT_COOLDOWN })
+		return
+	end
+
+	if itemId == "Drop" then -- the carried seed goes back to its pod (CarryHud.client's Drop button)
+		SeedService.returnCarry(player)
 		return
 	end
 
