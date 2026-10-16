@@ -430,16 +430,16 @@ A guard runs exactly as fast as a player at the zone's recommended Speed (`GUARD
 
 Why `WAKE_REACTION` (owner playtest, 100M in the Spirit Garden, caught "as soon as I take the seed"): the wake-up used to be only the head start plus 0–0.1 s, 0.26 s in the Spirit Garden. The old chase sim started the thief running at the very instant of the steal, from the pod, with the server seeing them live, so it showed 0.4 s of slack. In the real game the thief was still standing by the pod when the guard woke, and its first tick or two caught them, at any Speed. `tests/steal_flow.luau` now runs the steal the way the game does: any spot in the prompt's reach (even inside the sleeping boss: players pass through guards), a reaction delay, 0.1 s of server lag through the movement tracker (`SpeedService.seenPosition`), the guard loop at 10 Hz at any phase and its `MoveTo` walked every physics frame. The catch is still measured from the guard's root (the middle of its body, inside the model's width; the pods stay outside it).
 
-A slower player keeps the same head start but loses ground every second. WalkSpeed is logarithmic in Speed, so a few WalkSpeed points are a big share of the Speed number. In the steal flow (slack: how late a recommended-Speed thief may start running, server lag on top; threshold: the lowest Speed a quick thief, 0.2 s, escapes with):
+A slower player keeps the same head start but loses ground every second, and **below the sign the guard runs faster after them** (`Config.guardSpeedVs`: (sign / Speed) ^ 0.3, at most x1.35; owner 2026-10-16, 5M outran the 7.5M Snow Peaks). A guard walks home at 1.2x its chase speed (`GUARD_RETURN_FACTOR`, 2x the old 0.6). WalkSpeed is logarithmic in Speed, so a few WalkSpeed points are a big share of the Speed number. In the steal flow (slack: how late a recommended-Speed thief may start running, server lag on top; threshold: the lowest Speed a quick thief, 0.2 s, escapes with):
 
 | Zone | Recommended | Wakes after (reaction + head start) | Escapes from Speed | WalkSpeed (player vs guard) | Slack |
 |---|---|---|---|---|---|
-| Desert | 25K | 0.85 s (0.5 + 0.35) | ~12K (47%) | 71.9 vs 80.8 | 0.77 s |
-| Jungle | 500K | 0.74 s (0.5 + 0.24) | ~275K (55%) | 108.9 vs 115.9 | 0.61 s |
-| Lava | 2.5M | 0.71 s (0.5 + 0.21) | ~1.5M (61%) | 128.9 vs 134.7 | 0.67 s |
-| Snow | 7.5M | 0.69 s (0.5 + 0.19) | ~5.0M (66%) | 142.8 vs 147.6 | 0.57 s |
-| Deep Space | 25M | 0.67 s (0.5 + 0.17) | ~17M (68%) | 157.3 vs 161.7 | 0.64 s |
-| Spirit Garden | 75M | 0.66 s (0.5 + 0.16) | ~52M (70%) | 170.4 vs 174.6 | 0.55 s |
+| Desert | 25K | 0.85 s (0.5 + 0.35) | ~18.8K (75%) | 71.9 vs 80.8 | 0.77 s |
+| Jungle | 500K | 0.74 s (0.5 + 0.24) | ~425K (85%) | 108.9 vs 115.9 | 0.61 s |
+| Lava | 2.5M | 0.71 s (0.5 + 0.21) | ~2.2M (89%) | 128.9 vs 134.7 | 0.67 s |
+| Snow | 7.5M | 0.69 s (0.5 + 0.19) | ~6.8M (91%) | 142.8 vs 147.6 | 0.57 s |
+| Deep Space | 25M | 0.67 s (0.5 + 0.17) | ~23M (93%) | 157.3 vs 161.7 | 0.64 s |
+| Spirit Garden | 75M | 0.66 s (0.5 + 0.16) | ~70M (93%) | 170.4 vs 174.6 | 0.55 s |
 
 Why the wake-up and not the other knobs: a slower guard (`GUARD_SPEED_FACTOR` < 1) would let a thief below the sign pull away on long runs and break "you need the recommended Speed", and a ramp-up acceleration is a head start too, just harder to read. The wake-up already exists (the ❗ the boss shows; it now lasts about as long as its 0.6 s wake-up hop). Slack trades against the threshold: every 0.1 s of it lowers the threshold, and the shorter the run home, the less a slower thief loses on the way. With the short zones (runs home of 264 studs from the Desert nest to 2,240 from the Spirit Garden's) the thresholds sit at ~50–70% of the sign: a thief can't be far below it. The Meadow (recommended 0) wakes after 2.25 s, and its run home is a tutorial: anyone who runs gets away.
 

@@ -62,7 +62,7 @@ local function simulate(k: number, speedStat: number, opts: SimOpts?): (string, 
 			local gap = playerPos - guardPos
 			closest = math.min(closest, Vector3.new(gap.X, 0, gap.Z).Magnitude)
 		end
-		local cmd = GuardBrain.step(brain, t, guardPos, { { id = "thief", pos = playerPos, safe = safe } })
+		local cmd = GuardBrain.step(brain, t, guardPos, { { id = "thief", pos = playerPos, safe = safe, speed = if o.walk then nil else speedStat } })
 		if cmd.caughtId then
 			return "caught", t - 1000, playerPos.X, closest
 		end
@@ -198,7 +198,7 @@ H.test("guard flow: at the recommended Speed or more you escape if you start run
 end)
 
 H.test("guard flow: below the recommended Speed you get caught, even reacting at once (zones 2-7)", function()
-	-- A quick thief (0.2 s) escapes from ~47-70% of the sign: the run home is short, and WalkSpeed is
+	-- A quick thief (0.2 s) escapes from ~75-93% of the sign (Config.guardSpeedVs; WalkSpeed is
 	-- logarithmic in Speed (README "Soft gates").
 	for k = 2, #Config.ZONES do
 		local zone = Config.ZONES[k]
@@ -351,6 +351,19 @@ H.test("guard: bat stun freezes the guard for BAT_STUN seconds, then it resumes 
 	cmd = GuardBrain.step(brain, 1 + Config.BAT_STUN, Vector3.new(0, 0, 0), target)
 	H.eq(brain.state, "Chasing")
 	H.ok(cmd.moveTo ~= nil)
+end)
+
+H.test("guard flow: below the sign the guard runs faster after you (owner: 5M outran the 7.5M Snow Peaks)", function()
+	local snow = 5
+	H.eq(Config.ZONES[snow].id, "Snow")
+	H.eq((Flow.steal(snow, { speed = 5e6, reaction = 0 })), "caught", "5M in the Snow Peaks, even running at once")
+	H.eq((Flow.steal(snow, { speed = 7.5e6, reaction = 0.3 })), "escaped", "7.5M (the sign) still gets away")
+	H.eq(Config.guardSpeedVs(snow, 7.5e6), Config.guardChaseSpeed(snow), "at the sign: the plain chase speed")
+	H.eq(Config.guardSpeedVs(snow, 1e9), Config.guardChaseSpeed(snow), "above it: no change")
+	H.ok(Config.guardSpeedVs(snow, 5e6) > Config.guardChaseSpeed(snow) * 1.1, "2/3 of the sign: >10% faster")
+	H.ok(Config.guardSpeedVs(snow, 0) <= Config.guardChaseSpeed(snow) * Config.GUARD_UNDERSPEED_MAX + 1e-9, "capped")
+	H.eq(Config.guardSpeedVs(1, 0), Config.guardChaseSpeed(1), "the Meadow (no sign) never speeds up")
+	H.eq(Config.GUARD_RETURN_FACTOR, 1.2, "owner: home 2x faster than the old 0.6")
 end)
 
 return nil

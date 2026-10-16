@@ -236,11 +236,12 @@ end
 -- as long as a recommended-Speed thief takes to run GUARD_HEAD_START studs, plus the zone's wakeDelay.
 -- Slack also lets slower players escape: the shorter the run home, the less a slower thief loses on the
 -- way. With the zone lengths above a recommended-Speed thief may start running 0.55-0.75 s after the
--- steal (with 0.1 s of server lag on top), and a quick one (0.2 s) escapes from ~47-70% of the sign
--- (tests/guard.spec, tests/steal_flow; the recommended Speeds are only ~3-4x apart from the Lava Fields
+-- steal (with 0.1 s of server lag on top), and a quick one (0.2 s) escapes from ~75-93% of the sign (the
+-- guard runs faster after a thief below it, Config.guardSpeedVs; tests/guard.spec, tests/steal_flow; the
+-- recommended Speeds are only ~3-4x apart from the Lava Fields
 -- on, so a thief can't be far below the sign). The Meadow (req 0) is the tutorial.
 Config.GUARD_SPEED_FACTOR = 1 -- chase WalkSpeed = walkSpeedFor(zone.req) * this
-Config.GUARD_RETURN_FACTOR = 0.6 -- walking home is slower than chasing
+Config.GUARD_RETURN_FACTOR = 1.2 -- walking home: 2x the old 0.6 (owner 2026-10-16: "go home 2 times faster")
 Config.CATCH_DISTANCE = 6 -- horizontal studs, root to root
 Config.CHASE_TIMEOUT = 45
 Config.GUARD_SCALE = 3 -- body size multiplier ("giant")
@@ -251,6 +252,22 @@ Config.WAKE_REACTION = 0.5 -- s of every wake-up for the thief to notice the ste
 
 function Config.guardChaseSpeed(k: number): number
 	return Config.walkSpeedFor(Config.ZONES[k].req) * Config.GUARD_SPEED_FACTOR
+end
+
+-- Below the recommended Speed the guard runs faster after you (owner 2026-10-16: 5M outran the Snow Peaks'
+-- 7.5M guard, because WalkSpeed is a log curve and 5M runs only ~3% slower than 7.5M). Chasing a thief
+-- with Speed s < req it runs (req / s) ^ GUARD_UNDERSPEED_EXP faster, at most GUARD_UNDERSPEED_MAX:
+-- 2/3 of the sign is ~13% faster (caught), 90% of it ~3% (a quick thief still makes it from close by).
+Config.GUARD_UNDERSPEED_EXP = 0.3
+Config.GUARD_UNDERSPEED_MAX = 1.35
+function Config.guardSpeedVs(k: number, thiefSpeed: number?): number
+	local base = Config.guardChaseSpeed(k)
+	local req = Config.ZONES[k].req
+	local s = thiefSpeed
+	if req <= 0 or s == nil or s ~= s or s >= req then
+		return base
+	end
+	return base * math.min(Config.GUARD_UNDERSPEED_MAX, (req / math.max(s, 1)) ^ Config.GUARD_UNDERSPEED_EXP)
 end
 
 -- Seconds between a steal and zone k's guard's chase (its "❗" state): WAKE_REACTION, then the time a thief
