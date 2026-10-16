@@ -80,7 +80,8 @@ H.test("HUD: the left column has only Shop and Index (and Slow Mode); Trails ope
 		table.insert(buttons, name)
 	end
 	H.eq(table.concat(buttons, ","), "Shop,Index")
-	H.ok(string.find(HUD, "Name = \"SlowMode\"", 1, true), "the Slow Mode switch")
+	H.ok(string.find(HUD, "switchRow(3, \"SlowMode\", \"Slow Mode\", false,", 1, true), "the Slow Mode switch")
+	H.ok(string.find(HUD, "switchRow(4, \"Music\", \"Music\", true,", 1, true), "the Music switch (on at first)")
 	H.ok(string.find(HUD, "opens == \"Trails\"", 1, true), "the TRAIL SHOP stall still opens the Trail Shop")
 	H.ok(not string.find(REWARDS, "LeftColumn", 1, true), "Rewards.client adds no Gift button to the column")
 	H.ok(string.find(REWARDS, "GetAttribute(\"FreeGift\")", 1, true), "the gift box's prompt opens the Free Gift window")
@@ -189,7 +190,7 @@ H.test("HUD: more room between Shop, Index and Slow Mode", function()
 	H.ok(gap and gap >= 16, "a gap of 16+ design pixels")
 	local column = string.match(HUD, "local leftColumn = new%(\"Frame\", %b{}, (%b{})")
 	H.ok(column and string.find(column, "Padding = UDim.new(0, LEFT_GAP)", 1, true), "the column's layout uses it")
-	H.ok(string.find(HUD, "LEFT_H = 176, SIDE_H * 2 + 30 + 2 * LEFT_GAP", 1, true), "and the column's height counts it")
+	H.ok(string.find(HUD, "LEFT_H = 176, SIDE_H * 2 + 30 * 2 + 3 * LEFT_GAP", 1, true), "and the column's height counts it")
 end)
 
 H.test("HUD Sell window: mutation only on mutated plants, no \"no mutation\", no emoji; flower names on the cards", function()
@@ -523,6 +524,19 @@ H.test("Shop scroll: an unchanged re-sent stat never rebuilds the open window (o
 	-- and the window doesn't move: fitModal places it at one fixed spot
 	local fit = string.match(hud, "local function fitModal%(%).-\nend\n") or ""
 	H.ok(string.find(fit, "modal.Position = UDim2.new(0.5, 0, 0.5, (TOP - BOTTOM) / 2)", 1, true) ~= nil, "a fixed window spot")
+end)
+
+H.test("music: day and night lists in the base, each zone's nature sounds in the corridor, a Music switch", function()
+	local Config = H.shared("Config")
+	H.ok(#Config.MUSIC.day >= 2 and #Config.MUSIC.night >= 2, "a few tracks for day and for night")
+	H.eq(#Config.MUSIC_AMBIENCE, #Config.ZONES, "one nature loop per zone")
+	for _, id in { table.unpack(Config.MUSIC.day), table.unpack(Config.MUSIC.night), table.unpack(Config.MUSIC_AMBIENCE) } do
+		H.ok(type(id) == "number" and id > 0 and id == math.floor(id), tostring(id))
+	end
+	local music = fs.readFile("src/client/Music.client.luau")
+	H.ok(string.find(music, "Config.zoneAtX(root.Position.X)", 1, true), "the corridor is told by the zone, like the banner")
+	H.ok(string.find(music, "Config.MUSIC_AMBIENCE[zone]", 1, true), "out there: only nature sounds")
+	H.ok(string.find(music, "GetAttribute(\"MusicMuted\")", 1, true), "the switch mutes it")
 end)
 
 return nil

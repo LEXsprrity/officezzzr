@@ -1231,4 +1231,36 @@ Config.SOUNDS = {
 	Click = "rbxasset://sounds/button.wav",
 }
 
+-- Background music (a player's suggestion, owner 2026-10-16; Client/Music). Licensed APM tracks from the
+-- Creator Store (creator APMOfficial), free in every experience. Day and night each shuffle their own list,
+-- in the base only: out in the corridor the music fades away and only the zone's nature sounds play
+-- (owner 2026-10-16), ProSoundEffects loops (MUSIC_AMBIENCE, by Config.ZONES order). The HUD's Music switch
+-- mutes both.
+Config.MUSIC = {
+	day = {
+		1845737125, -- Happy Town (Gerhard Trede)
+		120231070741138, -- Curious Creatures (Patrick Fletcher)
+		103975484045591, -- Cafe Carousel (Patrick Fletcher)
+		1844071044, -- Summer Fun (a) (David Benjamin Walter)
+	},
+	night = {
+		119436736751365, -- Calm Night (Raphael Olivier)
+		1839777161, -- So Sneaky (Kosinus)
+		9043067401, -- A Curious Case A (Sonoton Vanguard)
+		1837629548, -- Corona (Richard Brown)
+	},
+}
+Config.MUSIC_AMBIENCE = {
+	9113444360, -- Meadow: Birds Park 2
+	9114057128, -- Desert: Desert Wind Whistley Light Gusts 2
+	9114891624, -- Jungle: Jungle Ambience 4
+	9112823563, -- Lava Fields: Lava Rumble 2
+	9114625552, -- Snow Peaks: Gods Wind 3
+	9119392620, -- Deep Space: Space Presence 2
+	9120750367, -- Spirit Garden: Wind Chimes 3
+}
+Config.MUSIC_VOLUME = 0.3
+Config.MUSIC_AMBIENCE_VOLUME = 0.5
+Config.MUSIC_FADE = 1.5 -- seconds to fade between tracks
+
 return Config

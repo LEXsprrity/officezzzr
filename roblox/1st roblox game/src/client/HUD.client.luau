@@ -175,7 +175,7 @@ end
 ----------------------------------------------------------------------------------------------------
 -- Left side, kept minimal, with no panels behind the numbers:
 --   * bottom-left: Speed (with a "+" that opens the Shop's Speed section) in pink, money in green;
---   * middle of the left edge: the Shop / Index buttons and the Slow Mode switch. (Trails opens from
+--   * middle of the left edge: the Shop / Index buttons and the Slow Mode and Music switches. (Trails opens from
 --     the TRAIL SHOP stall in the plaza, the Free Gift from the gift box where the free chest stood.)
 -- Sizes are design pixels: the screen is 900 tall at UIScale 1, about 680 on a landscape phone (the
 -- 0.55 minimum scale). The button column shrinks on its own if it would run into the Speed and money.
@@ -184,7 +184,7 @@ local SPEED_PINK = Color3.fromRGB(255, 70, 150)
 local MONEY_GREEN = Color3.fromRGB(85, 240, 70)
 local LEFT_GAP = 18 -- between Shop, Index and Slow Mode
 local SIDE_W, SIDE_H = 176, 68 -- the Shop / Index buttons (wide, like the reference)
-local STATS_H, LEFT_H = 176, SIDE_H * 2 + 30 + 2 * LEFT_GAP -- LEFT_H: 2 side buttons + Slow Mode
+local STATS_H, LEFT_H = 176, SIDE_H * 2 + 30 * 2 + 3 * LEFT_GAP -- LEFT_H: 2 side buttons + Slow Mode + Music
 local STATS_BOTTOM = 10
 
 local openModal: (name: string) -> ()
@@ -292,19 +292,38 @@ sideButton(2, "Index", "Index", "📖", Color3.fromRGB(35, 195, 255), function()
 	openModal("Index")
 end)
 
+-- The switches under them (Slow Mode, Music): styled like the buttons above, a square-ish track with a thick
+-- outline and the words in relief. `onToggle(on)` runs on every flip.
+local function switchRow(order: number, name: string, text: string, on: boolean, onToggle: (boolean) -> ())
+	local row = new("TextButton", { Name = name, Size = UDim2.new(1, 0, 0, 30), BackgroundTransparency = 1, Text = "", LayoutOrder = order, Parent = leftColumn })
+	local track = new("Frame", {
+		Size = UDim2.fromOffset(54, 28), Position = UDim2.fromOffset(2, 1), BackgroundColor3 = Color3.fromRGB(150, 165, 215), Parent = row,
+	}, deco(4, 4))
+	ShopUi.studs(track, nil) -- white-tinted: the track's colour changes with the switch
+	local knob = new("Frame", {
+		Size = UDim2.fromOffset(22, 22), Position = UDim2.fromOffset(3, 3), BackgroundColor3 = WHITE, Parent = track,
+	}, deco(3, 2))
+	UiFx.relief(bold(row, 3, { Text = text, Size = UDim2.new(1, -66, 0, 26), Position = UDim2.fromOffset(66, 1), TextXAlignment = Enum.TextXAlignment.Left }), 3, 3)
+	local function show(seconds: number)
+		local info = TweenInfo.new(seconds, Enum.EasingStyle.Quad)
+		TweenService:Create(knob, info, {
+			Position = UDim2.fromOffset(if on then 29 else 3, 3),
+			BackgroundColor3 = if on then Color3.fromRGB(190, 255, 150) else WHITE,
+		}):Play()
+		TweenService:Create(track, info, {
+			BackgroundColor3 = if on then Color3.fromRGB(70, 205, 60) else Color3.fromRGB(150, 165, 215),
+		}):Play()
+	end
+	show(0)
+	row.Activated:Connect(function()
+		on = not on
+		show(0.15)
+		onToggle(on)
+	end)
+end
+
 -- Slow Mode: purely local, clamps our own WalkSpeed so we can potter around the base.
 local slowMode = false
--- (styled like the buttons above: a square-ish track with a thick outline, the words in relief)
-local slowRow = new("TextButton", { Name = "SlowMode", Size = UDim2.new(1, 0, 0, 30), BackgroundTransparency = 1, Text = "", LayoutOrder = 3, Parent = leftColumn })
-local slowTrack = new("Frame", {
-	Size = UDim2.fromOffset(54, 28), Position = UDim2.fromOffset(2, 1), BackgroundColor3 = Color3.fromRGB(150, 165, 215), Parent = slowRow,
-}, deco(4, 4))
-ShopUi.studs(slowTrack, nil) -- white-tinted: the track's colour changes with the switch
-local slowKnob = new("Frame", {
-	Size = UDim2.fromOffset(22, 22), Position = UDim2.fromOffset(3, 3), BackgroundColor3 = WHITE, Parent = slowTrack,
-}, deco(3, 2))
-UiFx.relief(bold(slowRow, 3, { Text = "Slow Mode", Size = UDim2.new(1, -66, 0, 26), Position = UDim2.fromOffset(66, 1), TextXAlignment = Enum.TextXAlignment.Left }), 3, 3)
-
 local function applySlow()
 	local char = player.Character
 	local hum = char and char:FindFirstChildOfClass("Humanoid")
@@ -314,17 +333,13 @@ local function applySlow()
 		hum.WalkSpeed = stats.walkSpeed
 	end
 end
-slowRow.Activated:Connect(function()
-	slowMode = not slowMode
-	local info = TweenInfo.new(0.15, Enum.EasingStyle.Quad)
-	TweenService:Create(slowKnob, info, {
-		Position = UDim2.fromOffset(if slowMode then 29 else 3, 3),
-		BackgroundColor3 = if slowMode then Color3.fromRGB(190, 255, 150) else WHITE,
-	}):Play()
-	TweenService:Create(slowTrack, info, {
-		BackgroundColor3 = if slowMode then Color3.fromRGB(70, 205, 60) else Color3.fromRGB(150, 165, 215),
-	}):Play()
+switchRow(3, "SlowMode", "Slow Mode", false, function(on)
+	slowMode = on
 	applySlow()
+end)
+-- Music (Client/Music plays it): on by default; off sets our own MusicMuted attribute, which Music watches.
+switchRow(4, "Music", "Music", true, function(on)
+	player:SetAttribute("MusicMuted", not on)
 end)
 local function hookHumanoid(char: Model)
 	local hum = char:WaitForChild("Humanoid") :: Humanoid

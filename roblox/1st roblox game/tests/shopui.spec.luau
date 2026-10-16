@@ -598,7 +598,7 @@ H.test("HUD left column: wide Shop / Index buttons (icon left, word right in rel
 		H.ok((h + 8) * grow < gap / 2, "never over the next button")
 		H.ok((w + 8) * grow < 14, "never off the screen's left edge (the column is 14 px in)")
 	end
-	H.ok(string.find(HUD, "UiFx.relief(bold(slowRow, 3, { Text = \"Slow Mode\"", 1, true) ~= nil, "Slow Mode in relief, like them")
+	H.ok(string.find(HUD, "UiFx.relief(bold(row, 3, { Text = text,", 1, true) ~= nil, "Slow Mode in relief, like them")
 end)
 
 H.test("Shop SEED PACKS: the owner's pictures as the pack cards' backgrounds once uploaded (the zone colours until then)", function()
