@@ -166,8 +166,12 @@ local function onUse(player: Player, itemId: any)
 		end
 		s.cooldowns.Bat = now + Config.BAT_COOLDOWN
 		Net.LootEvent:FireAllClients("BatSwing", { player = player }) -- the others play the strike on this character (BatSwing.client)
-		local hitPlayer = BatTool.hitPlayer(player) -- (players don't collide, but a bat hits them)
-		local hit = GuardService.batHit(player) or hitPlayer ~= nil
+		local hitPlayer, playerAt = BatTool.hitPlayer(player) -- (players don't collide, but a bat hits them)
+		local hitGuard, guardAt = GuardService.batHit(player)
+		for _, at in { playerAt, guardAt } do
+			Net.LootEvent:FireAllClients("BatHit", { at = at, player = player }) -- POW!, stars, the thwack (BatSwing.client)
+		end
+		local hit = hitGuard or hitPlayer ~= nil
 		Net.LootEvent:FireClient(player, "Bat", { hit = hit, cooldown = Config.BAT_COOLDOWN })
 		return
 	end
