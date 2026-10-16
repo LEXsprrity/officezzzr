@@ -206,8 +206,8 @@ local function nearestGuard(pos: Vector3, range: number, filter: (Guard) -> bool
 end
 
 -- Bat: stun the nearest awake guard in reach. The distance is measured on the server, from where the
--- player could have walked to (SpeedService.trustedRoot).
-function GuardService.batHit(player: Player): boolean
+-- player could have walked to (SpeedService.trustedRoot). Returns whether it hit, and where (the hit effect).
+function GuardService.batHit(player: Player): (boolean, Vector3?)
 	local root = SpeedService.trustedRoot(player)
 	if not root then
 		return false
@@ -218,7 +218,7 @@ function GuardService.batHit(player: Player): boolean
 	end)
 	if g and GuardBrain.stun(g.brain, os.clock(), Config.BAT_STUN) then
 		showState(g)
-		return true
+		return true, g.root.CFrame.Position + Vector3.new(0, 4, 0)
 	end
 	return false
 end

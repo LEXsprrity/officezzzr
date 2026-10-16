@@ -88,8 +88,8 @@ end
 
 -- A swing at players: the nearest other player within BAT_PLAYER_RANGE of where the hitter could have
 -- walked to (SpeedService.trustedRoot / seenPosition) is knocked away from them, stunned for a moment and
--- drops a carried seed back to its pod. Returns the player hit, if any.
-function BatTool.hitPlayer(hitter: Player): Player?
+-- drops a carried seed back to its pod. Returns the player hit, if any, and where (the hit effect).
+function BatTool.hitPlayer(hitter: Player): (Player?, Vector3?)
 	local root = SpeedService.trustedRoot(hitter)
 	if not root then
 		return nil
@@ -112,18 +112,20 @@ function BatTool.hitPlayer(hitter: Player): Player?
 	local s = Sessions.get(victim)
 	local vroot = SpeedService.rootOf(victim)
 	local carried = s ~= nil and s.carry ~= nil
+	local hitAt: Vector3? = nil
 	SeedService.returnCarry(victim)
 	if s and vroot then
 		local away = Vector3.new(vroot.CFrame.Position.X - from.X, 0, vroot.CFrame.Position.Z - from.Z)
 		local dir = if away.Magnitude > 0.1 then away.Unit else root.CFrame.LookVector * Vector3.new(1, 0, 1)
 		dir = if dir.Magnitude > 0.1 then dir.Unit else Vector3.xAxis
 		SpeedService.knock(victim, dir)
+		hitAt = vroot.CFrame.Position + Vector3.new(0, 1.5, 0)
 		s.stunnedUntil = math.max(s.stunnedUntil, os.clock() + Config.BAT_PLAYER_STUN)
 		if carried then
 			Net.toast(victim, `{hitter.DisplayName} hit you with a bat! Your seed went back.`, "red")
 		end
 	end
-	return victim
+	return victim, hitAt
 end
 
 return BatTool
