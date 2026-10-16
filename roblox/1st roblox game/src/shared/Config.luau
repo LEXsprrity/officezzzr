@@ -245,8 +245,12 @@ Config.GUARD_RETURN_FACTOR = 1.2 -- walking home: 2x the old 0.6 (owner 2026-10-
 Config.CATCH_DISTANCE = 6 -- horizontal studs, root to root
 Config.CHASE_TIMEOUT = 45
 Config.GUARD_SCALE = 3 -- body size multiplier ("giant")
-Config.KNOCKBACK_STUDS = 30
 Config.CATCH_STUN = 1 -- seconds the caught player can't move
+-- Caught or hit with a bat, the player flies a little way (owner 2026-10-16: "not a lot but a little bit"):
+-- flung at KNOCK_SPEED away and KNOCK_UP up, about 16 studs at the default gravity (SpeedService.knock).
+Config.KNOCK_SPEED = 40
+Config.KNOCK_UP = 38
+Config.KNOCK_TIME = 0.7 -- s the flight takes (no moving, no Speed from it)
 Config.GUARD_HEAD_START = 28 -- studs a recommended-Speed thief runs while the guard wakes up (Config.wakeDelay)
 Config.WAKE_REACTION = 0.5 -- s of every wake-up for the thief to notice the steal and start running (see above)
 
@@ -788,6 +792,11 @@ Config.START_ITEMS = {} :: { [string]: number }
 Config.BAT_RANGE = 14
 Config.BAT_STUN = 2
 Config.BAT_COOLDOWN = 4
+-- The bat hits players too (owner 2026-10-16; players don't collide with each other): the nearest other player
+-- within BAT_PLAYER_RANGE studs flies a little way (SpeedService.knock), can't move for BAT_PLAYER_STUN s and drops
+-- a carried seed (it goes back to its pod).
+Config.BAT_PLAYER_RANGE = 9
+Config.BAT_PLAYER_STUN = 1
 
 -- Gamepasses: their ids come from monetization/ids.json (Config.applyMonetizationIds, below the developer
 -- products); id = 0 = not set up yet (the Shop says "coming soon"). Ownership is only ever decided on the server (ShopService: UserOwnsGamePassAsync

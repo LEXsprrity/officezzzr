@@ -2,6 +2,7 @@
 -- (walking or treadmill), enforce the movement sanity check, and set WalkSpeed from the Speed stat.
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Config = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("Config"))
+local Net = require(script.Parent:WaitForChild("Net"))
 local Sessions = require(script.Parent:WaitForChild("Sessions"))
 local SpeedLogic = require(script.Parent:WaitForChild("SpeedLogic"))
 local WorldBuilder = require(script.Parent:WaitForChild("WorldBuilder"))
@@ -34,6 +35,22 @@ function SpeedService.teleport(player: Player, cf: CFrame)
 		SpeedLogic.teleported(s.tracker, cf.Position)
 		s.tracker.at = os.clock()
 	end
+end
+
+-- Knocked away (a boss's catch, a bat hit; owner 2026-10-16: "flies a bit away"): the victim's own client
+-- flings its character (it owns its physics; BatSwing.client on LootEvent "Knock") `dir` (horizontal)
+-- at KNOCK_SPEED and up at KNOCK_UP, a little way through the air. The flight isn't a speed hack:
+-- the movement check skips it (tickPlayer) for KNOCK_TIME and starts again where they land.
+function SpeedService.knock(player: Player, dir: Vector3)
+	local s = Sessions.get(player)
+	if not s then
+		return
+	end
+	local flat = Vector3.new(dir.X, 0, dir.Z)
+	flat = if flat.Magnitude > 0.01 then flat.Unit else -Vector3.xAxis
+	s.knockedUntil = os.clock() + Config.KNOCK_TIME
+	s.stunnedUntil = math.max(s.stunnedUntil, os.clock() + Config.KNOCK_TIME)
+	Net.LootEvent:FireClient(player, "Knock", { velocity = flat * Config.KNOCK_SPEED + Vector3.yAxis * Config.KNOCK_UP, seconds = Config.KNOCK_TIME })
 end
 
 -- The character's root, if it is alive and where the server sees it now is somewhere it could have walked to
@@ -97,6 +114,13 @@ local function tickPlayer(s: Sessions.Session, dt: number, now: number)
 	end
 	headless[s] = nil
 	local pos = root.Position
+	if os.clock() < s.knockedUntil then
+		-- flying from a hit (SpeedService.knock): no Speed for it, and the movement check starts afresh
+		-- where they land
+		SpeedLogic.teleported(s.tracker, pos)
+		s.tracker.at = os.clock()
+		return
+	end
 	-- Only your own plot's belt pays; nobody can step onto somebody else's (Effects.client blocks it).
 	local onTreadmill = s.plot ~= nil and WorldBuilder.onBelt(s.plot.belt, pos)
 	local gain, verdict, back = SpeedLogic.step(s.tracker, pos, dt, {
