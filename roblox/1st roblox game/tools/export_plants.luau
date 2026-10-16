@@ -18,6 +18,7 @@
 local fs = require("@lune/fs")
 local roblox = require("@lune/roblox")
 local H = require("../tests/harness")
+local PlantGround = require("./plant_ground")
 
 local Config = H.shared("Config")
 local Vector3, CFrame = roblox.Vector3, roblox.CFrame
@@ -176,6 +177,7 @@ local function export(source: any, zone: number, rarity: number): (any, string)
 	if SWORDS[source.Name] then
 		model:SetAttribute("Sword", true)
 	end
+	PlantGround.apply(model) -- stand on its base disc, not on a leaf poking below it
 	return model, string.format("%-18s %3d parts  %5.1f -> %4.1f tall, reach %.2f (scale %.3f)", source.Name, #parts, height, height * s, radius * s, s)
 end
 
