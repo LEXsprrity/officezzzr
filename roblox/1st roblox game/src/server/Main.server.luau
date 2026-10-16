@@ -99,9 +99,9 @@ local function onCharacter(player: Player, char: Model)
 		hum.WalkSpeed = s.walkSpeed
 		TrailService.apply(char, s.profile.equippedTrail) -- a respawned character needs its trail again
 		BatTool.give(player) -- 1 equips it, a click swings it (BatSwing.client)
-		if s.passes.VIP then
+		if s.passes.VIP or VipService.isOwner(player) then
 			char:WaitForChild("Head", 5)
-			VipService.dress(char, true) -- ...and its VIP tag
+			VipService.dress(char, s.passes.VIP == true, VipService.isOwner(player)) -- ...and its VIP (or OWNER) tag
 		end
 		if s.plot then
 			task.defer(SpeedService.teleport, player, s.plot.spawnCFrame + Vector3.new(0, 3, 0))

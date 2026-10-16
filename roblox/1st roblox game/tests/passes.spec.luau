@@ -387,6 +387,28 @@ H.test("Fast Grow: the owner's plants are full-grown in half GROW_TIME, offline 
 	H.near(Selling.price(Inventory.asPlant(e2, NOW), NOW, 1), Selling.price(back, NOW, 1, 2), 1e-9, "an inventory plant sells as it stands")
 end)
 
+H.test("owner tag: a red OWNER badge and chat tag for the owner, instead of VIP", function()
+	local p = player()
+	p.UserId = Config.OWNER_USER_IDS[1]
+	local head = p.Character:FindFirstChild("Head")
+	H.ok(VipService.isOwner(p), "the owner is the owner")
+	VipService.apply(p, true) -- even owning VIP
+	H.eq(p:GetAttribute("Owner"), true, "the Owner attribute (chat)")
+	H.eq(head:FindFirstChild(VipService.TAG), nil, "no VIP tag")
+	local tag = head:FindFirstChild(VipService.OWNER_TAG)
+	H.ok(tag ~= nil and tag:IsA("BillboardGui"), "the OWNER tag over the head")
+	local label = tag:FindFirstChild("Label", true)
+	H.eq(label.Text, "OWNER")
+	H.ok(tag.Size.Y.Scale == VipService.SIZE.Y and tag.Size.X.Scale > VipService.SIZE.X, "as tall as the VIP tag, wider for the longer word")
+	VipService.apply(p, false)
+	H.ok(head:FindFirstChild(VipService.OWNER_TAG) ~= nil, "without the pass too")
+	local other = player()
+	VipService.apply(other, true)
+	H.ok(not VipService.isOwner(other) and other:GetAttribute("Owner") == nil, "anyone else: not the owner")
+	H.ok(other.Character:FindFirstChild("Head"):FindFirstChild(VipService.OWNER_TAG) == nil
+		and other.Character:FindFirstChild("Head"):FindFirstChild(VipService.TAG) ~= nil, "...a VIP keeps the VIP tag")
+end)
+
 ----------------------------------------------------------------------------------------------------
 -- Ownership: only the server decides it
 ----------------------------------------------------------------------------------------------------
@@ -464,9 +486,10 @@ H.test("passes: ownership is checked on the server (join and purchase); the clie
 	H.ok(string.find(chat, "TextChatService.OnIncomingMessage", 1, true) ~= nil and string.find(chat, "GetAttribute(\"VIP\")", 1, true) ~= nil,
 		"the [VIP] chat tag comes from the server's VIP attribute")
 	local main = fs.readFile("src/server/Main.server.luau")
-	H.ok(string.find(main, "VipService.dress(char, true)", 1, true) ~= nil, "a respawned VIP gets the tag again")
+	H.ok(string.find(main, "VipService.dress(char, s.passes.VIP == true, VipService.isOwner(player))", 1, true) ~= nil, "a respawned VIP (or the owner) gets the tag again")
+	H.ok(string.find(chat, "GetAttribute(\"Owner\")", 1, true) ~= nil, "the [OWNER] chat tag comes from the server's Owner attribute")
 	-- the head tag is the gold badge; the HUD has none any more (owner 2026-10-15)
-	H.ok(string.find(fs.readFile("src/server/VipService.luau"), "VipBadge.build(gui)", 1, true) ~= nil, "the head tag: the gold badge")
+	H.ok(string.find(fs.readFile("src/server/VipService.luau"), "VipBadge.build(gui, style)", 1, true) ~= nil, "the head tag: the gold badge")
 	H.ok(not fs.isFile("src/client/VipHudBadge.client.luau"), "no VIP badge in the HUD")
 	for _, file in fs.readDir("src/client") do
 		H.ok(not string.find(fs.readFile("src/client/" .. file), "VipBadge", 1, true), `{file}: no HUD VIP badge`)

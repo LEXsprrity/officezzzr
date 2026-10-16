@@ -5,14 +5,19 @@ local Players = game:GetService("Players")
 local TextChatService = game:GetService("TextChatService")
 
 local TAG = `<font color="#FFCE28"><b>[VIP]</b></font> `
+local OWNER_TAG = `<font color="#FF3C46"><b>[OWNER]</b></font> ` -- the owner's, instead of VIP (VipService)
 
 TextChatService.OnIncomingMessage = function(message: TextChatMessage): TextChatMessageProperties?
 	local source = message.TextSource
 	local player = source and Players:GetPlayerByUserId(source.UserId)
-	if not player or player:GetAttribute("VIP") ~= true then
+	if not player then
+		return nil
+	end
+	local tag = if player:GetAttribute("Owner") == true then OWNER_TAG elseif player:GetAttribute("VIP") == true then TAG else nil
+	if not tag then
 		return nil
 	end
 	local props = Instance.new("TextChatMessageProperties")
-	props.PrefixText = TAG .. message.PrefixText
+	props.PrefixText = tag .. message.PrefixText
 	return props
 end
