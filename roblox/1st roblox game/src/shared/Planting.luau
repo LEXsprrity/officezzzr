@@ -44,10 +44,11 @@ function Planting.coreRadius(rarity: number): number
 	return Planting.radius(rarity) * Config.PLANT_CORE_SHARE
 end
 
--- How far inside its bed a plant of `rarity` must stand: its core (at least PLANT_BED_MARGIN), or more for a
--- big one, so a full-grown plant reaches at most fenceOverhang past the bed's fence gap.
-function Planting.bedMargin(rarity: number): number
-	return math.max(Config.PLANT_BED_MARGIN, Planting.coreRadius(rarity), Planting.radius(rarity) - Config.BED_FENCE_GAP - Planting.fenceOverhang(rarity))
+-- How far inside its bed a plant of `rarity` must stand: PLANT_BED_MARGIN for every rarity (owner 2026-10-16:
+-- "also closer to the fence"; it used to grow with the plant, 4.5 studs for a Legendary). `rarity` is kept so
+-- every caller still says which plant it means.
+function Planting.bedMargin(_rarity: number): number
+	return Config.PLANT_BED_MARGIN
 end
 
 -- The closest two plants may stand (centre to centre): a tiny core, PLANT_SPACING_SHARE x (radiusA + radiusB),
