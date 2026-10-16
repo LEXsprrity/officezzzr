@@ -1201,6 +1201,7 @@ Config.MONEY_BOARD_INTERVAL = 60
 -- The admin panel (AdminPanel.client, AdminService): who may open it, and the DataStore that holds grants for
 -- players who were not in the giver's server (they get them when they next join).
 Config.ADMIN_USER_IDS = { 9301943082 } -- the owner (LEXsprrity)
+Config.OWNER_USER_IDS = { 9301943082 } -- a red OWNER tag over the head and in chat, instead of VIP (VipService)
 Config.ADMIN_MIN_RANK = 254 -- and anyone this high in the community (255 = its owner)
 Config.ADMIN_GRANTS_STORE = "AdminGrants_v1"
 Config.ADMIN_PENDING_MAX = 50 -- grants waiting for one player
