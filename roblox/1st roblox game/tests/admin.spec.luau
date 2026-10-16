@@ -75,3 +75,49 @@ H.test("admin: only the owner's ids and the community's top ranks are admins; th
 	local main = fs.readFile("src/server/Main.server.luau")
 	H.ok(string.find(main, "AdminService.init()", 1, true) and string.find(main, "AdminService.playerReady", 1, true))
 end)
+
+H.test("admin: TAKE takes seeds back from the bag, then the inventory, then the plot (seedlings first)", function()
+	H.ok(AdminGrant.check({ kind = "TakeSeed", zone = 4, rarity = Config.LEGENDARY, count = 10 }), "a TakeSeed is a grant")
+	H.eq(AdminGrant.check({ kind = "TakeSeed", zone = 4, rarity = 1, count = 0 }), nil)
+	local p = ProfileStore.defaultProfile()
+	p.seedBag = { ["4:5#11"] = 2, ["4:5:Gold#12"] = 1, ["4:4#13"] = 3, ["3:5#14"] = 1 }
+	p.inventory = { { id = 1, zone = 4, rarity = 5 }, { id = 2, zone = 1, rarity = 5 } } :: any
+	p.plants = {
+		{ slot = 1, zone = 4, rarity = 5 }, { slot = 2, zone = 4, rarity = 5, sproutUntil = 99 }, { slot = 3, zone = 2, rarity = 5 },
+	} :: any
+	-- 3 from the bag (plain first), then the inventory one
+	local taken, slots = AdminGrant.take(p, { kind = "TakeSeed", zone = 4, rarity = 5, count = 4 })
+	H.eq(taken, 4)
+	H.eq(#slots, 0)
+	H.eq(p.seedBag["4:5#11"], nil)
+	H.eq(p.seedBag["4:5:Gold#12"], nil)
+	H.eq(p.seedBag["4:4#13"], 3, "other rarities stay")
+	H.eq(p.seedBag["3:5#14"], 1, "other zones stay")
+	H.eq(#p.inventory, 1)
+	-- then the plot: the seedling before the grown one
+	taken, slots = AdminGrant.take(p, { kind = "TakeSeed", zone = 4, rarity = 5, count = 1 })
+	H.eq(taken, 1)
+	H.deepEq(slots, { 2 })
+	-- asking for more than they have takes what there is
+	taken, slots = AdminGrant.take(p, { kind = "TakeSeed", zone = 4, rarity = 5, count = 20 })
+	H.eq(taken, 1)
+	H.deepEq(slots, { 1 })
+	H.eq(#p.plants, 1)
+	H.eq(p.plants[1].slot, 3)
+end)
+
+H.test("admin: TAKE for someone away cancels the seeds still waiting for them first", function()
+	local list = {
+		{ kind = "Seed", zone = 4, rarity = 5, count = 6 }, { kind = "Money", amount = 50 }, { kind = "Seed", zone = 4, rarity = 5, count = 6 },
+	}
+	local out, cancelled, rest = AdminGrant.cancelPending(list, { kind = "TakeSeed", zone = 4, rarity = 5, count = 10 })
+	H.eq(cancelled, 10)
+	H.eq(rest, nil, "nothing left to take when they join")
+	H.deepEq(out, { { kind = "Money", amount = 50 }, { kind = "Seed", zone = 4, rarity = 5, count = 2 } })
+	out, cancelled, rest = AdminGrant.cancelPending({ { kind = "Seed", zone = 4, rarity = 5, count = 3 } }, { kind = "TakeSeed", zone = 4, rarity = 5, count = 10 })
+	H.eq(cancelled, 3)
+	H.deepEq(out, {})
+	H.deepEq(rest, { kind = "TakeSeed", zone = 4, rarity = 5, count = 7 })
+	local panel = fs.readFile("src/client/AdminPanel.client.luau")
+	H.ok(string.find(panel, 'kind = "TakeSeed"', 1, true), "the panel's TAKE button")
+end)

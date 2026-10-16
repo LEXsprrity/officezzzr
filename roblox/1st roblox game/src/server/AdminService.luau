@@ -17,6 +17,7 @@ local Server = script.Parent
 local Net = require(Server:WaitForChild("Net"))
 local Sessions = require(Server:WaitForChild("Sessions"))
 local SpeedService = require(Server:WaitForChild("SpeedService"))
+local PlotService = require(Server:WaitForChild("PlotService"))
 
 local AdminService = {}
 
@@ -69,6 +70,22 @@ local function giveNow(s: Sessions.Session, g: AdminGrant.Grant): number
 	return given
 end
 
+-- Takes seeds (TakeSeed) from someone in this server and saves it; no toast for them. Returns how many.
+local function takeNow(s: Sessions.Session, g: AdminGrant.Grant): number
+	local taken, slots = AdminGrant.take(s.profile, g)
+	if #slots > 0 then
+		PlotService.dropTaken(s, slots)
+	end
+	Sessions.pushFull(s)
+	Sessions.pushCore(s)
+	task.spawn(AdminService.save, s)
+	return taken
+end
+
+local function seeds(g: AdminGrant.Grant, n: number): string
+	return AdminGrant.describe({ kind = "Seed", zone = g.zone, rarity = g.rarity, count = n })
+end
+
 -- Someone in this server by username or display name: exact first, then a unique start of one.
 local function findHere(name: string): Player?
 	local lower = string.lower(name)
@@ -85,25 +102,35 @@ local function findHere(name: string): Player?
 	return if #starts == 1 then starts[1] else nil
 end
 
-local function queue(userId: number, g: AdminGrant.Grant): (boolean, string?)
+-- Puts a grant in the player's waiting list. A TakeSeed first cancels waiting Seed grants it matches (their
+-- count is the second result) and only what is left of it waits for them.
+local function queue(userId: number, g: AdminGrant.Grant): (boolean, any)
 	local store = pending
 	if not store then
 		return false, "no DataStore here"
 	end
 	local full = false
+	local cancelled = 0
 	local ok, err = pcall(store.UpdateAsync, store, keyFor(userId), function(old: any)
 		local list = if type(old) == "table" then old else {}
+		local add: AdminGrant.Grant? = g
+		if g.kind == "TakeSeed" then
+			list, cancelled, add = AdminGrant.cancelPending(list, g)
+		end
+		if not add then
+			return list
+		end
 		if #list >= Config.ADMIN_PENDING_MAX then
 			full = true
 			return nil
 		end
-		table.insert(list, g)
+		table.insert(list, add)
 		return list
 	end)
 	if full then
 		return false, "they already have too many waiting"
 	end
-	return ok, if ok then nil else tostring(err)
+	return ok, if ok then cancelled else tostring(err)
 end
 
 local function onAdmin(admin: Player, target: any, raw: any)
@@ -125,6 +152,12 @@ local function onAdmin(admin: Player, target: any, raw: any)
 	end
 	local here = findHere(target)
 	local ts = here and Sessions.get(here)
+	if here and ts and g.kind == "TakeSeed" then
+		local taken = takeNow(ts, g)
+		reply(admin, if taken > 0 then `Took {seeds(g, taken)} from {here.Name}` else `{here.Name} has no {seeds(g, 2)}`, taken > 0)
+		print(`[Admin] {admin.Name} took {seeds(g, taken)} from {here.Name}`)
+		return
+	end
 	if here and ts then
 		giveNow(ts, g)
 		reply(admin, `Gave {AdminGrant.describe(g)} to {here.Name}`, true)
@@ -137,7 +170,13 @@ local function onAdmin(admin: Player, target: any, raw: any)
 		return
 	end
 	local queued, err = queue(userId, g)
-	if queued then
+	if queued and g.kind == "TakeSeed" then
+		local cancelled = if type(err) == "number" then err else 0
+		local rest = (g.count :: number) - cancelled
+		local text = if cancelled > 0 then `Cancelled {seeds(g, cancelled)} still waiting for {target}` else `{target} isn't here`
+		reply(admin, if rest > 0 then `{text}: {seeds(g, rest)} will be taken when they join` else text, true)
+		print(`[Admin] {admin.Name} take {AdminGrant.describe(g)} from {target} ({userId}): cancelled {cancelled}`)
+	elseif queued then
 		reply(admin, `{target} isn't here: they get {AdminGrant.describe(g)} next time they join`, true)
 		print(`[Admin] {admin.Name} queued {AdminGrant.describe(g)} for {target} ({userId})`)
 	else
@@ -167,7 +206,9 @@ function AdminService.playerReady(s: Sessions.Session)
 	local here = player.Parent ~= nil and Sessions.get(player) == s
 	for _, raw in list do
 		local g = AdminGrant.check(raw)
-		if g and here then
+		if g and here and g.kind == "TakeSeed" then
+			takeNow(s, g)
+		elseif g and here then
 			giveNow(s, g)
 		elseif g then
 			queue(player.UserId, g) -- left while we fetched them: keep them for next time

@@ -1,7 +1,7 @@
 -- The owner's admin panel (owner 2026-10-16: "make a admin panel", to pay players back for bug reports).
 -- Only built for admins: the server sets the player attribute IsAdmin (AdminService). An "ADMIN" button in
 -- the bottom-right corner (or F2) opens a window: type a player's name (or tap someone in this server), then
--- give them money, Speed or seeds of a zone and rarity. Amounts read like "50K" or "1.5M" (AdminGrant). The
+-- give them money, Speed or seeds of a zone and rarity, or TAKE seeds back. Amounts read like "50K" or "1.5M" (AdminGrant). The
 -- server answers with LootEvent "AdminResult", shown under the buttons. Someone not in this server gets it
 -- the next time they join.
 local Players = game:GetService("Players")
@@ -169,8 +169,13 @@ rarityButton.Activated:Connect(function()
 	rarity = rarity % #Config.RARITIES + 1
 	showPickers()
 end)
-local countBox = box(window, `how many (1-{AdminGrant.MAX_SEEDS})`, UDim2.fromOffset(INPUT_X, 366), UDim2.fromOffset(INPUT_W, 48))
+local countBox = box(window, `1-{AdminGrant.MAX_SEEDS}`, UDim2.fromOffset(INPUT_X, 366), UDim2.fromOffset(100, 48))
 countBox.Text = "1"
+-- TAKE: takes seeds of that zone and rarity back (bag, then inventory, then plot; waiting ones are cancelled)
+local takeSeed = button(window, "TAKE", RED, UDim2.fromOffset(INPUT_X + 110, 366), UDim2.fromOffset(INPUT_W - 110, 48))
+takeSeed.Activated:Connect(function()
+	send({ kind = "TakeSeed", zone = zone, rarity = rarity, count = AdminGrant.parseAmount(countBox.Text) })
+end)
 local giveSeed = button(window, "GIVE", GREEN, UDim2.fromOffset(GIVE_X, 366), UDim2.fromOffset(GIVE_W, 48))
 giveSeed.Activated:Connect(function()
 	send({ kind = "Seed", zone = zone, rarity = rarity, count = AdminGrant.parseAmount(countBox.Text) })
