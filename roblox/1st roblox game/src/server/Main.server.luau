@@ -19,6 +19,7 @@ local PlotService = require(Server:WaitForChild("PlotService"))
 local ShopService = require(Server:WaitForChild("ShopService"))
 local TrailService = require(Server:WaitForChild("TrailService"))
 local VipService = require(Server:WaitForChild("VipService"))
+local BatTool = require(Server:WaitForChild("BatTool"))
 local AmbientService = require(Server:WaitForChild("AmbientService"))
 local RewardService = require(Server:WaitForChild("RewardService"))
 local PlantGhosts = require(Server:WaitForChild("PlantGhosts"))
@@ -90,6 +91,7 @@ local function onCharacter(player: Player, char: Model)
 		s.tracker = SpeedLogic.newState()
 		hum.WalkSpeed = s.walkSpeed
 		TrailService.apply(char, s.profile.equippedTrail) -- a respawned character needs its trail again
+		BatTool.give(player) -- 1 equips it, a click swings it (BatSwing.client)
 		if s.passes.VIP then
 			char:WaitForChild("Head", 5)
 			VipService.dress(char, true) -- ...and its VIP tag

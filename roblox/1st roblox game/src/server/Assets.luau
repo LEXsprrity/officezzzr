@@ -33,7 +33,7 @@ Assets.SLOTS = {
 	"Space_Planet", "Space_Crystal", "Space_Asteroid", "Space_Mushroom", "Space_UFO", "Space_Crater", "Space_Rocket", "Space_Rock",
 	"Spirit_Torii", "Spirit_Lantern", "Spirit_CherryTree", "Spirit_Shrine", "Spirit_Bamboo", "Spirit_Rock",
 	"Treadmill", "UpgradeSign", "ShopStall", "ShopStall_Shop", "ShopStall_Trails", "ShopStall_Index", "ShopStall_Sell",
-	"MoneyBoard",
+	"MoneyBoard", "Bat",
 } :: { string }
 for _, zone in Config.ZONES do
 	table.insert(Assets.SLOTS, "Creature_" .. compact(zone.seed))
@@ -116,6 +116,7 @@ Assets.ALIASES = {
 	Esteira = "Treadmill", Barraca = "ShopStall", Barracas = "ShopStall",
 	Cactos = "Desert_Cactus", Cacto = "Desert_Cactus", Pinheiros = "Snow_Pine", Pinheiro = "Snow_Pine",
 	BonecoDeNeve = "Snow_Snowman", Cerejeiras = "Spirit_CherryTree", Cerejeira = "Spirit_CherryTree",
+	Taco = "Bat", Bastao = "Bat",
 } :: { [string]: string }
 
 local FOLD: { [string]: string } = {}

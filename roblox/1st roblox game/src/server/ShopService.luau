@@ -14,6 +14,7 @@ local Shop = require(script.Parent:WaitForChild("Shop"))
 local SpeedService = require(script.Parent:WaitForChild("SpeedService"))
 local GuardService = require(script.Parent:WaitForChild("GuardService"))
 local SeedService = require(script.Parent:WaitForChild("SeedService"))
+local BatTool = require(script.Parent:WaitForChild("BatTool"))
 local PlotService = require(script.Parent:WaitForChild("PlotService"))
 local TrailService = require(script.Parent:WaitForChild("TrailService"))
 local VipService = require(script.Parent:WaitForChild("VipService"))
@@ -160,10 +161,11 @@ local function onUse(player: Player, itemId: any)
 	local now = os.clock()
 
 	if itemId == "Bat" then
-		if now < (s.cooldowns.Bat or 0) then
+		if now < (s.cooldowns.Bat or 0) or not BatTool.equipped(player) then -- only a bat in hand swings
 			return
 		end
 		s.cooldowns.Bat = now + Config.BAT_COOLDOWN
+		Net.LootEvent:FireAllClients("BatSwing", { player = player }) -- the others play the strike on this character (BatSwing.client)
 		local hit = GuardService.batHit(player)
 		Net.LootEvent:FireClient(player, "Bat", { hit = hit, cooldown = Config.BAT_COOLDOWN })
 		return

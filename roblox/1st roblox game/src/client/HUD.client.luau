@@ -361,15 +361,43 @@ local hotbar = new("Frame", {
 }, { new("UIListLayout", { FillDirection = Enum.FillDirection.Horizontal, HorizontalAlignment = Enum.HorizontalAlignment.Center,
 	SortOrder = Enum.SortOrder.LayoutOrder, Padding = UDim.new(0, 8) }) })
 local batCooldownUntil = 0
+-- 1 / the Bat slot only takes the bat out or puts it away (the server's BatTool gives each character
+-- one); a click with it in hand swings it (BatSwing.client).
+local BAT_TOOL = "Bat" -- the Tool's name
 local function useBat()
-	if os.clock() >= batCooldownUntil then
-		RequestUseItem:FireServer("Bat")
+	local char = Players.LocalPlayer.Character
+	local hum = char and char:FindFirstChildOfClass("Humanoid")
+	if not hum then
+		return
+	end
+	if char:FindFirstChild(BAT_TOOL) then
+		hum:UnequipTools()
+	else
+		local backpack = Players.LocalPlayer:FindFirstChildOfClass("Backpack")
+		local tool = backpack and backpack:FindFirstChild(BAT_TOOL)
+		if tool and tool:IsA("Tool") then
+			hum:EquipTool(tool)
+		end
 	end
 end
 local batSlot = new("TextButton", { Name = "BatSlot", Parent = hotbar })
 batSlot.LayoutOrder = 1
 ShopUi.slot(batSlot, "1")
 batSlot.Activated:Connect(useBat)
+do -- the slot shows selected while the bat is in hand
+	local function watch(char: Model)
+		local function update()
+			ShopUi.selectSlot(batSlot, char:FindFirstChild(BAT_TOOL) ~= nil)
+		end
+		char.ChildAdded:Connect(update)
+		char.ChildRemoved:Connect(update)
+		update()
+	end
+	Players.LocalPlayer.CharacterAdded:Connect(watch)
+	if Players.LocalPlayer.Character then
+		watch(Players.LocalPlayer.Character)
+	end
+end
 do
 	-- A wooden baseball bat, drawn from frames, lying diagonally across the slot: a round barrel tapering
 	-- into a thin handle with a knob, warm wood with a light side, a thin dark brown outline.
