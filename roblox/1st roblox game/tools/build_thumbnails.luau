@@ -16,13 +16,15 @@
 --     with the big relief title "STEAL A SEED" on a SurfaceGui to the left of the characters).
 -- It also writes LEIA-ME.txt, the owner's how-to (Portuguese). Deterministic: no randomness, no clock.
 -- Run from the game folder (default output: <your Desktop>/Thumbnails):
---   lune run tools/build_thumbnails.luau [output folder]
+--   lune run tools/build_thumbnails.luau [output folder] [only this scene key, e.g. Pyronis]
+-- Plus the plant thumbnails (PLANT_SCENES, below): a giant Legendary instead of a boss.
 local fs = require("@lune/fs")
 local process = require("@lune/process")
 local roblox = require("@lune/roblox")
 local H = require("../tests/harness")
 local Config = H.shared("Config")
 local BossRigs = H.shared("BossRigs")
+local Format = H.shared("Format")
 
 local Instance, Vector3, CFrame, Color3 = roblox.Instance, roblox.Vector3, roblox.CFrame, roblox.Color3
 local Vector2, UDim2, Enum = roblox.Vector2, roblox.UDim2, roblox.Enum
@@ -538,6 +540,227 @@ local function build(scene: Scene, kind: "Icon" | "Thumbnail"): any
 end
 
 ----------------------------------------------------------------------------------------------------
+-- Plant thumbnails (owner 2026-10-17, from a "TREX EGG" reference): no boss. A giant Legendary plant on the
+-- left where the reference has its T-rex, the player on the right holding the glowing seed over their head,
+-- and over them the plant's name in big fiery letters with what it earns under it ("+$765,000,000/s", a
+-- full-grown one with no mutation, from Config).
+----------------------------------------------------------------------------------------------------
+export type PlantScene = {
+	key: string, -- PlantThumbnail_<key>.rbxl
+	zone: string, -- the plant's zone (the background, the seed)
+	rarity: string, -- its folder in assets/Creature_<seed>.rbxm
+	plant: string, -- its model
+	seed: string, -- the design in assets/Seed_<zone>.rbxm
+	at: any, -- the scene's origin in the world (on the ground)
+	height: number, -- studs: the plant is scaled up to this tall
+	plantPos: any, plantTurn: number,
+	player: { pos: any, turn: number },
+	glow: any, -- the seed's glow and the plant's light
+	name: { any }, -- the name's gradient, top to bottom
+	thumb: Shot,
+}
+
+local PLANT_SCENES: { PlantScene } = {
+	{
+		key = "Pyronis", zone = "Spirit", rarity = "Legendary", plant = "Pyronis", seed = "Design2",
+		at = Vector3.new(2150, 0, -5),
+		height = 20, plantPos = Vector3.new(-13, 0, -3), plantTurn = 0.45,
+		player = { pos = Vector3.new(6.5, 0, 3), turn = -0.25 },
+		glow = rgb(255, 140, 40),
+		name = { rgb(255, 245, 120), rgb(255, 150, 30), rgb(235, 40, 20), rgb(150, 0, 10) },
+		thumb = { eye = Vector3.new(0, 7, 31), at = Vector3.new(0, 10, -2), fov = 52, aspect = 16 / 9 },
+	},
+}
+
+-- Scales a model about the origin, everything that has a size: parts (MeshParts too), attachments (where
+-- the plant's beams and sparks hang), beam widths and particle sizes.
+local function scaleAll(model: any, k: number)
+	for _, d in model:GetDescendants() do
+		if d:IsA("BasePart") then
+			d.Size *= k
+			d.CFrame = CFrame.new(d.CFrame.Position * k) * d.CFrame.Rotation
+		elseif d:IsA("Attachment") then
+			d.CFrame = CFrame.new(d.CFrame.Position * k) * d.CFrame.Rotation
+		elseif d:IsA("Beam") then
+			d.Width0 *= k
+			d.Width1 *= k
+		elseif d:IsA("ParticleEmitter") then
+			local keys = {}
+			for _, p in d.Size.Keypoints do
+				table.insert(keys, NumberSequenceKeypoint.new(p.Time, p.Value * k, p.Envelope * k))
+			end
+			d.Size = NumberSequence.new(keys)
+		end
+	end
+end
+
+-- The plant, scaled up, standing on the ground at the origin, with a fiery glow (a light, an outline and
+-- flames at its foot).
+local function bigPlant(scene: PlantScene): any
+	local k = zoneIndex(scene.zone)
+	local slot = string.gsub(Config.ZONES[k].seed, "%s", "")
+	local folder = roblox.deserializeModel(fs.readFile(`assets/Creature_{slot}.rbxm`))[1]
+	local model = folder[scene.rarity][scene.plant]:Clone()
+	local lo, hi = bounds(model)
+	local f = scene.height / (hi.Y - lo.Y)
+	scaleAll(model, f)
+	local ground = lo.Y * f
+	for _, d in model:GetDescendants() do
+		if d:IsA("BasePart") then
+			d.CFrame = CFrame.new(0, -ground, 0) * d.CFrame
+		end
+	end
+	model.Name = "PLANTA_" .. scene.plant
+	model.WorldPivot = CFrame.identity
+	still(model)
+	new("Highlight", {
+		FillColor = scene.glow, FillTransparency = 0.85, OutlineColor = rgb(255, 230, 120), OutlineTransparency = 0.2,
+		DepthMode = Enum.HighlightDepthMode.Occluded,
+	}, model)
+	local base = new("Part", {
+		Name = "Chamas", Size = Vector3.new(6, 1, 6), CFrame = CFrame.new(0, 0.5, 0), Transparency = 1,
+		Anchored = true, CanCollide = false, CanTouch = false, CanQuery = false, CastShadow = false,
+	}, model)
+	new("PointLight", { Color = scene.glow, Brightness = 5, Range = 24, Shadows = false }, base)
+	new("ParticleEmitter", {
+		Name = "Fogo", Texture = "rbxasset://textures/particles/fire_main.dds",
+		Color = ColorSequence.new({ ColorSequenceKeypoint.new(0, rgb(255, 230, 120)), ColorSequenceKeypoint.new(0.5, rgb(255, 120, 20)), ColorSequenceKeypoint.new(1, rgb(200, 20, 10)) }),
+		LightEmission = 1, Brightness = 2,
+		Size = NumberSequence.new({ NumberSequenceKeypoint.new(0, 2.5), NumberSequenceKeypoint.new(1, 0.3) }),
+		Transparency = NumberSequence.new({ NumberSequenceKeypoint.new(0, 0.2), NumberSequenceKeypoint.new(1, 1) }),
+		Lifetime = NumberRange.new(0.8, 1.4), Rate = 45, Speed = NumberRange.new(3, 6),
+		SpreadAngle = Vector2.new(25, 25), EmissionDirection = Enum.NormalId.Top, RotSpeed = NumberRange.new(-60, 60),
+	}, base)
+	new("ParticleEmitter", {
+		Name = "Faiscas", Texture = "rbxasset://textures/particles/sparkles_main.dds",
+		Color = ColorSequence.new(rgb(255, 220, 120), rgb(255, 90, 30)), LightEmission = 1, Brightness = 2,
+		Size = NumberSequence.new({ NumberSequenceKeypoint.new(0, 0.7), NumberSequenceKeypoint.new(1, 0) }),
+		Lifetime = NumberRange.new(1.5, 3), Rate = 25, Speed = NumberRange.new(4, 9),
+		SpreadAngle = Vector2.new(40, 40), EmissionDirection = Enum.NormalId.Top,
+	}, base)
+	return model
+end
+
+-- Big relief text on a SurfaceGui facing the camera, at the screen spot (sx, sy in -1..1) of the shot, `w`
+-- of the screen's width wide: each line { text, top, height (shares of the board), gradient, outline }.
+local function banner(parent: any, name: string, cam: any, shot: Shot, sx: number, sy: number, w: number, aspect: number, lines: { any })
+	local d = 12 -- studs in front of the camera
+	local t = math.tan(rad(shot.fov) / 2)
+	local width = w * 2 * t * shot.aspect * d
+	local height = width / aspect
+	local center = cam.Position + cam.LookVector * d + cam.RightVector * (sx * t * shot.aspect * d) + cam.UpVector * (sy * t * d)
+	local cf = CFrame.fromMatrix(center, -cam.RightVector, cam.UpVector) * CFrame.Angles(0, 0, rad(-3))
+	local board = new("Part", {
+		Name = name, Size = Vector3.new(width, height, 0.05), CFrame = cf, Transparency = 1,
+		Anchored = true, CanCollide = false, CanTouch = false, CanQuery = false, CastShadow = false,
+	}, parent)
+	local gui = new("SurfaceGui", {
+		Name = name, Face = Enum.NormalId.Front, SizingMode = Enum.SurfaceGuiSizingMode.FixedSize,
+		CanvasSize = Vector2.new(1000, math.floor(1000 / aspect)), LightInfluence = 0, Brightness = 1, AlwaysOnTop = true,
+	}, board)
+	for _, l in lines do
+		local text, y, h, fill, dark = l[1], l[2], l[3], l[4], l[5]
+		for layer = 1, 2 do
+			local shadow = layer == 1
+			local label = new("TextLabel", {
+				Name = if shadow then text .. "_Relevo" else text, Text = text, FontFace = FREDOKA, TextScaled = true,
+				BackgroundTransparency = 1, TextColor3 = if shadow then dark else rgb(255, 255, 255),
+				Size = UDim2.new(0.96, 0, h, 0), Position = UDim2.new(0.02, 0, y + (if shadow then 0.05 * h else 0), 0),
+				ZIndex = layer,
+			}, gui)
+			new("UIStroke", { Color = dark, Thickness = 14, LineJoinMode = Enum.LineJoinMode.Round }, label)
+			if not shadow then
+				local keys = {}
+				for i, c in fill do
+					table.insert(keys, ColorSequenceKeypoint.new((i - 1) / (#fill - 1), c))
+				end
+				new("UIGradient", { Color = ColorSequence.new(keys), Rotation = 90 }, label)
+			end
+		end
+	end
+	return board
+end
+
+local function buildPlant(scene: PlantScene): any
+	local shot = scene.thumb
+	local game = Instance.new("DataModel")
+	local ws = game:GetService("Workspace")
+	local frame = lookAt(scene.at, scene.at + Vector3.new(1, 0, 0))
+	local function w(p: any): any
+		return frame * p
+	end
+	local root = new("Model", { Name = "CENA_" .. scene.key }, ws)
+
+	local lo = w(Vector3.new(-26, 0, -26)):Min(w(Vector3.new(26, 0, 40)))
+	local hi = w(Vector3.new(-26, 0, -26)):Max(w(Vector3.new(26, 0, 40)))
+	zoneSlice(scene.zone, lo, hi).Parent = root
+
+	-- the giant plant (where the reference has its T-rex), turned a little toward the player
+	local plant = bigPlant(scene)
+	local pt0 = scene.plantTurn
+	place(plant, w(CFrame.new(scene.plantPos) * lookAt(Vector3.zero, Vector3.new(sin(pt0), 0, cos(pt0)))))
+	plant.Parent = root
+
+	-- the player holding the glowing seed: marker, stand-in and seed (as in the boss scenes)
+	local pt = scene.player.turn
+	local body = w(CFrame.new(scene.player.pos) * lookAt(Vector3.zero, Vector3.new(-sin(pt), 0, cos(pt))))
+	local marker = new("Part", {
+		Name = MARKER, Size = Vector3.new(2, 2, 1), CFrame = body * CFrame.new(0, HIP, 0), Transparency = 1,
+		Anchored = true, CanCollide = false, CanTouch = false, CanQuery = false, CastShadow = false,
+	}, ws)
+	marker:SetAttribute("Ajuda", "Seleciona o teu avatar e corre o comando do LEIA-ME.txt na Command Bar: ele vem para aqui, virado para a camara.")
+	local figure = standIn()
+	place(figure, body)
+	figure.Parent = root
+	local seed = seedModel({ zone = scene.zone, seed = scene.seed, glow = scene.glow } :: any)
+	place(seed, body * SEED_AT * CFrame.Angles(rad(-8), rad(-20), 0))
+	seed.Parent = root
+
+	local flowers = new("Folder", { Name = "Flores" }, root)
+	local models = flowerModels(scene.zone)
+	for i, f in FLOWERS do
+		if math.abs(f[1] - scene.plantPos.X) > 4 or f[2] > 4 then -- (none inside the giant plant)
+			local m = models[(i - 1) % #models + 1]:Clone()
+			place(m, w(CFrame.new(f[1], 0, f[2]) * CFrame.Angles(0, f[3], 0)))
+			still(m)
+			m.Parent = flowers
+		end
+	end
+
+	local eye, at = w(shot.eye), w(shot.at)
+	local cam = new("Camera", { Name = "Camera", CFrame = lookAt(eye, at), Focus = CFrame.new(at), FieldOfView = shot.fov }, ws)
+	ws.CurrentCamera = cam
+	local key = new("Part", {
+		Name = "LuzFrontal", Size = Vector3.new(1, 1, 1), Transparency = 1,
+		CFrame = lookAt(eye + Vector3.new(0, 9, 0) + cam.CFrame.RightVector * 6, w(Vector3.new(0, 8, 0))),
+		Anchored = true, CanCollide = false, CanTouch = false, CanQuery = false, CastShadow = false,
+	}, root)
+	new("SpotLight", { Face = Enum.NormalId.Front, Angle = 75, Brightness = 2.5, Range = 70, Color = rgb(255, 246, 230), Shadows = false }, key)
+
+	-- the name, fiery, and what it earns, in green, over the middle of the shot
+	local k = zoneIndex(scene.zone)
+	local r = 1
+	for i, ra in Config.RARITIES do
+		if ra.id == scene.rarity then
+			r = i
+		end
+	end
+	local income = Config.plantIncome(k, r, Config.plantWeight(k, r, Config.GROW_TIME, 1.2), nil)
+	local money = "+$" .. Format.commas(math.floor(income)) .. "/s"
+	banner(root, "NOME", cam.CFrame, shot, 0.15, 0.66, 0.45, 1000 / 380, {
+		{ string.upper(scene.plant), 0, 0.62, scene.name, rgb(90, 0, 0) },
+		{ money, 0.6, 0.38, { rgb(220, 255, 120), rgb(90, 230, 60), rgb(30, 160, 40) }, rgb(20, 60, 15) },
+	})
+
+	lighting(game, (w(scene.player.pos) - eye).Magnitude, 22)
+	new("StringValue", {
+		Name = "LEIA-ME", Value = `PlantThumbnail {scene.key}: le o LEIA-ME.txt (pasta Thumbnails). Mete o teu avatar em `
+			.. `{MARKER}, apaga {STANDIN} e tira o screenshot sem mexer na camara.`,
+	}, ws)
+	return game
+end
+
+----------------------------------------------------------------------------------------------------
 -- LEIA-ME.txt
 ----------------------------------------------------------------------------------------------------
 -- The Command Bar line that moves the selected rig onto the marker and poses it (R15 or R6): arms up over
@@ -565,6 +788,8 @@ local function readme(): string
 		"  Icon_VoidDragon.rbxl   Icon_Gorilla.rbxl   Icon_Lumistag.rbxl       -> ICONE (quadrado 512x512)",
 		"  Thumbnail_VoidDragon.rbxl   Thumbnail_Gorilla.rbxl   Thumbnail_Lumistag.rbxl  -> THUMBNAIL (1920x1080)",
 		"Em cada um: o boss a correr atras de ti de boca aberta, a semente gigante a brilhar, flores e a zona dele.",
+		"  PlantThumbnail_Pyronis.rbxl -> THUMBNAIL sem boss: a Pyronis gigante, o nome dela a fogo e o dinheiro/s.",
+		"  (Na Pyronis tambem pes o teu avatar no sitio marcado e tiras a foto do mesmo jeito.)",
 		"A camara ja esta no sitio certo. Nas thumbnails o titulo STEAL A SEED ja esta na cena.",
 		"",
 		"1) ABRIR",
@@ -615,8 +840,17 @@ local outDir = process.args[1] or `{process.env.USERPROFILE or process.env.HOME 
 if not fs.isDir(outDir) then
 	fs.writeDir(outDir)
 end
+local only = process.args[2]
+for _, scene in PLANT_SCENES do
+	if not only or only == scene.key then
+		local game = buildPlant(scene)
+		local path = `{outDir}/PlantThumbnail_{scene.key}.rbxl`
+		fs.writeFile(path, roblox.serializePlace(game))
+		print(`{path}: {#game:GetService("Workspace"):GetDescendants()} instances`)
+	end
+end
 for _, scene in SCENES do
-	for _, kind in { "Icon", "Thumbnail" } do
+	for _, kind in (if not only or only == scene.key then { "Icon", "Thumbnail" } else {}) :: { string } do
 		local game = build(scene, kind :: any)
 		local path = `{outDir}/{kind}_{scene.key}.rbxl`
 		fs.writeFile(path, roblox.serializePlace(game))
