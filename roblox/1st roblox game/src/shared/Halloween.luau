@@ -1,8 +1,8 @@
 --!strict
 -- The Halloween event (owner 2026-10-19: "evento de halloween sim", the map stays as it is). While it runs:
---   * CANDY lies all over the map (Server/CandyService): candy corn spread along the corridor and the base's
---     walkway; walking over one picks it up (no click), CANDY_VALUE candy, and another appears somewhere
---     else a little later (owner 2026-10-19: "people walk over them ... you dont need to click");
+--   * CANDY lies in the corridor (Server/CandyService): candy corn appearing here and there, never in the
+--     base; walking over one picks it up (no click), CANDY_VALUE candy (owner 2026-10-19: "people walk over
+--     them ... you dont need to click", then "none spawning in base", "only 25 per 5 minutes");
 --   * the Shop's HALLOWEEN card sells Haunted seeds for candy: PULL_PRICE for one, TEN_PRICE for ten (owner:
 --     "50 candys for 1 single pull and 500 for 10 pulls"), of the deepest zone the player's Speed reaches,
 --     always with the Haunted mutation (x5 income, a spooky look), which pods never roll (SeedPacks.hauntedPack);
@@ -25,15 +25,19 @@ Halloween.PULLS = { 1, 10 } -- the card's two buttons
 -- The Haunted seed's Legendary chance: this many times its zone's pod chance (Config.LEGENDARY_CHANCE).
 Halloween.LEGENDARY_MULT = 2
 
--- The candy on the map (Server/CandyService): CANDY_CORRIDOR pieces along the corridor (spread evenly over
--- its length, so the longer zones hold more) and CANDY_BASE on the base's walkway, each worth CANDY_VALUE.
--- One picked up comes back somewhere else after CANDY_RESPAWN seconds. A player picks up the candy within
--- CANDY_RADIUS studs (flat) of where the server trusts them to be.
-Halloween.CANDY_CORRIDOR = 80
-Halloween.CANDY_BASE = 10
+-- The candy on the map (Server/CandyService), only in the corridor (spread evenly over its length, so the
+-- longer zones hold more): CANDY_START pieces when the server starts, then one more every CANDY_EVERY
+-- seconds (25 per 5 minutes, owner 2026-10-19) while fewer than CANDY_ON_MAP lie there; picked-up pieces
+-- don't come back by themselves. Each is worth CANDY_VALUE. A player picks up the candy within CANDY_RADIUS
+-- studs (flat) of where the server trusts them to be.
+Halloween.CANDY_START = 10
+Halloween.CANDY_EVERY = 12
+Halloween.CANDY_ON_MAP = 25
 Halloween.CANDY_VALUE = 1
-Halloween.CANDY_RESPAWN = 20
 Halloween.CANDY_RADIUS = 5
+-- The owner's candy corn (Creator Store "Candy corn", in their inventory): loaded with InsertService when
+-- assets/Candy.rbxm isn't there; the built-in candy corn when neither works.
+Halloween.CANDY_ASSET = 72225906081888
 Halloween.CANDY_SIZE = Vector3.new(2.4, 3, 2.4) -- what a piece fits in (studs)
 Halloween.NEST_CLEARANCE = 36 -- no candy this close to a sleeping boss (flat studs from its nest's centre)
 
@@ -62,21 +66,10 @@ function Halloween.bestZone(speed: number): number
 	return best
 end
 
--- Where the base's walkway runs (x from its far end to the corridor mouth, |z| within it).
-function Halloween.baseRange(): (number, number, number)
-	local lastCol = (Config.MAX_PLAYERS + 1 - 1) // 2 -- the plots' and the plaza's spots, column by column
-	local far = Config.PLOT_FIRST_X - lastCol * Config.PLOT_SPACING_X - Config.PLOT_SIZE / 2
-	return far + 8, Config.CORRIDOR_START_X - 4, Config.WALKWAY_WIDTH / 2 - 4
-end
-
--- A candidate spot (x, z on the ground) for a piece of candy, drawn with `rng` (() -> [0, 1)): in the base
--- (`inBase`) somewhere on the walkway, else anywhere in the corridor away from its walls and the nests.
--- CandyService still checks the ground there is clear (no prop on it) and draws again if not.
-function Halloween.spot(inBase: boolean, rng: () -> number): Vector3
-	if inBase then
-		local x0, x1, half = Halloween.baseRange()
-		return Vector3.new(x0 + rng() * (x1 - x0), Config.GROUND_Y, (rng() * 2 - 1) * half)
-	end
+-- A candidate spot (x, z on the ground) for a piece of candy, drawn with `rng` (() -> [0, 1)): anywhere in
+-- the corridor (never the base) away from its walls and the nests. CandyService still checks the ground
+-- there is clear (no prop on it) and draws again if not.
+function Halloween.spot(rng: () -> number): Vector3
 	local half = Config.CORRIDOR_WIDTH / 2 - 12
 	for _ = 1, 20 do
 		local x = Config.CORRIDOR_START_X + 8 + rng() * (Config.END_X - Config.CORRIDOR_START_X - 16)
