@@ -14,6 +14,7 @@
 -- for Epic and Legendary.
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Config = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("Config"))
+local Halloween = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("Halloween"))
 local Assets = require(script.Parent:WaitForChild("Assets"))
 
 local CreatureModels = {}
@@ -61,6 +62,7 @@ export type Builder = {
 	body: BasePart?,
 	parts: { BasePart },
 	roles: { [BasePart]: string },
+	asset: boolean?, -- a plant model (assets folder or uploaded), not a built-in creature
 }
 
 local function newPart(b: Builder, role: string, name: string, class: string, size: Vector3, cf: CFrame, color: Color3, material: Enum.Material?): BasePart
@@ -76,6 +78,9 @@ local function newPart(b: Builder, role: string, name: string, class: string, si
 	p.CanQuery = false
 	if role == "glow" or role == "eye" then
 		p.CastShadow = false
+	end
+	if role == "fx" then
+		p:SetAttribute(Halloween.FLAIR, true) -- (our halo or pumpkin: Halloween.hauntify leaves it as it is)
 	end
 	p.Parent = b.model
 	b.roles[p] = role
@@ -467,20 +472,22 @@ local CELESTIAL_STARS = ColorSequence.new({
 	ColorSequenceKeypoint.new(1, rgb(120, 240, 255)),
 })
 
--- Haunted (the Halloween event's, Shared/Halloween): a pumpkin-orange body, deep purple leaves and petals,
--- toxic-green glow, orange and purple wisps, and a little jack-o'-lantern grinning at its feet.
-local HAUNTED_ORANGE = rgb(255, 125, 20)
-local HAUNTED_PURPLE = rgb(95, 35, 150)
-local HAUNTED_GREEN = rgb(140, 255, 60)
-local HAUNTED_WISPS = ColorSequence.new({
-	ColorSequenceKeypoint.new(0, HAUNTED_ORANGE),
-	ColorSequenceKeypoint.new(0.5, rgb(190, 90, 255)),
-	ColorSequenceKeypoint.new(1, HAUNTED_PURPLE),
-})
+-- Haunted (the Halloween event's, Shared/Halloween): a plant model gets the Pyronis thumbnail's look
+-- (Halloween.hauntify: toxic-green glow, pumpkin-orange brights, deep purple elsewhere, orange and purple
+-- wisps for its own particles and beams); a built-in creature a pumpkin-orange body with deep purple leaves
+-- and petals. Both get a little jack-o'-lantern grinning at their feet.
+local HAUNTED_ORANGE = Halloween.ORANGE
+local HAUNTED_PURPLE = Halloween.PURPLE
+local HAUNTED_GREEN = Halloween.GREEN
+local HAUNTED_WISPS = Halloween.WISPS
 
 local TINTED = { skin = 1, accent = 1, leaf = 0.8, flower = 0.8, husk = 0.45, asset = 0.5 }
 
 local function applyMutation(b: Builder, mut: Config.Mutation)
+	if mut.id == "Haunted" and b.asset then
+		Halloween.hauntify(b.model) -- (before our flair is added: only the plant's own parts and effects)
+		return
+	end
 	local i = 0
 	for _, p in b.parts do
 		local role = b.roles[p]
@@ -582,7 +589,8 @@ local function decorate(b: Builder, zoneIndex: number, rarityIndex: number, mut:
 	end
 
 	if fx then
-		particles(body, "ZoneFX", ColorSequence.new(fx.color), fx.rate, fx.size, fx.lifetime, fx.speed, fx.accel)
+		local zoneColors = if mut and mut.id == "Haunted" and b.asset then HAUNTED_WISPS else ColorSequence.new(fx.color) -- (like its own effects)
+		particles(body, "ZoneFX", zoneColors, fx.rate, fx.size, fx.lifetime, fx.speed, fx.accel)
 	end
 	if rarityIndex >= 4 then
 		particles(body, "RaritySparkles", ColorSequence.new(rarity.color), 2 + rarityIndex, 0.45, 1.4, 2, Vector3.zero)
@@ -696,7 +704,7 @@ function CreatureModels.build(zoneIndex: number, rarityIndex: number, mutation: 
 		else
 			model = template:Clone()
 		end
-		b = { model = model, body = model.PrimaryPart, parts = {}, roles = {} }
+		b = { model = model, body = model.PrimaryPart, parts = {}, roles = {}, asset = true }
 		for _, d in model:GetDescendants() do
 			if d:IsA("BasePart") then
 				table.insert(b.parts, d)
@@ -738,10 +746,35 @@ function CreatureModels.variantOf(zoneIndex: number, rarityIndex: number, pick: 
 	return if #names > 0 then names[(math.floor(pick) - 1) % #names + 1] else nil
 end
 
--- A planted seed's flower, drawn at random among the zone's plant models of its rarity (a surprise until it
--- is planted; PlotService keeps it in the plant's `variant`). nil when the zone has no plant models.
-function CreatureModels.randomVariant(zoneIndex: number, rarityIndex: number, roll: () -> number): string?
+-- The flowers a seed of (zone, rarity, mutation) may grow into, in the order its gene picks them: a Haunted
+-- seed only the Haunted set's (Halloween.SET, those the zone's models have), any other seed all the zone's
+-- models of its rarity (variants).
+function CreatureModels.seedVariants(zoneIndex: number, rarityIndex: number, mutation: string?): { string }
 	local names = CreatureModels.variants(zoneIndex, rarityIndex)
+	if mutation ~= Halloween.MUTATION then
+		return names
+	end
+	local set = {}
+	for _, name in Halloween.setFlowers(zoneIndex, rarityIndex) do
+		if table.find(names, name) then
+			table.insert(set, name)
+		end
+	end
+	return if #set > 0 then set else names
+end
+
+-- The flower a seed with this gene grows into (its planting ghost shows it; PlantGhosts.seedPlant keeps it in
+-- the plant's `variant`): the gene wraps round seedVariants, like variantOf. nil for the built-in creature.
+function CreatureModels.seedVariant(zoneIndex: number, rarityIndex: number, mutation: string?, gene: number): string?
+	local names = CreatureModels.seedVariants(zoneIndex, rarityIndex, mutation)
+	return if #names > 0 then names[(math.floor(gene) - 1) % #names + 1] else nil
+end
+
+-- A planted seed's flower, drawn at random among the flowers it may grow into (seedVariants; a seed from
+-- before genes: a surprise until it is planted; PlotService keeps it in the plant's `variant`). nil when the
+-- zone has no plant models.
+function CreatureModels.randomVariant(zoneIndex: number, rarityIndex: number, roll: () -> number, mutation: string?): string?
+	local names = CreatureModels.seedVariants(zoneIndex, rarityIndex, mutation)
 	return if #names > 0 then names[math.clamp(math.floor(roll() * #names) + 1, 1, #names)] else nil
 end
 

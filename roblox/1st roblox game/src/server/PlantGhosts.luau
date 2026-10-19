@@ -27,9 +27,12 @@ function PlantGhosts.count(zone: number, rarity: number): number
 	return math.max(#CreatureModels.variants(zone, rarity), 1)
 end
 
--- Which of them a seed with this gene grows into (its ghost's n).
-function PlantGhosts.indexOf(zone: number, rarity: number, gene: number): number
-	return (math.floor(gene) - 1) % PlantGhosts.count(zone, rarity) + 1
+-- Which of them a seed of this mutation with this gene grows into (its ghost's n): CreatureModels.seedVariant
+-- (a Haunted seed: one of the Haunted set's).
+function PlantGhosts.indexOf(zone: number, rarity: number, gene: number, mutation: string?): number
+	local flower = CreatureModels.seedVariant(zone, rarity, mutation, gene)
+	local index = if flower then table.find(CreatureModels.variants(zone, rarity), flower) else nil
+	return index or (math.floor(gene) - 1) % PlantGhosts.count(zone, rarity) + 1
 end
 
 -- How big a plant of (zone, rarity) with this weight variance is right when it is planted (its sprout
@@ -38,9 +41,9 @@ function PlantGhosts.sproutScale(zone: number, rarity: number, variance: number)
 	return CreatureModels.scaleFor(zone, rarity, Config.plantWeight(zone, rarity, 0, variance))
 end
 
--- What the planting preview shows for a seed with this gene: (ghost n, scale).
-function PlantGhosts.seedLook(zone: number, rarity: number, gene: number): (number, number)
-	return PlantGhosts.indexOf(zone, rarity, gene), PlantGhosts.sproutScale(zone, rarity, Config.geneVariance(gene))
+-- What the planting preview shows for a seed of this mutation with this gene: (ghost n, scale).
+function PlantGhosts.seedLook(zone: number, rarity: number, gene: number, mutation: string?): (number, number)
+	return PlantGhosts.indexOf(zone, rarity, gene, mutation), PlantGhosts.sproutScale(zone, rarity, Config.geneVariance(gene))
 end
 
 -- ...and for a plant (an inventory plant planted again): its own flower at its own size at `now`.
@@ -64,7 +67,7 @@ function PlantGhosts.bagPreview(bag: { [string]: number }, key: any, roll: () ->
 		SeedPacks.takeFromBag(bag, key)
 		key = SeedPacks.addToBag(bag, zone, rarity, mutation, gene)
 	end
-	local ghost, scale = PlantGhosts.seedLook(zone, rarity, gene :: number)
+	local ghost, scale = PlantGhosts.seedLook(zone, rarity, gene :: number, mutation)
 	return key, zone, rarity, mutation, ghost, scale
 end
 
@@ -75,7 +78,7 @@ function PlantGhosts.seedPlant(zone: number, rarity: number, mutation: string?, 
 	x: number, z: number, roll: () -> number): any
 	return {
 		slot = slot, zone = zone, rarity = rarity, mutation = mutation, plantedAt = now, x = x, z = z,
-		variant = if gene then CreatureModels.variantOf(zone, rarity, gene) else CreatureModels.randomVariant(zone, rarity, roll),
+		variant = if gene then CreatureModels.seedVariant(zone, rarity, mutation, gene) else CreatureModels.randomVariant(zone, rarity, roll, mutation),
 		variance = if gene then Config.geneVariance(gene) else nil,
 	}
 end

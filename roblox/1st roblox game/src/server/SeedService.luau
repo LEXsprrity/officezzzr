@@ -299,7 +299,7 @@ end
 -- The carry for a pod's seed, with what its planting ghost shows (the ghost is built now, so it reaches
 -- the thief's client before the carry does).
 function SeedService.newCarry(zone: number, podIndex: number, rarity: number, mutation: string?, gene: number): Sessions.Carry
-	local ghost, scale = PlantGhosts.seedLook(zone, rarity, gene)
+	local ghost, scale = PlantGhosts.seedLook(zone, rarity, gene, mutation)
 	PlantGhosts.ensure(zone, rarity, ghost)
 	return { zone = zone, rarity = rarity, mutation = mutation, gene = gene, ghost = ghost, scale = scale, pod = podIndex, model = nil }
 end

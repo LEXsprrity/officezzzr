@@ -198,15 +198,15 @@ H.test("HUD: the Index, Plants, Inventory and Sell cards show the flowers in 3D 
 	b = string.find(HUD, "-- Trail Shop strip scrolling", 1, true)
 	local plants = a and b and string.sub(HUD, a, b) or ""
 	H.ok(string.find(plants, "local FlowerView = require(Shared:WaitForChild(\"FlowerView\"))", 1, true), "the Plants panel uses FlowerView")
-	H.ok(string.find(plants, "FlowerView.show(f, FlowerView.flower(p.zone, p.rarity, p.flower), {", 1, true), "a Plants card: its plant's flower")
+	H.ok(string.find(plants, "FlowerView.show(f, FlowerView.flower(p.zone, p.rarity, p.flower, p.mutation), {", 1, true), "a Plants card: its plant's flower")
 	H.ok(string.find(plants, "FlowerView.show(f, look, {", 1, true), "an Inventory card: its look")
 	H.ok(string.find(plants, "FlowerView.seed(e.zone, gene)", 1, true), "a bag seed: its seed design (by its gene, like the hotbar)")
-	H.ok(string.find(plants, "FlowerView.flower(p.zone, p.rarity, p.flower))", 1, true), "a removed plant: its flower")
+	H.ok(string.find(plants, "FlowerView.flower(p.zone, p.rarity, p.flower, p.mutation))", 1, true), "a removed plant: its flower")
 	-- The Sell cards
 	a = string.find(HUD, "-- SELL window", 1, true)
 	b = string.find(HUD, "end of SELL", 1, true)
 	local sell = a and b and string.sub(HUD, a, b) or ""
-	H.ok(string.find(sell, "FlowerView.flower(p.zone, p.rarity, p.flower))", 1, true) and string.find(sell, "FlowerView.show(c, look, {", 1, true), "a Sell card: its flower")
+	H.ok(string.find(sell, "FlowerView.flower(p.zone, p.rarity, p.flower, p.mutation))", 1, true) and string.find(sell, "FlowerView.show(c, look, {", 1, true), "a Sell card: its flower")
 	H.ok(string.find(sell, "FlowerView.seed(it.zone, it.gene))", 1, true), "a seed's Sell card: its seed design")
 	H.ok(string.find(sell, "ReplicatedStorage.ChildAdded:Connect(", 1, true) and string.find(sell, "child.Name == FlowerView.FOLDER", 1, true),
 		"drawn again once the previews arrive")
@@ -214,5 +214,6 @@ H.test("HUD: the Index, Plants, Inventory and Sell cards show the flowers in 3D 
 	for _ in string.gmatch(HUD, "spin = true") do
 		spins += 1
 	end
-	H.eq(spins, 5, "Plants, Inventory, Sell, the pack reveal's seed and the x10 grid's seeds turn (only while on screen: FlowerView)")
+	H.eq(spins, 4, "Plants, Inventory, Sell and the pack reveal's seed turn (only while on screen: FlowerView)")
+	H.ok(string.find(HUD, "spin = look.spin ~= false", 1, true) ~= nil, "...and the x10 grid's seeds (the reel's Haunted plant cards stand still)")
 end)

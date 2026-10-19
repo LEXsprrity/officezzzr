@@ -8,6 +8,7 @@
 -- what they list changed).
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Config = require(script.Parent:WaitForChild("Config"))
+local Halloween = require(script.Parent:WaitForChild("Halloween"))
 
 local FlowerView = {}
 
@@ -19,14 +20,29 @@ FlowerView.SPIN = math.rad(40) -- radians a second
 FlowerView.TILT = math.rad(18) -- the camera looks down this much
 FlowerView.ANGLE = math.rad(-35) -- the resting 3/4 turn (the flowers face -Z)
 
+-- The Haunted copies of the previews (Halloween.hauntify, the look the server gives a Haunted plant), made once.
+local hauntedCopies: { [Model]: Model } = setmetatable({}, { __mode = "k" }) :: any
+
 -- The preview of flower `flower` (a plant model's name; nil: FALLBACK) of (zone, rarity), or nil while it
--- hasn't replicated (or doesn't exist).
-function FlowerView.flower(zone: number, rarity: number, flower: string?): Model?
+-- hasn't replicated (or doesn't exist). With `mutation` Haunted: in its Haunted look (a copy of it).
+function FlowerView.flower(zone: number, rarity: number, flower: string?, mutation: string?): Model?
 	local root = ReplicatedStorage:FindFirstChild(FlowerView.FOLDER)
 	local zoneFolder = root and root:FindFirstChild(tostring(zone))
 	local rarityFolder = zoneFolder and zoneFolder:FindFirstChild(tostring(rarity))
 	local model = rarityFolder and (rarityFolder:FindFirstChild(flower or FlowerView.FALLBACK) or rarityFolder:FindFirstChild(FlowerView.FALLBACK))
-	return if model and model:IsA("Model") then model else nil
+	if not (model and model:IsA("Model")) then
+		return nil
+	end
+	if mutation == Halloween.MUTATION then
+		local copy = hauntedCopies[model]
+		if not copy then
+			copy = model:Clone()
+			Halloween.hauntify(copy)
+			hauntedCopies[model] = copy
+		end
+		return copy
+	end
+	return model
 end
 
 -- The seed design a seed of `zone` with this gene looks like (like the hotbar's seed slot), or nil.
