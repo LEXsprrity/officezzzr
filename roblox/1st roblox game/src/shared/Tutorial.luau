@@ -13,40 +13,31 @@ local Tutorial = {}
 export type Step = {
 	id: string,
 	banner: string, -- the instruction at the top of the screen
-	label: string, -- the big floating words over the target
 }
 
--- In order. Each step's target and how it advances (Tutorial.advance):
---   run:    a Meadow seed pod; advances when the player is within NEAR studs of it
---   steal:  the same pod; advances when the server says they carry a seed (StatsUpdate `carrying`)
+-- In order (owner 2026-10-19: "u just really need 5 steps of the tutorial, go get first seed, go plant first
+-- seed, go walk on treadmill, done"; the red arrows on the ground point the way, no words over the targets).
+-- Each step's target and how it advances (Tutorial.advance):
+--   steal:  a Meadow seed pod; advances when the server says they carry a seed (StatsUpdate `carrying`)
 --   home:   their plot; advances when the seed goes into the seed bag (LootEvent "Stored"), back to steal
 --           if the seed is lost on the way (caught, dropped, died)
 --   plant:  their dirt (and the hotbar's seed slot); advances when a seed is planted (LootEvent "Planted")
---   grow:   the seedling, with its sprout timer; advances when it pops (LootEvent "Sprouted")
---   earn:   the grown plant; advances once their money has gone up and the step has shown EARN_MIN seconds
 --   speed:  their treadmill; advances once their Speed has gone up SPEED_GOAL since the step began
 --   ready:  the next zone's Speed sign; finishes on the "Let's go!" button or when they reach the sign
 Tutorial.STEPS = {
-	{ id = "run", banner = "Follow the red arrows down the corridor to the Meadow!", label = "STEAL A SEED" },
-	{ id = "steal", banner = "Hold E by a seed to steal it. The guardian wakes up, so RUN!", label = "STEAL A SEED" },
-	{ id = "home", banner = "Run back home to your plot before the guardian catches you!", label = "RUN HOME!" },
-	{ id = "plant", banner = "Press 2 (or tap the seed slot), then click your brown dirt to plant it.", label = "PLANT IT HERE" },
-	{ id = "grow", banner = "Your seed is sprouting. Wait for it to grow into a plant!", label = "WAITING FOR IT TO GROW" },
-	{ id = "earn", banner = "Your plant earns money every second, all by itself. Watch your money go up!", label = "IT MAKES MONEY!" },
-	{ id = "speed", banner = "Walking and treadmills raise your Speed. Stand on your treadmill to get faster!", label = "STAND HERE" },
-	{ id = "ready", banner = "", label = "" }, -- (filled in below from the next zone)
+	{ id = "steal", banner = "Follow the red arrows to steal a seed!" },
+	{ id = "home", banner = "Run home with your seed before the guardian catches you!" },
+	{ id = "plant", banner = "Press 2, then click your brown dirt to plant your seed!" },
+	{ id = "speed", banner = "Walk on your treadmill to get faster!" },
+	{ id = "ready", banner = "" }, -- (filled in below from the next zone)
 } :: { Step }
 
 do
 	local next = Config.ZONES[2]
-	local need = Format.short(next.req)
-	Tutorial.STEPS[8].banner = `You're ready! The sign by each zone shows the Speed it needs: get {need} Speed for the {next.name}.`
-	Tutorial.STEPS[8].label = `NEXT: {string.upper(next.name)}`
+	Tutorial.STEPS[5].banner = `All done! Get {Format.short(next.req)} Speed to reach the {next.name}.`
 end
 
-Tutorial.NEAR = 22 -- studs from the pod that count as "reached the Meadow"
 Tutorial.ARRIVE = 14 -- studs from the next zone's sign that finish the tutorial
-Tutorial.EARN_MIN = 4 -- seconds the "it makes money" step shows at least
 Tutorial.SPEED_GOAL = 300 -- Speed to gain on the "get faster" step (a second on the treadmill, or ~300 studs of walking)
 Tutorial.LOST_GRACE = 1.5 -- seconds after the carried seed goes before it counts as lost (the "Stored" event may follow)
 
@@ -65,11 +56,11 @@ function Tutorial.step(id: string): Step?
 	return if i then Tutorial.STEPS[i] else nil
 end
 
--- What the client has seen happen, for advance(). Events: "near", "pickup", "lost", "stored", "planted",
--- "sprouted", "earned", "faster", "finish", "skip".
+-- What the client has seen happen, for advance(). Events: "near" (at the next zone's sign), "pickup", "lost",
+-- "stored", "planted", "faster", "finish", "skip".
 -- Returns the next step id, "done" when the tutorial is over, or `id` unchanged. Only moves forward,
 -- except "lost" (the seed is gone: steal again). An event a later step already covers can jump ahead (a
--- player who steals before reaching the "run" target, or plants a seed already in the bag).
+-- player who plants a seed already in the bag).
 function Tutorial.advance(id: string, event: string): string
 	if id == "done" then
 		return "done"
@@ -85,23 +76,15 @@ function Tutorial.advance(id: string, event: string): string
 		return if table.find(from, id) then target else id
 	end
 	if event == "near" then
-		if id == "run" then
-			return "steal"
-		elseif id == "ready" then
-			return "done"
-		end
+		return upTo("done", { "ready" })
 	elseif event == "pickup" then
-		return upTo("home", { "run", "steal" })
+		return upTo("home", { "steal" })
 	elseif event == "lost" then
 		return upTo("steal", { "home" })
 	elseif event == "stored" then
-		return upTo("plant", { "run", "steal", "home" })
+		return upTo("plant", { "steal", "home" })
 	elseif event == "planted" then
-		return upTo("grow", { "run", "steal", "home", "plant" })
-	elseif event == "sprouted" then
-		return upTo("earn", { "grow" })
-	elseif event == "earned" then
-		return upTo("speed", { "earn" })
+		return upTo("speed", { "steal", "home", "plant" })
 	elseif event == "faster" then
 		return upTo("ready", { "speed" })
 	elseif event == "finish" then
@@ -110,30 +93,20 @@ function Tutorial.advance(id: string, event: string): string
 	return id
 end
 
--- The "it makes money" step is done once money went up and it showed long enough to read.
-function Tutorial.earned(startMoney: number, money: number, elapsed: number): boolean
-	return money > startMoney and elapsed >= Tutorial.EARN_MIN
-end
-
 -- The "get faster" step is done once Speed rose SPEED_GOAL since it began.
 function Tutorial.faster(startSpeed: number, speed: number): boolean
 	return speed - startSpeed >= Tutorial.SPEED_GOAL
 end
 
--- Where a player who hasn't finished starts (a new one at "run"; one who left mid-way picks up where their
--- stats say they were). `stats`: carrying (table or false), seedBag, plants ({ sproutUntil: number? } each: a seedling).
+-- Where a player who hasn't finished starts (a new one at "steal"; one who left mid-way picks up where their
+-- stats say they were). `stats`: carrying (table or false), seedBag, plants.
 function Tutorial.startStep(stats: { [string]: any }): string
 	if type(stats.carrying) == "table" then
 		return "home"
 	end
 	local plants = if type(stats.plants) == "table" then stats.plants else {}
-	for _, p in plants do
-		if type(p) == "table" and type(p.sproutUntil) == "number" then
-			return "grow"
-		end
-	end
 	if #plants > 0 then
-		return "earn"
+		return "speed"
 	end
 	if type(stats.seedBag) == "table" then
 		for _, n in stats.seedBag do
@@ -142,7 +115,7 @@ function Tutorial.startStep(stats: { [string]: any }): string
 			end
 		end
 	end
-	return "run"
+	return "steal"
 end
 
 ----------------------------------------------------------------------------------------------------

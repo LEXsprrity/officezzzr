@@ -101,10 +101,10 @@ end
 ----------------------------------------------------------------------------------------------------
 -- The formula
 ----------------------------------------------------------------------------------------------------
-H.test("sprout: time = base by rarity (30 s .. 20 min) x a zone factor rising to x2.5, rounded to 5 s; Fast Grow halves it", function()
-	H.deepEq(Config.SPROUT_BASE, { 30, 60, 180, 480, 1200 })
+H.test("sprout: time = base by rarity (5 s .. 5 min), the same in every zone, rounded to 5 s; Fast Grow halves it", function()
+	H.deepEq(Config.SPROUT_BASE, { 5, 15, 30, 60, 300 }) -- (owner 2026-10-19: at most 5 min)
 	H.eq(Config.sproutZoneFactor(1), 1, "Meadow x1")
-	H.eq(Config.sproutZoneFactor(#Config.ZONES), 2.5, "Spirit Garden x2.5")
+	H.eq(Config.sproutZoneFactor(#Config.ZONES), 1, "Spirit Garden x1: the same everywhere")
 	local rows = {}
 	for k, zone in Config.ZONES do
 		local cells = {}
@@ -124,9 +124,9 @@ H.test("sprout: time = base by rarity (30 s .. 20 min) x a zone factor rising to
 		table.insert(rows, `{zone.id} {table.concat(cells, "/")}`)
 	end
 	print("        sprout seconds: " .. table.concat(rows, ", "))
-	H.eq(Config.sproutTime(1, 1), 30)
-	H.eq(Config.sproutTime(7, 5), 3000, "a Spirit Garden Legendary: 50 min")
-	H.eq(Config.SPROUT_MAX, 3000)
+	H.eq(Config.sproutTime(1, 1), 5)
+	H.eq(Config.sproutTime(7, 5), 300, "a Spirit Garden Legendary: 5 min")
+	H.eq(Config.SPROUT_MAX, 300)
 	H.eq(Config.sproutTime(1, 1, 1000), Config.SPROUT_ROUND, "never 0")
 	-- left / is sprouting
 	local p = seedling(1, 2, 3, NOW)
@@ -161,14 +161,14 @@ H.test("sprout: sprouting goes on offline, and offline pay counts only the time 
 	local now = os.time()
 	local away = 1200
 	s.profile.lastSeen = now - away
-	local p = seedling(1, 2, 4, now - away) -- an Epic from the Desert: 600 s
+	local p = seedling(1, 2, 4, now - away) -- an Epic from the Desert: 60 s
 	local sprout = Config.sproutTime(2, 4)
-	H.eq(sprout, 600)
+	H.eq(sprout, 60)
 	s.profile.plants = { p }
 	H.eq(Config.sproutLeft(p, now), 0, "done while they were away")
 	local amount = PlotService.grantOffline(s)
 	local _, income = PlotService.plantStats(p, now)
-	H.near(amount, income * Config.averageTimeMult(2) * Config.OFFLINE_MULT * (away - sprout) * Sessions.moneyMult(s), amount * 1e-9, "paid for the last 600 s only, at the offline share")
+	H.near(amount, income * Config.averageTimeMult(2) * Config.OFFLINE_MULT * (away - sprout) * Sessions.moneyMult(s), amount * 1e-9, "paid for the time after it sprouted only, at the offline share")
 	-- still sprouting when they come back: nothing
 	local s2 = session()
 	s2.profile.lastSeen = now - 100
@@ -183,18 +183,18 @@ end)
 
 H.test("sprout: a seedling taken to the inventory keeps what it had left, and sprouts on when planted again", function()
 	local profile = ProfileStore.defaultProfile()
-	local p = seedling(4, 5, 3, NOW) -- 360 s
+	local p = seedling(4, 5, 3, NOW) -- 30 s
 	profile.plants = { p }
-	local entry = Inventory.take(profile, 4, NOW + 100) :: any
+	local entry = Inventory.take(profile, 4, NOW + 10) :: any
 	H.ok(entry ~= nil, "taken")
-	H.eq(entry.sprout, Config.sproutTime(5, 3) - 100, "260 s left")
+	H.eq(entry.sprout, Config.sproutTime(5, 3) - 10, "20 s left")
 	H.eq(entry.age, 0, "no growth yet")
-	-- days later: still 260 s left (it waits in the inventory)
+	-- days later: still 20 s left (it waits in the inventory)
 	local later = NOW + 86400
 	local back = Inventory.toPlant(entry, 9, later, 1, 2)
-	H.eq(back.sproutUntil, later + 260)
+	H.eq(back.sproutUntil, later + 20)
 	H.eq(back.plantedAt, back.sproutUntil, "growth starts when it is done")
-	H.eq(Config.sproutLeft(back, later), 260)
+	H.eq(Config.sproutLeft(back, later), 20)
 	H.eq((PlotService.plantStats(back, later)), Config.plantWeight(5, 3, 0, 1))
 	-- a grown plant has nothing to keep
 	profile.plants = { { slot = 5, zone = 1, rarity = 1, plantedAt = NOW - 50, x = 0, z = 0, variance = 1 } }
@@ -248,7 +248,7 @@ H.test("grow now: two products, picked by the time left (up to 10 min 9 R$, long
 	H.eq(Config.DEVELOPER_PRODUCTS.GrowNow1, nil)
 	H.eq(Config.DEVELOPER_PRODUCTS.GrowNow5, nil)
 	H.eq(#Config.products("GrowNow"), 2)
-	for _, case in { { 1, "GrowNow10" }, { 59, "GrowNow10" }, { 600, "GrowNow10" }, { 601, "GrowNow30" }, { 1800, "GrowNow30" }, { 3000, "GrowNow30" }, { 1e6, "GrowNow30" } } do
+	for _, case in { { 1, "GrowNow10" }, { 59, "GrowNow10" }, { 60, "GrowNow10" }, { 61, "GrowNow30" }, { 300, "GrowNow30" }, { 3000, "GrowNow30" }, { 1e6, "GrowNow30" } } do
 		H.eq((Config.growNowProduct(case[1])), case[2], `{case[1]} s left`)
 	end
 	H.eq((Config.growNowProduct(0)), nil, "grown: nothing to sell")
@@ -260,8 +260,8 @@ H.test("grow now: the prompt only for your own seedling, with the product its ti
 	local p = ProfileStore.defaultProfile()
 	p.plants = { seedling(1, 1, 1, NOW), seedling(2, 7, 5, NOW), { slot = 3, zone = 1, rarity = 1, plantedAt = NOW - 5, x = 0, z = 0, variance = 1 } }
 	with({ { Config.DEVELOPER_PRODUCTS.GrowNow10, "id", 5001 }, { Config.DEVELOPER_PRODUCTS.GrowNow30, "id", 5002 } }, function()
-		H.ok(Shop.canPrompt(p, "GrowNow10", { slot = 1, now = NOW }) ~= nil, "30 s left: GrowNow10")
-		H.ok(Shop.canPrompt(p, "GrowNow30", { slot = 2, now = NOW }) ~= nil, "50 min left: GrowNow30")
+		H.ok(Shop.canPrompt(p, "GrowNow10", { slot = 1, now = NOW }) ~= nil, "5 s left: GrowNow10")
+		H.ok(Shop.canPrompt(p, "GrowNow30", { slot = 2, now = NOW }) ~= nil, "5 min left: GrowNow30")
 		local function refused(name: string, target: any, why: string)
 			local product, msg = Shop.canPrompt(p, name, target)
 			H.eq(product, nil, why)
@@ -284,7 +284,7 @@ end)
 
 H.test("grow now: a receipt finishes that seedling once per PurchaseId; gone, it goes to another seedling", function()
 	local p = ProfileStore.defaultProfile()
-	p.plants = { seedling(1, 2, 3, NOW), seedling(2, 6, 4, NOW), { slot = 3, zone = 1, rarity = 1, plantedAt = NOW - 5, x = 0, z = 0, variance = 1 } }
+	p.plants = { seedling(1, 2, 3, NOW), seedling(2, 6, 5, NOW), { slot = 3, zone = 1, rarity = 1, plantedAt = NOW - 5, x = 0, z = 0, variance = 1 } }
 	local function rng(): number
 		return 0.5
 	end
@@ -300,7 +300,7 @@ H.test("grow now: a receipt finishes that seedling once per PurchaseId; gone, it
 	p.plants[4] = seedling(4, 1, 1, NOW)
 	local _, g2 = Shop.grantProduct(p, "GrowNow10", "gn-2", 0, rng, { slot = 1, now = NOW + 10 })
 	H.deepEq((g2 :: any).grown, { 2 }, "the longest seedling")
-	H.eq(Config.sproutLeft(p.plants[2], NOW + 10), before - 600, "GrowNow10 skips up to 10 min of it")
+	H.eq(Config.sproutLeft(p.plants[2], NOW + 10), before - 60, "GrowNow10 skips up to 1 min of it")
 	H.eq(p.plants[2].plantedAt, p.plants[2].sproutUntil, "its growth still starts when it is done")
 	Shop.grantProduct(p, "GrowNow30", "gn-3", 0, rng, { slot = 3, now = NOW + 10 })
 	H.eq(p.plants[2].sproutUntil, nil, "GrowNow30 finishes any seedling")
@@ -310,7 +310,7 @@ H.test("grow now: a receipt finishes that seedling once per PurchaseId; gone, it
 	-- nothing on the plot: a seedling in the inventory
 	p.inventory = { { id = 1, zone = 1, rarity = 1, age = 0, variance = 1, sprout = 1000 } }
 	local _, g5 = Shop.grantProduct(p, "GrowNow10", "gn-5", 0, rng, { slot = 1, now = NOW + 10 })
-	H.eq(p.inventory[1].sprout, 400, "10 min off the inventory seedling")
+	H.eq(p.inventory[1].sprout, 940, "1 min off the inventory seedling")
 	H.ok(not (g5 :: any).wasted)
 	Shop.grantProduct(p, "GrowNow30", "gn-6", 0, rng, nil)
 	H.eq(p.inventory[1].sprout, nil)
@@ -327,7 +327,7 @@ H.test("grow now: through the remotes (RequestBuy \"GrowNow:<id>\" then ProcessR
 	H.ok(type(buy) == "function" and type(process) == "function", "wired")
 	local owner, stranger = session(), session()
 	local now = os.time()
-	owner.profile.plants = { seedling(7, 3, 2, now) } -- 90 s: GrowNow10
+	owner.profile.plants = { seedling(7, 3, 2, now) } -- 15 s: GrowNow10
 	stranger.profile.plants = {}
 	local prompted: { { any } } = {}
 	with({

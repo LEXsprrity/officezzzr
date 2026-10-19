@@ -125,7 +125,8 @@ H.test("progression: money stays a sink all game (trails and plot levels bought 
 		if trail then
 			trailAt[trail] = b.t
 		elseif string.match(b.what, "^Plot Level") then
-			local third = if b.t < spirit / 3 then "early" elseif b.t < spirit * 2 / 3 then "middle" else "late"
+			-- (thirds, the last one from 60%: since 2026-10-19 sprouts last at most 5 min, so money comes a little sooner)
+			local third = if b.t < spirit / 3 then "early" elseif b.t < spirit * 0.6 then "middle" else "late"
 			plotBuys[third] += 1
 		end
 	end
