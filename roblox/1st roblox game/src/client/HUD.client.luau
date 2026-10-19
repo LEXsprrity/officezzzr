@@ -466,18 +466,37 @@ do
 	end
 end
 local batView: ViewportFrame? = nil
+local batTool: Tool? = nil
+local function drawBat()
+	local tool = batTool
+	local view = tool and ToolView.show(batSlot, tool, { size = UDim2.new(1, -4, 1, -4), position = UDim2.fromOffset(2, 2), zindex = 2 })
+	if view then
+		if batView then
+			batView:Destroy()
+		end
+		batView = view
+		batArt.Visible = false
+	end
+end
 local function showBat3D(tool: Instance?)
-	if batView or not (tool and tool:IsA("Tool")) then
+	if batTool or not (tool and tool:IsA("Tool")) then
 		return
 	end
-	batView = ToolView.show(batSlot, tool, { size = UDim2.new(1, -4, 1, -4), position = UDim2.fromOffset(2, 2), zindex = 2 })
-	if batView then
-		batArt.Visible = false
-	else -- its parts are still on their way
-		tool.ChildAdded:Once(function()
-			showBat3D(tool)
+	batTool = tool
+	drawBat()
+	-- Its pieces replicate one by one: the Handle can come before its mesh (owner 2026-10-19: the bare grey
+	-- stick showed), so it is drawn again as more of it arrives (a tenth of a second after the last piece).
+	local pending = false
+	tool.DescendantAdded:Connect(function()
+		if pending then
+			return
+		end
+		pending = true
+		task.delay(0.1, function()
+			pending = false
+			drawBat()
 		end)
-	end
+	end)
 end
 do -- built once, from whichever bat turns up first: in the Backpack (a new one each respawn) or in hand
 	local function watchFor(holder: Instance)

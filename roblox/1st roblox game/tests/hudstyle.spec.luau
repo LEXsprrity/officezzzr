@@ -170,10 +170,10 @@ H.test("hotbar: small dark see-through slots, the number top-left, a drawn bat a
 	H.ok(string.find(bat, "ToolView.show(batSlot, tool, { size = UDim2.new(1, -4, 1, -4), position = UDim2.fromOffset(2, 2), zindex = 2 })", 1, true) ~= nil,
 		"the 3D bat fills the slot like the seed, under the number and the cooldown shade")
 	H.ok(string.find(bat, "batArt.Visible = false", 1, true) ~= nil, "the drawn bat hides once the 3D one shows")
-	H.ok(string.find(bat, "if batView or not (tool and tool:IsA(\"Tool\")) then", 1, true) ~= nil, "built once, from a Tool")
+	H.ok(string.find(bat, "if batTool or not (tool and tool:IsA(\"Tool\")) then", 1, true) ~= nil, "from the first Tool")
+	H.ok(string.find(bat, "tool.DescendantAdded:Connect(function()", 1, true) and string.find(bat, "batView:Destroy()", 1, true), "drawn again once its mesh replicates (not the bare grey Handle)")
 	H.ok(string.find(bat, "child:IsA(\"Backpack\")", 1, true) and string.find(bat, "me.CharacterAdded:Connect(watchFor)", 1, true),
 		"found in the Backpack (each respawn) or in hand")
-	H.ok(string.find(bat, "tool.ChildAdded:Once(", 1, true) ~= nil, "retried while its parts replicate")
 	H.ok(not string.find(bat, "Icons.set", 1, true), "no 2D icon")
 	H.ok(not string.find(bat, "\"Bat\")", 1, true) and not string.find(bat, "Bat\\n", 1, true) and not string.find(HUD, "\"🏏\\nBat\"", 1, true),
 		"no Bat name, no hammer icon")
