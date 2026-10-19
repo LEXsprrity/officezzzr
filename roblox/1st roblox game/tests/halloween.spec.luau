@@ -105,7 +105,7 @@ H.test("halloween: the Haunted seed is always Haunted, with the zone's odds and 
 			sum += pct
 		end
 		H.near(sum, 100, 1e-9, "rarities")
-		H.near(odds.rarities[Config.LEGENDARY], Config.LEGENDARY_CHANCE[k] * Halloween.LEGENDARY_MULT * 100, 1e-9, "Legendary")
+		H.near(odds.rarities[Config.LEGENDARY], 2, 1e-9, "Legendary: 2% in every zone (owner 2026-10-19)")
 		H.eq(#odds.mutations, 1, "only Haunted")
 		H.eq(odds.mutations[1].pct, 100)
 		local rng = seeded(k)

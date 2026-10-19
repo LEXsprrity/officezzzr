@@ -22,8 +22,9 @@ Halloween.CANDY_MAX = 1e9 -- a save never holds more
 Halloween.PULL_PRICE = 50 -- one Haunted seed
 Halloween.TEN_PRICE = 500 -- ten of them
 Halloween.PULLS = { 1, 10 } -- the card's two buttons
--- The Haunted seed's Legendary chance: this many times its zone's pod chance (Config.LEGENDARY_CHANCE).
-Halloween.LEGENDARY_MULT = 2
+-- The Haunted seed's Legendary chance, the same in every zone (owner 2026-10-19: 2x the zone's pod chance left
+-- the Spirit Garden at 0.08%, "just crazy"; make it 2%).
+Halloween.LEGENDARY_CHANCE = 0.02
 
 -- The candy on the map (Server/CandyService), only in the corridor (spread evenly over its length, so the
 -- longer zones hold more): CANDY_START pieces when the server starts, then one more every CANDY_EVERY
