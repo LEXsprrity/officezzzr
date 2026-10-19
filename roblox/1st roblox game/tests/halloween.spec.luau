@@ -48,9 +48,9 @@ H.test("halloween: candy spots lie only in the corridor (off the walls, away fro
 	H.ok(Halloween.nearNest(Config.nestCenter(4)), "a nest is near itself")
 end)
 
-H.test("halloween: at most 25 candy appear per 5 minutes (owner 2026-10-19), up to 25 on the map", function()
+H.test("halloween: at most 25 candy appear per 5 minutes (owner 2026-10-19), up to 50 on the map", function()
 	H.ok(300 / Halloween.CANDY_EVERY <= 25 + 1e-9, `one every {Halloween.CANDY_EVERY} s`)
-	H.ok(Halloween.CANDY_START <= Halloween.CANDY_ON_MAP and Halloween.CANDY_ON_MAP <= 25, "a cap")
+	H.ok(Halloween.CANDY_START <= Halloween.CANDY_ON_MAP and Halloween.CANDY_ON_MAP == 50, "a cap of 50")
 	local candy = fs.readFile("src/server/CandyService.luau")
 	H.ok(not string.find(candy, "CANDY_RESPAWN", 1, true), "a piece picked up doesn't come straight back")
 	H.ok(string.find(candy, "#pieces < Halloween.CANDY_ON_MAP", 1, true) ~= nil, "the cap holds")

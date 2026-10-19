@@ -30,9 +30,9 @@ Halloween.LEGENDARY_MULT = 2
 -- seconds (25 per 5 minutes, owner 2026-10-19) while fewer than CANDY_ON_MAP lie there; picked-up pieces
 -- don't come back by themselves. Each is worth CANDY_VALUE. A player picks up the candy within CANDY_RADIUS
 -- studs (flat) of where the server trusts them to be.
-Halloween.CANDY_START = 10
+Halloween.CANDY_START = 20
 Halloween.CANDY_EVERY = 12
-Halloween.CANDY_ON_MAP = 25
+Halloween.CANDY_ON_MAP = 50 -- (owner 2026-10-19: "50 candys max spread around map instead of 25")
 Halloween.CANDY_VALUE = 1
 Halloween.CANDY_RADIUS = 5
 -- The owner's candy corn (Creator Store "Candy corn", in their inventory): loaded with InsertService when

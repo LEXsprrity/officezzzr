@@ -1,6 +1,6 @@
 -- The first-time tutorial (Shared/Tutorial, Server/TutorialService, Client/Tutorial): the steps and how each
 -- advances, where a returning player picks up, the veteran check on old saves, skip, the save round-trip and
--- the red arrow trail's path math. The arrows and labels themselves are client visuals (not run here).
+-- the red arrow trail's path math. The arrows themselves are client visuals (not run here).
 local fs = require("@lune/fs")
 local serde = require("@lune/serde")
 local H = require("./harness")
@@ -24,47 +24,39 @@ end
 ----------------------------------------------------------------------------------------------------
 -- Steps
 ----------------------------------------------------------------------------------------------------
-H.test("tutorial: the steps in order, each with an instruction and words over its target, no emoji", function()
-	H.ok(H.deepEq(ids(), { "run", "steal", "home", "plant", "grow", "earn", "speed", "ready" }))
+H.test("tutorial: five steps in order (owner 2026-10-19), each with a short instruction, no emoji, no words over targets", function()
+	H.ok(H.deepEq(ids(), { "steal", "home", "plant", "speed", "ready" }))
 	for _, s in Tutorial.STEPS do
 		H.ok(#s.banner > 10, `{s.id}: an instruction`)
-		H.ok(#s.label > 3 and string.upper(s.label) == s.label, `{s.id}: big words over the target`)
-		for _, text in { s.banner, s.label } do
-			H.ok(not string.find(text, "[\240-\244]"), `{s.id}: no emoji in "{text}"`)
-		end
+		H.ok(not string.find(s.banner, "[\240-\244]"), `{s.id}: no emoji in "{s.banner}"`)
+		H.eq((s :: any).label, nil, `{s.id}: the red arrows are enough (no words over the target)`)
 	end
-	H.eq(Tutorial.step("run").label, "STEAL A SEED", "the owner's words over the seed")
-	H.eq(Tutorial.step("steal").label, "STEAL A SEED")
-	H.eq(Tutorial.step("home").label, "RUN HOME!")
-	H.eq(Tutorial.step("plant").label, "PLANT IT HERE")
-	H.eq(Tutorial.step("grow").label, "WAITING FOR IT TO GROW")
+	H.eq(Tutorial.step("steal").banner, "Follow the red arrows to steal a seed!", "the owner's words")
 	H.ok(string.find(Tutorial.step("ready").banner, Config.ZONES[2].name, 1, true) ~= nil, "the last step names the next zone")
 	H.ok(string.find(Tutorial.step("ready").banner, "25K", 1, true) ~= nil, "...and the Speed its sign asks for")
 end)
 
 H.test("tutorial: a new player walks through every step by doing the thing, then it's done", function()
-	local id = "run"
+	local id = "steal"
 	local path = { id }
-	for _, event in { "near", "pickup", "stored", "planted", "sprouted", "earned", "faster", "near" } do
+	for _, event in { "pickup", "stored", "planted", "faster", "near" } do
 		id = Tutorial.advance(id, event)
 		table.insert(path, id)
 	end
-	H.ok(H.deepEq(path, { "run", "steal", "home", "plant", "grow", "earn", "speed", "ready", "done" }))
+	H.ok(H.deepEq(path, { "steal", "home", "plant", "speed", "ready", "done" }))
 	H.eq(Tutorial.advance("ready", "finish"), "done", "or the Let's go! button")
 end)
 
 H.test("tutorial: events out of turn don't advance it, a lost seed goes back to stealing, done stays done", function()
-	H.eq(Tutorial.advance("run", "sprouted"), "run")
+	H.eq(Tutorial.advance("steal", "faster"), "steal")
 	H.eq(Tutorial.advance("plant", "pickup"), "plant", "never backwards")
-	H.eq(Tutorial.advance("grow", "stored"), "grow")
-	H.eq(Tutorial.advance("earn", "faster"), "earn")
+	H.eq(Tutorial.advance("speed", "stored"), "speed")
 	H.eq(Tutorial.advance("steal", "near"), "steal")
 	H.eq(Tutorial.advance("speed", "finish"), "speed", "Let's go! is only the last step's")
 	H.eq(Tutorial.advance("home", "lost"), "steal", "caught or dropped on the way home: steal again")
 	H.eq(Tutorial.advance("plant", "lost"), "plant")
-	H.eq(Tutorial.advance("run", "pickup"), "home", "stole before reaching the trail's end: on to running home")
-	H.eq(Tutorial.advance("run", "stored"), "plant")
-	H.eq(Tutorial.advance("home", "planted"), "grow", "planted a seed already in the bag")
+	H.eq(Tutorial.advance("steal", "stored"), "plant")
+	H.eq(Tutorial.advance("home", "planted"), "speed", "planted a seed already in the bag")
 	H.eq(Tutorial.advance("done", "near"), "done")
 	H.eq(Tutorial.advance("nope", "near"), "nope")
 end)
@@ -75,23 +67,20 @@ H.test("tutorial: skip ends it from any step", function()
 	end
 end)
 
-H.test("tutorial: earning and getting faster need the real thing", function()
-	H.ok(not Tutorial.earned(100, 100, 30), "money hasn't moved")
-	H.ok(not Tutorial.earned(100, 150, Tutorial.EARN_MIN - 1), "shown long enough to read first")
-	H.ok(Tutorial.earned(100, 101, Tutorial.EARN_MIN))
+H.test("tutorial: getting faster needs the real thing", function()
 	H.ok(not Tutorial.faster(1000, 1000 + Tutorial.SPEED_GOAL - 1))
 	H.ok(Tutorial.faster(1000, 1000 + Tutorial.SPEED_GOAL))
 	H.ok(Tutorial.SPEED_GOAL <= Config.treadmillPerStep(1, Config.DEFAULT_TRAIL) * 4, "a second on the free treadmill does it")
 end)
 
 H.test("tutorial: a returning player picks up where their stats say", function()
-	H.eq(Tutorial.startStep({}), "run", "a new player")
-	H.eq(Tutorial.startStep({ carrying = false, plants = {}, seedBag = {} }), "run")
+	H.eq(Tutorial.startStep({}), "steal", "a new player")
+	H.eq(Tutorial.startStep({ carrying = false, plants = {}, seedBag = {} }), "steal")
 	H.eq(Tutorial.startStep({ carrying = { zone = 1, rarity = 1 } }), "home")
 	H.eq(Tutorial.startStep({ seedBag = { ["1:1#5"] = 1 } }), "plant")
-	H.eq(Tutorial.startStep({ seedBag = { ["1:1#5"] = 0 } }), "run")
-	H.eq(Tutorial.startStep({ plants = { { slot = 1, sproutUntil = 1e9 } }, seedBag = { ["1:1"] = 1 } }), "grow")
-	H.eq(Tutorial.startStep({ plants = { { slot = 1 } } }), "earn")
+	H.eq(Tutorial.startStep({ seedBag = { ["1:1#5"] = 0 } }), "steal")
+	H.eq(Tutorial.startStep({ plants = { { slot = 1, sproutUntil = 1e9 } }, seedBag = { ["1:1"] = 1 } }), "speed")
+	H.eq(Tutorial.startStep({ plants = { { slot = 1 } } }), "speed")
 end)
 
 ----------------------------------------------------------------------------------------------------
@@ -278,6 +267,8 @@ H.test("tutorial client: a skip button, words not emoji, the arrows glow red, th
 	H.ok(string.find(client, "UiFx.relief", 1, true) ~= nil, "relief words")
 	H.ok(not string.find(client, "[\240-\244]"), "no emoji")
 	H.ok(not string.find(client, "Toast", 1, true), "no info toasts: one banner per step")
+	H.ok(not string.find(client, "BillboardGui", 1, true), "no words over the targets: the red arrows are enough (owner 2026-10-19)")
+	H.ok(string.find(client, "Name = \"Banner\", AnchorPoint = Vector2.new(0.5, 0), Position = UDim2.new(0.5, 0, 0, 0)", 1, true) ~= nil, "the banner at the very top")
 	local carry = fs.readFile("src/client/CarryHud.client.luau")
 	H.ok(string.find(carry, "Tutorial = true", 1, true) ~= nil, "the RUN!! screen keeps the tutorial's banner")
 end)
