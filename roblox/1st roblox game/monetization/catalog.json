@@ -345,7 +345,7 @@
     "key": "GrowNow10",
     "kind": "product",
     "name": "Skip (1)",
-    "description": "Your sprouting plant finishes growing right away and starts earning (up to 10 minutes left).",
+    "description": "Your sprouting plant finishes growing right away and starts earning (up to 1 minutes left).",
     "price": 9,
     "isForSale": true,
     "image": "icons/Seeds.png"
