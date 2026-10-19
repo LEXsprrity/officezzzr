@@ -938,7 +938,12 @@ H.test("security: no loadstring, no fenv, no require by asset id, no HTTP; Inser
 		end
 		H.ok(not string.match(source, "require%s*%(%s*%d"), `{file}: require by asset id`)
 		if string.find(source, "GetService(\"InsertService\")", 1, true) then
-			H.eq(file, "src/server/CreatureModels.luau", "InsertService only loads Config.CREATURE_ASSETS")
+			-- CreatureModels: Config.CREATURE_ASSETS; CandyService: the owner's candy corn (one fixed id, scripts removed)
+			H.ok(file == "src/server/CreatureModels.luau" or file == "src/server/CandyService.luau", `{file}: InsertService only for Config's own ids`)
+			if file == "src/server/CandyService.luau" then
+				H.ok(string.find(source, "LoadAsset, InsertService, Halloween.CANDY_ASSET)", 1, true) ~= nil, "only the candy corn")
+				H.ok(string.find(source, "d:IsA(\"BaseScript\")", 1, true) ~= nil, "its scripts removed")
+			end
 		end
 	end
 end)

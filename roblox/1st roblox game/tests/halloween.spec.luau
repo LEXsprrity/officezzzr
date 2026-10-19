@@ -36,23 +36,24 @@ H.test("halloween: 50 candy for one pull, 500 for ten (owner 2026-10-19), nothin
 	end
 end)
 
-H.test("halloween: candy spots lie in the corridor (off the walls, away from the nests) or on the base's walkway", function()
+H.test("halloween: candy spots lie only in the corridor (off the walls, away from the nests), never in the base", function()
 	local rng = seeded(3)
 	local half = Config.CORRIDOR_WIDTH / 2
-	for _ = 1, 2000 do
-		local p = Halloween.spot(false, rng)
-		H.ok(p.X > Config.CORRIDOR_START_X and p.X < Config.END_X, "in the corridor")
+	for _ = 1, 3000 do
+		local p = Halloween.spot(rng)
+		H.ok(p.X > Config.CORRIDOR_START_X and p.X < Config.END_X, "in the corridor, not the base")
 		H.ok(math.abs(p.Z) <= half - 12 + 1e-9, "off the walls")
 		H.ok(not Halloween.nearNest(p), "away from the bosses")
 	end
-	local x0, x1, w = Halloween.baseRange()
-	H.ok(x0 < x1 and x1 < Config.CORRIDOR_START_X and w > 0, "a walkway")
-	for _ = 1, 500 do
-		local p = Halloween.spot(true, rng)
-		H.ok(p.X >= x0 and p.X <= x1 and math.abs(p.Z) <= w, "on the walkway")
-		H.ok(math.abs(p.Z) < Config.WALKWAY_WIDTH / 2, "not in a plot")
-	end
 	H.ok(Halloween.nearNest(Config.nestCenter(4)), "a nest is near itself")
+end)
+
+H.test("halloween: at most 25 candy appear per 5 minutes (owner 2026-10-19), up to 25 on the map", function()
+	H.ok(300 / Halloween.CANDY_EVERY <= 25 + 1e-9, `one every {Halloween.CANDY_EVERY} s`)
+	H.ok(Halloween.CANDY_START <= Halloween.CANDY_ON_MAP and Halloween.CANDY_ON_MAP <= 25, "a cap")
+	local candy = fs.readFile("src/server/CandyService.luau")
+	H.ok(not string.find(candy, "CANDY_RESPAWN", 1, true), "a piece picked up doesn't come straight back")
+	H.ok(string.find(candy, "#pieces < Halloween.CANDY_ON_MAP", 1, true) ~= nil, "the cap holds")
 end)
 
 H.test("halloween: the candy service picks up by walking over (trusted position), and the old candy sources are gone", function()
