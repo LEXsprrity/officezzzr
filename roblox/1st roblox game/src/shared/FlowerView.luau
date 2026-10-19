@@ -22,10 +22,12 @@ FlowerView.TILT = math.rad(18) -- the camera looks down this much
 FlowerView.ANGLE = math.rad(-35) -- the resting 3/4 turn (the flowers face -Z)
 
 -- The made-over copies of the previews (Shared/Mutations.makeover: the Haunted, Gold or Diamond look the server
--- gives such a plant), made once: [preview][mutation id].
-local mutationCopies: { [Model]: { [string]: Model } } = setmetatable({}, { __mode = "k" }) :: any
+-- gives such a plant), made once: [preview][mutation id]. Strong keys: an Instance as a weak key can be
+-- collected while the preview still exists (nothing in Lua holds its userdata), and the copy was made again.
+-- The previews are a fixed set (one folder, replicated once), so this stays small.
+local mutationCopies: { [Model]: { [string]: Model } } = {}
 -- ...and the recoloured ones (Palettes.apply, as the server recolours a plant): [preview][palette id].
-local paletteCopies: { [Model]: { [string]: Model } } = setmetatable({}, { __mode = "k" }) :: any
+local paletteCopies: { [Model]: { [string]: Model } } = {}
 
 -- The preview of flower `flower` (a plant model's name; nil: FALLBACK) of (zone, rarity), or nil while it
 -- hasn't replicated (or doesn't exist). With a `mutation` that repaints the plant (Haunted, Gold, Diamond): in
