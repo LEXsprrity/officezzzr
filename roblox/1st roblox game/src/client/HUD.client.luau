@@ -933,7 +933,7 @@ do
 		ShopUi.studs(f, accent) -- studded, under the strip, the 3D view and the words
 		new("Frame", { Size = UDim2.new(0, 8, 1, -14), Position = UDim2.fromOffset(7, 7), BackgroundColor3 = accent, BorderSizePixel = 0, Parent = f },
 			{ new("UICorner", { CornerRadius = UDim.new(1, 0) }) })
-		FlowerView.show(f, FlowerView.flower(p.zone, p.rarity, p.flower), {
+		FlowerView.show(f, FlowerView.flower(p.zone, p.rarity, p.flower, p.mutation), {
 			size = UDim2.fromOffset(VIEW, VIEW), position = UDim2.new(0, 20, 0, CARD_H / 2), anchor = Vector2.new(0, 0.5), spin = true,
 		})
 		ink(f, { Text = p.name or SeedPacks.seedName(p.zone, p.rarity, p.mutation), Size = UDim2.new(1, TEXT_W, 0, 24), Position = UDim2.fromOffset(TEXT_X, 7) })
@@ -1079,7 +1079,7 @@ do
 			itemCard(nextOrder(), p.name or SeedPacks.seedName(p.zone, p.rarity, p.mutation),
 				`{rarity.id}{if p.mutation then " · " .. p.mutation else ""} · {if p.sprout then `Sprouts in {Format.clock(p.sprout)}` else Config.ZONES[p.zone].name}`,
 				p.rarity, p.mutation, `inv:{p.id}`,
-				FlowerView.flower(p.zone, p.rarity, p.flower))
+				FlowerView.flower(p.zone, p.rarity, p.flower, p.mutation))
 		end
 	end
 
@@ -1534,9 +1534,25 @@ do
 			f.BackgroundTransparency = 0.15 -- the card's picture shows a little through
 		end
 		local top = if featured then 38 else 24
-		FlowerView.show(f, FlowerView.flower(zone, tile.rarity, tile.flower), {
-			size = UDim2.new(1, -8, 1, -(top + 4)), position = UDim2.fromOffset(4, top), zindex = 4, spin = featured, zoom = 1.25,
-		})
+		local viewOptions = { size = UDim2.new(1, -8, 1, -(top + 4)), position = UDim2.fromOffset(4, top), zindex = 4, spin = featured, zoom = 1.25 }
+		local view = FlowerView.show(f, FlowerView.flower(zone, tile.rarity, tile.flower, tile.mutation), viewOptions)
+		local flowers = tile.flowers
+		if flowers and #flowers > 1 then -- (the Haunted seed: every flower of the set it may grow into, in turn)
+			task.spawn(function()
+				local i = 1
+				while f.Parent do
+					task.wait(2.5)
+					if not f.Parent then
+						break
+					elseif not FlowerView.onScreen(view) then -- (the Shop is shut or scrolled away: nothing to redraw)
+						continue
+					end
+					i = i % #flowers + 1
+					view:Destroy()
+					view = FlowerView.show(f, FlowerView.flower(zone, tile.rarity, flowers[i], tile.mutation), viewOptions)
+				end
+			end)
+		end
 		-- the rarity's name and its % in the rarity's colour (owner 2026-10-15), thick dark outline, relief
 		local ink = if featured then COLORS.gold else SeedPacks.tileTextColor(tile.rarity)
 		local name = bold(f, if featured then 4 else 3, {
@@ -2283,7 +2299,7 @@ do
 	local function plantCard(grid: Instance, order: number, it: any)
 		local p = it.src
 		local c = cardBase(grid, order, it, p.name or SeedPacks.seedName(p.zone, p.rarity, p.mutation), Config.RARITIES[p.rarity].id,
-			FlowerView.flower(p.zone, p.rarity, p.flower))
+			FlowerView.flower(p.zone, p.rarity, p.flower, p.mutation))
 		local y = SELL_VIEW
 		local incomeLabel = bold(c, 2, { Size = UDim2.new(1, -14, 0, 22), Position = UDim2.fromOffset(7, 132 + y) })
 		local priceLabel = bold(c, 3, { Size = UDim2.new(1, -14, 0, 34), Position = UDim2.fromOffset(7, 158 + y), TextColor3 = MONEY_GREEN })
@@ -2526,6 +2542,7 @@ do
 	local CARD_W, CARD_H, CARD_GAP = 132, 168, 12
 	local REEL_X, REEL_Y, REEL_W, REEL_H = 40, 84, 700, 196
 	local REEL_COUNT, REEL_TARGET = 44, 38
+	local HAUNTED_REEL_3D = 12 -- a Haunted reel's 3D plant cards: the last this many before the winner, and after it
 	local RESULT_Y = REEL_Y + REEL_H + 24
 	local VIEW = 176 -- the seed in 3D
 
@@ -2623,10 +2640,23 @@ do
 		panelScale.Scale = math.clamp(math.min((w - 24) / (PANEL_W + 12), (h - 24) / (PANEL_H + 12)), 0.3, 1)
 	end
 
+	-- The 3D plant a Haunted seed of (zone, rarity) grows into, in its Haunted look: its gene's flower of the
+	-- Haunted set (Halloween.flowerOf, the server's pick too), or `flower`; nil for any other seed (and while
+	-- the previews haven't replicated).
+	local function hauntedPlant(zone: number, rarity: number, mutation: string?, gene: number?, flower: string?): Model?
+		if mutation ~= Halloween.MUTATION then
+			return nil
+		end
+		local name = flower or (if gene then Halloween.flowerOf(zone, rarity, gene) else nil)
+		return if name then FlowerView.flower(zone, rarity, name, mutation) else nil
+	end
+
 	-- A reel card: a seed icon, the rarity on its own line, the mutation (if any) on a pill under it. All
 	-- text is scaled inside the card's padding, so "Uncommon" or "Celestial" always fits.
 	-- `look`: the seed's zone and gene: its 3D seed look (FlowerView) instead of the Seeds icon (the x10 grid).
-	local function seedCard(parent: Instance, rarity: number, mutation: string?, look: { zone: number, gene: number? }?): Frame
+	-- A Haunted seed shows the Haunted plant it grows into (hauntedPlant), or `flower` of the set (a reel card).
+	-- `spin` false: a still picture (the reel's cards).
+	local function seedCard(parent: Instance, rarity: number, mutation: string?, look: { zone: number, gene: number?, flower: string?, spin: boolean? }?): Frame
 		local r = Config.RARITIES[rarity]
 		local mut = Config.mutationById(mutation)
 		local f = new("Frame", { Size = UDim2.fromOffset(CARD_W, CARD_H), BackgroundColor3 = WHITE, ZIndex = 3, Parent = parent }, deco(12, 3))
@@ -2635,13 +2665,14 @@ do
 		local inner = new("Frame", { Name = "Inner", BackgroundTransparency = 1, Size = UDim2.fromScale(1, 1), ZIndex = 3, Parent = f }, {
 			new("UIPadding", { PaddingLeft = UDim.new(0, 10), PaddingRight = UDim.new(0, 10), PaddingTop = UDim.new(0, 8), PaddingBottom = UDim.new(0, 10) }),
 		})
-		local seedModel = look and FlowerView.seed(look.zone, look.gene)
+		local plantModel = look and hauntedPlant(look.zone, rarity, mutation, look.gene, look.flower)
+		local seedModel = plantModel or (look and FlowerView.seed(look.zone, look.gene))
 		if seedModel then
 			local view = new("Frame", {
-				Name = "Seed3D", BackgroundTransparency = 1, Size = UDim2.fromScale(0.8, 0.36), AnchorPoint = Vector2.new(0.5, 0),
-				Position = UDim2.fromScale(0.5, 0), ZIndex = 4, Parent = inner,
+				Name = if plantModel then "Plant3D" else "Seed3D", BackgroundTransparency = 1, Size = UDim2.fromScale(0.8, 0.36),
+				AnchorPoint = Vector2.new(0.5, 0), Position = UDim2.fromScale(0.5, 0), ZIndex = 4, Parent = inner,
 			})
-			FlowerView.show(view, seedModel, { zindex = 4, spin = true, zoom = 1.2 })
+			FlowerView.show(view, seedModel, { zindex = 4, spin = look.spin ~= false, zoom = if plantModel then 1.35 else 1.2 })
 		else
 			bigIcon(inner, "Seeds", { Size = UDim2.fromScale(0.5, 0.32), AnchorPoint = Vector2.new(0.5, 0),
 				Position = UDim2.fromScale(0.5, 0), ZIndex = 3 })
@@ -2724,7 +2755,17 @@ do
 			if i ~= REEL_TARGET then
 				rarity, mutation = SeedPacks.roll(tease, rng)
 			end
-			local card = seedCard(strip, rarity, mutation)
+			-- Haunted seeds (the Halloween card): the cards the reel slows down over show the Haunted plants of
+			-- the set (still pictures; the one it lands on is the seed's own), the blur before them the icon.
+			local look = nil
+			if mutation == Halloween.MUTATION and i >= REEL_TARGET - HAUNTED_REEL_3D then
+				local set = Halloween.setFlowers(best.zone, rarity)
+				look = {
+					zone = best.zone, gene = if i == REEL_TARGET then tonumber(best.gene) else nil, spin = false,
+					flower = if i ~= REEL_TARGET and #set > 0 then set[math.random(#set)] else nil,
+				}
+			end
+			local card = seedCard(strip, rarity, mutation, look)
 			card.Name = "Card" .. i
 			card.Position = UDim2.fromOffset((i - 1) * step, 0)
 		end
@@ -2800,7 +2841,9 @@ do
 		else
 			viewHolder.BackgroundColor3 = color
 			viewHolder.Visible = true
-			FlowerView.show(viewHolder, FlowerView.seed(best.zone, tonumber(best.gene)), { zindex = 5, spin = true, zoom = 1.3 })
+			-- (a Haunted seed: the Haunted plant it grows into, the Halloween card's prize)
+			local plant = hauntedPlant(best.zone, best.rarity, best.mutation, tonumber(best.gene))
+			FlowerView.show(viewHolder, plant or FlowerView.seed(best.zone, tonumber(best.gene)), { zindex = 5, spin = true, zoom = if plant then 1.15 else 1.3 })
 			resultLabel.Text = `{if mut then string.upper(mut.id) .. " " else ""}{string.upper(rarity.id)}!`
 			resultLabel.TextColor3 = color
 			resultLabel.Visible = true

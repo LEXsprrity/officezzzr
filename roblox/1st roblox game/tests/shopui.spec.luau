@@ -91,7 +91,7 @@ H.test("pack reveal: cards fit their text, a clear centre marker, the result and
 	end
 	H.ok(string.find(REVEAL, "Text = \"Click to continue\", Size = UDim2.new(1, -40, 0, 30), Position = UDim2.new(0, 20, 1, -42)", 1, true) ~= nil,
 		"Click to continue at the bottom")
-	H.ok(string.find(REVEAL, "FlowerView.show(viewHolder, FlowerView.seed(best.zone, tonumber(best.gene))", 1, true) ~= nil, "the won seed in 3D")
+	H.ok(string.find(REVEAL, "FlowerView.show(viewHolder, plant or FlowerView.seed(best.zone, tonumber(best.gene))", 1, true) ~= nil, "the won seed in 3D (a Haunted one: its Haunted plant)")
 	local shop = fs.readFile("src/server/Shop.luau")
 	H.ok(string.find(shop, "gene = gene }", 1, true) ~= nil, "the server sends the seed's gene (its look; the bag key has it too)")
 end)
@@ -270,7 +270,7 @@ H.test("Shop SEED PACKS: one wide gold-outlined card per pack, a red New! tag, s
 	H.ok(string.find(shop, "stroke.Color = COLORS.gold", 1, true) ~= nil, "a gold outline (featured)")
 	H.ok(string.find(shop, "ShopUi.tag(c, \"New!\"", 1, true) ~= nil and not string.find(HUD, "PREMIUM", 1, true), "New! instead of PREMIUM")
 	H.ok(string.find(shop, "SeedPacks.showcase(pack, stats.catalog)", 1, true) ~= nil, "the tiles from SeedPacks.showcase (the server's odds)")
-	H.ok(string.find(shop, "FlowerView.show(f, FlowerView.flower(zone, tile.rarity, tile.flower), {", 1, true) ~= nil, "each tile a ViewportFrame of its flower")
+	H.ok(string.find(shop, "FlowerView.show(f, FlowerView.flower(zone, tile.rarity, tile.flower, tile.mutation), viewOptions)", 1, true) ~= nil, "each tile a ViewportFrame of its flower")
 	H.ok(string.find(shop, "new(\"UIGradient\", { Name = \"Rainbow\", Rotation = 35, Color = RAINBOW, Parent = stroke })", 1, true) ~= nil,
 		"the featured tile's rainbow frame")
 	H.ok(string.find(shop, "outline(if featured then 5 else 2, if featured then WHITE else FRAME_INK)", 1, true) ~= nil, "square tiles, thin dark outlines")

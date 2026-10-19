@@ -41,6 +41,182 @@ Halloween.CANDY_ASSET = 72225906081888
 Halloween.CANDY_SIZE = Vector3.new(2.4, 3, 2.4) -- what a piece fits in (studs)
 Halloween.NEST_CLEARANCE = 36 -- no candy this close to a sleeping boss (flat studs from its nest's centre)
 
+-- The HAUNTED SET (owner 2026-10-19: "do what u did to pyronis in like 6 other legendarys, 10 epics, 10 rares,
+-- 10 uncommons, 10 commons"): the plant models (assets/Creature_<Seed>.rbxm, by zone and rarity) a Haunted
+-- seed grows into, the most detailed ones (particles, glow, beams) with a spooky bent. A Haunted seed's gene
+-- picks among its zone and rarity's list here (flowerOf), never among the other models; every zone has at
+-- least one of every rarity. 7 Legendaries (one a zone, the Pyronis of the thumbnail among them), 10 Epics,
+-- 10 Rares, 10 Uncommons, 10 Commons; tests/halloween.spec checks the counts and that every name exists.
+-- The order is the gene's: don't reorder a list (planted plants keep their flower by name, but a seed in a
+-- bag would grow into another one).
+Halloween.SET = {
+	[1] = { -- Meadow
+		Common = { "Daisy", "Tulip" },
+		Uncommon = { "Pansy" },
+		Rare = { "Hellebore" },
+		Epic = { "Ballerina" },
+		Legendary = { "Verdantis" },
+	},
+	[2] = { -- Desert
+		Common = { "Cactus", "Nuzwat" },
+		Uncommon = { "DesertWildFlower" },
+		Rare = { "HaloOrchid" },
+		Epic = { "MantisReaper", "Sahur" },
+		Legendary = { "Helios" },
+	},
+	[3] = { -- Jungle
+		Common = { "BugEater", "ZombeeFlower" },
+		Uncommon = { "SpiderLilly", "OceanBloom" },
+		Rare = { "GlowBerry", "Snapdragon" },
+		Epic = { "Bombardiro", "Patapim" },
+		Legendary = { "Paradoxys" },
+	},
+	[4] = { -- Lava Fields
+		Common = { "EmberSpark" },
+		Uncommon = { "DarkflareRose", "RedStar" },
+		Rare = { "FrostburnRose" },
+		Epic = { "CrimsonWidow", "StrawberryElephant" },
+		Legendary = { "Infernyx" },
+	},
+	[5] = { -- Snow Peaks
+		Common = { "Mistletoe" },
+		Uncommon = { "Snowpuff" },
+		Rare = { "CrystalDaisy" },
+		Epic = { "Trallalero" },
+		Legendary = { "Aracnid" },
+	},
+	[6] = { -- Deep Space
+		Common = { "NebulaRose" },
+		Uncommon = { "Voidbloom", "MeteorFlower" },
+		Rare = { "Gleamblossom", "StarfallFlower" },
+		Epic = { "TwilightAmarilis" },
+		Legendary = { "Stellaris" },
+	},
+	[7] = { -- Spirit Garden
+		Common = { "MoonlaceOrchid" },
+		Uncommon = { "Crystalflower" },
+		Rare = { "Ghostflower", "Ghostleaf" },
+		Epic = { "Assassino" },
+		Legendary = { "Pyronis" },
+	},
+} :: { [number]: { [string]: { string } } }
+
+-- The Haunted set's models of (zone, rarity), in gene order (empty for an unknown zone or rarity).
+function Halloween.setFlowers(zone: number, rarity: number): { string }
+	local byRarity = Halloween.SET[zone]
+	local r = Config.RARITIES[rarity]
+	return if byRarity and r and byRarity[r.id] then byRarity[r.id] else {}
+end
+
+-- The flower a Haunted seed of (zone, rarity) with this gene grows into, picked like every seed's
+-- (CreatureModels.variantOf: the gene wraps round the list) but among the set's models only; nil when the set
+-- has none there. The server (CreatureModels.seedVariant) and the reveal reel (HUD) both pick by this.
+function Halloween.flowerOf(zone: number, rarity: number, gene: number): string?
+	local names = Halloween.setFlowers(zone, rarity)
+	return if #names > 0 then names[(math.floor(gene) - 1) % #names + 1] else nil
+end
+
+-- The Haunted look of a plant model (the Pyronis thumbnail's recipe, owner 2026-10-19: "do what u did to
+-- pyronis"): Neon parts glow toxic green, bright parts (red over 0.7) turn pumpkin orange, everything else
+-- deep purple, and its particles and beams become orange-to-purple wisps. A model with too little bright
+-- (under ORANGE_SHARE of its surface orange) would be a purple blob, so its brightest colours (by red, a whole
+-- colour at a time, never past ORANGE_MAX of the surface) turn orange too; the Pyronis has enough and keeps
+-- the plain recipe. Deterministic (by colour, whatever the parts' order), so the server's plant
+-- (CreatureModels) and the HUD's 3D picture of it (FlowerView) match.
+Halloween.ORANGE = Color3.fromRGB(255, 125, 20)
+Halloween.PURPLE = Color3.fromRGB(95, 35, 150)
+Halloween.GREEN = Color3.fromRGB(140, 255, 60)
+Halloween.WISPS = ColorSequence.new({
+	ColorSequenceKeypoint.new(0, Halloween.ORANGE),
+	ColorSequenceKeypoint.new(0.5, Color3.fromRGB(190, 90, 255)),
+	ColorSequenceKeypoint.new(1, Halloween.PURPLE),
+})
+Halloween.BRIGHT = 0.7 -- red above this: orange
+Halloween.TO_ORANGE = 0.7 -- how far a bright part goes to orange
+Halloween.TO_PURPLE = 0.75 -- ...and the rest to purple
+Halloween.ORANGE_SHARE = 0.15
+Halloween.ORANGE_MAX = 0.5
+
+local function surface(p: BasePart): number
+	local s = p.Size
+	return if p.Transparency >= 0.95 then 0 else s.X * s.Y + s.Y * s.Z + s.X * s.Z
+end
+
+-- The colours (Color3:ToHex) of `parts` that turn orange.
+function Halloween.orangeColors(parts: { BasePart }): { [string]: boolean }
+	type Group = { color: Color3, hex: string, area: number }
+	local groups: { Group } = {}
+	local byHex: { [string]: Group } = {}
+	local total, orange = 0, 0
+	local out: { [string]: boolean } = {}
+	for _, p in parts do
+		local area = surface(p)
+		total += area
+		if p.Material == Enum.Material.Neon then
+			continue
+		end
+		local hex = p.Color:ToHex()
+		local g = byHex[hex]
+		if not g then
+			g = { color = p.Color, hex = hex, area = 0 }
+			byHex[hex] = g
+			table.insert(groups, g)
+		end
+		g.area += area
+		if p.Color.R > Halloween.BRIGHT then
+			out[hex] = true
+			orange += area
+		end
+	end
+	if orange >= Halloween.ORANGE_SHARE * total then
+		return out
+	end
+	table.sort(groups, function(a, b)
+		if a.color.R ~= b.color.R then
+			return a.color.R > b.color.R
+		end
+		return a.hex > b.hex
+	end)
+	for _, g in groups do
+		if orange >= Halloween.ORANGE_SHARE * total then
+			break
+		end
+		if not out[g.hex] and orange + g.area <= Halloween.ORANGE_MAX * total then
+			out[g.hex] = true
+			orange += g.area
+		end
+	end
+	return out
+end
+
+-- The attribute on the parts CreatureModels adds to a plant (its rarity halo, the jack-o'-lantern): not the
+-- plant's own, so hauntify leaves them as they are (a preview of a plant has them too).
+Halloween.FLAIR = "Flair"
+
+-- Gives every part, particle emitter and beam under `root` the Haunted look (see above).
+function Halloween.hauntify(root: Instance)
+	local parts: { BasePart } = {}
+	for _, d in root:GetDescendants() do
+		if d:GetAttribute(Halloween.FLAIR) then
+			continue
+		elseif d:IsA("BasePart") then
+			table.insert(parts, d)
+		elseif d:IsA("ParticleEmitter") or d:IsA("Beam") then
+			d.Color = Halloween.WISPS
+		end
+	end
+	local orange = Halloween.orangeColors(parts)
+	for _, p in parts do
+		if p.Material == Enum.Material.Neon then
+			p.Color = Halloween.GREEN
+		elseif orange[p.Color:ToHex()] then
+			p.Color = p.Color:Lerp(Halloween.ORANGE, Halloween.TO_ORANGE)
+		else
+			p.Color = p.Color:Lerp(Halloween.PURPLE, Halloween.TO_PURPLE)
+		end
+	end
+end
+
 function Halloween.active(now: number): boolean
 	return now >= Halloween.START and now < Halloween.END
 end

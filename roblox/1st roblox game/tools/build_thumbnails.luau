@@ -26,6 +26,7 @@ local H = require("../tests/harness")
 local Config = H.shared("Config")
 local BossRigs = H.shared("BossRigs")
 local Format = H.shared("Format")
+local Halloween = H.shared("Halloween")
 
 local Instance, Vector3, CFrame, Color3 = roblox.Instance, roblox.Vector3, roblox.CFrame, roblox.Color3
 local Vector2, UDim2, Enum = roblox.Vector2, roblox.UDim2, roblox.Enum
@@ -599,32 +600,15 @@ local PLANT_SCENES: { PlantScene } = {
 	},
 }
 
--- The Haunted look (CreatureModels' Halloween mutation, stronger for the poster): glowing parts toxic green,
--- bright parts pumpkin orange, the rest deep purple; sparks and beams orange to purple.
-local HAUNTED_ORANGE = rgb(255, 125, 20)
-local HAUNTED_PURPLE = rgb(95, 35, 150)
-local HAUNTED_GREEN = rgb(140, 255, 60)
-local HAUNTED_WISPS = ColorSequence.new({
-	ColorSequenceKeypoint.new(0, HAUNTED_ORANGE),
-	ColorSequenceKeypoint.new(0.5, rgb(190, 90, 255)),
-	ColorSequenceKeypoint.new(1, HAUNTED_PURPLE),
-})
+-- The Haunted look (the game's Haunted plants have it too, Shared/Halloween.hauntify): glowing parts toxic
+-- green, bright parts pumpkin orange, the rest deep purple; sparks and beams orange to purple.
+local HAUNTED_ORANGE = Halloween.ORANGE
+local HAUNTED_PURPLE = Halloween.PURPLE
+local HAUNTED_GREEN = Halloween.GREEN
+local HAUNTED_WISPS = Halloween.WISPS
 
 local function hauntify(model: any)
-	for _, d in model:GetDescendants() do
-		if d:IsA("BasePart") then
-			local c = d.Color
-			if d.Material == Enum.Material.Neon then
-				d.Color = HAUNTED_GREEN
-			elseif c.R > 0.7 then
-				d.Color = c:Lerp(HAUNTED_ORANGE, 0.7)
-			else
-				d.Color = c:Lerp(HAUNTED_PURPLE, 0.75)
-			end
-		elseif d:IsA("ParticleEmitter") or d:IsA("Beam") then
-			d.Color = HAUNTED_WISPS
-		end
-	end
+	Halloween.hauntify(model)
 end
 
 -- A jack-o'-lantern `d` studs wide on the ground at the origin, its carved face (glowing) toward +Z: three
