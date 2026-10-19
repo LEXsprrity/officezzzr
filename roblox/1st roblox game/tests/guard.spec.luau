@@ -198,13 +198,16 @@ H.test("guard flow: at the recommended Speed or more you escape if you start run
 end)
 
 H.test("guard flow: below the recommended Speed you get caught, even reacting at once (zones 2-7)", function()
-	-- A quick thief (0.2 s) escapes from ~75-93% of the sign (Config.guardSpeedVs; WalkSpeed is
+	-- A quick thief (0.2 s) escapes from ~84-96% of the sign (Config.guardSpeedVs; WalkSpeed is
 	-- logarithmic in Speed (README "Soft gates").
 	for k = 2, #Config.ZONES do
 		local zone = Config.ZONES[k]
 		H.eq((Flow.steal(k, { speed = Config.ZONES[k - 1].req, reaction = 0 })), "caught", `{zone.id} at the previous zone's sign`)
 		local share = if zone.id == "Desert" then 0.4 else 0.5
 		H.eq((Flow.steal(k, { speed = zone.req * share, reaction = 0.2 })), "caught", `{zone.id} at {share * 100}% of the sign`)
+		-- (owner 2026-10-19: 65M farmed the 75M Spirit Garden) 90% of the sign doesn't make it either (the Desert 80%)
+		local close = if zone.id == "Desert" then 0.8 else 0.9
+		H.eq((Flow.steal(k, { speed = zone.req * close, reaction = 0.2 })), "caught", `{zone.id} at {close * 100}% of the sign`)
 		H.eq((Flow.steal(k, { speed = zone.req, standStill = true })), "caught", `{zone.id}: standing by the pod`)
 	end
 end)
