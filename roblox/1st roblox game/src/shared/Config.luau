@@ -542,13 +542,13 @@ end
 -- Sprouting: a seed planted from the bag or carried home first stands as a seedling (a dirt mound and a
 -- sprout, PlotService) that earns nothing, for sproutTime(zone, rarity) seconds; then it pops into its
 -- flower and its growth curve (GROW_TIME, plantAge) starts from there. It is an absolute time (the plant's
--- `sproutUntil`), so it goes on offline. Base time by rarity x a zone factor rising evenly with depth
--- (Meadow x1 .. Spirit Garden x2.5), rounded to SPROUT_ROUND seconds: a Meadow Common 30 s, a Spirit
--- Garden Legendary 50 min (tests/progression_sim: the free timeline still lands ~12 h, README). The owner's
--- Fast Grow pass divides it (Config.passGrowMult), like growth. "Grow now" (the GrowNow products below)
--- skips what is left for Robux.
-Config.SPROUT_BASE = { 30, 60, 180, 480, 1200 } -- seconds, Config.RARITIES order (Common .. Legendary)
-Config.SPROUT_ZONE_STEP = 0.25 -- the zone factor grows this much per zone: 1, 1.25, 1.5 .. 2.5
+-- `sproutUntil`), so it goes on offline. The time goes by rarity only, the same in every zone (owner
+-- 2026-10-19: long sprouts were driving kids away; at most 5 minutes): Common 5 s, Uncommon 15 s, Rare
+-- 30 s, Epic 1 min, Legendary 5 min. The owner's Fast Grow pass divides it (Config.passGrowMult), like
+-- growth. "Grow now" (the GrowNow products below) skips what is left for Robux. Seedlings in old saves
+-- sprouting longer than SPROUT_MAX are cut to it (PlotService).
+Config.SPROUT_BASE = { 5, 15, 30, 60, 300 } -- seconds, Config.RARITIES order (Common .. Legendary)
+Config.SPROUT_ZONE_STEP = 0 -- the zone factor grows this much per zone (0: the same in every zone)
 Config.SPROUT_ROUND = 5
 
 function Config.sproutZoneFactor(zone: number): number
@@ -971,8 +971,9 @@ Config.DEVELOPER_PRODUCTS = {
 
 	-- Grow now: finish a sprouting plant right away (its hover info's and Plants card's button). Priced by
 	-- how much sprouting is left when it is prompted (Config.growNowProduct); the top one finishes any
-	-- sprout, however long (only deep Legendaries wait over 30 min).
-	GrowNow10 = { kind = "GrowNow", label = "Skip (1)", robux = 9, upTo = 10 * 60 },
+	-- sprout, however long (since 2026-10-19 sprouts last at most 5 min: GrowNow10 is up to 1 min, Common to
+	-- Epic; GrowNow30 the Legendaries; the names stay, the products exist on the dashboard).
+	GrowNow10 = { kind = "GrowNow", label = "Skip (1)", robux = 9, upTo = 60 },
 	GrowNow30 = { kind = "GrowNow", label = "Skip (2)", robux = 19, upTo = math.huge },
 } :: { [string]: DevProduct }
 
@@ -1023,7 +1024,7 @@ function Config.plotUpgradeProduct(level: number): (string?, DevProduct?)
 end
 
 -- The Grow Now product for a plant with `left` seconds of sprouting left, as (name, product): the cheapest
--- one whose upTo covers it (owner: up to 10 min 9 R$, anything longer 29 R$, which finishes it however
+-- one whose upTo covers it (up to 1 min 9 R$, anything longer 19 R$, which finishes it however
 -- long it is), or nil when it isn't sprouting.
 Config.GROW_NOW_PRODUCTS = { "GrowNow10", "GrowNow30" }
 function Config.growNowProduct(left: number): (string?, DevProduct?)

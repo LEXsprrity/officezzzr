@@ -54,6 +54,21 @@ Toast.RAINBOW = ColorSequence.new({
 	ColorSequenceKeypoint.new(0.8, Color3.fromRGB(60, 170, 255)), ColorSequenceKeypoint.new(1, Color3.fromRGB(190, 90, 255)),
 })
 
+-- A toast is as wide as its words (owner 2026-10-19: "The sun is up." sat in a long plate with a lot of
+-- empty space on its right), from MIN_W up to W (BIG_W): longer messages wrap and shrink as before.
+Toast.MIN_W = 220
+Toast.PAD = 22 -- design pixels right of the words
+Toast.CHAR_W = 0.6 -- a FredokaOne character's width / its size, when TextService can't measure (tests)
+
+-- The plate's width for `message` with its words starting `left` pixels in, at text size `size`, at most `maxW`.
+function Toast.fitWidth(message: string, left: number, size: number, maxW: number): number
+	local ok, bounds = pcall(function()
+		return game:GetService("TextService"):GetTextSize(message, size, ShopUi.FONT, Vector2.new(10000, size * 2))
+	end)
+	local textW = if ok and typeof(bounds) == "Vector2" then bounds.X else (utf8.len(message) or #message) * size * Toast.CHAR_W
+	return math.clamp(math.ceil(left + textW + Toast.PAD), Toast.MIN_W, maxW)
+end
+
 export type Options = {
 	color: string?, -- a Toast.STYLES name (default blue)
 	icon: string?, -- an Icons key (Toast.ICONS), "Sun" or "Moon" (drawn); default: the style's; "" = none
@@ -149,6 +164,7 @@ function Toast.build(parent: Instance, message: string, options: Options?): (Fra
 		end
 	end
 
+	plate.Size = UDim2.fromOffset(Toast.fitWidth(message, left, h - 14, w), h) -- as wide as its words
 	local words = ShopUi.label(plate, if big then 4 else 3, {
 		Name = "Words", Text = message, TextWrapped = true, Position = UDim2.fromOffset(left, 6), Size = UDim2.new(1, -(left + 14), 1, -14),
 		TextXAlignment = if left > 14 then Enum.TextXAlignment.Left else Enum.TextXAlignment.Center, ZIndex = 5,
@@ -169,6 +185,7 @@ function Toast.show(holder: Instance, message: string, options: Options?): Frame
 		GroupTransparency = 1, Parent = slot,
 	})
 	local plate = Toast.build(group, message, o)
+	slot.Size = UDim2.fromOffset(plate.Size.X.Offset + 16, h + 16) -- (the plate fits its words)
 	plate.AnchorPoint = Vector2.new(0.5, 0.5)
 	plate.Position = UDim2.fromScale(0.5, 0.5)
 	local pop = new("UIScale", { Scale = 0.6, Parent = group })
