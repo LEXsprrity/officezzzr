@@ -1616,7 +1616,7 @@ do
 			task.spawn(function()
 				local i = 1
 				while f.Parent do
-					task.wait(2.5)
+					task.wait(5) -- (owner 2026-10-19: 5 s of screen time each)
 					if not f.Parent then
 						break
 					elseif not FlowerView.onScreen(view) then -- (the Shop is shut or scrolled away: nothing to redraw)

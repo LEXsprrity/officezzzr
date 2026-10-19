@@ -228,22 +228,23 @@ local function area(p: any): number
 	return s.X * s.Y + s.Y * s.Z + s.X * s.Z
 end
 
-H.test("haunted set: 7 Legendaries (one a zone, the Pyronis), 10 Epics, 10 Rares, 10 Uncommons, 10 Commons", function()
-	local want = { 10, 10, 10, 10, 7 }
+H.test("haunted set: at least two of every rarity in every zone (14 each, 15 Epics; the Desert one Legendary), the Pyronis first Spirit Legendary", function()
+	local want = { 14, 14, 14, 15, 13 }
 	local counts = { 0, 0, 0, 0, 0 }
 	local seen = {}
 	for k in Config.ZONES do
 		H.ok(Halloween.SET[k] ~= nil, `{Config.ZONES[k].id} has a set`)
 		for r, rarity in Config.RARITIES do
 			local names = Halloween.setFlowers(k, r)
-			H.ok(#names >= 1, `{Config.ZONES[k].id} {rarity.id}: at least one Haunted plant`)
+			local least = if Config.ZONES[k].id == "Desert" and r == L then 1 else 2 -- (Aetheris would be mush)
+			H.ok(#names >= least, `{Config.ZONES[k].id} {rarity.id}: at least {least} Haunted plants (the Shop card turns through them)`)
 			counts[r] += #names
 			for _, name in names do
 				H.ok(not seen[`{k}:{name}`], `{name} listed once`)
 				seen[`{k}:{name}`] = true
 			end
 		end
-		H.eq(#Halloween.setFlowers(k, L), 1, `one Legendary in {Config.ZONES[k].id}`)
+		H.eq(#Halloween.setFlowers(k, L), if Config.ZONES[k].id == "Desert" then 1 else 2, `Legendaries in {Config.ZONES[k].id}`)
 		for key in Halloween.SET[k] do
 			local known = false
 			for _, rarity in Config.RARITIES do
