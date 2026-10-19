@@ -10,7 +10,6 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Shared = ReplicatedStorage:WaitForChild("Shared")
 local Config = require(Shared:WaitForChild("Config"))
 local SeedPacks = require(Shared:WaitForChild("SeedPacks"))
-local Halloween = require(Shared:WaitForChild("Halloween"))
 local Net = require(script.Parent:WaitForChild("Net"))
 local Sessions = require(script.Parent:WaitForChild("Sessions"))
 local WorldBuilder = require(script.Parent:WaitForChild("WorldBuilder"))
@@ -504,17 +503,12 @@ function SeedService.storeCarried(player: Player): boolean
 	return true
 end
 
--- Planted (or stored): the pod regrows later with a fresh roll. The seed made it home, so during the
--- Halloween event it pays its zone's candy (Halloween.stealCandy).
+-- Planted (or stored): the pod regrows later with a fresh roll.
 function SeedService.consumeCarry(player: Player): Sessions.Carry?
 	local s = Sessions.get(player)
 	local carry = s and clearCarry(s)
-	if not s or not carry then
+	if not carry then
 		return nil
-	end
-	if Halloween.active(os.time()) then
-		s.profile.candy = math.min(s.profile.candy + Halloween.stealCandy(carry.zone), Halloween.CANDY_MAX)
-		Sessions.push(player, { candy = s.profile.candy })
 	end
 	local nest = nests[carry.zone]
 	local pod = nest and nest.pods[carry.pod]

@@ -1653,7 +1653,6 @@ do
 		local k = Halloween.bestZone(stats.speed or 0)
 		local pack = SeedPacks.hauntedPack(k)
 		local zone = Config.ZONES[k]
-		local price = Halloween.price(k)
 		local haunted = Config.mutationById(Halloween.MUTATION) :: Config.Mutation
 		local c = cardFrame(modalBody, order, HALLOWEEN_PURPLE, { Name = "Haunted", Size = UDim2.new(1, -8, 0, L.PACK_H) })
 		local stroke = c:FindFirstChildOfClass("UIStroke") :: UIStroke
@@ -1685,24 +1684,31 @@ do
 			end
 		end
 		bold(c, 2, {
-			Text = `Candy: +{Halloween.CANDY_PER_MINUTE} every minute you play, +1 to +{#Config.ZONES} for every seed you bring home (deeper zones give more)`,
+			Text = "Candy corn lies all over the map: just walk over it to pick it up!",
 			Size = UDim2.new(1, -36, 0, 22), Position = UDim2.fromOffset(18, bottom + 8), ZIndex = 3,
 		})
 		local have = bold(c, 2, {
 			Name = "Have", Size = UDim2.new(1, -36, 0, 20), Position = UDim2.fromOffset(18, bottom + 32), TextColor3 = Color3.fromRGB(255, 235, 200), ZIndex = 3,
 		})
-		local buy = buttonRow(c, PACK_W, L.PACK_H, L.bottomY(L.PACK_H, true), {
-			{
-				text = `{price} Candy`, color = HALLOWEEN_ORANGE, robux = false, gift = false, caption = if free > 0 then "1 Seed" else "Bag full!",
+		-- "1 Seed" (50 candy) and "10 Seeds" (500), like a pack's two buttons; grey without the candy or the room
+		local buys: { Buy } = {}
+		for _, count in Halloween.PULLS do
+			local fits = count <= free
+			table.insert(buys, {
+				text = `{Halloween.price(count)} Candy`, color = HALLOWEEN_ORANGE, robux = false, gift = false,
+				caption = if fits then (if count > 1 then `{count} Seeds` else "1 Seed") elseif count > 1 and free > 0 then `Need {count} free` else "Bag full!",
 				onClick = function()
-					RequestBuy:FireServer(`Candy:{k}`)
+					RequestBuy:FireServer(`Candy:{k}:{count}`)
 				end,
-			},
-		})[1]
+			})
+		end
+		local buttons = buttonRow(c, PACK_W, L.PACK_H, L.bottomY(L.PACK_H, true), buys)
 		watchMoney(function()
 			local candy = stats.candy or 0
 			have.Text = `You have {Format.commas(candy)} candy`
-			buy.BackgroundColor3 = if candy >= price and free > 0 then HALLOWEEN_ORANGE else COLORS.disabled
+			for i, count in Halloween.PULLS do
+				buttons[i].BackgroundColor3 = if candy >= (Halloween.price(count) :: number) and count <= free then HALLOWEEN_ORANGE else COLORS.disabled
+			end
 		end)
 	end
 

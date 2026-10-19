@@ -56,33 +56,42 @@ function Shop.buy(p: Profile, itemId: string): (boolean, string)
 	return true, label or itemId
 end
 
--- The Halloween card's buy (Shared/Halloween): zone `k`'s Haunted seed for candy, into the seed bag (always
--- the Haunted mutation, its rarity rolled by SeedPacks.hauntedPack). Only while the event runs, only a zone
--- the player's Speed reaches, only with room in the bag. Returns (ok, message, the seed rolled, its pack).
+-- The Halloween card's buy (Shared/Halloween): `count` (1 or 10) of zone `k`'s Haunted seeds for candy
+-- (Halloween.price: 50 / 500), into the seed bag (always the Haunted mutation, each rarity rolled by
+-- SeedPacks.hauntedPack). Only while the event runs, only a zone the player's Speed reaches, only with room in
+-- the bag for all of them. Returns (ok, message, the seeds rolled, their pack).
 export type HauntedRoll = { zone: number, rarity: number, mutation: string?, name: string, gene: number }
-function Shop.buyHaunted(p: Profile, k: any, now: number, rng: () -> number): (boolean, string, HauntedRoll?, SeedPacks.Pack?)
+function Shop.buyHaunted(p: Profile, k: any, count: any, now: number, rng: () -> number): (boolean, string, { HauntedRoll }?, SeedPacks.Pack?)
 	if not Halloween.active(now) then
 		return false, "The Halloween event is over", nil, nil
 	end
 	if type(k) ~= "number" or k ~= math.floor(k) or not Config.ZONES[k] then
 		return false, "Unknown seed", nil, nil
 	end
+	local price = if type(count) == "number" then Halloween.price(count) else nil
+	if not price then
+		return false, "Unknown seed", nil, nil
+	end
 	if k > Halloween.bestZone(p.speed) then
 		return false, `Reach {Format.short(Config.ZONES[k].req)} Speed first`, nil, nil
 	end
-	local price = Halloween.price(k)
 	if p.candy < price then
 		return false, `Not enough candy ({p.candy}/{price})`, nil, nil
 	end
-	if SeedPacks.bagCount(p.seedBag) >= Config.SEED_BAG_MAX then
-		return false, "Your seed bag is full: plant some first!", nil, nil
+	local free = Config.SEED_BAG_MAX - SeedPacks.bagCount(p.seedBag)
+	if free < count then
+		return false, if count > 1 and free > 0 then `Ten seeds need 10 free spaces in your seed bag (you have {free})` else "Your seed bag is full: plant some first!", nil, nil
 	end
 	p.candy -= price
 	local pack = SeedPacks.hauntedPack(k)
-	local rarity, mutation = SeedPacks.roll(pack, rng)
-	local gene = Config.rollGene(rng)
-	SeedPacks.addToBag(p.seedBag, k, rarity, mutation, gene) -- (its hidden flower and size)
-	return true, pack.name, { zone = k, rarity = rarity, mutation = mutation, name = SeedPacks.seedName(k, rarity, mutation), gene = gene }, pack
+	local rolls = {}
+	for _ = 1, count do
+		local rarity, mutation = SeedPacks.roll(pack, rng)
+		local gene = Config.rollGene(rng)
+		SeedPacks.addToBag(p.seedBag, k, rarity, mutation, gene) -- (its hidden flower and size)
+		table.insert(rolls, { zone = k, rarity = rarity, mutation = mutation, name = SeedPacks.seedName(k, rarity, mutation), gene = gene })
+	end
+	return true, pack.name, rolls, pack
 end
 
 -- Equips an owned trail. Returns (ok, message).

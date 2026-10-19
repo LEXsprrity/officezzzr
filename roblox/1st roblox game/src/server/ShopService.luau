@@ -11,6 +11,7 @@ local Format = require(Shared:WaitForChild("Format"))
 local Net = require(script.Parent:WaitForChild("Net"))
 local Sessions = require(script.Parent:WaitForChild("Sessions"))
 local Shop = require(script.Parent:WaitForChild("Shop"))
+local SeedPacks = require(Shared:WaitForChild("SeedPacks"))
 local SpeedService = require(script.Parent:WaitForChild("SpeedService"))
 local GuardService = require(script.Parent:WaitForChild("GuardService"))
 local SeedService = require(script.Parent:WaitForChild("SeedService"))
@@ -120,20 +121,30 @@ local function onBuy(player: Player, itemId: any)
 		return
 	end
 
-	-- The Halloween card: "Candy:<zone>", a Haunted seed for candy (Shop.buyHaunted), revealed like a pack.
+	-- The Halloween card: "Candy:<zone>:<count>", 1 or 10 Haunted seeds for candy (Shop.buyHaunted), revealed
+	-- like a pack (a x10: the reel lands on the best, then the grid shows all ten).
 	if string.sub(itemId, 1, 6) == "Candy:" then
-		local ok, message, roll, pack = Shop.buyHaunted(s.profile, tonumber(string.match(itemId, "^Candy:(%d)$")), os.time(), roll01)
-		if not ok or not roll or not pack then
+		local zone, count = string.match(itemId, "^Candy:(%d):(%d+)$")
+		local ok, message, rolls, pack = Shop.buyHaunted(s.profile, tonumber(zone), tonumber(count), os.time(), roll01)
+		if not ok or not rolls or not pack then
 			Net.toast(player, message, "red")
 			return
 		end
 		Sessions.pushFull(s)
-		Net.LootEvent:FireClient(player, "PackRoll", { packId = pack.id, name = pack.name, zone = pack.zone, result = roll })
-		if Config.announcesLegendary(roll.zone, roll.rarity, true) then
-			task.delay(Config.PACK_ANNOUNCE_DELAY, function() -- once the buyer's reveal reel has landed
-				Net.announce(Config.legendaryAnnouncement(player.DisplayName, roll.zone, roll.mutation), "gold")
-			end)
+		local best = nil
+		for _, roll in rolls do
+			if SeedPacks.better(roll, best) then
+				best = roll
+			end
+			if Config.announcesLegendary(roll.zone, roll.rarity, true) then
+				task.delay(Config.PACK_ANNOUNCE_DELAY, function() -- once the buyer's reveal reel has landed
+					Net.announce(Config.legendaryAnnouncement(player.DisplayName, roll.zone, roll.mutation), "gold")
+				end)
+			end
 		end
+		Net.LootEvent:FireClient(player, "PackRoll", {
+			packId = pack.id, name = pack.name, zone = pack.zone, result = best, results = if #rolls > 1 then rolls else nil,
+		})
 		return
 	end
 
