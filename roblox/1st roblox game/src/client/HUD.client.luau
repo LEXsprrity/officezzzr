@@ -944,7 +944,7 @@ do
 		ShopUi.studs(f, accent) -- studded, under the strip, the 3D view and the words
 		new("Frame", { Size = UDim2.new(0, 8, 1, -14), Position = UDim2.fromOffset(7, 7), BackgroundColor3 = accent, BorderSizePixel = 0, Parent = f },
 			{ new("UICorner", { CornerRadius = UDim.new(1, 0) }) })
-		FlowerView.show(f, FlowerView.flower(p.zone, p.rarity, p.flower, p.mutation), {
+		FlowerView.show(f, FlowerView.flower(p.zone, p.rarity, p.flower, p.mutation, p.palette), {
 			size = UDim2.fromOffset(VIEW, VIEW), position = UDim2.new(0, 20, 0, CARD_H / 2), anchor = Vector2.new(0, 0.5), spin = true,
 		})
 		ink(f, { Text = p.name or SeedPacks.seedName(p.zone, p.rarity, p.mutation), Size = UDim2.new(1, TEXT_W, 0, 24), Position = UDim2.fromOffset(TEXT_X, 7) })
@@ -1090,7 +1090,7 @@ do
 			itemCard(nextOrder(), p.name or SeedPacks.seedName(p.zone, p.rarity, p.mutation),
 				`{rarity.id}{if p.mutation then " · " .. p.mutation else ""} · {if p.sprout then `Sprouts in {Format.clock(p.sprout)}` else Config.ZONES[p.zone].name}`,
 				p.rarity, p.mutation, `inv:{p.id}`,
-				FlowerView.flower(p.zone, p.rarity, p.flower, p.mutation))
+				FlowerView.flower(p.zone, p.rarity, p.flower, p.mutation, p.palette))
 		end
 	end
 
@@ -2129,10 +2129,14 @@ end
 -- The flowers come from the server (stats.catalog[zone][rarity], the plant models' names); a zone or
 -- rarity without plant models shows one cell for the rarity itself.
 -- Each cell shows its flower in 3D over its name (Shared/FlowerView): turning slowly once found, a black
--- silhouette over "???" until then (the shape may show, the name and colours are the surprise).
+-- silhouette over "???" until then (the shape may show, the name and colours are the surprise). A found
+-- flower's corner holds a stud per palette (Shared/Palettes), lit in its colour once grown in it (the Index
+-- key "zone:rarity:Daisy:Azure"); the discovered count stays one per flower.
 ----------------------------------------------------------------------------------------------------
 local function renderIndex()
 	local FlowerView = require(Shared:WaitForChild("FlowerView"))
+	local Palettes = require(Shared:WaitForChild("Palettes"))
+	local PIP = 13 -- a palette stud
 	local catalog = stats.catalog or {}
 	-- Each cell: { key = the Index key that lights it, name = what it says once lit, model = its flower model }
 	local function cellsOf(k: number, r: number): { { key: string, name: string, model: string? } }
@@ -2191,6 +2195,20 @@ local function renderIndex()
 				FlowerView.show(cell, FlowerView.flower(k, r, c.model), {
 					size = UDim2.new(1, -8, 1, -(NAME_H + 8)), position = UDim2.fromOffset(4, 4), spin = got, silhouette = not got,
 				})
+				if got and c.model then
+					-- its palettes (Shared/Palettes) as little studs in the corner: lit in their colour once grown
+					local pips = new("Frame", {
+						Name = "Palettes", BackgroundTransparency = 1, Position = UDim2.fromOffset(6, 6),
+						Size = UDim2.fromOffset(#Palettes.LIST * (PIP + 3), PIP), ZIndex = 3, Parent = cell,
+					}, { new("UIListLayout", { FillDirection = Enum.FillDirection.Horizontal, Padding = UDim.new(0, 3), SortOrder = Enum.SortOrder.LayoutOrder }) })
+					for i, p in Palettes.LIST do
+						local lit = stats.index[`{c.key}:{p.id}`] == true
+						local pip = new("Frame", {
+							Name = p.id, Size = UDim2.fromOffset(PIP, PIP), LayoutOrder = i, BackgroundTransparency = if lit then 0 else 0.55, ZIndex = 3, Parent = pips,
+						}, { outline(2) })
+						shade(pip, if lit then p.swatch else FRAME_INK, 0.35, 0.2)
+					end
+				end
 				bold(cell, 2, {
 					Text = if got then c.name else "???", Size = UDim2.new(1, -8, 0, NAME_H), Position = UDim2.new(0, 4, 1, -(NAME_H + 4)),
 					TextColor3 = WHITE, TextTransparency = if got then 0 else 0.15,
@@ -2336,7 +2354,7 @@ do
 	local function plantCard(grid: Instance, order: number, it: any)
 		local p = it.src
 		local c = cardBase(grid, order, it, p.name or SeedPacks.seedName(p.zone, p.rarity, p.mutation), Config.RARITIES[p.rarity].id,
-			FlowerView.flower(p.zone, p.rarity, p.flower, p.mutation))
+			FlowerView.flower(p.zone, p.rarity, p.flower, p.mutation, p.palette))
 		local y = SELL_VIEW
 		local incomeLabel = bold(c, 2, { Size = UDim2.new(1, -14, 0, 22), Position = UDim2.fromOffset(7, 132 + y) })
 		local priceLabel = bold(c, 3, { Size = UDim2.new(1, -14, 0, 34), Position = UDim2.fromOffset(7, 158 + y), TextColor3 = MONEY_GREEN })

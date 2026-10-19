@@ -515,6 +515,6 @@ H.test("haunted reveal: the HALLOWEEN card shows the set's Haunted plants; the r
 	H.ok(string.find(HUD, "local plant = hauntedPlant(best.zone, best.rarity, best.mutation, tonumber(best.gene))", 1, true) ~= nil, "the single result: its plant")
 	H.ok(string.find(HUD, "if mutation == Halloween.MUTATION and i >= REEL_TARGET - HAUNTED_REEL_3D then", 1, true) ~= nil, "the reel's cards")
 	-- Haunted plants on the Plants, Inventory and Sell cards wear the look too
-	local _, n = string.gsub(HUD, "FlowerView%.flower%(p%.zone, p%.rarity, p%.flower, p%.mutation%)", "")
+	local _, n = string.gsub(HUD, "FlowerView%.flower%(p%.zone, p%.rarity, p%.flower, p%.mutation, p%.palette%)", "")
 	H.eq(n, 3, "Plants, Inventory and Sell cards")
 end)

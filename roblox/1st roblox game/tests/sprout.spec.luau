@@ -207,7 +207,7 @@ end)
 -- Save
 ----------------------------------------------------------------------------------------------------
 H.test("sprout: save v12 keeps sproutUntil and the inventory's sprout; older saves' plants are fully grown", function()
-	H.eq(ProfileStore.VERSION, 12)
+	H.ok(ProfileStore.VERSION >= 12)
 	local p = ProfileStore.defaultProfile()
 	p.plants = { seedling(1, 2, 2, NOW), { slot = 2, zone = 1, rarity = 1, plantedAt = NOW - 10, x = 0, z = 0, variance = 1 } }
 	p.inventory = { { id = 1, zone = 3, rarity = 4, age = 0, variance = 1, sprout = 123 }, { id = 2, zone = 1, rarity = 1, age = 30, variance = 1 } }

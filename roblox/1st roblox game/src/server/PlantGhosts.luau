@@ -12,6 +12,7 @@
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Config = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("Config"))
 local SeedPacks = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("SeedPacks"))
+local Palettes = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("Palettes"))
 local CreatureModels = require(script.Parent:WaitForChild("CreatureModels"))
 
 local PlantGhosts = {}
@@ -71,15 +72,16 @@ function PlantGhosts.bagPreview(bag: { [string]: number }, key: any, roll: () ->
 	return key, zone, rarity, mutation, ghost, scale
 end
 
--- The plant a seed grows into, planted at (x, z) under id `slot` at `now`: with a gene, the flower and
--- variance it decides (what its ghost showed); without one (a seed from before genes) a flower drawn now
--- with `roll` and the variance from its planting time and id.
+-- The plant a seed grows into, planted at (x, z) under id `slot` at `now`: with a gene, the flower, palette
+-- (Shared/Palettes) and variance it decides (what its ghost showed); without one (a seed from before genes) a
+-- flower drawn now with `roll`, Natural, and the variance from its planting time and id.
 function PlantGhosts.seedPlant(zone: number, rarity: number, mutation: string?, gene: number?, slot: number, now: number,
 	x: number, z: number, roll: () -> number): any
 	return {
 		slot = slot, zone = zone, rarity = rarity, mutation = mutation, plantedAt = now, x = x, z = z,
 		variant = if gene then CreatureModels.seedVariant(zone, rarity, mutation, gene) else CreatureModels.randomVariant(zone, rarity, roll, mutation),
 		variance = if gene then Config.geneVariance(gene) else nil,
+		palette = Palettes.ofSeed(gene, mutation), -- its colours (nil: Natural; always for a seed from before genes)
 	}
 end
 
