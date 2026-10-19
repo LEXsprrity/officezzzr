@@ -21,7 +21,7 @@ local new = ShopUi.new
 
 local RED = Color3.fromRGB(225, 25, 35)
 local INK = ShopUi.INK
-local KEEP = { CarryHud = true, ZoneBanner = true } -- shown while running
+local KEEP = { CarryHud = true, ZoneBanner = true, Tutorial = true } -- shown while running
 
 local gui = new("ScreenGui", { Name = "CarryHud", ResetOnSpawn = false, Enabled = false, DisplayOrder = 5, ZIndexBehavior = Enum.ZIndexBehavior.Sibling })
 -- Same design-pixel scale as the HUD: 900 tall at scale 1

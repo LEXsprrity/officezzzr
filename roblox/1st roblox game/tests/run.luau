@@ -39,6 +39,7 @@ require("./sprout.spec")
 require("./packplant.spec")
 require("./admin.spec")
 require("./halloween.spec")
+require("./tutorial.spec")
 require("./palettes.spec")
 require("./compile.spec")
 

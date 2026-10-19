@@ -26,6 +26,8 @@
 
 --   client -> server: ClaimReward(kind) ("Gift": the Free Gift window's CLAIM button; RewardService checks)
 --   client -> server: Admin(target name, grant) (the owner's admin panel; AdminService ignores non-admins)
+--   client -> server: Tutorial("done" | "skip") (Client/Tutorial finished or skipped; TutorialService keeps
+--     `tutorialDone`)
 --   server -> client: StatsUpdate(stats), LootEvent(kind, data), IncomePopup(amount, position)
 --     LootEvent "Announce" { text, color } goes to every client (Net.announce)
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -50,6 +52,7 @@ local Net = {
 	StatsUpdate = remote("StatsUpdate"),
 	LootEvent = remote("LootEvent"),
 	IncomePopup = remote("IncomePopup"),
+	Tutorial = remote("Tutorial"),
 	Admin = remote("Admin"),
 }
 
