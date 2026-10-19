@@ -26,6 +26,9 @@
 
 --   client -> server: ClaimReward(kind) ("Gift": the Free Gift window's CLAIM button; RewardService checks)
 --   client -> server: Admin(target name, grant) (the owner's admin panel; AdminService ignores non-admins)
+--   client -> server: AdminEvent(request) (the admin panel's EVENTS page: live events in every server;
+--     AdminService ignores non-admins, LiveEventService checks the rest)
+--   server -> client: LootEvent "LiveAnnounce" { text, by } (an admin's message, every server)
 --   client -> server: Tutorial("done" | "skip") (Client/Tutorial finished or skipped; TutorialService keeps
 --     `tutorialDone`)
 --   server -> client: StatsUpdate(stats), LootEvent(kind, data), IncomePopup(amount, position)
@@ -54,6 +57,7 @@ local Net = {
 	IncomePopup = remote("IncomePopup"),
 	Tutorial = remote("Tutorial"),
 	Admin = remote("Admin"),
+	AdminEvent = remote("AdminEvent"),
 }
 
 -- Server -> client only. Any client can still fire them at the server: those calls are dropped here

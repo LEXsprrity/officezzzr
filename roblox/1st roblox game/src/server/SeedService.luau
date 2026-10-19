@@ -17,6 +17,7 @@ local Inventory = require(script.Parent:WaitForChild("Inventory"))
 local Assets = require(script.Parent:WaitForChild("Assets"))
 local PlantGhosts = require(script.Parent:WaitForChild("PlantGhosts"))
 local SpeedService = require(script.Parent:WaitForChild("SpeedService"))
+local LiveEventService = require(script.Parent:WaitForChild("LiveEventService"))
 
 local SeedService = {}
 
@@ -334,15 +335,18 @@ local function steal(player: Player, zone: number, podIndex: number)
 		return
 	end
 
-	-- 2x Luck: the thief's own luck re-draws the rarity, never below what the pod showed (Config.luckUpgrade)
-	local rarity = Config.luckUpgrade(zone, pod.rarity, pod.luck, Sessions.luckMult(s), function()
+	-- 2x Luck (and a live Luck event, Server/LiveEventService): the thief's own luck re-draws the rarity, never below
+	-- what the pod showed (Config.luckUpgrade)
+	local rarity = Config.luckUpgrade(zone, pod.rarity, pod.luck, Sessions.luckMult(s) * LiveEventService.mult("Luck"), function()
 		return SeedService.luckRoll(pod.gene, player.UserId)
 	end)
-	local mutation = pod.mutation
+	-- a live Mutation storm: its draw is fixed by the seed and the thief too, so re-stealing it draws the same
+	local mutation = LiveEventService.stealMutation(pod.mutation, isNight(), SeedService.luckRoll(pod.gene + 7919, player.UserId))
 	pod.regrowToken += 1 -- (its refresh clock stops while the seed is away)
 	setPod(pod, zone, false)
 	local carry = SeedService.newCarry(zone, podIndex, rarity, mutation, pod.gene)
 	carry.shown = pod.rarity
+	carry.podMutation = pod.mutation
 	carry.model = makeCarryModel(char, carry)
 	s.carry = carry
 	Sessions.pushCarry(s)
@@ -463,7 +467,8 @@ function SeedService.returnCarry(player: Player)
 		return
 	end
 	local pod = nests[carry.zone].pods[carry.pod]
-	pod.rarity, pod.mutation, pod.gene = carry.shown or carry.rarity, carry.mutation, carry.gene or Config.rollGene(roll)
+	local mutation = if carry.shown then carry.podMutation else carry.mutation -- (a storm's mutation stays with the thief)
+	pod.rarity, pod.mutation, pod.gene = carry.shown or carry.rarity, mutation, carry.gene or Config.rollGene(roll)
 	show(pod, carry.zone) -- (a pending regrow goes stale; its refresh clock starts again)
 end
 

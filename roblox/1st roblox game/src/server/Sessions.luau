@@ -17,6 +17,7 @@ export type Carry = {
 	gene: number?, -- the seed's hidden flower and size (Config.rollGene)
 	ghost: number?, -- what its planting ghost shows (PlantGhosts.seedLook): the flower's n...
 	scale: number?, -- ...at the size it has when planted
+	podMutation: string?, -- the mutation its pod showed (a live Mutation storm may have changed `mutation`); it goes back to the pod as that
 	shown: number?, -- the rarity its pod showed (2x Luck may have raised `rarity`); it goes back to the pod as that
 	pod: number,
 	model: Model?,

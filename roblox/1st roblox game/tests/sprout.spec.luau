@@ -388,7 +388,8 @@ H.test("grow now: the seedling model, its countdown and the Grow now button (sou
 	for _, needle in {
 		"Seedling.build(plant.zone, plant.rarity, plant.mutation)",
 		"model:SetAttribute(\"SproutUntil\", plant.sproutUntil)",
-		"plant.sproutUntil = now + Config.sproutTime(zone, rarity, Sessions.growMult(s))",
+		"local sprout = LiveEventService.sproutSeconds(zone, rarity, Sessions.growMult(s))", -- (Config.sproutTime x a live Grow event)
+		"plant.sproutUntil = if sprout > 0 then now + sprout else nil",
 		"continue -- a seedling earns nothing",
 		"PlotService.popSprout(s, state, plant, now)",
 	} do

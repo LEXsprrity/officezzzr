@@ -934,6 +934,9 @@ H.test("security: no loadstring, no fenv, no require by asset id, no HTTP; Inser
 	for _, file in files do
 		local source = fs.readFile(file)
 		for _, banned in { "loadstring", "getfenv", "setfenv", "HttpService", "RequestAsync", "PostAsync", "MessagingService" } do
+			if banned == "MessagingService" and file == "src/server/LiveEventService.luau" then
+				continue -- (the live events' cross-server sync: it only publishes on and listens to LiveEvents.TOPIC)
+			end
 			H.ok(not string.find(source, banned, 1, true), `{file}: {banned}`)
 		end
 		H.ok(not string.match(source, "require%s*%(%s*%d"), `{file}: require by asset id`)

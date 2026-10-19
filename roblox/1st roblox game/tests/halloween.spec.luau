@@ -53,7 +53,8 @@ H.test("halloween: at most 25 candy appear per 5 minutes (owner 2026-10-19), up 
 	H.ok(Halloween.CANDY_START <= Halloween.CANDY_ON_MAP and Halloween.CANDY_ON_MAP == 50, "a cap of 50")
 	local candy = fs.readFile("src/server/CandyService.luau")
 	H.ok(not string.find(candy, "CANDY_RESPAWN", 1, true), "a piece picked up doesn't come straight back")
-	H.ok(string.find(candy, "#pieces < Halloween.CANDY_ON_MAP", 1, true) ~= nil, "the cap holds")
+	H.ok(string.find(candy, "local cap = Halloween.CANDY_ON_MAP + (if LiveEventService.running(\"Candy\") then LiveEvents.CANDY_CAP_BONUS else 0)", 1, true) ~= nil, "the cap holds (raised only during a live Candy rain)")
+	H.ok(string.find(candy, "#pieces < cap", 1, true) ~= nil, "the cap holds")
 end)
 
 H.test("halloween: the candy service picks up by walking over (trusted position), and the old candy sources are gone", function()
