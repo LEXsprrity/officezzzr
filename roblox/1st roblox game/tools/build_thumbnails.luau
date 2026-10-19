@@ -17,7 +17,8 @@
 -- It also writes LEIA-ME.txt, the owner's how-to (Portuguese). Deterministic: no randomness, no clock.
 -- Run from the game folder (default output: <your Desktop>/Thumbnails):
 --   lune run tools/build_thumbnails.luau [output folder] [only this scene key, e.g. Pyronis]
--- Plus the plant thumbnails (PLANT_SCENES, below): a giant Legendary instead of a boss.
+-- Plus the plant thumbnails (PLANT_SCENES, below): a giant Legendary instead of a boss (and a Halloween one:
+-- the plant Haunted, at night, with jack-o'-lanterns and the event's candy corn).
 local fs = require("@lune/fs")
 local process = require("@lune/process")
 local roblox = require("@lune/roblox")
@@ -395,7 +396,8 @@ end
 ----------------------------------------------------------------------------------------------------
 -- Lighting: bright, saturated, a bit of bloom, no fog
 ----------------------------------------------------------------------------------------------------
-local function lighting(game: any, focus: number, depth: number)
+-- `night`: the Halloween look instead (a moonlit purple night, a violet haze, stars).
+local function lighting(game: any, focus: number, depth: number, night: boolean?)
 	local L = game:GetService("Lighting")
 	L.Technology = Enum.Technology.Future
 	L.ClockTime = 13
@@ -415,6 +417,20 @@ local function lighting(game: any, focus: number, depth: number)
 	new("BloomEffect", { Intensity = 0.7, Size = 28, Threshold = 1.3 }, L)
 	new("ColorCorrectionEffect", { Saturation = 0.3, Contrast = 0.12, Brightness = 0.03, TintColor = rgb(255, 252, 245) }, L)
 	new("SunRaysEffect", { Intensity = 0.04, Spread = 0.7 }, L)
+	if night then
+		L.ClockTime = 0
+		L.Brightness = 1.5
+		L.Ambient = rgb(75, 45, 115)
+		L.OutdoorAmbient = rgb(120, 80, 160)
+		L.ColorShift_Top = rgb(255, 160, 80)
+		L.ColorShift_Bottom = rgb(70, 30, 110)
+		L.ExposureCompensation = 0.35
+		L:FindFirstChildOfClass("Sky").StarCount = 3000
+		local air = L:FindFirstChildOfClass("Atmosphere")
+		air.Density, air.Haze, air.Color, air.Decay = 0.32, 1.2, rgb(120, 70, 170), rgb(55, 20, 85)
+		local grade = L:FindFirstChildOfClass("ColorCorrectionEffect")
+		grade.Saturation, grade.Contrast, grade.TintColor = 0.35, 0.18, rgb(238, 220, 255)
+	end
 	-- the characters stay sharp; the far zone softens a little
 	new("DepthOfFieldEffect", { FocusDistance = focus, InFocusRadius = depth, NearIntensity = 0, FarIntensity = 0.25 }, L)
 end
@@ -558,6 +574,7 @@ export type PlantScene = {
 	glow: any, -- the seed's glow and the plant's light
 	name: { any }, -- the name's gradient, top to bottom
 	thumb: Shot,
+	haunted: boolean?, -- the Halloween version: Haunted plant, night, pumpkins, candy corn, "HAUNTED" over the name
 }
 
 local PLANT_SCENES: { PlantScene } = {
@@ -570,6 +587,103 @@ local PLANT_SCENES: { PlantScene } = {
 		name = { rgb(255, 245, 120), rgb(255, 150, 30), rgb(235, 40, 20), rgb(150, 0, 10) },
 		thumb = { eye = Vector3.new(0, 7, 31), at = Vector3.new(0, 10, -2), fov = 52, aspect = 16 / 9 },
 	},
+	{
+		key = "PyronisHaunted", zone = "Spirit", rarity = "Legendary", plant = "Pyronis", seed = "Design2",
+		at = Vector3.new(2150, 0, -5),
+		height = 20, plantPos = Vector3.new(-13, 0, -3), plantTurn = 0.45,
+		player = { pos = Vector3.new(6.5, 0, 3), turn = -0.25 },
+		glow = rgb(190, 90, 255),
+		name = { rgb(255, 235, 130), rgb(255, 150, 30), rgb(215, 70, 0), rgb(120, 25, 0) },
+		thumb = { eye = Vector3.new(0, 7, 31), at = Vector3.new(0, 10, -2), fov = 52, aspect = 16 / 9 },
+		haunted = true,
+	},
+}
+
+-- The Haunted look (CreatureModels' Halloween mutation, stronger for the poster): glowing parts toxic green,
+-- bright parts pumpkin orange, the rest deep purple; sparks and beams orange to purple.
+local HAUNTED_ORANGE = rgb(255, 125, 20)
+local HAUNTED_PURPLE = rgb(95, 35, 150)
+local HAUNTED_GREEN = rgb(140, 255, 60)
+local HAUNTED_WISPS = ColorSequence.new({
+	ColorSequenceKeypoint.new(0, HAUNTED_ORANGE),
+	ColorSequenceKeypoint.new(0.5, rgb(190, 90, 255)),
+	ColorSequenceKeypoint.new(1, HAUNTED_PURPLE),
+})
+
+local function hauntify(model: any)
+	for _, d in model:GetDescendants() do
+		if d:IsA("BasePart") then
+			local c = d.Color
+			if d.Material == Enum.Material.Neon then
+				d.Color = HAUNTED_GREEN
+			elseif c.R > 0.7 then
+				d.Color = c:Lerp(HAUNTED_ORANGE, 0.7)
+			else
+				d.Color = c:Lerp(HAUNTED_PURPLE, 0.75)
+			end
+		elseif d:IsA("ParticleEmitter") or d:IsA("Beam") then
+			d.Color = HAUNTED_WISPS
+		end
+	end
+end
+
+-- A jack-o'-lantern `d` studs wide on the ground at the origin, its carved face (glowing) toward +Z: three
+-- lobes, a stem, two diamond eyes, a grin with two teeth and a candle light inside.
+local function pumpkin(d: number): any
+	local m = new("Model", { Name = "Abobora" })
+	local function part(name: string, size: any, cf: any, color: any, props: { [string]: any }?): any
+		local p = new("Part", {
+			Name = name, Size = size, CFrame = cf, Color = color, Material = Enum.Material.SmoothPlastic,
+			Anchored = true, CanCollide = false, CanTouch = false, CanQuery = false,
+		}, m)
+		for k, v in props or {} do
+			p[k] = v
+		end
+		return p
+	end
+	local h = d * 0.8
+	for _, lobe in { { 0, 1 }, { -0.24, 0.72 }, { 0.24, 0.72 } } do
+		local p = part("Gomo", Vector3.new(d * lobe[2], h, d * 0.85), CFrame.new(d * lobe[1], h / 2, 0), if lobe[1] == 0 then HAUNTED_ORANGE else rgb(235, 105, 15))
+		new("SpecialMesh", { MeshType = Enum.MeshType.Sphere }, p)
+	end
+	part("Pe", Vector3.new(d * 0.3, d * 0.12, d * 0.12), CFrame.new(0.03 * d, h + d * 0.1, 0) * CFrame.Angles(0, 0, rad(78)), rgb(70, 110, 35), { Shape = Enum.PartType.Cylinder })
+	local front = d * 0.41
+	local fire = rgb(255, 215, 80)
+	for _, x in { -0.2, 0.2 } do
+		part("Olho", Vector3.new(d * 0.16, d * 0.16, d * 0.06), CFrame.new(d * x, h * 0.62, front) * CFrame.Angles(0, 0, rad(45)), fire, { Material = Enum.Material.Neon })
+	end
+	part("Boca", Vector3.new(d * 0.46, d * 0.1, d * 0.06), CFrame.new(0, h * 0.3, front - d * 0.02), fire, { Material = Enum.Material.Neon })
+	for _, x in { -0.13, 0.13 } do
+		part("Dente", Vector3.new(d * 0.07, d * 0.07, d * 0.07), CFrame.new(d * x, h * 0.36, front + d * 0.005), HAUNTED_ORANGE)
+	end
+	local candle = part("Vela", Vector3.new(0.2, 0.2, 0.2), CFrame.new(0, h * 0.45, front * 0.5), fire, { Transparency = 1, CastShadow = false })
+	new("PointLight", { Color = rgb(255, 150, 40), Brightness = 3, Range = d * 4, Shadows = false }, candle)
+	return m
+end
+
+-- The event's candy corn (assets/Candy.rbxm, the map's pieces), `height` studs tall, on the ground at the origin.
+local CANDY = roblox.deserializeModel(fs.readFile("assets/Candy.rbxm"))[1]
+local function candyCorn(height: number): any
+	local m = CANDY:Clone()
+	local lo, hi = bounds(m)
+	local mid = (lo + hi) / 2
+	for _, d in m:GetDescendants() do
+		if d:IsA("BasePart") then
+			d.CFrame = CFrame.new(-mid.X, -lo.Y, -mid.Z) * d.CFrame
+		end
+	end
+	scale(m, height / (hi.Y - lo.Y))
+	m.Name = "DoceHalloween"
+	m.WorldPivot = CFrame.identity
+	still(m)
+	return m
+end
+
+-- Where the pumpkins and the candy lie (scene frame: x, z, size or turn), clear of the plant, the player and the title.
+local PUMPKINS = { { -3.5, 10, 1.9 }, { 13.5, 9, 1.6 }, { -22, 5, 2.8 }, { 20, -5, 2.4 }, { -5, -14, 2.2 } }
+local CANDIES = {
+	{ 1, 14, 0.4 }, { -7, 13, 2.1 }, { 9, 13.5, 1.2 }, { 3.5, 9.5, 2.9 }, { -15, 10, 0.8 }, { 16, 12, 2.4 },
+	{ -1, 6.5, 1.7 }, { 11, 4, 0.2 }, { -18, 1, 2.6 }, { 6, -6, 1.1 },
 }
 
 -- Scales a model about the origin, everything that has a size: parts (MeshParts too), attachments (where
@@ -613,8 +727,14 @@ local function bigPlant(scene: PlantScene): any
 	model.Name = "PLANTA_" .. scene.plant
 	model.WorldPivot = CFrame.identity
 	still(model)
+	if scene.haunted then
+		hauntify(model)
+	end
+	local flame = if scene.haunted
+		then ColorSequence.new({ ColorSequenceKeypoint.new(0, rgb(220, 255, 140)), ColorSequenceKeypoint.new(0.5, HAUNTED_GREEN), ColorSequenceKeypoint.new(1, HAUNTED_PURPLE) })
+		else ColorSequence.new({ ColorSequenceKeypoint.new(0, rgb(255, 230, 120)), ColorSequenceKeypoint.new(0.5, rgb(255, 120, 20)), ColorSequenceKeypoint.new(1, rgb(200, 20, 10)) })
 	new("Highlight", {
-		FillColor = scene.glow, FillTransparency = 0.85, OutlineColor = rgb(255, 230, 120), OutlineTransparency = 0.2,
+		FillColor = scene.glow, FillTransparency = 0.85, OutlineColor = if scene.haunted then HAUNTED_GREEN else rgb(255, 230, 120), OutlineTransparency = 0.2,
 		DepthMode = Enum.HighlightDepthMode.Occluded,
 	}, model)
 	local base = new("Part", {
@@ -624,7 +744,7 @@ local function bigPlant(scene: PlantScene): any
 	new("PointLight", { Color = scene.glow, Brightness = 5, Range = 24, Shadows = false }, base)
 	new("ParticleEmitter", {
 		Name = "Fogo", Texture = "rbxasset://textures/particles/fire_main.dds",
-		Color = ColorSequence.new({ ColorSequenceKeypoint.new(0, rgb(255, 230, 120)), ColorSequenceKeypoint.new(0.5, rgb(255, 120, 20)), ColorSequenceKeypoint.new(1, rgb(200, 20, 10)) }),
+		Color = flame,
 		LightEmission = 1, Brightness = 2,
 		Size = NumberSequence.new({ NumberSequenceKeypoint.new(0, 2.5), NumberSequenceKeypoint.new(1, 0.3) }),
 		Transparency = NumberSequence.new({ NumberSequenceKeypoint.new(0, 0.2), NumberSequenceKeypoint.new(1, 1) }),
@@ -633,7 +753,7 @@ local function bigPlant(scene: PlantScene): any
 	}, base)
 	new("ParticleEmitter", {
 		Name = "Faiscas", Texture = "rbxasset://textures/particles/sparkles_main.dds",
-		Color = ColorSequence.new(rgb(255, 220, 120), rgb(255, 90, 30)), LightEmission = 1, Brightness = 2,
+		Color = if scene.haunted then HAUNTED_WISPS else ColorSequence.new(rgb(255, 220, 120), rgb(255, 90, 30)), LightEmission = 1, Brightness = 2,
 		Size = NumberSequence.new({ NumberSequenceKeypoint.new(0, 0.7), NumberSequenceKeypoint.new(1, 0) }),
 		Lifetime = NumberRange.new(1.5, 3), Rate = 25, Speed = NumberRange.new(4, 9),
 		SpreadAngle = Vector2.new(40, 40), EmissionDirection = Enum.NormalId.Top,
@@ -723,8 +843,32 @@ local function buildPlant(scene: PlantScene): any
 			local m = models[(i - 1) % #models + 1]:Clone()
 			place(m, w(CFrame.new(f[1], 0, f[2]) * CFrame.Angles(0, f[3], 0)))
 			still(m)
+			if scene.haunted then
+				hauntify(m)
+			end
 			m.Parent = flowers
 		end
+	end
+
+	-- Halloween: jack-o'-lanterns grinning at the camera, candy corn on the ground and a big moon
+	if scene.haunted then
+		local spooky = new("Folder", { Name = "Halloween" }, root)
+		for _, p in PUMPKINS do
+			local m = pumpkin(p[3])
+			local toward = shot.eye - Vector3.new(p[1], 0, p[2])
+			place(m, w(CFrame.new(p[1], 0, p[2]) * CFrame.Angles(0, math.atan2(toward.X, toward.Z), 0)))
+			m.Parent = spooky
+		end
+		for i, c in CANDIES do
+			local m = candyCorn(1.5)
+			place(m, w(CFrame.new(c[1], 0, c[2]) * CFrame.Angles(0, c[3], rad(if i % 3 == 0 then 70 else 8))))
+			m.Parent = spooky
+		end
+		new("Part", {
+			Name = "Lua", Shape = Enum.PartType.Ball, Size = Vector3.new(34, 34, 34), CFrame = w(CFrame.new(-95, 62, -160)),
+			Color = rgb(255, 225, 160), Material = Enum.Material.Neon, Anchored = true, CanCollide = false,
+			CanTouch = false, CanQuery = false, CastShadow = false,
+		}, spooky)
 	end
 
 	local eye, at = w(shot.eye), w(shot.at)
@@ -745,14 +889,23 @@ local function buildPlant(scene: PlantScene): any
 			r = i
 		end
 	end
-	local income = Config.plantIncome(k, r, Config.plantWeight(k, r, Config.GROW_TIME, 1.2), nil)
+	local income = Config.plantIncome(k, r, Config.plantWeight(k, r, Config.GROW_TIME, 1.2), if scene.haunted then "Haunted" else nil)
 	local money = "+$" .. Format.commas(math.floor(income)) .. "/s"
-	banner(root, "NOME", cam.CFrame, shot, 0.15, 0.66, 0.45, 1000 / 380, {
-		{ string.upper(scene.plant), 0, 0.62, scene.name, rgb(90, 0, 0) },
-		{ money, 0.6, 0.38, { rgb(220, 255, 120), rgb(90, 230, 60), rgb(30, 160, 40) }, rgb(20, 60, 15) },
-	})
+	local green = { rgb(220, 255, 120), rgb(90, 230, 60), rgb(30, 160, 40) }
+	if scene.haunted then
+		banner(root, "NOME", cam.CFrame, shot, 0.15, 0.62, 0.45, 1000 / 520, {
+			{ "HAUNTED", 0, 0.3, { rgb(235, 200, 255), rgb(175, 95, 255), rgb(100, 35, 160) }, rgb(35, 5, 55) },
+			{ string.upper(scene.plant), 0.27, 0.45, scene.name, rgb(60, 10, 0) },
+			{ money, 0.7, 0.28, green, rgb(20, 60, 15) },
+		})
+	else
+		banner(root, "NOME", cam.CFrame, shot, 0.15, 0.66, 0.45, 1000 / 380, {
+			{ string.upper(scene.plant), 0, 0.62, scene.name, rgb(90, 0, 0) },
+			{ money, 0.6, 0.38, green, rgb(20, 60, 15) },
+		})
+	end
 
-	lighting(game, (w(scene.player.pos) - eye).Magnitude, 22)
+	lighting(game, (w(scene.player.pos) - eye).Magnitude, 22, scene.haunted)
 	new("StringValue", {
 		Name = "LEIA-ME", Value = `PlantThumbnail {scene.key}: le o LEIA-ME.txt (pasta Thumbnails). Mete o teu avatar em `
 			.. `{MARKER}, apaga {STANDIN} e tira o screenshot sem mexer na camara.`,
@@ -789,6 +942,7 @@ local function readme(): string
 		"  Thumbnail_VoidDragon.rbxl   Thumbnail_Gorilla.rbxl   Thumbnail_Lumistag.rbxl  -> THUMBNAIL (1920x1080)",
 		"Em cada um: o boss a correr atras de ti de boca aberta, a semente gigante a brilhar, flores e a zona dele.",
 		"  PlantThumbnail_Pyronis.rbxl -> THUMBNAIL sem boss: a Pyronis gigante, o nome dela a fogo e o dinheiro/s.",
+		"  PlantThumbnail_PyronisHaunted.rbxl -> a mesma, versao HALLOWEEN: Pyronis Haunted, noite, aboboras e doces.",
 		"  (Na Pyronis tambem pes o teu avatar no sitio marcado e tiras a foto do mesmo jeito.)",
 		"A camara ja esta no sitio certo. Nas thumbnails o titulo STEAL A SEED ja esta na cena.",
 		"",
