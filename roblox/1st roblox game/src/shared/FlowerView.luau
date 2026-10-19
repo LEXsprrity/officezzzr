@@ -8,7 +8,7 @@
 -- what they list changed).
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Config = require(script.Parent:WaitForChild("Config"))
-local Halloween = require(script.Parent:WaitForChild("Halloween"))
+local Mutations = require(script.Parent:WaitForChild("Mutations"))
 local Palettes = require(script.Parent:WaitForChild("Palettes"))
 
 local FlowerView = {}
@@ -21,15 +21,16 @@ FlowerView.SPIN = math.rad(40) -- radians a second
 FlowerView.TILT = math.rad(18) -- the camera looks down this much
 FlowerView.ANGLE = math.rad(-35) -- the resting 3/4 turn (the flowers face -Z)
 
--- The Haunted copies of the previews (Halloween.hauntify, the look the server gives a Haunted plant), made once.
-local hauntedCopies: { [Model]: Model } = setmetatable({}, { __mode = "k" }) :: any
+-- The made-over copies of the previews (Shared/Mutations.makeover: the Haunted, Gold or Diamond look the server
+-- gives such a plant), made once: [preview][mutation id].
+local mutationCopies: { [Model]: { [string]: Model } } = setmetatable({}, { __mode = "k" }) :: any
 -- ...and the recoloured ones (Palettes.apply, as the server recolours a plant): [preview][palette id].
 local paletteCopies: { [Model]: { [string]: Model } } = setmetatable({}, { __mode = "k" }) :: any
 
 -- The preview of flower `flower` (a plant model's name; nil: FALLBACK) of (zone, rarity), or nil while it
--- hasn't replicated (or doesn't exist). With `mutation` Haunted: in its Haunted look (a copy of it); with a
--- `palette` (Shared/Palettes id; not under Haunted or Rainbow): in its colours (a copy of it). The other
--- mutations' tints aren't shown.
+-- hasn't replicated (or doesn't exist). With a `mutation` that repaints the plant (Haunted, Gold, Diamond): in
+-- its look (a copy of it); with a `palette` (Shared/Palettes id; not under a repainting mutation or Rainbow):
+-- in its colours (a copy of it). The other mutations' tints aren't shown.
 function FlowerView.flower(zone: number, rarity: number, flower: string?, mutation: string?, palette: string?): Model?
 	local root = ReplicatedStorage:FindFirstChild(FlowerView.FOLDER)
 	local zoneFolder = root and root:FindFirstChild(tostring(zone))
@@ -38,12 +39,17 @@ function FlowerView.flower(zone: number, rarity: number, flower: string?, mutati
 	if not (model and model:IsA("Model")) then
 		return nil
 	end
-	if mutation == Halloween.MUTATION then
-		local copy = hauntedCopies[model]
+	if mutation and Mutations.repaints(mutation) then
+		local copies = mutationCopies[model]
+		if not copies then
+			copies = {}
+			mutationCopies[model] = copies
+		end
+		local copy = copies[mutation]
 		if not copy then
 			copy = model:Clone()
-			Halloween.hauntify(copy)
-			hauntedCopies[model] = copy
+			Mutations.makeover(copy, mutation)
+			copies[mutation] = copy
 		end
 		return copy
 	end

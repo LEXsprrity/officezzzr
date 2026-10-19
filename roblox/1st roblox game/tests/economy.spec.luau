@@ -132,11 +132,11 @@ H.test("rarity: 5 rarities, luck and deeper zones shift Common..Epic toward rare
 	end)
 	H.eq(top, 5)
 	local _, nightMut = Config.rollSeed(1, 1, true, function()
-		return Config.MUTATIONS[1].chance + Config.MUTATIONS[2].chance + 0.01
+		return Config.MUTATIONS[1].chance + Config.MUTATIONS[2].chance + Config.MUTATIONS[3].chance + 0.01 -- (past Gold, Diamond, Rainbow)
 	end)
 	H.eq(nightMut, "Night", "Night mutation only rolls at night")
 	local _, dayMut = Config.rollSeed(1, 1, false, function()
-		return Config.MUTATIONS[1].chance + Config.MUTATIONS[2].chance + 0.01
+		return Config.MUTATIONS[1].chance + Config.MUTATIONS[2].chance + Config.MUTATIONS[3].chance + 0.01 -- (past Gold, Diamond, Rainbow)
 	end)
 	H.eq(dayMut, nil)
 end)

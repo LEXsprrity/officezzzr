@@ -8,8 +8,9 @@
 --     every palette.
 --   * A plant keeps its palette (`palette`, nil = Natural; PlantGhosts.seedPlant stores it, ProfileStore saves
 --     it), so plants from before palettes stay Natural and never change.
---   * Haunted and Rainbow repaint the whole plant (Halloween.hauntify; the client cycles a Rainbow plant's
---     colours), so a seed of either has no palette (ofSeed, shown); the other mutations tint over it.
+--   * Haunted, Gold, Diamond and Rainbow repaint the whole plant (Shared/Mutations.makeover; the client cycles
+--     a Rainbow plant's colours), so a seed of any of them has no palette (ofSeed, shown, OVERRIDDEN); Night
+--     and Celestial tint over it.
 --   * The recolour (apply) is by colour, whatever the parts' order, like Halloween.hauntify, so the server's
 --     plant (CreatureModels.build) and the HUD's 3D picture of it (FlowerView) match. It turns hues only:
 --     every colour keeps its saturation and brightness (Neon stays as bright), whites, greys and blacks stay.
@@ -29,7 +30,7 @@ Palettes.LIST = {
 } :: { Palette }
 
 -- The mutations that repaint a plant entirely: no palette under them.
-Palettes.OVERRIDDEN = { Haunted = true, Rainbow = true } :: { [string]: boolean }
+Palettes.OVERRIDDEN = { Haunted = true, Gold = true, Diamond = true, Rainbow = true } :: { [string]: boolean }
 
 -- The palette with this id (untrusted), or nil (Natural, or not a palette).
 function Palettes.byId(id: any): Palette?

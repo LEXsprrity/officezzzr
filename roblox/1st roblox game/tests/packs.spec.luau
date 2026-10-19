@@ -175,22 +175,23 @@ H.test("odds: rarity odds sum to 100% and mutations + none sum to 100% for both 
 	end
 end)
 
-H.test("odds: packs roll with double luck and double Gold/Rainbow (8%, 2%), Celestial 0.5%, never Night", function()
+H.test("odds: packs roll with double luck and double Gold/Diamond/Rainbow (20%, 8%, 5%), Celestial 1.25%, never Night", function()
 	H.eq(Config.PACK_LUCK, 2, "packs roll rarities with double luck (night pods are x1.5)")
 	H.eq(Config.PACK_MUTATION_MULT, 2)
 	H.eq(Config.PACK_EXCLUSIVE, "Celestial")
-	H.eq(Config.PACK_EXCLUSIVE_CHANCE, 0.005)
+	H.eq(Config.PACK_EXCLUSIVE_CHANCE, 0.0125, "2.5x the old 0.5% (owner 2026-10-19: more variety)")
 	for _, pack in packs() do
 		local odds = SeedPacks.odds(pack)
 		local ids = {}
 		for _, m in odds.mutations do
 			table.insert(ids, m.id)
 		end
-		H.eq(table.concat(ids, ","), "Celestial,Gold,Rainbow", pack.id)
-		H.near(odds.mutations[1].pct, 0.5, 1e-12, "Celestial 0.5%")
-		H.near(odds.mutations[2].pct, 8, 1e-12, "Gold 8%")
-		H.near(odds.mutations[3].pct, 2, 1e-12, "Rainbow 2%")
-		H.eq(SeedPacks.percent(odds.mutations[1].pct), "0.5%")
+		H.eq(table.concat(ids, ","), "Celestial,Gold,Diamond,Rainbow", pack.id)
+		H.near(odds.mutations[1].pct, 1.25, 1e-12, "Celestial 1.25%")
+		H.near(odds.mutations[2].pct, 20, 1e-12, "Gold 20%")
+		H.near(odds.mutations[3].pct, 8, 1e-12, "Diamond 8%")
+		H.near(odds.mutations[4].pct, 5, 1e-12, "Rainbow 5%")
+		H.eq(SeedPacks.percent(odds.mutations[1].pct), "1.25%")
 	end
 	local space, spirit = SeedPacks.odds(packs()[1]), SeedPacks.odds(packs()[2])
 	H.ok(spirit.rarities[4] > space.rarities[4], "deeper zone, more Epics")

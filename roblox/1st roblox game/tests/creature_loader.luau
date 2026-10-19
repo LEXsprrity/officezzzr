@@ -10,9 +10,10 @@ local Config = H.shared("Config")
 local configNode = {}
 local halloweenNode = {}
 local palettesNode = {}
+local mutationsNode = {}
 local assetsNode = {}
 local sharedNode = { WaitForChild = function(_, name)
-	return if name == "Config" then configNode elseif name == "Halloween" then halloweenNode elseif name == "Palettes" then palettesNode else nil
+	return if name == "Config" then configNode elseif name == "Halloween" then halloweenNode elseif name == "Palettes" then palettesNode elseif name == "Mutations" then mutationsNode else nil
 end }
 local serverNode = { WaitForChild = function(_, name)
 	assert(name == "Assets", "CreatureModels required server module " .. name)
@@ -33,6 +34,9 @@ local env = {
 		end
 		if target == halloweenNode then
 			return H.shared("Halloween")
+		end
+		if target == mutationsNode then
+			return H.shared("Mutations")
 		end
 		if target == palettesNode then
 			return H.shared("Palettes")
