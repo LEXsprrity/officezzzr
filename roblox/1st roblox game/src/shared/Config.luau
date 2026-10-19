@@ -359,19 +359,20 @@ function Config.legendaryAnnouncement(playerName: string, zone: number, mutation
 	return `🌟 {playerName} got a LEGENDARY {plantName or prefix .. "Seed"}!`
 end
 
--- `exclusive` mutations never roll from pods (chance 0); only the premium seed packs can give them
--- (PACK_EXCLUSIVE). The list is the roll order (rollSeed, SeedPacks.odds) and the order the Index shows them.
--- Owner 2026-10-19 ("make gold, rainbow and celestial seed modifications be less rare so more variety"):
--- Gold, Rainbow and the packs' Celestial are 2.5x what they were (4%, 1%, 0.5%), and the new Diamond sits
--- between Gold and Rainbow on the ladder, in chance and in pay. Gold and Diamond repaint the whole plant
--- (Shared/Mutations), like Haunted.
+-- `exclusive` mutations don't get the packs' mutationMult: a premium pack gives its own (PACK_EXCLUSIVE at
+-- PACK_EXCLUSIVE_CHANCE); Haunted comes only from the Halloween card's seeds (chance 0 from pods). The list is
+-- the roll order (rollSeed, SeedPacks.odds) and the order the Index shows them.
+-- Owner 2026-10-19: first "make gold, rainbow and celestial ... less rare so more variety" (2.5x), then "turn
+-- those [down] to half of what they are right now and let celestials appear on stolen as well": Gold 5%,
+-- Diamond 2%, Rainbow 1.25%, and Celestial now rolls from pods too, at half the Rainbow's chance (0.625%),
+-- the rarest. Gold and Diamond repaint the whole plant (Shared/Mutations), like Haunted.
 export type Mutation = { id: string, color: Color3, income: number, chance: number, nightOnly: boolean, exclusive: boolean? }
 Config.MUTATIONS = {
-	{ id = "Gold", color = Color3.fromRGB(255, 215, 0), income = 3, chance = 0.10, nightOnly = false },
-	{ id = "Diamond", color = Color3.fromRGB(185, 240, 255), income = 4, chance = 0.04, nightOnly = false },
-	{ id = "Rainbow", color = Color3.fromRGB(255, 80, 200), income = 8, chance = 0.025, nightOnly = false },
+	{ id = "Gold", color = Color3.fromRGB(255, 215, 0), income = 3, chance = 0.05, nightOnly = false },
+	{ id = "Diamond", color = Color3.fromRGB(185, 240, 255), income = 4, chance = 0.02, nightOnly = false },
+	{ id = "Rainbow", color = Color3.fromRGB(255, 80, 200), income = 8, chance = 0.0125, nightOnly = false },
 	{ id = "Night", color = Color3.fromRGB(90, 90, 255), income = 2, chance = 0.12, nightOnly = true },
-	{ id = "Celestial", color = Color3.fromRGB(120, 240, 255), income = 12, chance = 0, nightOnly = false, exclusive = true },
+	{ id = "Celestial", color = Color3.fromRGB(120, 240, 255), income = 12, chance = 0.00625, nightOnly = false, exclusive = true },
 	-- the Halloween event's (Shared/Halloween): only from its Haunted seeds, bought with candy
 	{ id = "Haunted", color = Color3.fromRGB(255, 125, 20), income = 5, chance = 0, nightOnly = false, exclusive = true },
 } :: { Mutation }
@@ -871,8 +872,8 @@ end
 Config.PACK_LUCK = 2 -- packs roll Common..Epic with double luck (night pods are x1.5).
 Config.PACK_LEGENDARY_CHANCE = 0.015 -- ...but Legendary stays a rare event (1 in ~67)...
 Config.PACK_MUTATION_MULT = 2 -- ...with twice the Gold/Diamond/Rainbow chances (Night never rolls from packs)...
-Config.PACK_EXCLUSIVE = "Celestial" -- ...plus the pack-only mutation, which pods never roll
-Config.PACK_EXCLUSIVE_CHANCE = 0.0125 -- (0.5% until 2026-10-19, owner: more variety; still the rarest)
+Config.PACK_EXCLUSIVE = "Celestial" -- ...plus the premium mutation at its own chance (pods roll it too, since 2026-10-19)
+Config.PACK_EXCLUSIVE_CHANCE = 0.00625 -- (owner 2026-10-19: 0.5%, then 1.25%, then half of that)
 Config.SEED_BAG_MAX = 50 -- soft cap: the Shop won't *prompt* a pack purchase once the bag holds this many
 Config.SEED_BAG_HARD_MAX = 250 -- paid grants may go past SEED_BAG_MAX up to here; saves are clamped here
 -- The plant inventory: a plant taken off the plot (the Plants panel's Remove) waits here, as it was

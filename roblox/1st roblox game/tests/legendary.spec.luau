@@ -73,16 +73,16 @@ H.test("legendary: the other rarities stay sane (weights sum to 1, Epic still co
 	H.ok(epicSpiritDay >= 0.05 and epicSpiritDay <= 0.15, `Spirit Garden Epic by day {epicSpiritDay * 100}%`)
 end)
 
-H.test("legendary: packs roll it at 1-2%, Celestial stays pack-only (1.25%)", function()
+H.test("legendary: packs roll it at 1-2%, Celestial at 0.625% (pods roll it too)", function()
 	for _, entry in Config.products("Pack") do
 		local pack = SeedPacks.packForProduct(entry.product)
 		local odds = SeedPacks.odds(pack)
 		H.ok(odds.rarities[L] >= 1 and odds.rarities[L] <= 2, `{pack.name}: {odds.rarities[L]}%`)
 		H.ok(odds.rarities[L] / 100 > podChance(pack.zone, true), `{pack.name} still beats a night steal`)
 		H.eq(odds.mutations[1].id, "Celestial")
-		H.near(odds.mutations[1].pct, 1.25, 1e-12)
+		H.near(odds.mutations[1].pct, 0.625, 1e-12)
 	end
-	H.eq(Config.mutationById("Celestial").chance, 0, "pods never roll Celestial")
+	H.near(Config.mutationById("Celestial").chance, 0.00625, 1e-12, "pods roll Celestial at 0.625% (owner 2026-10-19)")
 end)
 
 H.test("legendary: a large seeded roll matches the odds (pods by day/night, packs)", function()
