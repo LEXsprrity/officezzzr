@@ -101,6 +101,22 @@ A seed you plant (carried home, or from the bag) first stands as a **seedling**:
 - **Grow now** (developer products, kind `GrowNow`): `GrowNow10` "Skip (1)" **9 R$** while 10 minutes or less are left, `GrowNow30` "Skip (2)" **19 R$** for anything longer, which finishes the seedling **however long it has left** (only deep Epics and Legendaries wait over 30 min, and a "Grow now" that leaves a seedling still sprouting would read as broken to a kid). The button asks the server (`RequestBuy "GrowNow:<plant id>"`, rate-limited); `PlotService.promptGrowNow` checks it is **your own** plant and still sprouting and picks the product by its time left, and `Shop.canPrompt` re-checks the tier. The plant is remembered per product in the session; `ProcessReceipt` (idempotent per PurchaseId, saved before confirming) sprouts it at once. If it already sprouted or was sold or removed meanwhile (or the receipt lands after a rejoin), the purchase goes to the seedling with the most time left, on the plot first, then in the inventory, skipping up to what the product covers (10 min / all); with no seedling anywhere it is confirmed and logged (`[ShopService] Grow Now … no seedling left`): a game can't refund Robux.
 - **Old saves.** Plants from before v12 have no `sproutUntil`: they are fully grown, as they were.
 
+## First-time tutorial
+Owner 2026-10-19: "person spawns in, gets some red arrows that go until they reach a seed with text on top saying steal a seed, then ... every single step from planting to waiting for growth". `Client/Tutorial` shows it while the profile's `tutorialDone` is false. Each step has a trail of glowing red chevrons on the ground from the player to its target, flowing toward it, plus big floating relief words over the target that bob gently, and one studded banner at the top with the instruction and a **Skip** button. The trail goes out of the plot by its entrance and through the corridor mouth (`Tutorial.route` / `Tutorial.arrows`). Between steps everything fades out and back in. A step advances when the player actually does the thing (`Tutorial.advance`):
+
+| # | Step | Target and words | Advances when |
+|---|---|---|---|
+| 1 | run | a Meadow pod, "STEAL A SEED" | the player is within 22 studs of it |
+| 2 | steal | the same pod, "STEAL A SEED" | StatsUpdate `carrying` (they hold a seed) |
+| 3 | home | their plot, "RUN HOME!" | LootEvent `Stored` (the seed went into the bag); a seed lost on the way (caught, dropped, died) goes back to step 2 |
+| 4 | plant | their dirt, "PLANT IT HERE", plus a red arrow over the hotbar's seed slot | LootEvent `Planted` |
+| 5 | grow | the seedling, "WAITING FOR IT TO GROW" with its sprout timer | LootEvent `Sprouted` |
+| 6 | earn | the plant, "IT MAKES MONEY!" with its $/s | their money went up (income is paid every second by itself, nothing to collect), after at least 4 s |
+| 7 | speed | their treadmill, "STAND HERE" with the Speed gained | +300 Speed since the step began (walking or the treadmill) |
+| 8 | ready | the Desert's Speed sign, "NEXT: DESERT" | the **Let's go!** button, or reaching the sign |
+
+Finishing or skipping fires the `Tutorial` remote. `Server/TutorialService` then sets `tutorialDone`, and the next save keeps it. **Old saves** have no `tutorialDone` field: they count as done when the player clearly played (any money, a plant, an inventory plant, a seed in the bag, an Index entry, or 1,000+ Speed; `Tutorial.doneFromSave`), so veterans never see it. A player who leaves half way picks up from their stats (`Tutorial.startStep`).
+
 ## Economy: what money and Robux buy
 **In-game money buys only three things: trails, plot upgrades and treadmill tiers.** Everything else in the Shop is Robux (developer products and gamepasses). There is no money path to Speed or extra slots (`Shop.buy` refuses them, and tests check it).
 
@@ -559,6 +575,9 @@ Each planted seed grows into its zone's creature (`CreatureModels`). The creatur
 | `src/client/Planting.client.luau` | 〃 | The planting preview (green/red disc on your dirt), click / tap / R2 to plant (remote `PlantSeed`), the hint and ✖ for bagged seeds |
 | `src/client/DayNight.client.luau` | 〃 | The fade to black at each day/night flip and the local switch of the look (from the server clock) |
 | `src/client/SpeedPlanks.client.luau` | 〃 | Writes each nest's "👟 2M recommended" plank from `Config.ZONES[k].req` (`Format.speedPlank`, so a map with older numbers still reads right) and colours it green or red from your Speed |
+| `src/client/Tutorial.client.luau` | `StarterPlayerScripts.Client` | The first-time tutorial: the red arrow trail, the floating words over each target, the banner with Skip (see "First-time tutorial") |
+| `src/shared/Tutorial.luau` | `ReplicatedStorage.Shared` | *Pure*: the tutorial steps and how each advances, where a returning player picks up, the old-save veteran check, the arrow trail's route and flow |
+| `src/server/TutorialService.luau` | `ServerScriptService.Server` | The `Tutorial` remote: sets the profile's `tutorialDone` when the tutorial is finished or skipped |
 | `tests/` | — | Lune harness + specs (guard, speed, data, economy, world, lighting, packs, legendary odds + announcements, shop, progression + its free-player simulation, creatures, assets, map, bosses, icons + uploader, SELL stall, community rewards, treadmill tiers + own-belt animation, free planting + save migration) |
 
 ## Networking

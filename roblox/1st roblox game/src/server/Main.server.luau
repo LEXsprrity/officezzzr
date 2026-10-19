@@ -49,6 +49,7 @@ task.spawn(PlantGhosts.publish) -- the planting preview's 3D ghosts, for the cli
 task.spawn(FlowerPreviews.publish) -- every flower's 3D picture, for the HUD's Index, Plants and Sell cards
 AmbientService.start()
 RewardService.start()
+require(Server:WaitForChild("TutorialService")).init() -- the first-time tutorial's done flag
 require(Server:WaitForChild("CandyService")).init() -- the Halloween event's candy on the map (while it runs)
 
 -- DataStore (unavailable in Studio unless "Enable Studio Access to API Services" is on)

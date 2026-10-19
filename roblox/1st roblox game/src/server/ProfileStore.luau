@@ -6,6 +6,7 @@ local Shared = ReplicatedStorage:WaitForChild("Shared")
 local Config = require(Shared:WaitForChild("Config"))
 local SeedPacks = require(Shared:WaitForChild("SeedPacks"))
 local Planting = require(Shared:WaitForChild("Planting"))
+local Tutorial = require(Shared:WaitForChild("Tutorial"))
 
 local ProfileStore = {}
 ProfileStore.__index = ProfileStore
@@ -122,6 +123,7 @@ export type Profile = {
 	giftShown: boolean, -- the Free Gift window already opened by itself once
 	chestAt: number, -- unix seconds of the last free chest claim (0 = never); the chest is gone, kept so saves round-trip
 	candy: number, -- the Halloween event's candy (Shared/Halloween; 0 before it)
+	tutorialDone: boolean, -- the first-time tutorial was finished or skipped (Shared/Tutorial; old saves: Tutorial.doneFromSave)
 }
 
 function ProfileStore.defaultProfile(): Profile
@@ -148,6 +150,7 @@ function ProfileStore.defaultProfile(): Profile
 		giftShown = false,
 		chestAt = 0,
 		candy = 0,
+		tutorialDone = false, -- a new player gets the tutorial
 	}
 end
 
@@ -292,6 +295,7 @@ function ProfileStore.serialize(p: Profile): { [string]: any }
 		giftShown = p.giftShown,
 		chestAt = p.chestAt,
 		candy = p.candy,
+		tutorialDone = p.tutorialDone,
 	}
 end
 
@@ -339,6 +343,8 @@ function ProfileStore.deserialize(data: any): Profile
 	p.giftShown = data.giftShown == true
 	p.chestAt = num(data.chestAt, 0, 0, math.huge)
 	p.candy = int(data.candy, 0, 0, 1e9) -- (absent before the Halloween event: none)
+	-- (absent before the tutorial: done for a veteran, so only new players ever see it)
+	p.tutorialDone = Tutorial.doneFromSave(data)
 
 	local used = {}
 	local modern = type(data.v) == "number" and data.v >= 6 -- plants saved with their spot
