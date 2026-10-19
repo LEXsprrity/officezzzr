@@ -14,11 +14,6 @@
     "assetType": "Image",
     "imageId": "92707569262568"
   },
-  "Vip": {
-    "assetId": "83557479696002",
-    "assetType": "Image",
-    "imageId": "83557479696002"
-  },
   "ExtraSlots": {
     "assetId": "95521515036924",
     "assetType": "Image",
@@ -28,6 +23,11 @@
     "assetId": "74001403380769",
     "assetType": "Image",
     "imageId": "74001403380769"
+  },
+  "HalloweenBg": {
+    "assetId": "96329767383559",
+    "assetType": "Image",
+    "imageId": "96329767383559"
   },
   "Home": {
     "assetId": "135634506350041",
@@ -118,5 +118,10 @@
     "assetId": "135986955777794",
     "assetType": "Image",
     "imageId": "135986955777794"
+  },
+  "Vip": {
+    "assetId": "83557479696002",
+    "assetType": "Image",
+    "imageId": "83557479696002"
   }
 }

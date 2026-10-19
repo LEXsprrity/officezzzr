@@ -19,6 +19,7 @@ ShopLayout.SCROLLBAR = 14
 ShopLayout.TITLE_H = 84
 local WINDOWS = {
 	Shop = { w = 1120, h = 640 },
+	Candy = { w = 1120, h = 580 }, -- the Haunted seed's card (as wide as a pack's) and a line
 }
 ShopLayout.DEFAULT_W, ShopLayout.DEFAULT_H = 860, 600
 ShopLayout.MAX_W, ShopLayout.MAX_H = 1120, 640 -- the biggest window (the studs and stripes cover it)
