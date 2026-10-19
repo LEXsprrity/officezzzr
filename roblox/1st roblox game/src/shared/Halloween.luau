@@ -45,59 +45,62 @@ Halloween.NEST_CLEARANCE = 36 -- no candy this close to a sleeping boss (flat st
 -- 10 uncommons, 10 commons"): the plant models (assets/Creature_<Seed>.rbxm, by zone and rarity) a Haunted
 -- seed grows into, the most detailed ones (particles, glow, beams) with a spooky bent. A Haunted seed's gene
 -- picks among its zone and rarity's list here (flowerOf), never among the other models; every zone has at
--- least one of every rarity. 7 Legendaries (one a zone, the Pyronis of the thumbnail among them), 10 Epics,
--- 10 Rares, 10 Uncommons, 10 Commons; tests/halloween.spec checks the counts and that every name exists.
+-- least TWO of every rarity (owner 2026-10-19: the Shop card turns through them, 5 s each; but the Desert has
+-- one Legendary, Helios: its other, Aetheris, turns to mush), 3 Spirit Epics
+-- (both Duality plants): 14 Commons, Uncommons and Rares, 15 Epics, 13 Legendaries (first 10/10/10/10/7: new ones
+-- were added at the end of each list, so seeds already in bags mostly keep their flower);
+-- tests/halloween.spec checks the counts and that every name exists.
 -- The order is the gene's: don't reorder a list (planted plants keep their flower by name, but a seed in a
 -- bag would grow into another one).
 Halloween.SET = {
 	[1] = { -- Meadow
 		Common = { "Daisy", "Tulip" },
-		Uncommon = { "Pansy" },
-		Rare = { "Hellebore" },
-		Epic = { "Ballerina" },
-		Legendary = { "Verdantis" },
+		Uncommon = { "Pansy", "Rose" },
+		Rare = { "Hellebore", "Orchid" },
+		Epic = { "Ballerina", "Mafioso" },
+		Legendary = { "Verdantis", "Sunfloris" },
 	},
 	[2] = { -- Desert
 		Common = { "Cactus", "Nuzwat" },
-		Uncommon = { "DesertWildFlower" },
-		Rare = { "HaloOrchid" },
+		Uncommon = { "DesertWildFlower", "ZebraFlower" },
+		Rare = { "HaloOrchid", "RadianceLily" },
 		Epic = { "MantisReaper", "Sahur" },
-		Legendary = { "Helios" },
+		Legendary = { "Helios" }, -- (its only other Legendary, Aetheris, turns all orange and green: mush)
 	},
 	[3] = { -- Jungle
 		Common = { "BugEater", "ZombeeFlower" },
 		Uncommon = { "SpiderLilly", "OceanBloom" },
 		Rare = { "GlowBerry", "Snapdragon" },
 		Epic = { "Bombardiro", "Patapim" },
-		Legendary = { "Paradoxys" },
+		Legendary = { "Paradoxys", "Venomyx" },
 	},
 	[4] = { -- Lava Fields
-		Common = { "EmberSpark" },
+		Common = { "EmberSpark", "Pomeflower" },
 		Uncommon = { "DarkflareRose", "RedStar" },
-		Rare = { "FrostburnRose" },
+		Rare = { "FrostburnRose", "DragonFlower" },
 		Epic = { "CrimsonWidow", "StrawberryElephant" },
-		Legendary = { "Infernyx" },
+		Legendary = { "Infernyx", "Draconyx" },
 	},
 	[5] = { -- Snow Peaks
-		Common = { "Mistletoe" },
-		Uncommon = { "Snowpuff" },
-		Rare = { "CrystalDaisy" },
-		Epic = { "Trallalero" },
-		Legendary = { "Aracnid" },
+		Common = { "Mistletoe", "HollyBloom" },
+		Uncommon = { "Snowpuff", "FrostLily" },
+		Rare = { "CrystalDaisy", "Glacierheart" },
+		Epic = { "Trallalero", "Reindeer" },
+		Legendary = { "Aracnid", "Frostwyrm" },
 	},
 	[6] = { -- Deep Space
-		Common = { "NebulaRose" },
+		Common = { "NebulaRose", "EclipseBloom" },
 		Uncommon = { "Voidbloom", "MeteorFlower" },
 		Rare = { "Gleamblossom", "StarfallFlower" },
-		Epic = { "TwilightAmarilis" },
-		Legendary = { "Stellaris" },
+		Epic = { "TwilightAmarilis", "LaVaca" },
+		Legendary = { "Stellaris", "Jellythys" },
 	},
 	[7] = { -- Spirit Garden
-		Common = { "MoonlaceOrchid" },
-		Uncommon = { "Crystalflower" },
+		Common = { "MoonlaceOrchid", "Camellia" },
+		Uncommon = { "Crystalflower", "Whitenight" },
 		Rare = { "Ghostflower", "Ghostleaf" },
-		Epic = { "Assassino" },
-		Legendary = { "Pyronis" },
+		Epic = { "Assassino", "DualityFlower", "DualityRose" },
+		Legendary = { "Pyronis", "Cryonix" },
 	},
 } :: { [number]: { [string]: { string } } }
 
