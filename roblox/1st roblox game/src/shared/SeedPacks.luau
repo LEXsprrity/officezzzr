@@ -93,7 +93,7 @@ end
 
 -- A sold pack by its reveal id ("Pack:Space"), or nil. Retired ones too: a receipt for one still reveals.
 -- The Halloween event's Haunted seed of zone k (Shared/Halloween; bought with candy, never Robux): the zone's
--- usual odds with its Legendary chance x Halloween.LEGENDARY_MULT, always the Haunted mutation.
+-- usual odds with a flat Halloween.LEGENDARY_CHANCE (2%) Legendary, always the Haunted mutation.
 function SeedPacks.hauntedPack(k: number): Pack
 	local zone = Config.ZONES[k]
 	return {
@@ -101,7 +101,7 @@ function SeedPacks.hauntedPack(k: number): Pack
 		zone = k,
 		name = "Haunted Seed",
 		luck = 1,
-		legendaryChance = Config.LEGENDARY_CHANCE[k] * Halloween.LEGENDARY_MULT,
+		legendaryChance = Halloween.LEGENDARY_CHANCE,
 		mutationMult = 0, -- (no Gold or Rainbow on top)
 		exclusive = Halloween.MUTATION,
 		exclusiveChance = 1,
