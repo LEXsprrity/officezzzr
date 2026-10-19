@@ -6,7 +6,8 @@
 -- (LookVector), and at scale 1 everything fits inside Config.CREATURE_FOOTPRINT. PlotService pivots the
 -- model onto its slot and scales it with Model:ScaleTo, which scales around that pivot.
 --
--- Rarity adds flair (recoloured trims, Neon, light, sparkles, a halo); a mutation tints and
+-- Rarity adds flair (recoloured trims, Neon, light, sparkles, a halo); a mutation tints (or, Haunted, Gold and
+-- Diamond, repaints a plant model entirely: Shared/Mutations) and
 -- swaps materials and adds particles. A model in the assets folder (slot Creature_<Seed>, e.g. Creature_LotusWyrm)
 -- replaces a zone's creature; Config.CREATURE_ASSETS (uploaded asset ids) is the next choice. The game's
 -- plants are the owner's flower pack (models/plants), exported per zone and rarity into those slots by
@@ -16,6 +17,7 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Config = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("Config"))
 local Halloween = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("Halloween"))
 local Palettes = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("Palettes"))
+local Mutations = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("Mutations"))
 local Assets = require(script.Parent:WaitForChild("Assets"))
 
 local CreatureModels = {}
@@ -482,12 +484,18 @@ local HAUNTED_PURPLE = Halloween.PURPLE
 local HAUNTED_GREEN = Halloween.GREEN
 local HAUNTED_WISPS = Halloween.WISPS
 
+-- Gold and Diamond (Shared/Mutations): a plant model gets a whole metallic-gold or icy-crystal makeover (its
+-- particles golden sparkles or white-cyan glints); a built-in creature is tinted by its parts' roles.
+local function sparklesOf(mut: Config.Mutation): ColorSequence
+	local look = Mutations.LOOKS[mut.id]
+	return if mut.id == "Rainbow" then RAINBOW elseif mut.id == "Haunted" then HAUNTED_WISPS elseif look then look.sparkles else ColorSequence.new(mut.color)
+end
+
 local TINTED = { skin = 1, accent = 1, leaf = 0.8, flower = 0.8, husk = 0.45, asset = 0.5 }
 
 local function applyMutation(b: Builder, mut: Config.Mutation)
-	if mut.id == "Haunted" and b.asset then
-		Halloween.hauntify(b.model) -- (before our flair is added: only the plant's own parts and effects)
-		return
+	if b.asset and Mutations.makeover(b.model, mut.id) then
+		return -- (before our flair is added: only the plant's own parts and effects)
 	end
 	local i = 0
 	for _, p in b.parts do
@@ -495,11 +503,16 @@ local function applyMutation(b: Builder, mut: Config.Mutation)
 		local weight = TINTED[role]
 		i += 1
 		if role == "glow" then
-			p.Color = if mut.id == "Rainbow" then Color3.fromHSV((i * 0.13) % 1, 0.7, 1) elseif mut.id == "Haunted" then HAUNTED_GREEN else mut.color
+			local look = Mutations.LOOKS[mut.id]
+			p.Color = if mut.id == "Rainbow" then Color3.fromHSV((i * 0.13) % 1, 0.7, 1) elseif mut.id == "Haunted" then HAUNTED_GREEN elseif look then look.glow else mut.color
 		elseif weight then
 			if mut.id == "Gold" then
 				p.Color = p.Color:Lerp(mut.color, 0.75 * weight)
 				p.Material = Enum.Material.Foil
+			elseif mut.id == "Diamond" then
+				p.Color = p.Color:Lerp(mut.color, 0.75 * weight)
+				p.Material = Enum.Material.Ice
+				p.Reflectance = 0.2
 			elseif mut.id == "Rainbow" then
 				if role == "skin" or role == "asset" then
 					p:SetAttribute("Mutation", "Rainbow") -- the client cycles its colour
@@ -590,7 +603,7 @@ local function decorate(b: Builder, zoneIndex: number, rarityIndex: number, mut:
 	end
 
 	if fx then
-		local zoneColors = if mut and mut.id == "Haunted" and b.asset then HAUNTED_WISPS else ColorSequence.new(fx.color) -- (like its own effects)
+		local zoneColors = if mut and b.asset and Mutations.repaints(mut.id) then sparklesOf(mut) else ColorSequence.new(fx.color) -- (like its own effects)
 		particles(body, "ZoneFX", zoneColors, fx.rate, fx.size, fx.lifetime, fx.speed, fx.accel)
 	end
 	if rarityIndex >= 4 then
@@ -604,7 +617,7 @@ local function decorate(b: Builder, zoneIndex: number, rarityIndex: number, mut:
 			stars.LightEmission = 1
 			stars.RotSpeed = NumberRange.new(-30, 30)
 		else
-			local colors = if mut.id == "Rainbow" then RAINBOW elseif mut.id == "Haunted" then HAUNTED_WISPS else ColorSequence.new(mut.color)
+			local colors = sparklesOf(mut)
 			particles(body, "MutationSparkles", colors, 7, 0.5, 1.2, 2.5, Vector3.zero)
 		end
 	end
@@ -685,8 +698,8 @@ end
 -- Builds the creature for (zone, rarity, mutation?) at the origin (see the header). The model's
 -- PrimaryPart is its body and its pivot is the origin. `pick` (the plant's id) chooses among the zone's
 -- plant models of that rarity, so each plant keeps its look and neighbours differ. `palette` (the plant's,
--- Shared/Palettes) recolours a plant model before its mutation tints it (none under Haunted or Rainbow,
--- which repaint it all).
+-- Shared/Palettes) recolours a plant model before its mutation tints it (none under Haunted, Gold, Diamond or
+-- Rainbow, which repaint it all).
 function CreatureModels.build(zoneIndex: number, rarityIndex: number, mutation: string?, pick: number?, palette: string?): Model
 	local zone = Config.ZONES[zoneIndex]
 	local model: Model

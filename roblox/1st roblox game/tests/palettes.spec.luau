@@ -189,6 +189,9 @@ H.test("palettes: the seed's gene gives its palette on the server plant, the pla
 			end
 		end
 		H.eq(FlowerView.flower(SPIRIT, EPIC, names[1], "Haunted", "Azure"), FlowerView.flower(SPIRIT, EPIC, names[1], "Haunted"), "Haunted wins")
+		for _, mut in { "Gold", "Diamond" } do
+			H.eq(FlowerView.flower(SPIRIT, EPIC, names[1], mut, "Azure"), FlowerView.flower(SPIRIT, EPIC, names[1], mut), `{mut} wins`)
+		end
 	end)
 	rs.__children.FlowerPreviews = before
 	H.ok(ok, err)
@@ -230,12 +233,14 @@ H.test("palettes: old plants (no palette) stay Natural and never change; the pal
 	end).palette, nil)
 end)
 
-H.test("palettes: Haunted wins (hauntify) and Rainbow repaints; Gold, Night and Celestial tint over the palette", function()
+H.test("palettes: Haunted, Gold and Diamond win (their makeover) and Rainbow repaints; Night and Celestial tint over the palette", function()
 	local name = "DualityRose"
 	local pick = pickOf(SPIRIT, EPIC, name)
 	for gene = 1, 2000 do
 		H.eq(Palettes.ofSeed(gene, Halloween.MUTATION), nil, "a Haunted seed has no palette")
 		H.eq(Palettes.ofSeed(gene, "Rainbow"), nil, "nor a Rainbow one")
+		H.eq(Palettes.ofSeed(gene, "Gold"), nil, "nor a Gold one")
+		H.eq(Palettes.ofSeed(gene, "Diamond"), nil, "nor a Diamond one")
 		H.eq(Palettes.ofSeed(gene, "Night"), Palettes.of(gene), "a Night seed has its gene's")
 	end
 	H.eq(PlantGhosts.seedPlant(SPIRIT, EPIC, Halloween.MUTATION, 77, 1, NOW, 0, 0, math.random).palette, nil)
@@ -244,6 +249,11 @@ H.test("palettes: Haunted wins (hauntify) and Rainbow repaints; Gold, Night and 
 		H.eq(ownColors(haunted), ownColors(CreatureModels.build(SPIRIT, EPIC, Halloween.MUTATION, pick)), `Haunted {p.id}: the Haunted look`)
 		H.eq(Palettes.prefix(p.id, Halloween.MUTATION), "", "named Haunted only")
 		H.eq(Palettes.shown(p.id, "Rainbow"), nil)
+		for _, mut in { "Gold", "Diamond" } do
+			local made = CreatureModels.build(SPIRIT, EPIC, mut, pick, p.id)
+			H.eq(ownColors(made), ownColors(CreatureModels.build(SPIRIT, EPIC, mut, pick)), `{mut} {p.id}: the {mut} look`)
+			H.eq(Palettes.prefix(p.id, mut), "", `named {mut} only`)
+		end
 	end
 	-- the tints go over a palette and it still shows through: a palette's plant stays at least half as far
 	-- (in colour, part by part) from the Natural one under the same mutation as without it
@@ -262,7 +272,7 @@ H.test("palettes: Haunted wins (hauntify) and Rainbow repaints; Gold, Night and 
 	for _, name in CreatureModels.variants(SPIRIT, EPIC) do
 		local at = pickOf(SPIRIT, EPIC, name)
 		local plain = CreatureModels.build(SPIRIT, EPIC, nil, at)
-		for _, mut in { "Gold", "Night", "Celestial" } do
+		for _, mut in { "Night", "Celestial" } do
 			local natural = CreatureModels.build(SPIRIT, EPIC, mut, at)
 			for _, p in Palettes.LIST do
 				local tinted = CreatureModels.build(SPIRIT, EPIC, mut, at, p.id)
@@ -281,6 +291,10 @@ H.test("palettes: named before the flower, after the mutation (\"Night Azure Dua
 	H.eq(PlotService.plantName(plant), "Night Azure Duality Rose")
 	plant.mutation = Halloween.MUTATION
 	H.eq(PlotService.plantName(plant), "Haunted Duality Rose", "Haunted: no palette")
+	plant.mutation = "Diamond"
+	H.eq(PlotService.plantName(plant), "Diamond Duality Rose", "Diamond: no palette")
+	plant.mutation = "Gold"
+	H.eq(PlotService.plantName(plant), "Gold Duality Rose", "Gold: no palette")
 	plant.mutation = nil
 	plant.palette = nil
 	H.eq(PlotService.plantName(plant), "Duality Rose", "Natural: no word")

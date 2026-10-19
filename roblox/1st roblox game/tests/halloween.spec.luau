@@ -484,7 +484,7 @@ H.test("haunted look: the HUD's 3D pictures (FlowerView) show a Haunted plant as
 			H.ok(ownColors(plain) ~= ownColors(spooky), "the preview itself stays plain")
 			local server = CreatureModels.build(k, r, HAUNTED, table.find(CreatureModels.variants(k, r), name))
 			H.eq(ownColors(spooky), ownColors(server), `{name}: the same colours as the planted one`)
-			H.eq(FlowerView.flower(k, r, name, "Gold"), plain, "other mutations: the plain picture")
+			H.eq(FlowerView.flower(k, r, name, "Night"), plain, "a tinting mutation: the plain picture")
 		end
 	end)
 	rs.__children.FlowerPreviews = before
