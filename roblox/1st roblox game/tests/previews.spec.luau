@@ -214,6 +214,6 @@ H.test("HUD: the Index, Plants, Inventory and Sell cards show the flowers in 3D 
 	for _ in string.gmatch(HUD, "spin = true") do
 		spins += 1
 	end
-	H.eq(spins, 4, "Plants, Inventory, Sell and the pack reveal's seed turn (only while on screen: FlowerView)")
+	H.eq(spins, 5, "Plants, Inventory, Sell, the pack reveal's seed and every pack reward tile (owner 2026-10-19) turn (only while on screen: FlowerView)")
 	H.ok(string.find(HUD, "spin = look.spin ~= false", 1, true) ~= nil, "...and the x10 grid's seeds (the reel's Haunted plant cards stand still)")
 end)
