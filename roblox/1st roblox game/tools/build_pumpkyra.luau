@@ -363,7 +363,63 @@ local function preview(plant: any): any
 	return game
 end
 
-local plant = build()
+-- The Blender Pumpkyra (tools/blender/pumpkyra.py, uploaded with tools/blender/roblox_model.mjs), as Roblox
+-- imported it: its MeshParts made still, the glow inside the pumpkin Neon, a candle light, flames from the
+-- eyes, embers from the crown, spores round the head and purple wisps from the mound; its pivot on the ground.
+local function finish(model: any): any
+	local byName = {}
+	for _, d in model:GetDescendants() do
+		if d:IsA("BasePart") then
+			byName[d.Name] = d
+			d.Anchored = true
+			d.CanCollide = false
+			d.CanTouch = false
+			d.CanQuery = false
+		end
+	end
+	local core, petals, mound = byName.PumpkinGlow, byName.Petals, byName.Mound
+	core.Material = NEON
+	core.Color = rgb(255, 175, 50)
+	core.CastShadow = false
+	new("PointLight", { Color = rgb(255, 150, 40), Brightness = 3, Range = 14, Shadows = false }, core)
+	local head = core.CFrame.Position
+	for side = -1, 1, 2 do
+		local eye = new("Attachment", { Name = "EyeFlame", CFrame = core.CFrame:Inverse() * CFrame.new(head + V(side * 0.6, 0.45, -1.35)) }, core)
+		emitter(eye, "EyeFire", {
+			Texture = "rbxasset://textures/particles/fire_main.dds", Color = seq(rgb(255, 240, 150), ORANGE, PURPLE),
+			Size = nums(0, 0.35, 1, 0.05), Transparency = nums(0, 0.3, 1, 1),
+			Lifetime = NumberRange.new(0.35, 0.6), Rate = 14, Speed = NumberRange.new(0.6, 1.2),
+			SpreadAngle = Vector2.new(15, 15), RotSpeed = NumberRange.new(-90, 90),
+		})
+	end
+	local crown = new("Attachment", { Name = "Crown", CFrame = petals.CFrame:Inverse() * CFrame.new(head + V(0, 2.2, 0)) }, petals)
+	emitter(crown, "Embers", {
+		Texture = "rbxasset://textures/particles/sparkles_main.dds", Color = seq(rgb(255, 220, 120), ORANGE, PURPLE),
+		Size = nums(0, 0.3, 1, 0), Transparency = nums(0, 0, 1, 1),
+		Lifetime = NumberRange.new(1.2, 2.2), Rate = 14, Speed = NumberRange.new(1.5, 3),
+		SpreadAngle = Vector2.new(35, 35), Acceleration = V(0, 1, 0),
+	})
+	emitter(core, "Spores", {
+		Texture = "rbxasset://textures/particles/sparkles_main.dds", Color = seq(rgb(210, 255, 150), GREEN),
+		Size = nums(0, 0.18, 0.5, 0.26, 1, 0), Transparency = nums(0, 0.2, 1, 1),
+		Lifetime = NumberRange.new(1.5, 2.5), Rate = 8, Speed = NumberRange.new(1.5, 2.5),
+		SpreadAngle = Vector2.new(180, 180),
+	})
+	emitter(mound, "Wisps", {
+		Texture = "rbxasset://textures/particles/smoke_main.dds", Color = seq(PURPLE, PURPLE_DARK),
+		Size = nums(0, 0.8, 1, 2.2), Transparency = nums(0, 0.75, 0.4, 0.6, 1, 1),
+		Lifetime = NumberRange.new(2, 3.5), Rate = 4, Speed = NumberRange.new(0.3, 0.7),
+		SpreadAngle = Vector2.new(60, 60), RotSpeed = NumberRange.new(-20, 20), LightEmission = 0.6,
+	})
+	model.PrimaryPart = mound
+	model.WorldPivot = CFrame.identity
+	return model
+end
+
+-- With a second argument (the imported model's .rbxm), the Blender version; else the Parts one.
+local plant = if process.args[2]
+	then finish(roblox.deserializeModel(fs.readFile(process.args[2]))[1])
+	else build()
 local count = 0
 for _, d in plant:GetDescendants() do
 	if d:IsA("BasePart") then
