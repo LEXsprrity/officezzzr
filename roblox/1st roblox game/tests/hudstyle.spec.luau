@@ -164,7 +164,17 @@ H.test("hotbar: small dark see-through slots, the number top-left, a drawn bat a
 
 	local bat = block(HUD, "local batSlot", "local batShade")
 	H.ok(string.find(bat, "ShopUi.slot(batSlot, \"1\")", 1, true) ~= nil, "slot 1 in the hotbar's look")
-	H.ok(string.find(bat, "Name = \"Bat\"", 1, true) and string.find(bat, "Rotation = 42", 1, true), "a bat drawn diagonally")
+	H.ok(string.find(bat, "Name = \"Bat\"", 1, true) and string.find(bat, "Rotation = 42", 1, true), "a bat drawn diagonally (the stand-in)")
+	-- the bat itself in 3D (owner 2026-10-19), from the Tool in the Backpack or the hand; the drawn one until then
+	H.ok(string.find(HUD, "local ToolView = require(Shared:WaitForChild(\"ToolView\"))", 1, true) ~= nil, "uses Shared/ToolView")
+	H.ok(string.find(bat, "ToolView.show(batSlot, tool, { size = UDim2.new(1, -4, 1, -4), position = UDim2.fromOffset(2, 2), zindex = 2 })", 1, true) ~= nil,
+		"the 3D bat fills the slot like the seed, under the number and the cooldown shade")
+	H.ok(string.find(bat, "batArt.Visible = false", 1, true) ~= nil, "the drawn bat hides once the 3D one shows")
+	H.ok(string.find(bat, "if batView or not (tool and tool:IsA(\"Tool\")) then", 1, true) ~= nil, "built once, from a Tool")
+	H.ok(string.find(bat, "child:IsA(\"Backpack\")", 1, true) and string.find(bat, "me.CharacterAdded:Connect(watchFor)", 1, true),
+		"found in the Backpack (each respawn) or in hand")
+	H.ok(string.find(bat, "tool.ChildAdded:Once(", 1, true) ~= nil, "retried while its parts replicate")
+	H.ok(not string.find(bat, "Icons.set", 1, true), "no 2D icon")
 	H.ok(not string.find(bat, "\"Bat\")", 1, true) and not string.find(bat, "Bat\\n", 1, true) and not string.find(HUD, "\"🏏\\nBat\"", 1, true),
 		"no Bat name, no hammer icon")
 	H.ok(not string.find(bat, "Color3.fromRGB(200, 140, 80)", 1, true), "no brown slot background")
@@ -503,6 +513,52 @@ H.test("Shop tabs: a click scrolls the open Shop to its section; the lit tab fol
 	H.eq(at(200), "Featured", "and back to the top")
 	H.eq(ShopLayout.litTab({}, 100, 500), nil, "nothing laid out: unchanged")
 	H.eq(ShopLayout.litTab({ Money = 120 }, 100, 500), "Money", "only the laid-out titles count")
+end)
+
+H.test("hotbar bat in 3D: laid diagonally, grip bottom-left, fitted to the slot, brightly lit", function()
+	local ToolView = H.shared("ToolView")
+	local V, CF = roblox.Vector3, roblox.CFrame
+	-- BatTool's plain bat: a 4 x 0.5 x 0.5 handle, the hand at x = -1.6
+	local function check(boxes: { any }, grip: any, label: string)
+		local lo, hi = ToolView.bounds(boxes)
+		local pose = ToolView.pose(lo, hi, grip)
+		local g = pose * grip
+		H.ok(g.X < 0 and g.Y < 0, `{label}: the grip end bottom-left ({g})`)
+		local points = {}
+		for _, b in boxes do
+			local cf = pose * b.cframe
+			local h = b.size / 2
+			for _, s in { V.new(-1, -1, -1), V.new(1, 1, 1), V.new(-1, 1, -1), V.new(1, -1, 1), V.new(-1, -1, 1), V.new(1, 1, -1), V.new(-1, 1, 1), V.new(1, -1, -1) } do
+				table.insert(points, cf * (h * s))
+			end
+		end
+		-- the far end (furthest from the grip) is top-right
+		local far = points[1]
+		for _, p in points do
+			if (p - g).Magnitude > (far - g).Magnitude then
+				far = p
+			end
+		end
+		H.ok(far.X > 0 and far.Y > 0, `{label}: the far end top-right ({far})`)
+		H.ok(far.Z > 0, `{label}: turned a little toward the camera`)
+		local dist = ToolView.distance(points, ToolView.FOV, ToolView.FILL)
+		local t = math.tan(math.rad(ToolView.FOV) / 2)
+		local widest = 0
+		for _, p in points do
+			local depth = dist - p.Z
+			H.ok(depth > 0, `{label}: in front of the camera`)
+			widest = math.max(widest, math.abs(p.X) / depth / t, math.abs(p.Y) / depth / t)
+		end
+		H.ok(math.abs(widest - ToolView.FILL) < 1e-6, `{label}: the widest point at FILL of the half-width ({widest})`)
+	end
+	check({ { cframe = CF.new(), size = V.new(4, 0.5, 0.5) } }, V.new(-1.6, 0, 0), "along X")
+	check({ { cframe = CF.new(), size = V.new(4, 0.5, 0.5) } }, V.new(1.6, 0, 0), "grip at the + end")
+	check({ { cframe = CF.new(), size = V.new(0.4, 0.4, 3) }, { cframe = CF.new(0, 0, -1.8), size = V.new(0.7, 0.7, 1.2) } },
+		V.new(0, 0, 1.2), "along Z, two parts")
+	check({ { cframe = CF.Angles(0.3, 0.2, 0.1), size = V.new(0.5, 4, 0.5) } }, V.new(0, -1.5, 0), "along Y, tilted")
+	H.ok(ToolView.AMBIENT.R > 0.6 and ToolView.AMBIENT.G > 0.6, "bright ambient: not a dark picture")
+	H.ok(ToolView.LIGHT_DIRECTION.Z < 0, "lit from the camera's side")
+	H.eq(string.find(read("src/shared/ToolView.luau"), "RenderStepped", 1, true), nil, "a still picture, like the seed slot")
 end)
 
 return nil

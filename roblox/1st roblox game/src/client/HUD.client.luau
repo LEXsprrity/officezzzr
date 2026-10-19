@@ -20,6 +20,7 @@ local ShopLayout = require(Shared:WaitForChild("ShopLayout"))
 local ShopUi = require(Shared:WaitForChild("ShopUi"))
 local Toast = require(Shared:WaitForChild("Toast"))
 local Halloween = require(Shared:WaitForChild("Halloween"))
+local ToolView = require(Shared:WaitForChild("ToolView"))
 
 local player = Players.LocalPlayer
 local remotes = ReplicatedStorage:WaitForChild("Remotes")
@@ -439,12 +440,16 @@ do -- the slot shows selected while the bat is in hand
 		watch(Players.LocalPlayer.Character)
 	end
 end
+-- The slot shows the bat itself in 3D (owner 2026-10-19): the Tool the server put in the Backpack (or the
+-- hand), laid diagonally and fitted to the slot (Shared/ToolView). Until that Tool has replicated, a bat
+-- drawn from frames stands in.
+local batArt: Frame
 do
 	-- A wooden baseball bat, drawn from frames, lying diagonally across the slot: a round barrel tapering
 	-- into a thin handle with a knob, warm wood with a light side, a thin dark brown outline.
 	local WOOD = ColorSequence.new(Color3.fromRGB(236, 172, 100), Color3.fromRGB(160, 92, 42))
 	local BARK = Color3.fromRGB(70, 36, 14)
-	local bat = new("Frame", {
+	batArt = new("Frame", {
 		Name = "Bat", BackgroundTransparency = 1, AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.52, 0.52),
 		Size = UDim2.fromScale(0.2, 1.02), Rotation = 42, ZIndex = 2, Parent = batSlot,
 	})
@@ -452,12 +457,50 @@ do
 	for _, part in { { 0.36, 0.52, 0.42 }, { 0.62, 0.9, 0.08 }, { 0.6, 0.38, 0.22 }, { 0.92, 0.02, 0.5 } } do
 		new("Frame", {
 			AnchorPoint = Vector2.new(0.5, 0), Position = UDim2.fromScale(0.5, part[2]), Size = UDim2.fromScale(part[1], part[3]),
-			BackgroundColor3 = WHITE, BorderSizePixel = 0, ZIndex = 2, Parent = bat,
+			BackgroundColor3 = WHITE, BorderSizePixel = 0, ZIndex = 2, Parent = batArt,
 		}, {
 			new("UICorner", { CornerRadius = UDim.new(0.5, 0) }), -- round wood (art)
 			new("UIGradient", { Color = WOOD }),
 			new("UIStroke", { Thickness = 1.5, Color = BARK }),
 		})
+	end
+end
+local batView: ViewportFrame? = nil
+local function showBat3D(tool: Instance?)
+	if batView or not (tool and tool:IsA("Tool")) then
+		return
+	end
+	batView = ToolView.show(batSlot, tool, { size = UDim2.new(1, -4, 1, -4), position = UDim2.fromOffset(2, 2), zindex = 2 })
+	if batView then
+		batArt.Visible = false
+	else -- its parts are still on their way
+		tool.ChildAdded:Once(function()
+			showBat3D(tool)
+		end)
+	end
+end
+do -- built once, from whichever bat turns up first: in the Backpack (a new one each respawn) or in hand
+	local function watchFor(holder: Instance)
+		holder.ChildAdded:Connect(function(child)
+			if child.Name == BAT_TOOL then
+				showBat3D(child)
+			end
+		end)
+		showBat3D(holder:FindFirstChild(BAT_TOOL))
+	end
+	local me = Players.LocalPlayer
+	me.ChildAdded:Connect(function(child)
+		if child:IsA("Backpack") then
+			watchFor(child)
+		end
+	end)
+	me.CharacterAdded:Connect(watchFor)
+	local pack = me:FindFirstChildOfClass("Backpack")
+	if pack then
+		watchFor(pack)
+	end
+	if me.Character then
+		watchFor(me.Character)
 	end
 end
 local batShade = new("Frame", {
