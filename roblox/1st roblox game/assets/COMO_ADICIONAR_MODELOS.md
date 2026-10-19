@@ -248,6 +248,7 @@ O **ninho** fica bem no canto ESQUERDO do corredor (quem vem da base), encostado
 | `ShopStall_Sell` | só a barraca SELL (vender plantas): a mesma barraca, com o toldo vermelho e branco. O anel verde no chão e o texto "SELL" continuam do jogo. Sem modelo, fica a barraca do jogo (não usa `ShopStall`) | praça das lojas | ~17 | 17 × 13 |
 | `MoneyBoard` | a moldura do quadro "MOST MONEY/s" (moldura com studs, o topo e o pedestal). O painel com o título e a lista dos 10 melhores continua do jogo (12 × 18 studs, a 4 studs do chão) | ao lado do presente FREE GIFT | ~23 | ~16 |
 | `Bat` | o bastão que o jogador segura (um **Tool** com uma peça `Handle`; sons `Swoosh`, `Equip` e `Hit` dentro do Handle são usados). Scripts que vierem com o modelo são apagados | na mão do jogador (tecla 1) | ~4 | ~0.4 |
+| `Candy` | o doce do evento de Halloween (o candy corn do dono): espalhado pelo mapa, apanha-se ao passar por cima. Gira e flutua sozinho. Sem modelo, o jogo faz um candy corn de 3 peças | corredor e passeio da base | ~3 | ~2.4 |
 
 #### Esteiras por nível (`Treadmill_T1` ... `Treadmill_T10`)
 

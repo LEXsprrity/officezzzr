@@ -114,6 +114,7 @@ end)
 local SOUND_FOR = {
 	Pickup = "Pickup", Planted = "Plant", Stored = "Pickup", Caught = "Caught", GuardWake = "Wake",
 	Bat = "Bat", Bought = "Buy", End = "Pickup", PackRoll = "Buy", Announce = "Pickup", SoldPlants = "Buy",
+	Candy = "Pickup", -- (Halloween candy walked over: CandyService)
 }
 
 -- 2x Luck raised a seed as it was stolen (the server's Pickup says what the pod showed: `shown`): "Lucky!

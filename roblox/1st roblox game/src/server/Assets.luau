@@ -34,6 +34,7 @@ Assets.SLOTS = {
 	"Spirit_Torii", "Spirit_Lantern", "Spirit_CherryTree", "Spirit_Shrine", "Spirit_Bamboo", "Spirit_Rock",
 	"Treadmill", "UpgradeSign", "ShopStall", "ShopStall_Shop", "ShopStall_Trails", "ShopStall_Index", "ShopStall_Sell",
 	"MoneyBoard", "Bat",
+	"Candy", -- the Halloween event's candy on the map (CandyService)
 } :: { string }
 for _, zone in Config.ZONES do
 	table.insert(Assets.SLOTS, "Creature_" .. compact(zone.seed))
