@@ -120,6 +120,23 @@ local function onBuy(player: Player, itemId: any)
 		return
 	end
 
+	-- The Halloween card: "Candy:<zone>", a Haunted seed for candy (Shop.buyHaunted), revealed like a pack.
+	if string.sub(itemId, 1, 6) == "Candy:" then
+		local ok, message, roll, pack = Shop.buyHaunted(s.profile, tonumber(string.match(itemId, "^Candy:(%d)$")), os.time(), roll01)
+		if not ok or not roll or not pack then
+			Net.toast(player, message, "red")
+			return
+		end
+		Sessions.pushFull(s)
+		Net.LootEvent:FireClient(player, "PackRoll", { packId = pack.id, name = pack.name, zone = pack.zone, result = roll })
+		if Config.announcesLegendary(roll.zone, roll.rarity, true) then
+			task.delay(Config.PACK_ANNOUNCE_DELAY, function() -- once the buyer's reveal reel has landed
+				Net.announce(Config.legendaryAnnouncement(player.DisplayName, roll.zone, roll.mutation), "gold")
+			end)
+		end
+		return
+	end
+
 	-- Robux: "Product:<name>". We only open the Robux prompt here; ProcessReceipt grants.
 	if string.sub(itemId, 1, 8) == "Product:" then
 		local name = string.match(itemId, "^Product:(%a%w*)$")

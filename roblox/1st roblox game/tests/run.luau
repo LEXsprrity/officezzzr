@@ -38,6 +38,7 @@ require("./hudstyle.spec")
 require("./sprout.spec")
 require("./packplant.spec")
 require("./admin.spec")
+require("./halloween.spec")
 require("./compile.spec")
 
 print("Steal a Seed: mocked server tests\n")

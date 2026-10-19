@@ -180,6 +180,7 @@ function Sessions.pushFull(s: Session)
 		index = table.clone(p.index),
 		reachedEnd = p.reachedEnd,
 		freeGift = p.freeGift, -- the Free Gift window's CLAIMED state
+		candy = p.candy, -- the Halloween event's (Shared/Halloween)
 		passes = table.clone(s.passes),
 		carrying = carryView(s),
 		plot = if s.plot then s.plot.index else nil,

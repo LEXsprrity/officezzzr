@@ -467,6 +467,17 @@ local CELESTIAL_STARS = ColorSequence.new({
 	ColorSequenceKeypoint.new(1, rgb(120, 240, 255)),
 })
 
+-- Haunted (the Halloween event's, Shared/Halloween): a pumpkin-orange body, deep purple leaves and petals,
+-- toxic-green glow, orange and purple wisps, and a little jack-o'-lantern grinning at its feet.
+local HAUNTED_ORANGE = rgb(255, 125, 20)
+local HAUNTED_PURPLE = rgb(95, 35, 150)
+local HAUNTED_GREEN = rgb(140, 255, 60)
+local HAUNTED_WISPS = ColorSequence.new({
+	ColorSequenceKeypoint.new(0, HAUNTED_ORANGE),
+	ColorSequenceKeypoint.new(0.5, rgb(190, 90, 255)),
+	ColorSequenceKeypoint.new(1, HAUNTED_PURPLE),
+})
+
 local TINTED = { skin = 1, accent = 1, leaf = 0.8, flower = 0.8, husk = 0.45, asset = 0.5 }
 
 local function applyMutation(b: Builder, mut: Config.Mutation)
@@ -476,7 +487,7 @@ local function applyMutation(b: Builder, mut: Config.Mutation)
 		local weight = TINTED[role]
 		i += 1
 		if role == "glow" then
-			p.Color = if mut.id == "Rainbow" then Color3.fromHSV((i * 0.13) % 1, 0.7, 1) else mut.color
+			p.Color = if mut.id == "Rainbow" then Color3.fromHSV((i * 0.13) % 1, 0.7, 1) elseif mut.id == "Haunted" then HAUNTED_GREEN else mut.color
 		elseif weight then
 			if mut.id == "Gold" then
 				p.Color = p.Color:Lerp(mut.color, 0.75 * weight)
@@ -489,6 +500,9 @@ local function applyMutation(b: Builder, mut: Config.Mutation)
 				end
 			elseif mut.id == "Night" then
 				p.Color = p.Color:Lerp(rgb(45, 45, 130), 0.6 * weight)
+			elseif mut.id == "Haunted" then
+				local spooky = if role == "leaf" or role == "flower" then HAUNTED_PURPLE else HAUNTED_ORANGE
+				p.Color = p.Color:Lerp(spooky, 0.7 * weight)
 			elseif mut.id == "Celestial" then
 				if role == "leaf" or role == "flower" then
 					p.Color = CELESTIAL_WHITE
@@ -503,6 +517,23 @@ local function applyMutation(b: Builder, mut: Config.Mutation)
 			end
 		end
 	end
+end
+
+-- A little jack-o'-lantern (2 parts: the creatures' part budget) at the front-right of a Haunted plant's feet,
+-- at the edge of its footprint (`radius`, CreatureModels.extents): an orange pumpkin wearing the classic
+-- Roblox face (a built-in texture, no upload), facing out of the plant's front (-Z), and its stem.
+local function jackOLantern(b: Builder, radius: number)
+	local d = 0.9
+	local out = math.max(radius - d * 0.75, 0) -- (its box stays inside the plant's footprint)
+	local at = V(out * 0.8, d * 0.4, -out * 0.6)
+	local pumpkin = ellipsoid(b, "fx", "Pumpkin", V(d, d * 0.8, d), CFrame.new(at), HAUNTED_ORANGE)
+	pumpkin.CastShadow = false
+	local face = Instance.new("Decal")
+	face.Name = "PumpkinFace"
+	face.Texture = "rbxasset://textures/face.png"
+	face.Face = Enum.NormalId.Front
+	face.Parent = pumpkin
+	stalk(b, "fx", "PumpkinStem", at + V(0, d * 0.35, 0), at + V(0.05, d * 0.6, 0), 0.16, rgb(70, 120, 40))
 end
 
 local function decorate(b: Builder, zoneIndex: number, rarityIndex: number, mut: Config.Mutation?)
@@ -564,8 +595,13 @@ local function decorate(b: Builder, zoneIndex: number, rarityIndex: number, mut:
 			stars.LightEmission = 1
 			stars.RotSpeed = NumberRange.new(-30, 30)
 		else
-			particles(body, "MutationSparkles", if mut.id == "Rainbow" then RAINBOW else ColorSequence.new(mut.color), 7, 0.5, 1.2, 2.5, Vector3.zero)
+			local colors = if mut.id == "Rainbow" then RAINBOW elseif mut.id == "Haunted" then HAUNTED_WISPS else ColorSequence.new(mut.color)
+			particles(body, "MutationSparkles", colors, 7, 0.5, 1.2, 2.5, Vector3.zero)
 		end
+	end
+
+	if mut and mut.id == "Haunted" then
+		jackOLantern(b, CreatureModels.extents(b.model))
 	end
 
 	-- Anchors PlotService hangs the Info billboard and the Remove prompt on (they scale with the model).

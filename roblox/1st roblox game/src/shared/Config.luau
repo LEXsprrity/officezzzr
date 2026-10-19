@@ -366,6 +366,8 @@ Config.MUTATIONS = {
 	{ id = "Rainbow", color = Color3.fromRGB(255, 80, 200), income = 8, chance = 0.01, nightOnly = false },
 	{ id = "Night", color = Color3.fromRGB(90, 90, 255), income = 2, chance = 0.12, nightOnly = true },
 	{ id = "Celestial", color = Color3.fromRGB(120, 240, 255), income = 12, chance = 0, nightOnly = false, exclusive = true },
+	-- the Halloween event's (Shared/Halloween): only from its Haunted seeds, bought with candy
+	{ id = "Haunted", color = Color3.fromRGB(255, 125, 20), income = 5, chance = 0, nightOnly = false, exclusive = true },
 } :: { Mutation }
 
 function Config.mutationById(id: string?): Mutation?

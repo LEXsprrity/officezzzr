@@ -19,6 +19,7 @@ local UiFx = require(Shared:WaitForChild("UiFx"))
 local ShopLayout = require(Shared:WaitForChild("ShopLayout"))
 local ShopUi = require(Shared:WaitForChild("ShopUi"))
 local Toast = require(Shared:WaitForChild("Toast"))
+local Halloween = require(Shared:WaitForChild("Halloween"))
 
 local player = Players.LocalPlayer
 local remotes = ReplicatedStorage:WaitForChild("Remotes")
@@ -34,7 +35,7 @@ local stats: { [string]: any } = {
 	money = 0, speed = 0, walkSpeed = 16, income = 0, slots = Config.SLOTS_START, plotLevel = 1,
 	trails = { [Config.DEFAULT_TRAIL] = true }, equippedTrail = Config.DEFAULT_TRAIL, speedMult = Config.trailMult(Config.DEFAULT_TRAIL),
 	treadmillTier = 1,
-	items = {}, index = {}, plants = {}, passes = {}, carrying = false, reachedEnd = false, seedBag = {},
+	items = {}, index = {}, plants = {}, passes = {}, carrying = false, reachedEnd = false, seedBag = {}, candy = 0,
 }
 
 ----------------------------------------------------------------------------------------------------
@@ -184,7 +185,10 @@ local SPEED_PINK = Color3.fromRGB(255, 70, 150)
 local MONEY_GREEN = Color3.fromRGB(85, 240, 70)
 local LEFT_GAP = 18 -- between Shop, Index and Slow Mode
 local SIDE_W, SIDE_H = 176, 68 -- the Shop / Index buttons (wide, like the reference)
-local STATS_H, LEFT_H = 176, SIDE_H * 2 + 30 * 2 + 3 * LEFT_GAP -- LEFT_H: 2 side buttons + Slow Mode + Music
+-- The Halloween event (Shared/Halloween) adds a third side button, Candy, while it runs (from joining).
+local HALLOWEEN = Halloween.active(workspace:GetServerTimeNow())
+local SIDE_BUTTONS = if HALLOWEEN then 3 else 2
+local STATS_H, LEFT_H = 176, SIDE_H * SIDE_BUTTONS + 30 * 2 + (SIDE_BUTTONS + 1) * LEFT_GAP -- LEFT_H: the side buttons + Slow Mode + Music
 local STATS_BOTTOM = 10
 
 local openModal: (name: string) -> ()
@@ -271,7 +275,7 @@ local leftScale = new("UIScale", { Parent = leftColumn })
 -- Wide vivid buttons (owner reference 2026-10-15): about 2.6:1, near-square corners, a thick dark outline,
 -- a flat colour, studded, with a lighter top (ShopUi.bevel; no dark bottom band), the icon on the left and the
 -- word in big white relief on its right.
-local function sideButton(order: number, label: string, icon: string, emoji: string, color: Color3, onClick: () -> ())
+local function sideButton(order: number, label: string, icon: string, emoji: string, color: Color3, onClick: () -> ()): TextButton
 	-- The column lays out the holder; the button sits centred in it so its hover pop grows from the middle.
 	local holder = new("Frame", { Name = label, Size = UDim2.fromOffset(SIDE_W, SIDE_H), BackgroundTransparency = 1, LayoutOrder = order, Parent = leftColumn })
 	local b = new("TextButton", {
@@ -283,6 +287,7 @@ local function sideButton(order: number, label: string, icon: string, emoji: str
 	iconLabel(b, icon, emoji, { Size = UDim2.fromOffset(54, 54), AnchorPoint = Vector2.new(0, 0.5), Position = UDim2.new(0, 8, 0.5, -1) })
 	UiFx.relief(bold(b, 4, { Text = label, Size = UDim2.new(1, -78, 0, 42), Position = UDim2.new(0, 68, 0.5, -23), TextXAlignment = Enum.TextXAlignment.Left }), 3, 4)
 	b.Activated:Connect(onClick)
+	return b
 end
 
 sideButton(1, "Shop", "Shop", "🛒", Color3.fromRGB(95, 230, 45), function()
@@ -291,6 +296,24 @@ end)
 sideButton(2, "Index", "Index", "📖", Color3.fromRGB(35, 195, 255), function()
 	openModal("Index")
 end)
+
+-- Halloween (Shared/Halloween): an orange Candy button under Index, the player's candy in a purple bubble on its
+-- top-right corner; it opens the Shop at its HALLOWEEN card.
+local HALLOWEEN_ORANGE = Color3.fromRGB(255, 125, 20)
+local HALLOWEEN_PURPLE = Color3.fromRGB(110, 40, 175)
+local candyCount: TextLabel? = nil
+if HALLOWEEN then
+	local b = sideButton(3, "Candy", "Candy", "🍬", HALLOWEEN_ORANGE, function()
+		openShopAt("Halloween")
+	end)
+	local bubble = new("Frame", {
+		Name = "CandyCount", AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.new(1, -6, 0, 4), Size = UDim2.fromOffset(62, 34),
+		BackgroundColor3 = HALLOWEEN_PURPLE, ZIndex = 4, Parent = b,
+	}, deco(4, 3))
+	ShopUi.studs(bubble, HALLOWEEN_PURPLE)
+	candyCount = bold(bubble, 3, { Text = "0", Size = UDim2.new(1, -8, 1, -6), Position = UDim2.fromOffset(4, 2), ZIndex = 5 })
+	UiFx.relief(candyCount :: TextLabel, 2, 3)
+end
 
 -- The switches under them (Slow Mode, Music): styled like the buttons above, a square-ish track with a thick
 -- outline and the words in relief. `onToggle(on)` runs on every flip.
@@ -1622,6 +1645,68 @@ do
 	end
 
 	----------------------------------------------------------------------------------------------------
+	-- HALLOWEEN: the event's card (Shared/Halloween), laid out like a pack's, in night purple with a pumpkin
+	-- outline: the Haunted seed of the deepest zone the player's Speed reaches, its odds, how candy is earned,
+	-- and the candy button (orange while there is enough candy and room in the bag).
+	----------------------------------------------------------------------------------------------------
+	local function hauntedCard(order: number, free: number)
+		local k = Halloween.bestZone(stats.speed or 0)
+		local pack = SeedPacks.hauntedPack(k)
+		local zone = Config.ZONES[k]
+		local price = Halloween.price(k)
+		local haunted = Config.mutationById(Halloween.MUTATION) :: Config.Mutation
+		local c = cardFrame(modalBody, order, HALLOWEEN_PURPLE, { Name = "Haunted", Size = UDim2.new(1, -8, 0, L.PACK_H) })
+		local stroke = c:FindFirstChildOfClass("UIStroke") :: UIStroke
+		stroke.Color = HALLOWEEN_ORANGE
+		sunburst(c, 0.86, 0.42, 560)
+		sunburst(c, 0.3, 0.55, 560)
+		UiFx.relief(ShopUi.tag(c, "Event!", UDim2.fromOffset(18, 16), UDim2.fromOffset(116, 44), 4), 3, 3)
+		UiFx.relief(bold(c, 5, {
+			Name = "Title", Text = `HAUNTED {string.upper(zone.seed)} SEED`, Size = UDim2.new(1, -184, 0, 54), Position = UDim2.fromOffset(150, 8),
+			TextXAlignment = Enum.TextXAlignment.Left, TextColor3 = Color3.fromRGB(255, 160, 40), ZIndex = 4,
+		}), 4, 5)
+		bold(c, 3, {
+			Text = `{zone.name} seed · always Haunted (x{haunted.income} income) · {Halloween.timeLeft(workspace:GetServerTimeNow())}`,
+			Size = UDim2.new(1, -184, 0, 24), Position = UDim2.fromOffset(152, 62), TextXAlignment = Enum.TextXAlignment.Left,
+			TextColor3 = Color3.fromRGB(255, 235, 200), ZIndex = 3,
+		})
+		local tiles = SeedPacks.showcase(pack, stats.catalog)
+		local bottom, featuredW, gap = 262, 220, 12
+		local smallW = math.floor((PACK_W - 36 - featuredW - 18 - (#tiles - 2) * gap) / math.max(#tiles - 1, 1))
+		local x, n = 18, 0
+		for _, tile in tiles do
+			if tile.featured then
+				rewardTile(c, k, tile, UDim2.new(1, -(18 + featuredW), 0, 94), featuredW, bottom - 94)
+			else
+				n += 1
+				local h = 124 + (n - 1) * 8
+				rewardTile(c, k, tile, UDim2.fromOffset(x, bottom - h), smallW, h)
+				x += smallW + gap
+			end
+		end
+		bold(c, 2, {
+			Text = `Candy: +{Halloween.CANDY_PER_MINUTE} every minute you play, +1 to +{#Config.ZONES} for every seed you bring home (deeper zones give more)`,
+			Size = UDim2.new(1, -36, 0, 22), Position = UDim2.fromOffset(18, bottom + 8), ZIndex = 3,
+		})
+		local have = bold(c, 2, {
+			Name = "Have", Size = UDim2.new(1, -36, 0, 20), Position = UDim2.fromOffset(18, bottom + 32), TextColor3 = Color3.fromRGB(255, 235, 200), ZIndex = 3,
+		})
+		local buy = buttonRow(c, PACK_W, L.PACK_H, L.bottomY(L.PACK_H, true), {
+			{
+				text = `{price} Candy`, color = HALLOWEEN_ORANGE, robux = false, gift = false, caption = if free > 0 then "1 Seed" else "Bag full!",
+				onClick = function()
+					RequestBuy:FireServer(`Candy:{k}`)
+				end,
+			},
+		})[1]
+		watchMoney(function()
+			local candy = stats.candy or 0
+			have.Text = `You have {Format.commas(candy)} candy`
+			buy.BackgroundColor3 = if candy >= price and free > 0 then HALLOWEEN_ORANGE else COLORS.disabled
+		end)
+	end
+
+	----------------------------------------------------------------------------------------------------
 	-- The other cards
 	----------------------------------------------------------------------------------------------------
 	-- A grid of cards (`w` x `h` cells, three a row by default), auto-sized to its contents.
@@ -1782,9 +1867,14 @@ do
 
 		-- Seed packs (Robux)
 		-- (the Shop's Featured tab scrolls here; owner 2026-10-15: "-- FEATURED --")
-		shopSections.Featured = section("FEATURED", nextOrder(), HEADING_GOLD)
 		local bagCount = SeedPacks.bagCount(stats.seedBag or {})
 		local bagFull = bagCount >= Config.SEED_BAG_MAX
+		-- The Halloween event's card first, while it runs (Shared/Halloween; the Candy button opens the Shop here)
+		if Halloween.active(workspace:GetServerTimeNow()) then
+			shopSections.Halloween = section("HALLOWEEN", nextOrder(), HALLOWEEN_ORANGE)
+			hauntedCard(nextOrder(), Config.SEED_BAG_MAX - bagCount)
+		end
+		shopSections.Featured = section("FEATURED", nextOrder(), HEADING_GOLD)
 		for _, offer in SeedPacks.offers() do
 			packCard(nextOrder(), offer, Config.SEED_BAG_MAX - bagCount)
 		end
@@ -2709,7 +2799,8 @@ do
 			resultLabel.TextColor3 = color
 			resultLabel.Visible = true
 			local exclusive = best.mutation ~= nil and best.mutation == pack.exclusive
-			resultSub.Text = `{if exclusive then "PACK EXCLUSIVE! " else ""}{SeedPacks.seedName(best.zone, best.rarity, best.mutation)} → your Inventory`
+			local event = best.mutation == Halloween.MUTATION -- (the Halloween card's seeds are all Haunted)
+			resultSub.Text = `{if event then "HALLOWEEN! " elseif exclusive then "PACK EXCLUSIVE! " else ""}{SeedPacks.seedName(best.zone, best.rarity, best.mutation)} → your Inventory`
 			resultSub.Visible = true
 		end
 
@@ -2775,6 +2866,9 @@ end
 local function refresh(changed: { [string]: any })
 	speedValue.Text = Format.short(stats.speed)
 	moneyValue.Text = Format.money(stats.money)
+	if candyCount then
+		candyCount.Text = Format.short(stats.candy or 0)
+	end
 
 	-- (No banner while carrying a seed: the seed in hand and the planting ghost, Planting.client, say it.)
 	if not slowMode and changed.walkSpeed then
@@ -2791,7 +2885,7 @@ local function refresh(changed: { [string]: any })
 	elseif modal.Visible and (changed.index or changed.items or changed.slots or changed.plotLevel or changed.trails or changed.equippedTrail
 		or changed.treadmillTier or changed.passes or changed.seedBag or changed.catalog) then
 		renderModal()
-	elseif modal.Visible and (changed.money or changed.income or changed.speed) then
+	elseif modal.Visible and (changed.money or changed.income or changed.speed or changed.candy) then
 		for _, update in moneyWatchers do
 			update()
 		end
