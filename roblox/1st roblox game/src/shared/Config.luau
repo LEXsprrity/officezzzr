@@ -264,8 +264,9 @@ end
 -- Below the recommended Speed the guard runs faster after you (owner 2026-10-16: 5M outran the Snow Peaks'
 -- 7.5M guard, because WalkSpeed is a log curve and 5M runs only ~3% slower than 7.5M). Chasing a thief
 -- with Speed s < req it runs (req / s) ^ GUARD_UNDERSPEED_EXP faster, at most GUARD_UNDERSPEED_MAX:
--- 2/3 of the sign is ~13% faster (caught), 90% of it ~3% (a quick thief still makes it from close by).
-Config.GUARD_UNDERSPEED_EXP = 0.3
+-- 2/3 of the sign is ~28% faster (caught), 90% of it ~6.5%: a quick thief makes it from ~95% of the sign
+-- (owner 2026-10-19: a 65M player farmed the 75M Spirit Garden, so the exponent went 0.3 -> 0.6).
+Config.GUARD_UNDERSPEED_EXP = 0.6
 Config.GUARD_UNDERSPEED_MAX = 1.35
 function Config.guardSpeedVs(k: number, thiefSpeed: number?): number
 	local base = Config.guardChaseSpeed(k)
