@@ -190,7 +190,8 @@ H.test("HUD: more room between Shop, Index and Slow Mode", function()
 	H.ok(gap and gap >= 16, "a gap of 16+ design pixels")
 	local column = string.match(HUD, "local leftColumn = new%(\"Frame\", %b{}, (%b{})")
 	H.ok(column and string.find(column, "Padding = UDim.new(0, LEFT_GAP)", 1, true), "the column's layout uses it")
-	H.ok(string.find(HUD, "LEFT_H = 176, SIDE_H * 2 + 30 * 2 + 3 * LEFT_GAP", 1, true), "and the column's height counts it")
+	H.ok(string.find(HUD, "LEFT_H = 176, SIDE_H * SIDE_BUTTONS + 30 * 2 + (SIDE_BUTTONS + 1) * LEFT_GAP", 1, true), "and the column's height counts it")
+	H.ok(string.find(HUD, "local SIDE_BUTTONS = if HALLOWEEN then 3 else 2", 1, true), "(a third button, Candy, during the Halloween event)")
 end)
 
 H.test("HUD Sell window: mutation only on mutated plants, no \"no mutation\", no emoji; flower names on the cards", function()
@@ -236,7 +237,7 @@ do
 	-- Per file: the code (Lua patterns on the line) where an icon may stand in its emoji.
 	local ALLOWED: { [string]: { string } } = {
 		["src/client/HUD.client.luau"] = {
-			"^%s*iconLabel%(statsFrame", "^sideButton%(", "button%(hotbar", "Icons%.set%(sideTitle", "^for _, tab in", "Icons%.set%(modalSubtitle",
+			"^%s*iconLabel%(statsFrame", "sideButton%(", "button%(hotbar", "Icons%.set%(sideTitle", "^for _, tab in", "Icons%.set%(modalSubtitle",
 			"chunky%(parent, \"🎁\"", "Text = \"🏃\"", "^button%(rightTabs, \"🪴\"", "iconLabel%(art, \"%a+\"",
 		},
 		["src/client/Rewards.client.luau"] = { "iconLabel%(" },

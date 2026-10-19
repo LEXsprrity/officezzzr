@@ -121,6 +121,7 @@ export type Profile = {
 	freeGift: boolean, -- the Free Gift (community Speed) was claimed: never again on this account
 	giftShown: boolean, -- the Free Gift window already opened by itself once
 	chestAt: number, -- unix seconds of the last free chest claim (0 = never); the chest is gone, kept so saves round-trip
+	candy: number, -- the Halloween event's candy (Shared/Halloween; 0 before it)
 }
 
 function ProfileStore.defaultProfile(): Profile
@@ -146,6 +147,7 @@ function ProfileStore.defaultProfile(): Profile
 		freeGift = false,
 		giftShown = false,
 		chestAt = 0,
+		candy = 0,
 	}
 end
 
@@ -289,6 +291,7 @@ function ProfileStore.serialize(p: Profile): { [string]: any }
 		freeGift = p.freeGift,
 		giftShown = p.giftShown,
 		chestAt = p.chestAt,
+		candy = p.candy,
 	}
 end
 
@@ -335,6 +338,7 @@ function ProfileStore.deserialize(data: any): Profile
 	p.freeGift = data.freeGift == true
 	p.giftShown = data.giftShown == true
 	p.chestAt = num(data.chestAt, 0, 0, math.huge)
+	p.candy = int(data.candy, 0, 0, 1e9) -- (absent before the Halloween event: none)
 
 	local used = {}
 	local modern = type(data.v) == "number" and data.v >= 6 -- plants saved with their spot

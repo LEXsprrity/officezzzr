@@ -184,6 +184,20 @@ for _, player in Players:GetPlayers() do
 	task.spawn(onPlayerAdded, player)
 end
 
+-- The Halloween event (Shared/Halloween): CANDY_PER_MINUTE candy for every minute in the game.
+task.spawn(function()
+	local Halloween = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("Halloween"))
+	while true do
+		task.wait(60)
+		if Halloween.active(os.time()) then
+			for _, s in Sessions.all() do
+				s.profile.candy = math.min(s.profile.candy + Halloween.CANDY_PER_MINUTE, Halloween.CANDY_MAX)
+				Sessions.push(s.player, { candy = s.profile.candy })
+			end
+		end
+	end
+end)
+
 -- Autosave
 task.spawn(function()
 	while true do

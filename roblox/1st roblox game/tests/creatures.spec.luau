@@ -107,6 +107,10 @@ builtIn("creatures: mutations tint, swap materials and add particles", function(
 			end
 			H.eq(#find(model, "HaloOrb"), 6, "celestial halo even on a Common")
 			H.eq(find(model, "MutationSparkles")[1].LightEmission, 1, "celestial stars glow")
+		elseif m.id == "Haunted" then
+			H.ok(model.PrimaryPart.Color ~= plain.PrimaryPart.Color, "haunted tints the body")
+			H.eq(#find(model, "Pumpkin"), 1, "a jack-o'-lantern at its feet")
+			H.eq(#find(model, "PumpkinFace"), 1, "with a face")
 		else
 			H.ok(model.PrimaryPart.Color ~= plain.PrimaryPart.Color, m.id .. " tints the body")
 		end

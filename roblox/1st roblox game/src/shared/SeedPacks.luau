@@ -4,6 +4,7 @@
 -- and the seed-bag key format. Pure and shared, so the Shop UI shows exactly the odds the server rolls with.
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Config = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("Config"))
+local Halloween = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("Halloween"))
 
 local SeedPacks = {}
 
@@ -91,7 +92,32 @@ function SeedPacks.better(a: { rarity: number, mutation: string? }, b: { rarity:
 end
 
 -- A sold pack by its reveal id ("Pack:Space"), or nil. Retired ones too: a receipt for one still reveals.
+-- The Halloween event's Haunted seed of zone k (Shared/Halloween; bought with candy, never Robux): the zone's
+-- usual odds with its Legendary chance x Halloween.LEGENDARY_MULT, always the Haunted mutation.
+function SeedPacks.hauntedPack(k: number): Pack
+	local zone = Config.ZONES[k]
+	return {
+		id = "Haunted:" .. zone.id,
+		zone = k,
+		name = "Haunted Seed",
+		luck = 1,
+		legendaryChance = Config.LEGENDARY_CHANCE[k] * Halloween.LEGENDARY_MULT,
+		mutationMult = 0, -- (no Gold or Rainbow on top)
+		exclusive = Halloween.MUTATION,
+		exclusiveChance = 1,
+	}
+end
+
 function SeedPacks.lookup(id: string): Pack?
+	local haunted = string.match(id, "^Haunted:(%a+)$")
+	if haunted then
+		for k, zone in Config.ZONES do
+			if zone.id == haunted then
+				return SeedPacks.hauntedPack(k)
+			end
+		end
+		return nil
+	end
 	for _, entry in Config.products("Pack") do
 		local pack = SeedPacks.packForProduct(entry.product)
 		if pack.id == id then
@@ -121,7 +147,7 @@ function SeedPacks.odds(pack: Pack): Odds
 		sum += pack.exclusiveChance * 100
 	end
 	for _, mut in Config.MUTATIONS do
-		if not mut.nightOnly and not mut.exclusive and mut.chance > 0 then
+		if not mut.nightOnly and not mut.exclusive and mut.chance > 0 and pack.mutationMult > 0 then
 			local pct = mut.chance * pack.mutationMult * 100
 			table.insert(mutations, { id = mut.id, pct = pct })
 			sum += pct
