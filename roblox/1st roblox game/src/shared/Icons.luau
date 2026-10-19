@@ -41,6 +41,7 @@ Icons.TEXTURES = {
 	Studs = true,
 	PackSpaceBg = true, -- Starpetal Pack: a deep-space landscape, a ringed planet (owner's starpetal.jpg)
 	PackSpiritBg = true, -- Lotus Wyrm Pack: cherry blossoms, Mt Fuji, a temple (owner's sakura.jpg)
+	HalloweenBg = true, -- the Candy window and its Haunted seed card: a haunted forest, a jack-o'-lantern (owner's "halloween background.png")
 } :: { [string]: boolean }
 
 -- "rbxassetid://<id>" for an uploaded icon, or nil while its id is 0 (not uploaded yet) or unknown.

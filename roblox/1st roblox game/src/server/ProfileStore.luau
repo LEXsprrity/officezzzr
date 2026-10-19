@@ -5,6 +5,7 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Shared = ReplicatedStorage:WaitForChild("Shared")
 local Config = require(Shared:WaitForChild("Config"))
 local SeedPacks = require(Shared:WaitForChild("SeedPacks"))
+local Palettes = require(Shared:WaitForChild("Palettes"))
 local Planting = require(Shared:WaitForChild("Planting"))
 local Tutorial = require(Shared:WaitForChild("Tutorial"))
 
@@ -46,7 +47,9 @@ ProfileStore.__index = ProfileStore
 -- v12 added sprouting: a fresh seed first stands as a seedling until `sproutUntil` (unix seconds, `su`; its
 -- plantedAt, where growth starts, is the same time), and an inventory plant taken off mid-sprout keeps what
 -- was left (`sprout`, seconds, `sp`). Older plants have neither: they are fully sprouted, as they were.
-ProfileStore.VERSION = 12
+-- v13 keeps each plant's colour variant (`palette`, `pa`: Shared/Palettes, from its seed's gene), in the
+-- inventory too. Older plants have none: Natural, the model's own colours, as they always looked.
+ProfileStore.VERSION = 13
 
 -- The zones' recommended Speed before v7 (Config.ZONES order), for migrateSpeed.
 ProfileStore.LEGACY_ZONE_REQ = { 0, 10e3, 500e3, 5e6, 50e6, 500e6, 5e9 }
@@ -86,6 +89,7 @@ export type Plant = {
 	z: number, -- ...and along (+z toward the entrance)
 	variant: string?, -- v8: its flower (plant model name), drawn at planting; nil = the id-based pick (older saves)
 	variance: number?, -- v9: its weight variance, kept from before it went to the inventory; nil = Config.plantVariance
+	palette: string?, -- v13: its colour variant (Shared/Palettes id); nil = Natural (older saves)
 	yaw: number?, -- v11: degrees it is turned from facing the entrance (Planting.facing); nil = 0 (older saves)
 	sproutUntil: number?, -- v12: a seedling (no income) until then (unix seconds); nil = sprouted (Config.sproutLeft)
 }
@@ -100,6 +104,7 @@ export type InvPlant = {
 	variant: string?,
 	age: number, -- seconds it had grown (0..Config.GROW_TIME)
 	variance: number,
+	palette: string?, -- v13
 	yaw: number?, -- v11: the way it faced on the plot
 	sprout: number?, -- v12: seconds of sprouting it still had when it left the plot (nil = none)
 }
@@ -255,11 +260,11 @@ end
 function ProfileStore.serialize(p: Profile): { [string]: any }
 	local plants = {}
 	for _, pl in p.plants do
-		table.insert(plants, { s = pl.slot, z = pl.zone, r = pl.rarity, m = pl.mutation, t = pl.plantedAt, px = pl.x, pz = pl.z, vr = pl.variant, va = pl.variance, yw = pl.yaw, su = pl.sproutUntil })
+		table.insert(plants, { s = pl.slot, z = pl.zone, r = pl.rarity, m = pl.mutation, t = pl.plantedAt, px = pl.x, pz = pl.z, vr = pl.variant, va = pl.variance, pa = pl.palette, yw = pl.yaw, su = pl.sproutUntil })
 	end
 	local inventory = {}
 	for _, it in p.inventory do
-		table.insert(inventory, { i = it.id, z = it.zone, r = it.rarity, m = it.mutation, vr = it.variant, a = it.age, va = it.variance, yw = it.yaw, sp = it.sprout })
+		table.insert(inventory, { i = it.id, z = it.zone, r = it.rarity, m = it.mutation, vr = it.variant, a = it.age, va = it.variance, pa = it.palette, yw = it.yaw, sp = it.sprout })
 	end
 	local index = {}
 	for key, v in p.index do
@@ -371,6 +376,7 @@ function ProfileStore.deserialize(data: any): Profile
 					table.insert(p.plants, {
 						slot = slot, zone = zone, rarity = rarity, mutation = mutation, plantedAt = math.max(raw.t, sproutUntil or raw.t), x = x, z = z,
 						variant = variantOf(raw.vr), variance = varianceOf(raw.va),
+						palette = Palettes.byId(raw.pa) and raw.pa or nil, -- v13 (nil before, or junk: Natural)
 						yaw = Planting.normalizeYaw(raw.yw), -- v11 (nil before: facing the entrance)
 						sproutUntil = sproutUntil,
 					})
@@ -397,6 +403,7 @@ function ProfileStore.deserialize(data: any): Profile
 						id = id, zone = zone, rarity = rarity,
 						mutation = if type(raw.m) == "string" and Config.mutationById(raw.m) then raw.m else nil,
 						variant = variantOf(raw.vr), age = num(raw.a, 0, 0, Config.GROW_TIME), variance = variance,
+						palette = Palettes.byId(raw.pa) and raw.pa or nil, -- v13
 						yaw = Planting.normalizeYaw(raw.yw),
 						sprout = if sprout > 0 then sprout else nil, -- v12
 					})

@@ -530,7 +530,7 @@ H.test("x10: the pack card has a 1 Seed and a 10 Seeds button, each a gift + R$"
 	H.ok(string.find(card, "for _, entry in { offer.single, offer.ten } do", 1, true) ~= nil, "both products on one card")
 	H.ok(string.find(card, "if count > 1 then `{count} Seeds` else \"1 Seed\"", 1, true) ~= nil, "captions 1 Seed / 10 Seeds")
 	H.ok(string.find(card, "robuxBuy(robuxPrice(entry.product), entry.product.id, \"Product:\" .. entry.name, caption)", 1, true) ~= nil, "gift + R$ each")
-	H.ok(string.find(card, "`Need {count} free`", 1, true) and string.find(card, "buy.color = COLORS.disabled", 1, true), "greyed when they can't fit")
+	H.ok(string.find(card, "`Need {count} free`", 1, true) and string.find(card, "buy.color = COLORS.short", 1, true), "green (never grey) when they can't fit")
 	H.ok(string.find(hud, "for _, offer in SeedPacks.offers() do\n\t\t\tpackCard(nextOrder(), offer, Config.SEED_BAG_MAX - bagCount)", 1, true) ~= nil,
 		"one card per pack")
 	-- the buttons' layout fits the card (ShopLayout.row: two gift + R$ pairs)

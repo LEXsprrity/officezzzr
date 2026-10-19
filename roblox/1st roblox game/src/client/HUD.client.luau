@@ -54,6 +54,9 @@ local COLORS = {
 	red = Color3.fromRGB(240, 70, 70),
 	gold = Color3.fromRGB(255, 205, 50),
 	disabled = Color3.fromRGB(170, 170, 170),
+	-- a buy button you can't afford yet (not enough money or candy, or no room): green, never grey (owner
+	-- 2026-10-19: grey "kills the colorfulness of the game")
+	short = Color3.fromRGB(60, 200, 80),
 	buy = Color3.fromRGB(60, 200, 80), -- green: money and R$ buy buttons
 	equip = Color3.fromRGB(60, 160, 255),
 }
@@ -298,13 +301,13 @@ sideButton(2, "Index", "Index", "📖", Color3.fromRGB(35, 195, 255), function()
 end)
 
 -- Halloween (Shared/Halloween): an orange Candy button under Index, the player's candy in a purple bubble on its
--- top-right corner; it opens the Shop at its HALLOWEEN card.
+-- top-right corner; it opens the Candy window (its own menu: renderCandy).
 local HALLOWEEN_ORANGE = Color3.fromRGB(255, 125, 20)
 local HALLOWEEN_PURPLE = Color3.fromRGB(110, 40, 175)
 local candyCount: TextLabel? = nil
 if HALLOWEEN then
 	local b = sideButton(3, "Candy", "Candy", "🍬", HALLOWEEN_ORANGE, function()
-		openShopAt("Halloween")
+		openModal("Candy")
 	end)
 	local bubble = new("Frame", {
 		Name = "CandyCount", AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.new(1, -6, 0, 4), Size = UDim2.fromOffset(62, 34),
@@ -582,6 +585,7 @@ local WINDOWS: { [string]: any } = {
 	Shop = { title = "Shop", bar = Color3.fromRGB(59, 227, 59) },
 	Trails = { title = "Trail Shop", bar = Color3.fromRGB(185, 70, 255) },
 	Index = { title = "Index", bar = Color3.fromRGB(40, 170, 255) },
+	Candy = { title = "Halloween", bar = HALLOWEEN_ORANGE },
 }
 
 -- Paints a frame `color` with a lit top: a WHITE background under a vertical colour gradient.
@@ -636,6 +640,13 @@ local studs = new("Frame", {
 })
 ShopUi.studs(studs, WINDOW_BODY, nil, 1) -- the same studs as the title bar (ShopUi.STUD_CELL), tinted charcoal
 
+-- The Candy window's body: the owner's Halloween picture (Icons.TEXTURES HalloweenBg), darkened so the card
+-- stands out; openModal shows it only there, once uploaded
+local candyBackdrop = new("ImageLabel", {
+	Name = "CandyBackdrop", Position = UDim2.fromOffset(0, TITLE_H), Size = UDim2.new(1, 0, 1, -TITLE_H), BackgroundTransparency = 1,
+	ScaleType = Enum.ScaleType.Crop, Image = Icons.image("HalloweenBg") or "", ImageColor3 = Color3.fromRGB(150, 140, 175), Visible = false,
+	ZIndex = 1, Parent = modal,
+})
 -- Title bar: one flat colour (openModal), studs, three light diagonal bands on its right half, a shine
 local titleBar = new("Frame", {
 	Size = UDim2.new(1, 0, 0, TITLE_H), BackgroundColor3 = WHITE, BorderSizePixel = 0, ClipsDescendants = true, ZIndex = 2, Parent = modal,
@@ -933,7 +944,7 @@ do
 		ShopUi.studs(f, accent) -- studded, under the strip, the 3D view and the words
 		new("Frame", { Size = UDim2.new(0, 8, 1, -14), Position = UDim2.fromOffset(7, 7), BackgroundColor3 = accent, BorderSizePixel = 0, Parent = f },
 			{ new("UICorner", { CornerRadius = UDim.new(1, 0) }) })
-		FlowerView.show(f, FlowerView.flower(p.zone, p.rarity, p.flower, p.mutation), {
+		FlowerView.show(f, FlowerView.flower(p.zone, p.rarity, p.flower, p.mutation, p.palette), {
 			size = UDim2.fromOffset(VIEW, VIEW), position = UDim2.new(0, 20, 0, CARD_H / 2), anchor = Vector2.new(0, 0.5), spin = true,
 		})
 		ink(f, { Text = p.name or SeedPacks.seedName(p.zone, p.rarity, p.mutation), Size = UDim2.new(1, TEXT_W, 0, 24), Position = UDim2.fromOffset(TEXT_X, 7) })
@@ -1079,7 +1090,7 @@ do
 			itemCard(nextOrder(), p.name or SeedPacks.seedName(p.zone, p.rarity, p.mutation),
 				`{rarity.id}{if p.mutation then " · " .. p.mutation else ""} · {if p.sprout then `Sprouts in {Format.clock(p.sprout)}` else Config.ZONES[p.zone].name}`,
 				p.rarity, p.mutation, `inv:{p.id}`,
-				FlowerView.flower(p.zone, p.rarity, p.flower, p.mutation))
+				FlowerView.flower(p.zone, p.rarity, p.flower, p.mutation, p.palette))
 		end
 	end
 
@@ -1215,6 +1226,7 @@ openModal = function(name: string)
 	local window = WINDOWS[name]
 	modalName = name
 	shopTabs.Visible = name == "Shop" -- (the Shop's section tabs: only on the Shop)
+	candyBackdrop.Visible = name == "Candy" and candyBackdrop.Image ~= ""
 	local w, h = ShopLayout.window(name) -- the Shop is wider
 	modal.Size = UDim2.fromOffset(w, h)
 	fitModal()
@@ -1369,6 +1381,7 @@ end
 ----------------------------------------------------------------------------------------------------
 local packShines: { Frame } = {} -- swept across the pack cards every frame while they're shown
 local renderShop: () -> boolean
+local renderCandy: () -> ()
 do
 	local PassCards = require(Shared:WaitForChild("PassCards"))
 	local ShopArt = require(Shared:WaitForChild("ShopArt"))
@@ -1534,7 +1547,7 @@ do
 			f.BackgroundTransparency = 0.15 -- the card's picture shows a little through
 		end
 		local top = if featured then 38 else 24
-		local viewOptions = { size = UDim2.new(1, -8, 1, -(top + 4)), position = UDim2.fromOffset(4, top), zindex = 4, spin = featured, zoom = 1.25 }
+		local viewOptions = { size = UDim2.new(1, -8, 1, -(top + 4)), position = UDim2.fromOffset(4, top), zindex = 4, spin = true, zoom = 1.25 }
 		local view = FlowerView.show(f, FlowerView.flower(zone, tile.rarity, tile.flower, tile.mutation), viewOptions)
 		local flowers = tile.flowers
 		if flowers and #flowers > 1 then -- (the Haunted seed: every flower of the set it may grow into, in turn)
@@ -1653,7 +1666,7 @@ do
 			local caption = if fits then (if count > 1 then `{count} Seeds` else "1 Seed") elseif count > 1 and free > 0 then `Need {count} free` else "Bag full!"
 			local buy = robuxBuy(robuxPrice(entry.product), entry.product.id, "Product:" .. entry.name, caption)
 			if not fits then
-				buy.color = COLORS.disabled
+				buy.color = COLORS.short
 			end
 			table.insert(buys, buy)
 		end
@@ -1673,8 +1686,26 @@ do
 		local c = cardFrame(modalBody, order, HALLOWEEN_PURPLE, { Name = "Haunted", Size = UDim2.new(1, -8, 0, L.PACK_H) })
 		local stroke = c:FindFirstChildOfClass("UIStroke") :: UIStroke
 		stroke.Color = HALLOWEEN_ORANGE
-		sunburst(c, 0.86, 0.42, 560)
-		sunburst(c, 0.3, 0.55, 560)
+		-- The owner's Halloween picture (Icons.TEXTURES HalloweenBg), cropped and darkened like a pack's
+		-- (packCard); two sunbursts until it is uploaded
+		local picture = Icons.image("HalloweenBg")
+		if picture then
+			new("ImageLabel", {
+				Name = "Background", Image = picture, ScaleType = Enum.ScaleType.Crop, Size = UDim2.fromScale(1, 1), BackgroundTransparency = 1,
+				ZIndex = 1, Parent = c,
+			})
+			new("Frame", { Name = "Darken", Size = UDim2.fromScale(1, 1), BackgroundColor3 = Color3.new(0, 0, 0), BorderSizePixel = 0, ZIndex = 1, Parent = c }, {
+				new("UIGradient", { Rotation = 90, Transparency = NumberSequence.new({
+					NumberSequenceKeypoint.new(0, 0.45), NumberSequenceKeypoint.new(0.25, 0.85), NumberSequenceKeypoint.new(0.55, 0.8),
+					NumberSequenceKeypoint.new(1, 0.15),
+				}) }),
+			})
+			local studLayer = c:FindFirstChild("Studs") :: GuiObject
+			studLayer.ZIndex = 2
+		else
+			sunburst(c, 0.86, 0.42, 560)
+			sunburst(c, 0.3, 0.55, 560)
+		end
 		UiFx.relief(ShopUi.tag(c, "Event!", UDim2.fromOffset(18, 16), UDim2.fromOffset(116, 44), 4), 3, 3)
 		UiFx.relief(bold(c, 5, {
 			Name = "Title", Text = `HAUNTED {string.upper(zone.seed)} SEED`, Size = UDim2.new(1, -184, 0, 54), Position = UDim2.fromOffset(150, 8),
@@ -1706,7 +1737,8 @@ do
 		local have = bold(c, 2, {
 			Name = "Have", Size = UDim2.new(1, -36, 0, 20), Position = UDim2.fromOffset(18, bottom + 32), TextColor3 = Color3.fromRGB(255, 235, 200), ZIndex = 3,
 		})
-		-- "1 Seed" (50 candy) and "10 Seeds" (500), like a pack's two buttons; grey without the candy or the room
+		-- "1 Seed" (50 candy) and "10 Seeds" (500), like a pack's two buttons; green without the candy or the room
+		-- (COLORS.short: never grey)
 		local buys: { Buy } = {}
 		for _, count in Halloween.PULLS do
 			local fits = count <= free
@@ -1723,7 +1755,7 @@ do
 			local candy = stats.candy or 0
 			have.Text = `You have {Format.commas(candy)} candy`
 			for i, count in Halloween.PULLS do
-				buttons[i].BackgroundColor3 = if candy >= (Halloween.price(count) :: number) and count <= free then HALLOWEEN_ORANGE else COLORS.disabled
+				buttons[i].BackgroundColor3 = if candy >= (Halloween.price(count) :: number) and count <= free then HALLOWEEN_ORANGE else COLORS.short
 			end
 		end)
 	end
@@ -1793,7 +1825,7 @@ do
 		end
 		local money = buttonRow(c, L.CARD_W, L.CARD_H, L.bottomY(L.CARD_H, true), buys)[1]
 		watchMoney(function()
-			money.BackgroundColor3 = if price and stats.money >= price then COLORS.shop else COLORS.disabled
+			money.BackgroundColor3 = if price and stats.money >= price then COLORS.shop else COLORS.short
 		end)
 	end
 
@@ -1891,11 +1923,6 @@ do
 		-- (the Shop's Featured tab scrolls here; owner 2026-10-15: "-- FEATURED --")
 		local bagCount = SeedPacks.bagCount(stats.seedBag or {})
 		local bagFull = bagCount >= Config.SEED_BAG_MAX
-		-- The Halloween event's card first, while it runs (Shared/Halloween; the Candy button opens the Shop here)
-		if Halloween.active(workspace:GetServerTimeNow()) then
-			shopSections.Halloween = section("HALLOWEEN", nextOrder(), HALLOWEEN_ORANGE)
-			hauntedCard(nextOrder(), Config.SEED_BAG_MAX - bagCount)
-		end
 		shopSections.Featured = section("FEATURED", nextOrder(), HEADING_GOLD)
 		for _, offer in SeedPacks.offers() do
 			packCard(nextOrder(), offer, Config.SEED_BAG_MAX - bagCount)
@@ -1977,6 +2004,16 @@ do
 			return true
 		end
 		return false
+	end
+
+	-- The Candy window (the Candy button; owner 2026-10-19: its own menu, not the Shop's, on the owner's
+	-- Halloween picture): the Haunted seed's card and the seed bag's room.
+	function renderCandy()
+		clearModal(12)
+		cardSeed = 0
+		local bagCount = SeedPacks.bagCount(stats.seedBag or {})
+		hauntedCard(1, Config.SEED_BAG_MAX - bagCount)
+		note(`Seed bag {bagCount}/{Config.SEED_BAG_MAX}{if bagCount >= Config.SEED_BAG_MAX then " (full: plant some first!)" else ""} · plant them from the Inventory in the Plants panel`, 2)
 	end
 end
 
@@ -2064,7 +2101,7 @@ do
 		end)
 		moneyButton.Position = UDim2.fromOffset(12, y)
 		watchMoney(function()
-			moneyButton.BackgroundColor3 = if stats.money >= t.price then COLORS.buy else COLORS.disabled
+			moneyButton.BackgroundColor3 = if stats.money >= t.price then COLORS.buy else COLORS.short
 		end)
 		if product then
 			chunky(c, Format.robux(robuxPrice(product)), robuxColor(product.id, ROBUX_GREEN), UDim2.fromOffset(TRAIL_W - 24 - moneyW - 8, 54), function()
@@ -2092,10 +2129,14 @@ end
 -- The flowers come from the server (stats.catalog[zone][rarity], the plant models' names); a zone or
 -- rarity without plant models shows one cell for the rarity itself.
 -- Each cell shows its flower in 3D over its name (Shared/FlowerView): turning slowly once found, a black
--- silhouette over "???" until then (the shape may show, the name and colours are the surprise).
+-- silhouette over "???" until then (the shape may show, the name and colours are the surprise). A found
+-- flower's corner holds a stud per palette (Shared/Palettes), lit in its colour once grown in it (the Index
+-- key "zone:rarity:Daisy:Azure"); the discovered count stays one per flower.
 ----------------------------------------------------------------------------------------------------
 local function renderIndex()
 	local FlowerView = require(Shared:WaitForChild("FlowerView"))
+	local Palettes = require(Shared:WaitForChild("Palettes"))
+	local PIP = 13 -- a palette stud
 	local catalog = stats.catalog or {}
 	-- Each cell: { key = the Index key that lights it, name = what it says once lit, model = its flower model }
 	local function cellsOf(k: number, r: number): { { key: string, name: string, model: string? } }
@@ -2154,6 +2195,20 @@ local function renderIndex()
 				FlowerView.show(cell, FlowerView.flower(k, r, c.model), {
 					size = UDim2.new(1, -8, 1, -(NAME_H + 8)), position = UDim2.fromOffset(4, 4), spin = got, silhouette = not got,
 				})
+				if got and c.model then
+					-- its palettes (Shared/Palettes) as little studs in the corner: lit in their colour once grown
+					local pips = new("Frame", {
+						Name = "Palettes", BackgroundTransparency = 1, Position = UDim2.fromOffset(6, 6),
+						Size = UDim2.fromOffset(#Palettes.LIST * (PIP + 3), PIP), ZIndex = 3, Parent = cell,
+					}, { new("UIListLayout", { FillDirection = Enum.FillDirection.Horizontal, Padding = UDim.new(0, 3), SortOrder = Enum.SortOrder.LayoutOrder }) })
+					for i, p in Palettes.LIST do
+						local lit = stats.index[`{c.key}:{p.id}`] == true
+						local pip = new("Frame", {
+							Name = p.id, Size = UDim2.fromOffset(PIP, PIP), LayoutOrder = i, BackgroundTransparency = if lit then 0 else 0.55, ZIndex = 3, Parent = pips,
+						}, { outline(2) })
+						shade(pip, if lit then p.swatch else FRAME_INK, 0.35, 0.2)
+					end
+				end
 				bold(cell, 2, {
 					Text = if got then c.name else "???", Size = UDim2.new(1, -8, 0, NAME_H), Position = UDim2.new(0, 4, 1, -(NAME_H + 4)),
 					TextColor3 = WHITE, TextTransparency = if got then 0 else 0.15,
@@ -2299,7 +2354,7 @@ do
 	local function plantCard(grid: Instance, order: number, it: any)
 		local p = it.src
 		local c = cardBase(grid, order, it, p.name or SeedPacks.seedName(p.zone, p.rarity, p.mutation), Config.RARITIES[p.rarity].id,
-			FlowerView.flower(p.zone, p.rarity, p.flower, p.mutation))
+			FlowerView.flower(p.zone, p.rarity, p.flower, p.mutation, p.palette))
 		local y = SELL_VIEW
 		local incomeLabel = bold(c, 2, { Size = UDim2.new(1, -14, 0, 22), Position = UDim2.fromOffset(7, 132 + y) })
 		local priceLabel = bold(c, 3, { Size = UDim2.new(1, -14, 0, 34), Position = UDim2.fromOffset(7, 158 + y), TextColor3 = MONEY_GREEN })
@@ -2505,6 +2560,8 @@ renderModal = function()
 		renderIndex()
 	elseif modalName == "Sell" then
 		renderSell()
+	elseif modalName == "Candy" then
+		renderCandy()
 	end
 	if not focused then
 		modalBody.CanvasPosition = keep

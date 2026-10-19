@@ -12,7 +12,7 @@ local Icons = H.shared("Icons")
 local WorldBuilder = H.server("WorldBuilder")
 
 local KEYS = {
-	"Bag", "Bat", "Close", "ExtraSlots", "Gift", "Home", "Index", "Leaderboard", "Lock", "Money", "PackSpaceBg", "PackSpiritBg",
+	"Bag", "Bat", "Close", "ExtraSlots", "Gift", "HalloweenBg", "Home", "Index", "Leaderboard", "Lock", "Money", "PackSpaceBg", "PackSpiritBg",
 	"Plants", "PlotUpgrade", "Robux", "SeedPack", "Seeds", "Shop", "Speed", "Star", "Studs", "TrailShop", "Treadmill", "Vip",
 }
 
@@ -58,7 +58,7 @@ local function show(pieces: { any }?): string?
 	return table.concat(out, " ")
 end
 
-H.test("icons: ids.json loads as Config.ICONS with all 24 keys (uploaded ids or 0)", function()
+H.test("icons: ids.json loads as Config.ICONS with all 25 keys (uploaded ids or 0)", function()
 	local raw = serde.decode("json", fs.readFile("icons/ids.json"))
 	local n = 0
 	for key, id in raw do
@@ -289,7 +289,7 @@ local function reply(code: number, body: any)
 	}
 end
 
-H.test("uploader: --dry-run lists all 24 icons and never needs a key or the network", function()
+H.test("uploader: --dry-run lists all 25 icons and never needs a key or the network", function()
 	local opts = Uploader.parseArgs({ "--dry-run" })
 	H.ok(opts and opts.dryRun)
 	local run = fakeDeps({})

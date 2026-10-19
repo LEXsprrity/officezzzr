@@ -15,6 +15,7 @@
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Config = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("Config"))
 local Halloween = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("Halloween"))
+local Palettes = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("Palettes"))
 local Assets = require(script.Parent:WaitForChild("Assets"))
 
 local CreatureModels = {}
@@ -683,8 +684,10 @@ end
 ----------------------------------------------------------------------------------------------------
 -- Builds the creature for (zone, rarity, mutation?) at the origin (see the header). The model's
 -- PrimaryPart is its body and its pivot is the origin. `pick` (the plant's id) chooses among the zone's
--- plant models of that rarity, so each plant keeps its look and neighbours differ.
-function CreatureModels.build(zoneIndex: number, rarityIndex: number, mutation: string?, pick: number?): Model
+-- plant models of that rarity, so each plant keeps its look and neighbours differ. `palette` (the plant's,
+-- Shared/Palettes) recolours a plant model before its mutation tints it (none under Haunted or Rainbow,
+-- which repaint it all).
+function CreatureModels.build(zoneIndex: number, rarityIndex: number, mutation: string?, pick: number?, palette: string?): Model
 	local zone = Config.ZONES[zoneIndex]
 	local model: Model
 	local b: Builder
@@ -711,6 +714,7 @@ function CreatureModels.build(zoneIndex: number, rarityIndex: number, mutation: 
 				b.roles[d] = "asset"
 			end
 		end
+		Palettes.apply(model, Palettes.shown(palette, mutation)) -- (before our flair: only the plant's own parts and effects)
 	else
 		model = Instance.new("Model")
 		b = { model = model, body = nil, parts = {}, roles = {} }
