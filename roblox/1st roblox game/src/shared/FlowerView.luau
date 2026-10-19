@@ -9,6 +9,7 @@
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Config = require(script.Parent:WaitForChild("Config"))
 local Halloween = require(script.Parent:WaitForChild("Halloween"))
+local Palettes = require(script.Parent:WaitForChild("Palettes"))
 
 local FlowerView = {}
 
@@ -22,10 +23,14 @@ FlowerView.ANGLE = math.rad(-35) -- the resting 3/4 turn (the flowers face -Z)
 
 -- The Haunted copies of the previews (Halloween.hauntify, the look the server gives a Haunted plant), made once.
 local hauntedCopies: { [Model]: Model } = setmetatable({}, { __mode = "k" }) :: any
+-- ...and the recoloured ones (Palettes.apply, as the server recolours a plant): [preview][palette id].
+local paletteCopies: { [Model]: { [string]: Model } } = setmetatable({}, { __mode = "k" }) :: any
 
 -- The preview of flower `flower` (a plant model's name; nil: FALLBACK) of (zone, rarity), or nil while it
--- hasn't replicated (or doesn't exist). With `mutation` Haunted: in its Haunted look (a copy of it).
-function FlowerView.flower(zone: number, rarity: number, flower: string?, mutation: string?): Model?
+-- hasn't replicated (or doesn't exist). With `mutation` Haunted: in its Haunted look (a copy of it); with a
+-- `palette` (Shared/Palettes id; not under Haunted or Rainbow): in its colours (a copy of it). The other
+-- mutations' tints aren't shown.
+function FlowerView.flower(zone: number, rarity: number, flower: string?, mutation: string?, palette: string?): Model?
 	local root = ReplicatedStorage:FindFirstChild(FlowerView.FOLDER)
 	local zoneFolder = root and root:FindFirstChild(tostring(zone))
 	local rarityFolder = zoneFolder and zoneFolder:FindFirstChild(tostring(rarity))
@@ -39,6 +44,21 @@ function FlowerView.flower(zone: number, rarity: number, flower: string?, mutati
 			copy = model:Clone()
 			Halloween.hauntify(copy)
 			hauntedCopies[model] = copy
+		end
+		return copy
+	end
+	local id = Palettes.shown(palette, mutation)
+	if id then
+		local copies = paletteCopies[model]
+		if not copies then
+			copies = {}
+			paletteCopies[model] = copies
+		end
+		local copy = copies[id]
+		if not copy then
+			copy = model:Clone()
+			Palettes.apply(copy, id)
+			copies[id] = copy
 		end
 		return copy
 	end

@@ -6,6 +6,7 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Shared = ReplicatedStorage:WaitForChild("Shared")
 local Config = require(Shared:WaitForChild("Config"))
 local Format = require(Shared:WaitForChild("Format"))
+local Palettes = require(Shared:WaitForChild("Palettes"))
 local SeedPacks = require(Shared:WaitForChild("SeedPacks"))
 local Icons = require(Shared:WaitForChild("Icons"))
 local Treadmill = require(Shared:WaitForChild("Treadmill"))
@@ -137,15 +138,16 @@ local function setIncomeLabel(label: TextLabel, zone: number, perSecond: number,
 end
 
 -- What a plant is called: the flower model it grew into (its `variant`, drawn when it was planted; older
--- plants: CreatureModels.variantOf with its id, the same pick as its model), after its mutation: "Daisy",
--- "Gold Desert Wild Flower". Without plant models (the built-in creature) it goes by its zone's seed.
+-- plants: CreatureModels.variantOf with its id, the same pick as its model), after its mutation and palette
+-- (Shared/Palettes; none for Natural): "Daisy", "Gold Desert Wild Flower", "Night Azure Duality Rose".
+-- Without plant models (the built-in creature) it goes by its zone's seed.
 function PlotService.plantName(plant: ProfileStore.Plant): string
 	local prefix = if plant.mutation then plant.mutation .. " " else ""
 	local variant = CreatureModels.flowerOf(plant.zone, plant.rarity, plant.variant, plant.slot)
 	if not variant then
 		return `{prefix}{Config.RARITIES[plant.rarity].id} {Config.ZONES[plant.zone].seed}`
 	end
-	return `{prefix}{Format.plantName(variant)}`
+	return `{prefix}{Palettes.prefix(plant.palette, plant.mutation)}{Format.plantName(variant)}`
 end
 
 local SPROUTING_INK = Color3.fromRGB(200, 240, 170)
@@ -157,7 +159,7 @@ local function buildPlantModel(state: PlotState, plant: ProfileStore.Plant, weig
 	-- its end time and owner as attributes (Client/Sprouts shows the countdown and the owner's Grow now).
 	local sprouting = Config.isSprouting(plant, os.time())
 	local model = if sprouting then Seedling.build(plant.zone, plant.rarity, plant.mutation)
-		else CreatureModels.build(plant.zone, plant.rarity, plant.mutation, CreatureModels.pickOf(plant.zone, plant.rarity, plant.variant, plant.slot))
+		else CreatureModels.build(plant.zone, plant.rarity, plant.mutation, CreatureModels.pickOf(plant.zone, plant.rarity, plant.variant, plant.slot), plant.palette)
 	model.Name = "Plant_" .. plant.slot
 	if sprouting then
 		model:SetAttribute("SproutUntil", plant.sproutUntil)
@@ -269,6 +271,7 @@ local function pushPlants(s: Sessions.Session, now: number)
 			sproutUntil = if Config.isSprouting(plant, now) then plant.sproutUntil else nil, -- a seedling: when it is done (the card's countdown, Grow now)
 			name = PlotService.plantName(plant), -- "Gold Daisy": its flower model's name (the Plants panel, the Sell cards)
 			flower = CreatureModels.flowerOf(plant.zone, plant.rarity, plant.variant, plant.slot), -- its model ("Daisy"): the HUD's 3D picture
+			palette = Palettes.shown(plant.palette, plant.mutation), -- ...in its colours (nil: Natural)
 			sell = Selling.price(plant, now, mult, grow),
 		})
 	end
@@ -281,6 +284,7 @@ local function pushPlants(s: Sessions.Session, now: number)
 			sprout = entry.sprout, -- seconds of sprouting it still has (planted again, it sprouts on)
 			name = PlotService.plantName(plant), sell = Selling.price(plant, now, mult),
 			flower = CreatureModels.flowerOf(plant.zone, plant.rarity, plant.variant, plant.slot),
+			palette = Palettes.shown(plant.palette, plant.mutation),
 		})
 	end
 	Sessions.push(s.player, { plants = view, inventory = inventory, slots = Sessions.maxSlots(s) })
@@ -303,13 +307,18 @@ local function plotOf(player: Player): PlotState?
 end
 
 -- The Index (collection book) entries a plant fills: "zone:rarity", its flower "zone:rarity:Daisy" (model
--- name, CreatureModels.flowerOf) and its mutation "zone:Gold". Marks them in the profile and returns the
--- new ones.
+-- name, CreatureModels.flowerOf), its flower's palette "zone:rarity:Daisy:Azure" (not for Natural; the
+-- Index cell shows the palettes found) and its mutation "zone:Gold". Marks them in the profile and returns
+-- the new ones.
 function PlotService.indexKeys(plant: ProfileStore.Plant): { string }
 	local keys = { `{plant.zone}:{plant.rarity}` }
 	local variant = CreatureModels.flowerOf(plant.zone, plant.rarity, plant.variant, plant.slot)
+	local palette = Palettes.shown(plant.palette, plant.mutation)
 	if variant then
 		table.insert(keys, `{plant.zone}:{plant.rarity}:{variant}`)
+		if palette then
+			table.insert(keys, `{plant.zone}:{plant.rarity}:{variant}:{palette}`)
+		end
 	end
 	if plant.mutation then
 		table.insert(keys, `{plant.zone}:{plant.mutation}`)

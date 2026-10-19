@@ -18,7 +18,8 @@
 -- Run from the game folder (default output: <your Desktop>/Thumbnails):
 --   lune run tools/build_thumbnails.luau [output folder] [only this scene key, e.g. Pyronis]
 -- Plus the plant thumbnails (PLANT_SCENES, below): a giant Legendary instead of a boss (and a Halloween one:
--- the plant Haunted, at night, with jack-o'-lanterns and the event's candy corn).
+-- the plant Haunted, at night, with jack-o'-lanterns and the event's candy corn), and the colour variants'
+-- line-up (LINEUPS: a zone's plants of one rarity in every palette, Shared/Palettes).
 local fs = require("@lune/fs")
 local process = require("@lune/process")
 local roblox = require("@lune/roblox")
@@ -27,6 +28,7 @@ local Config = H.shared("Config")
 local BossRigs = H.shared("BossRigs")
 local Format = H.shared("Format")
 local Halloween = H.shared("Halloween")
+local Palettes = H.shared("Palettes")
 
 local Instance, Vector3, CFrame, Color3 = roblox.Instance, roblox.Vector3, roblox.CFrame, roblox.Color3
 local Vector2, UDim2, Enum = roblox.Vector2, roblox.UDim2, roblox.Enum
@@ -898,6 +900,95 @@ local function buildPlant(scene: PlantScene): any
 end
 
 ----------------------------------------------------------------------------------------------------
+-- The colour variants' line-up (Shared/Palettes, the game's recolour): a zone's plants of one rarity, a row
+-- each, before (Natural, the first column) and after (a column per palette), on the zone's ground, each
+-- column under its palette's name and each row's plant named at its left. PaletteLineup_<key>.rbxl; no
+-- avatar to put in, only the screenshot.
+----------------------------------------------------------------------------------------------------
+export type Lineup = { key: string, zone: string, rarity: string, plants: { string }, at: any, height: number, gapX: number, gapZ: number, shot: Shot }
+
+local LINEUPS: { Lineup } = {
+	{
+		key = "SpiritEpics", zone = "Spirit", rarity = "Epic", plants = { "Assassino", "DualityFlower", "DualityRose" },
+		at = Vector3.new(2150, 0, -5), height = 6, gapX = 8, gapZ = 11,
+		shot = { eye = Vector3.new(0, 25, 27), at = Vector3.new(0, 1.5, -11), fov = 50, aspect = 16 / 9 },
+	},
+}
+
+-- A name over the scene (a BillboardGui: it faces the camera): chunky white letters with a dark outline.
+local function tag(parent: any, text: string, at: any, color: any, width: number)
+	local anchor = new("Part", {
+		Name = "Nome_" .. text, Size = Vector3.new(0.2, 0.2, 0.2), CFrame = CFrame.new(at), Transparency = 1,
+		Anchored = true, CanCollide = false, CanTouch = false, CanQuery = false, CastShadow = false,
+	}, parent)
+	local gui = new("BillboardGui", { Name = text, Size = UDim2.fromOffset(width, 56), AlwaysOnTop = true, LightInfluence = 0 }, anchor)
+	local label = new("TextLabel", {
+		Text = text, FontFace = FREDOKA, TextScaled = true, BackgroundTransparency = 1, TextColor3 = rgb(255, 255, 255),
+		Size = UDim2.fromScale(1, 1),
+	}, gui)
+	new("UIStroke", { Color = color:Lerp(rgb(0, 0, 0), 0.6), Thickness = 4, LineJoinMode = Enum.LineJoinMode.Round }, label)
+	new("UIGradient", { Color = ColorSequence.new(rgb(255, 255, 255), color:Lerp(rgb(255, 255, 255), 0.3)), Rotation = 90 }, label)
+end
+
+local function buildLineup(scene: Lineup): any
+	local shot = scene.shot
+	local game = Instance.new("DataModel")
+	local ws = game:GetService("Workspace")
+	local frame = lookAt(scene.at, scene.at + Vector3.new(1, 0, 0))
+	local function w(p: any): any
+		return frame * p
+	end
+	local root = new("Model", { Name = "CENA_Cores_" .. scene.key }, ws)
+	local columns = { { id = Palettes.NATURAL, color = rgb(120, 220, 90) } }
+	for _, p in Palettes.LIST do
+		table.insert(columns, { id = p.id, color = p.swatch })
+	end
+	local halfX = (#columns - 1) * scene.gapX / 2
+	local lo = w(Vector3.new(-halfX - 8, 0, -#scene.plants * scene.gapZ - 4)):Min(w(Vector3.new(halfX + 8, 0, 10)))
+	local hi = w(Vector3.new(-halfX - 8, 0, -#scene.plants * scene.gapZ - 4)):Max(w(Vector3.new(halfX + 8, 0, 10)))
+	zoneSlice(scene.zone, lo, hi).Parent = root
+
+	local k = zoneIndex(scene.zone)
+	local slot = string.gsub(Config.ZONES[k].seed, "%s", "")
+	local folder = roblox.deserializeModel(fs.readFile(`assets/Creature_{slot}.rbxm`))[1]
+	local plants = new("Folder", { Name = "Plantas" }, root)
+	for row, name in scene.plants do
+		local z = -(row - 1) * scene.gapZ
+		for col, c in columns do
+			local model = folder[scene.rarity][name]:Clone()
+			local mlo, mhi = bounds(model)
+			local f = scene.height / (mhi.Y - mlo.Y)
+			scaleAll(model, f)
+			for _, d in model:GetDescendants() do
+				if d:IsA("BasePart") then
+					d.CFrame = CFrame.new(0, -mlo.Y * f, 0) * d.CFrame
+				end
+			end
+			model.WorldPivot = CFrame.identity
+			still(model)
+			Palettes.apply(model, if c.id == Palettes.NATURAL then nil else c.id)
+			model.Name = `{name}_{c.id}`
+			local x = -halfX + (col - 1) * scene.gapX
+			place(model, w(CFrame.new(x, 0, z) * CFrame.Angles(0, pi + 0.35, 0))) -- (they face -Z: turned to the camera)
+			model.Parent = plants
+		end
+		tag(root, string.upper(Format.plantName(name)), w(Vector3.new(-halfX - scene.gapX * 0.95, scene.height * 0.45, z)), rgb(255, 230, 120), 190)
+	end
+	for col, c in columns do
+		tag(root, string.upper(c.id), w(Vector3.new(-halfX + (col - 1) * scene.gapX, scene.height + 2.2, 0)), c.color, 170)
+	end
+
+	local eye, at = w(shot.eye), w(shot.at)
+	local cam = new("Camera", { Name = "Camera", CFrame = lookAt(eye, at), Focus = CFrame.new(at), FieldOfView = shot.fov }, ws)
+	ws.CurrentCamera = cam
+	lighting(game, (at - eye).Magnitude, 40)
+	new("StringValue", {
+		Name = "LEIA-ME", Value = `PaletteLineup {scene.key}: as cores novas das plantas (Natural = antes). So tirar o screenshot sem mexer na camara.`,
+	}, ws)
+	return game
+end
+
+----------------------------------------------------------------------------------------------------
 -- LEIA-ME.txt
 ----------------------------------------------------------------------------------------------------
 -- The Command Bar line that moves the selected rig onto the marker and poses it (R15 or R6): arms up over
@@ -927,6 +1018,8 @@ local function readme(): string
 		"Em cada um: o boss a correr atras de ti de boca aberta, a semente gigante a brilhar, flores e a zona dele.",
 		"  PlantThumbnail_Pyronis.rbxl -> THUMBNAIL sem boss: a Pyronis gigante, o nome dela a fogo e o dinheiro/s.",
 		"  PlantThumbnail_PyronisHaunted.rbxl -> a mesma, versao HALLOWEEN: Pyronis Haunted, noite, aboboras e doces.",
+		"  PaletteLineup_SpiritEpics.rbxl -> as cores novas: as 3 Epic do Spirit Garden, Natural (antes) e cada cor.",
+		"  (Nessa nao ha avatar: so abrir e tirar o screenshot.)",
 		"  (Na Pyronis tambem pes o teu avatar no sitio marcado e tiras a foto do mesmo jeito.)",
 		"A camara ja esta no sitio certo. Nas thumbnails o titulo STEAL A SEED ja esta na cena.",
 		"",
@@ -983,6 +1076,14 @@ for _, scene in PLANT_SCENES do
 	if not only or only == scene.key then
 		local game = buildPlant(scene)
 		local path = `{outDir}/PlantThumbnail_{scene.key}.rbxl`
+		fs.writeFile(path, roblox.serializePlace(game))
+		print(`{path}: {#game:GetService("Workspace"):GetDescendants()} instances`)
+	end
+end
+for _, scene in LINEUPS do
+	if not only or only == scene.key then
+		local game = buildLineup(scene)
+		local path = `{outDir}/PaletteLineup_{scene.key}.rbxl`
 		fs.writeFile(path, roblox.serializePlace(game))
 		print(`{path}: {#game:GetService("Workspace"):GetDescendants()} instances`)
 	end
