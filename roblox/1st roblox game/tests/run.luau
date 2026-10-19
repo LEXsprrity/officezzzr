@@ -42,6 +42,7 @@ require("./halloween.spec")
 require("./tutorial.spec")
 require("./palettes.spec")
 require("./mutations.spec")
+require("./liveevents.spec")
 require("./compile.spec")
 
 print("Steal a Seed: mocked server tests\n")

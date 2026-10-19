@@ -3,7 +3,8 @@
 -- the bottom-right corner (or F2) opens a window: type a player's name (or tap someone in this server), then
 -- give them money, Speed or seeds of a zone and rarity, or TAKE seeds back. Amounts read like "50K" or "1.5M" (AdminGrant). The
 -- server answers with LootEvent "AdminResult", shown under the buttons. Someone not in this server gets it
--- the next time they join.
+-- the next time they join. The EVENTS tab starts live "admin abuse" events in every server (an event, its
+-- multiplier or option, minutes, START), lists the running ones with STOP, and SENDs a message to everyone.
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local UserInputService = game:GetService("UserInputService")
@@ -11,11 +12,13 @@ local UserInputService = game:GetService("UserInputService")
 local Shared = ReplicatedStorage:WaitForChild("Shared")
 local Config = require(Shared:WaitForChild("Config"))
 local AdminGrant = require(Shared:WaitForChild("AdminGrant"))
+local LiveEvents = require(Shared:WaitForChild("LiveEvents"))
 local ShopUi = require(Shared:WaitForChild("ShopUi"))
 local UiFx = require(Shared:WaitForChild("UiFx"))
 
 local remotes = ReplicatedStorage:WaitForChild("Remotes")
 local AdminRemote = remotes:WaitForChild("Admin") :: RemoteEvent
+local AdminEventRemote = remotes:WaitForChild("AdminEvent") :: RemoteEvent
 local LootEvent = remotes:WaitForChild("LootEvent") :: RemoteEvent
 
 local player = Players.LocalPlayer
@@ -81,7 +84,7 @@ local open = button(gui, "ADMIN", PANEL, UDim2.new(1, -144, 1, -60), UDim2.fromO
 
 -- The window
 local window = plate("Frame", PANEL, { Name = "Window", Visible = false, AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.5), Size = UDim2.fromOffset(W, H), ZIndex = 2, Parent = gui })
-UiFx.relief(ShopUi.label(window, 4, { Text = "ADMIN PANEL", Size = UDim2.fromOffset(W - 120, 46), Position = UDim2.fromOffset(20, 10), TextXAlignment = Enum.TextXAlignment.Left, ZIndex = 4 }), 3, 4)
+UiFx.relief(ShopUi.label(window, 4, { Text = "ADMIN PANEL", Size = UDim2.fromOffset(W - 250, 46), Position = UDim2.fromOffset(20, 10), TextXAlignment = Enum.TextXAlignment.Left, ZIndex = 4 }), 3, 4)
 local close = button(window, "X", RED, UDim2.fromOffset(W - 66, 10), UDim2.fromOffset(50, 46))
 
 local INPUT_X, INPUT_W, GIVE_X, GIVE_W = 130, 230, 374, 146
@@ -179,6 +182,127 @@ end)
 local giveSeed = button(window, "GIVE", GREEN, UDim2.fromOffset(GIVE_X, 366), UDim2.fromOffset(GIVE_W, 48))
 giveSeed.Activated:Connect(function()
 	send({ kind = "Seed", zone = zone, rarity = rarity, count = AdminGrant.parseAmount(countBox.Text) })
+end)
+
+----------------------------------------------------------------------------------------------------
+-- EVENTS: live "admin abuse" events in every server (Server/LiveEventService checks everything again)
+----------------------------------------------------------------------------------------------------
+local eventsTab, eventsWord = button(window, "EVENTS", Color3.fromRGB(255, 150, 20), UDim2.fromOffset(W - 216, 10), UDim2.fromOffset(140, 46))
+local page = plate("Frame", PANEL, { Name = "Events", Visible = false, Active = true, Position = UDim2.fromOffset(0, 62), Size = UDim2.new(1, 0, 1, -118), ZIndex = 6, Parent = window })
+eventsTab.Activated:Connect(function()
+	page.Visible = not page.Visible
+	eventsWord.Text = if page.Visible then "GRANTS" else "EVENTS"
+end)
+
+local kindIndex, choiceIndex = 1, 1
+local function kindNow(): string
+	return LiveEvents.KINDS[kindIndex]
+end
+rowName(page, "Event", 8)
+local kindButton, kindWord = button(page, "", BLUE, UDim2.fromOffset(INPUT_X, 8), UDim2.fromOffset(INPUT_W, 48))
+local choiceButton, choiceWord = button(page, "", BLUE, UDim2.fromOffset(GIVE_X, 8), UDim2.fromOffset(GIVE_W, 48))
+local function showKind()
+	local choices = LiveEvents.CHOICES[kindNow()]
+	choiceIndex = math.clamp(choiceIndex, 1, #choices)
+	kindWord.Text = string.upper(kindNow())
+	choiceWord.Text = choices[choiceIndex].label
+end
+showKind()
+kindButton.Activated:Connect(function()
+	kindIndex = kindIndex % #LiveEvents.KINDS + 1
+	choiceIndex = 1
+	showKind()
+end)
+choiceButton.Activated:Connect(function()
+	choiceIndex = choiceIndex % #LiveEvents.CHOICES[kindNow()] + 1
+	showKind()
+end)
+
+rowName(page, "Minutes", 64)
+local minutesBox = box(page, `{LiveEvents.MIN_MINUTES}-{LiveEvents.MAX_MINUTES}`, UDim2.fromOffset(INPUT_X, 64), UDim2.fromOffset(100, 48))
+minutesBox.Text = "10"
+local startButton = button(page, "START (ALL SERVERS)", GREEN, UDim2.fromOffset(INPUT_X + 110, 64), UDim2.fromOffset(W - INPUT_X - 130, 48))
+startButton.Activated:Connect(function()
+	local choice = LiveEvents.CHOICES[kindNow()][choiceIndex]
+	local req = { op = "start", kind = kindNow(), mult = choice.mult, option = choice.option, minutes = tonumber(minutesBox.Text) }
+	local ok, why = LiveEvents.checkStart(req, true)
+	if not ok then
+		say(why or "?", false)
+		return
+	end
+	say(`Starting {LiveEvents.describe(req :: any)} in all servers...`, true)
+	AdminEventRemote:FireServer(req)
+end)
+
+rowName(page, "Message", 120)
+local messageBox = box(page, `say something to everyone (max {LiveEvents.MAX_TEXT})`, UDim2.fromOffset(INPUT_X, 120), UDim2.fromOffset(INPUT_W, 48))
+messageBox.TextSize = 20
+local sendButton = button(page, "SEND", BLUE, UDim2.fromOffset(GIVE_X, 120), UDim2.fromOffset(GIVE_W, 48))
+sendButton.Activated:Connect(function()
+	local text = LiveEvents.cleanText(messageBox.Text)
+	if not text then
+		say("Type a message first", false)
+		return
+	end
+	say("Sending to all servers...", true)
+	AdminEventRemote:FireServer({ op = "announce", text = text })
+	messageBox.Text = ""
+end)
+
+-- The running events, each with STOP
+rowName(page, "Running", 176)
+local running = new("ScrollingFrame", {
+	BackgroundTransparency = 1, BorderSizePixel = 0, Position = UDim2.fromOffset(INPUT_X, 176), Size = UDim2.new(1, -INPUT_X - 20, 1, -184),
+	CanvasSize = UDim2.new(), AutomaticCanvasSize = Enum.AutomaticSize.Y, ScrollBarThickness = 4, ZIndex = 3, Parent = page,
+})
+new("UIListLayout", { Padding = UDim.new(0, 6), SortOrder = Enum.SortOrder.LayoutOrder, Parent = running })
+local none = UiFx.relief(ShopUi.label(page, 2, { Text = "none", Size = UDim2.fromOffset(200, 30), Position = UDim2.fromOffset(INPUT_X, 184), TextXAlignment = Enum.TextXAlignment.Left, ZIndex = 4 }), 2, 2)
+local timers: { [TextLabel]: number } = {}
+local function refreshRunning()
+	table.clear(timers)
+	for _, c in running:GetChildren() do
+		if c:IsA("Frame") then
+			c:Destroy()
+		end
+	end
+	local folder = ReplicatedStorage:FindFirstChild(LiveEvents.FOLDER)
+	local count = 0
+	for _, c in (if folder then folder:GetChildren() else {}) do
+		local endsAt = c:GetAttribute("EndsAt")
+		if type(endsAt) == "number" then
+			count += 1
+			local ev = { kind = c:GetAttribute("Kind") or "?", mult = c:GetAttribute("Mult"), option = c:GetAttribute("Option") }
+			local row = new("Frame", { Name = c.Name, BackgroundTransparency = 1, LayoutOrder = math.floor(endsAt), Size = UDim2.new(1, -8, 0, 44), ZIndex = 3, Parent = running })
+			local label = ShopUi.label(row, 3, { Text = "", TextXAlignment = Enum.TextXAlignment.Left, Size = UDim2.new(1, -130, 1, -8), Position = UDim2.fromOffset(4, 4), ZIndex = 4 })
+			label:SetAttribute("Event", LiveEvents.describe(ev :: any))
+			timers[label] = endsAt
+			local id = c.Name
+			local stop = button(row, "STOP", RED, UDim2.new(1, -116, 0, 2), UDim2.fromOffset(112, 40))
+			stop.Activated:Connect(function()
+				say(`Stopping {LiveEvents.describe(ev :: any)} in all servers...`, true)
+				AdminEventRemote:FireServer({ op = "stop", id = id })
+			end)
+		end
+	end
+	none.Visible = count == 0
+end
+local function showTimers()
+	local now = workspace:GetServerTimeNow()
+	for label, endsAt in timers do
+		label.Text = `{label:GetAttribute("Event")}  {LiveEvents.clock(endsAt - now)}`
+	end
+end
+task.spawn(function()
+	local folder = ReplicatedStorage:WaitForChild(LiveEvents.FOLDER)
+	folder.ChildAdded:Connect(refreshRunning)
+	folder.ChildRemoved:Connect(function()
+		task.defer(refreshRunning)
+	end)
+	refreshRunning()
+	while true do
+		showTimers()
+		task.wait(0.5)
+	end
 end)
 
 LootEvent.OnClientEvent:Connect(function(kind: string, data: any)

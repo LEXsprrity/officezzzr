@@ -2,6 +2,7 @@
 -- bug reports). Admins are Config.ADMIN_USER_IDS, anyone at Config.ADMIN_MIN_RANK or above in the community,
 -- and everyone in Studio. They get the player attribute IsAdmin, which shows the panel (AdminPanel.client).
 --   client -> server: Admin(target name, grant) (AdminGrant: Money, Speed or Seed); non-admins are ignored
+--   client -> server: AdminEvent(request) (the EVENTS page: live events in every server, Server/LiveEventService)
 --   server -> client: LootEvent "AdminResult" { text, ok } to the admin
 -- A player in this server gets the grant at once (and a gold toast). Anyone else, by username, gets it the
 -- next time they join any server: it waits in the Config.ADMIN_GRANTS_STORE DataStore under their user id.
@@ -18,6 +19,7 @@ local Net = require(Server:WaitForChild("Net"))
 local Sessions = require(Server:WaitForChild("Sessions"))
 local SpeedService = require(Server:WaitForChild("SpeedService"))
 local PlotService = require(Server:WaitForChild("PlotService"))
+local LiveEventService = require(Server:WaitForChild("LiveEventService"))
 
 local AdminService = {}
 
@@ -216,8 +218,28 @@ function AdminService.playerReady(s: Sessions.Session)
 	end
 end
 
+-- The EVENTS page: only admins, rate-limited; LiveEventService checks the admin again and every value.
+local function onAdminEvent(admin: Player, raw: any)
+	if not admins[admin] then
+		return
+	end
+	local s = Sessions.get(admin)
+	if not s or not Sessions.allowRequest(s, 2) then
+		return
+	end
+	LiveEventService.request(admin, raw)
+end
+
 function AdminService.init()
 	Net.Admin.OnServerEvent:Connect(onAdmin)
+	Net.AdminEvent.OnServerEvent:Connect(onAdminEvent)
+	LiveEventService.isAdmin = function(p: Player): boolean
+		return admins[p] == true
+	end
+	LiveEventService.reply = reply
+	LiveEventService.showAnnounce = function(text: string, by: string?)
+		Net.LootEvent:FireAllClients("LiveAnnounce", { text = text, by = by })
+	end
 	Players.PlayerRemoving:Connect(function(p)
 		admins[p] = nil
 	end)

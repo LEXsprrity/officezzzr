@@ -51,6 +51,7 @@ AmbientService.start()
 RewardService.start()
 require(Server:WaitForChild("TutorialService")).init() -- the first-time tutorial's done flag
 require(Server:WaitForChild("CandyService")).init() -- the Halloween event's candy on the map (while it runs)
+task.spawn(require(Server:WaitForChild("LiveEventService")).init) -- the admin's live events, in every server (after CandyService: its Candy rain)
 
 -- DataStore (unavailable in Studio unless "Enable Studio Access to API Services" is on)
 local store: ProfileStore.Store? = nil

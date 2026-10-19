@@ -6,6 +6,7 @@ local Net = require(script.Parent:WaitForChild("Net"))
 local Sessions = require(script.Parent:WaitForChild("Sessions"))
 local SpeedLogic = require(script.Parent:WaitForChild("SpeedLogic"))
 local WorldBuilder = require(script.Parent:WaitForChild("WorldBuilder"))
+local LiveEventService = require(script.Parent:WaitForChild("LiveEventService"))
 
 local SpeedService = {}
 
@@ -128,12 +129,13 @@ local function tickPlayer(s: Sessions.Session, dt: number, now: number)
 	if typeof(char) == "Instance" and char:GetAttribute("OnTreadmill") ~= onTreadmill then
 		char:SetAttribute("OnTreadmill", onTreadmill)
 	end
+	local live = LiveEventService.mult("Speed") -- a live Speed event: walking and the treadmill pay more
 	local gain, verdict, back = SpeedLogic.step(s.tracker, pos, dt, {
 		walkSpeed = s.walkSpeed,
 		onTreadmill = onTreadmill,
-		mult = Sessions.speedPerStud(s),
+		mult = Sessions.speedPerStud(s) * live,
 		treadmillTier = s.profile.treadmillTier,
-		trailMult = Sessions.speedMult(s),
+		trailMult = Sessions.speedMult(s) * live,
 	})
 	s.tracker.at = now
 

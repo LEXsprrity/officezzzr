@@ -16,6 +16,8 @@ local Assets = require(script.Parent:WaitForChild("Assets"))
 local Net = require(script.Parent:WaitForChild("Net"))
 local Sessions = require(script.Parent:WaitForChild("Sessions"))
 local SpeedService = require(script.Parent:WaitForChild("SpeedService"))
+local LiveEventService = require(script.Parent:WaitForChild("LiveEventService"))
+local LiveEvents = require(Shared:WaitForChild("LiveEvents"))
 
 local CandyService = {}
 
@@ -181,6 +183,26 @@ function CandyService.init()
 	f.Name = "HalloweenCandy"
 	f.Parent = workspace
 	folder = f
+	-- A live Candy rain (LiveEventService): LiveEvents.CANDY_BURST pieces at once, up to the raised cap
+	LiveEventService.onStart(function(ev)
+		if ev.kind ~= "Candy" or not Halloween.active(os.time()) then
+			return
+		end
+		task.spawn(function()
+			local cap = Halloween.CANDY_ON_MAP + LiveEvents.CANDY_CAP_BONUS
+			for _ = 1, LiveEvents.CANDY_BURST do
+				if #pieces >= cap then
+					break
+				end
+				local ok, err = pcall(spawnPiece)
+				if not ok then
+					warn("[CandyService]", err)
+					break
+				end
+				task.wait(0.05)
+			end
+		end)
+	end)
 	task.spawn(function()
 		if not Assets.get("Candy") then
 			template = loadTemplate()
@@ -188,10 +210,12 @@ function CandyService.init()
 		for _ = 1, Halloween.CANDY_START do
 			spawnPiece()
 		end
-		-- one more every CANDY_EVERY seconds while there's room
+		-- one more every CANDY_EVERY seconds while there's room (a live Candy rain: faster, and more room)
 		while Halloween.active(os.time()) do
-			task.wait(Halloween.CANDY_EVERY)
-			if #pieces < Halloween.CANDY_ON_MAP and Halloween.active(os.time()) then
+			local raining = LiveEventService.running("Candy")
+			task.wait(if raining then LiveEvents.CANDY_EVERY else Halloween.CANDY_EVERY)
+			local cap = Halloween.CANDY_ON_MAP + (if LiveEventService.running("Candy") then LiveEvents.CANDY_CAP_BONUS else 0)
+			if #pieces < cap and Halloween.active(os.time()) then
 				local ok, err = pcall(spawnPiece)
 				if not ok then
 					warn("[CandyService]", err)

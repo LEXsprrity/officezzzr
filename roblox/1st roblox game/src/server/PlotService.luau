@@ -23,6 +23,7 @@ local Inventory = require(script.Parent:WaitForChild("Inventory"))
 local PlantGhosts = require(script.Parent:WaitForChild("PlantGhosts"))
 local Seedling = require(script.Parent:WaitForChild("Seedling"))
 local SpeedService = require(script.Parent:WaitForChild("SpeedService"))
+local LiveEventService = require(script.Parent:WaitForChild("LiveEventService"))
 
 local TreadmillBoard = require(script.Parent:WaitForChild("TreadmillBoard"))
 
@@ -262,7 +263,7 @@ local function pushPlants(s: Sessions.Session, now: number)
 	local view = {}
 	for _, plant in s.profile.plants do
 		local weight, income = PlotService.plantStats(plant, now, grow)
-		income *= mult * Config.timeMult(plant.zone, isNight)
+		income *= mult * Config.timeMult(plant.zone, isNight) * LiveEventService.mult("Money")
 		-- `sell`: what the SELL stall pays for it right now (Selling.price)
 		table.insert(view, {
 			-- x/z: where it stands in the plot's space (the planting preview keeps new plants clear of it)
@@ -359,8 +360,10 @@ local function plantSeed(player: Player, s: Sessions.Session, state: PlotState, 
 		-- A fresh seed sprouts first (Config.sproutTime; Fast Grow halves it), earning nothing; its growth
 		-- starts when it is done. Its variance is fixed now, so moving plantedAt never changes its size.
 		plant.variance = Config.varianceOf(plant)
-		plant.sproutUntil = now + Config.sproutTime(zone, rarity, Sessions.growMult(s))
-		plant.plantedAt = plant.sproutUntil :: number
+		-- A live Grow event (LiveEventService) divides the time, or skips it (Instant: a flower at once).
+		local sprout = LiveEventService.sproutSeconds(zone, rarity, Sessions.growMult(s))
+		plant.sproutUntil = if sprout > 0 then now + sprout else nil
+		plant.plantedAt = now + sprout
 	end
 	table.insert(s.profile.plants, plant)
 	spawnPlant(state, plant, now, Sessions.growMult(s))
@@ -1122,7 +1125,7 @@ end
 local PLANTS_PUSH_EVERY = 3
 local payoutPass = 0
 local function payout(s: Sessions.Session, state: PlotState, now: number)
-	local mult = Sessions.moneyMult(s)
+	local mult = Sessions.moneyMult(s) * LiveEventService.mult("Money") -- (a live Money event: paid here only, never offline or saved)
 	local grow = Sessions.growMult(s)
 	local isNight = Config.dayPhase(now)
 	local total = 0
