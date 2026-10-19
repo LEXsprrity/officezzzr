@@ -72,19 +72,19 @@ end
 ----------------------------------------------------------------------------------------------------
 -- Chances
 ----------------------------------------------------------------------------------------------------
-H.test("mutations: Gold, Rainbow and Celestial 2.5x as common, Diamond between Gold and Rainbow, in roll order", function()
+H.test("mutations: Gold 5%, Diamond 2%, Rainbow 1.25%, Celestial 0.625% (owner 2026-10-19: half of the 2.5x), in roll order", function()
 	local ids = {}
 	for _, m in Config.MUTATIONS do
 		table.insert(ids, m.id)
 	end
 	H.eq(table.concat(ids, ","), "Gold,Diamond,Rainbow,Night,Celestial,Haunted", "the roll (and Index) order")
 	local gold, diamond, rainbow = Config.mutationById("Gold"), Config.mutationById("Diamond"), Config.mutationById("Rainbow")
-	H.near(gold.chance, 0.10, 1e-12, "Gold: 10% (was 4%)")
-	H.near(diamond.chance, 0.04, 1e-12, "Diamond: 4%")
-	H.near(rainbow.chance, 0.025, 1e-12, "Rainbow: 2.5% (was 1%)")
-	H.near(Config.PACK_EXCLUSIVE_CHANCE, 0.0125, 1e-12, "Celestial: 1.25% of pack seeds (was 0.5%)")
+	H.near(gold.chance, 0.05, 1e-12, "Gold: 5%")
+	H.near(diamond.chance, 0.02, 1e-12, "Diamond: 2%")
+	H.near(rainbow.chance, 0.0125, 1e-12, "Rainbow: 1.25%")
+	H.near(Config.PACK_EXCLUSIVE_CHANCE, 0.00625, 1e-12, "Celestial: 0.625% of pack seeds")
 	for _, c in { { gold.chance, 0.04 }, { rainbow.chance, 0.01 }, { Config.PACK_EXCLUSIVE_CHANCE, 0.005 } } do
-		H.ok(c[1] >= 2 * c[2] and c[1] <= 3 * c[2], "2-3x the old chance")
+		H.ok(c[1] >= c[2] and c[1] <= 1.5 * c[2], "a little over the old chance (1x-1.5x)")
 	end
 	-- the ladder: the rarer, the better it pays; Diamond between Gold and Rainbow
 	H.ok(gold.chance > diamond.chance and diamond.chance > rainbow.chance, "Gold > Diamond > Rainbow in chance")

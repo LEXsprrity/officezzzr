@@ -1716,7 +1716,7 @@ do
 		local exclusive = Config.mutationById(pack.exclusive)
 		bold(c, 2, {
 			Text = `{Format.money(Config.seedIncome(pack.zone))}/s per Common sprout`
-				.. (if exclusive then ` · {exclusive.id} x{exclusive.income} income, only from packs` else ""),
+				.. (if exclusive then ` · {exclusive.id} x{exclusive.income} income` else ""),
 			Size = UDim2.new(1, -36, 0, 20), Position = UDim2.fromOffset(18, bottom + 32), TextColor3 = Color3.fromRGB(255, 245, 210), ZIndex = 3,
 		})
 		-- "1 Seed" and "10 Seeds" (owner 2026-10-15, like the reference's "1 Egg" / "10 Eggs"), each a gift + R$
@@ -2968,7 +2968,7 @@ do
 			resultLabel.Visible = true
 			local exclusive = best.mutation ~= nil and best.mutation == pack.exclusive
 			local event = best.mutation == Halloween.MUTATION -- (the Halloween card's seeds are all Haunted)
-			resultSub.Text = `{if event then "HALLOWEEN! " elseif exclusive then "PACK EXCLUSIVE! " else ""}{SeedPacks.seedName(best.zone, best.rarity, best.mutation)} → your Inventory`
+			resultSub.Text = `{if event then "HALLOWEEN! " elseif exclusive then `{string.upper(best.mutation)}! ` else ""}{SeedPacks.seedName(best.zone, best.rarity, best.mutation)} → your Inventory`
 			resultSub.Visible = true
 		end
 

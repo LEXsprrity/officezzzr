@@ -175,11 +175,11 @@ H.test("odds: rarity odds sum to 100% and mutations + none sum to 100% for both 
 	end
 end)
 
-H.test("odds: packs roll with double luck and double Gold/Diamond/Rainbow (20%, 8%, 5%), Celestial 1.25%, never Night", function()
+H.test("odds: packs roll with double luck and double Gold/Diamond/Rainbow (10%, 4%, 2.5%), Celestial 0.625%, never Night", function()
 	H.eq(Config.PACK_LUCK, 2, "packs roll rarities with double luck (night pods are x1.5)")
 	H.eq(Config.PACK_MUTATION_MULT, 2)
 	H.eq(Config.PACK_EXCLUSIVE, "Celestial")
-	H.eq(Config.PACK_EXCLUSIVE_CHANCE, 0.0125, "2.5x the old 0.5% (owner 2026-10-19: more variety)")
+	H.eq(Config.PACK_EXCLUSIVE_CHANCE, 0.00625, "half of 1.25% (owner 2026-10-19)")
 	for _, pack in packs() do
 		local odds = SeedPacks.odds(pack)
 		local ids = {}
@@ -187,11 +187,11 @@ H.test("odds: packs roll with double luck and double Gold/Diamond/Rainbow (20%, 
 			table.insert(ids, m.id)
 		end
 		H.eq(table.concat(ids, ","), "Celestial,Gold,Diamond,Rainbow", pack.id)
-		H.near(odds.mutations[1].pct, 1.25, 1e-12, "Celestial 1.25%")
-		H.near(odds.mutations[2].pct, 20, 1e-12, "Gold 20%")
-		H.near(odds.mutations[3].pct, 8, 1e-12, "Diamond 8%")
-		H.near(odds.mutations[4].pct, 5, 1e-12, "Rainbow 5%")
-		H.eq(SeedPacks.percent(odds.mutations[1].pct), "1.25%")
+		H.near(odds.mutations[1].pct, 0.625, 1e-12, "Celestial 0.625%")
+		H.near(odds.mutations[2].pct, 10, 1e-12, "Gold 10%")
+		H.near(odds.mutations[3].pct, 4, 1e-12, "Diamond 4%")
+		H.near(odds.mutations[4].pct, 2.5, 1e-12, "Rainbow 2.5%")
+		H.eq(SeedPacks.percent(odds.mutations[1].pct), "0.62%")
 	end
 	local space, spirit = SeedPacks.odds(packs()[1]), SeedPacks.odds(packs()[2])
 	H.ok(spirit.rarities[4] > space.rarities[4], "deeper zone, more Epics")
@@ -263,26 +263,26 @@ H.test("roll: 200k seeded rolls match the displayed odds, Celestial included", f
 	end
 end)
 
-H.test("celestial: still a mutation (x12, exclusive) and pods can never roll it, day or night, any zone", function()
+H.test("celestial: still a mutation (x12, exclusive in packs), and since 2026-10-19 pods roll it too, the rarest", function()
 	local cel = Config.mutationById("Celestial")
 	H.ok(cel ~= nil, "Celestial still exists")
-	H.eq(cel.exclusive, true)
-	H.eq(cel.chance, 0, "pods roll mutations by chance; 0 means never")
+	H.eq(cel.exclusive, true, "packs give it at their own chance (PACK_EXCLUSIVE_CHANCE), not doubled")
+	H.near(cel.chance, Config.mutationById("Rainbow").chance / 2, 1e-12, "owner: on stolen seeds too, at half the Rainbow's chance")
 	H.eq(cel.income, 12)
-	local rng = seeded(7)
-	for k = 1, #Config.ZONES do
-		for _, night in { false, true } do
-			for _ = 1, 10000 do
-				local _, m = Config.rollSeed(k, if night then Config.NIGHT_LUCK else 1, night, rng)
-				H.ok(m ~= "Celestial", "a pod rolled Celestial")
-			end
+	for _, m in Config.MUTATIONS do
+		if m.id ~= "Celestial" and m.chance > 0 then
+			H.ok(cel.chance < m.chance, `rarer than {m.id}`)
 		end
-		-- even the luckiest edge of the pod roll can't land on it
-		local _, edge = Config.rollSeed(k, Config.NIGHT_LUCK, true, function()
-			return 0
-		end)
-		H.ok(edge ~= "Celestial", "rng 0 pod roll")
 	end
+	local rng = seeded(7)
+	local hits = 0
+	for _ = 1, 200000 do
+		local _, m = Config.rollSeed(7, 1, false, rng)
+		if m == "Celestial" then
+			hits += 1
+		end
+	end
+	H.ok(math.abs(hits - cel.chance * 200000) <= 0.1 * cel.chance * 200000, `a pod rolls it about {cel.chance * 100}% of the time ({hits})`)
 end)
 
 ----------------------------------------------------------------------------------------------------

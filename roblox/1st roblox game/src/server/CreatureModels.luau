@@ -465,7 +465,7 @@ local RAINBOW = ColorSequence.new({
 	ColorSequenceKeypoint.new(1, rgb(220, 90, 255)),
 })
 
--- Celestial (exclusive, premium seed packs only) is the rarest look: a deep-violet starry body, white Neon
+-- Celestial (the rarest: premium seed packs, and since 2026-10-19 pods too) is the rarest look: a deep-violet starry body, white Neon
 -- leaves and petals, cyan glow, a soft star halo and slow drifting stars.
 local CELESTIAL_VIOLET = rgb(55, 25, 140)
 local CELESTIAL_WHITE = rgb(240, 242, 255)
