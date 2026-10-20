@@ -44,6 +44,11 @@ export type Lie = {
 	tuck: number?,
 	curl: number?, -- the tail curls round to its left (spread along it)
 	spine: { number }?, -- snake: yaw of each body bone on the ground (the coil)
+	-- the front feet (hands) turn this much in the world (X, Y, Z Euler angles for the right one; the left is
+	-- mirrored): the gorilla's would point up lying on its front (owner 2026-10-20: "palms face down")
+	hand: Vector3?,
+	wingYaw: number?, -- the folded wings: swept back this much (default 0.75)...
+	wingRoll: number?, -- ...and rolled this much (default 0.55; the dragon's are folded down, owner 2026-10-20)
 }
 
 export type Profile = {
@@ -168,7 +173,10 @@ BossRigs.PROFILES = {
 			["Root.R.001-IKTarget"] = swing(1.2),
 		},
 		swing = 0.7, bend = 0.7, bob = 0.15, hop = 0.45, lunge = 0.9,
-		lie = { drop = 0, tilt = 1.4, neck = { -0.1, -0.2 }, head = -0.7, hip = { front = 2.5, rear = 0.6 }, knee = { front = 0.3, rear = 0 } },
+		lie = {
+			drop = 0, tilt = 1.4, neck = { -0.1, -0.2 }, head = -0.7, hip = { front = 2.5, rear = 0.6 }, knee = { front = 0.3, rear = 0 },
+			hand = Vector3.new(-1.536, -0.232, 0.119), -- (the hands as when it stands: knuckles down, not palms up)
+		},
 		eyes = { "eye2", "eye3", "eye4", "Body.014" },
 		halfWidth = 5.6, -- with its arms down (its rest bounds are the T-pose)
 	},
@@ -197,7 +205,10 @@ BossRigs.PROFILES = {
 			leg("Root.R.003", "Root.R.007", "Root.R.016-IKTarget", 1, false, { tip = "Root.R.016" }),
 		},
 		swing = 0.7, bend = 0.8, bob = 0.15, hop = 0.5, lunge = 0.9,
-		lie = { drop = 1.5, neck = { 0.9, 0.9, 0.5 }, head = -0.3, hip = { front = 0.5, rear = 0.5 }, knee = { front = -0.9, rear = -0.9 }, curl = 1.2 },
+		lie = {
+			drop = 1.5, neck = { 0.9, 0.9, 0.5 }, head = -0.3, hip = { front = 0.5, rear = 0.5 }, knee = { front = -0.9, rear = -0.9 }, curl = 1.2,
+			wingYaw = -1.2, wingRoll = 0.9, -- (folded down and back along its body, not raised)
+		},
 		eyes = { "DragonPurple.009", "DragonPurple.012", "DragonPurple.013", "DragonPurple.014", "DragonPurple.015" },
 	},
 	-- Spirit Garden: a glowing stag with antlers. Gallops in bounds, lies down to sleep, rams on a catch.
@@ -322,6 +333,9 @@ local function sleep(pose: Pose, p: Profile, t: number)
 			add(pose, l.hip, roll(-l.side * (lie.tuck or 0)) * swing(hip))
 			add(pose, l.knee, swing(knee))
 		end
+		if lie.hand and l.front and l.foot then
+			add(pose, l.foot, CFrame.Angles(lie.hand.X, lie.hand.Y * l.side, lie.hand.Z * l.side))
+		end
 	end
 	-- the tail curls round to one side, swaying a little with each breath
 	local tail = p.tail or {}
@@ -333,7 +347,7 @@ local function sleep(pose: Pose, p: Profile, t: number)
 	end
 	-- wings folded back along the body; fins flat on the ground
 	sides(pose, p.wings, function(side)
-		return yaw(-side * 0.75) * roll(-side * 0.55)
+		return yaw(-side * (lie.wingYaw or 0.75)) * roll(-side * (lie.wingRoll or 0.55))
 	end)
 	sides(pose, p.fins, function(side)
 		return roll(-side * (0.35 + 0.03 * breathe))
