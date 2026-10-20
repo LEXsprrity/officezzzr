@@ -196,21 +196,26 @@ H.test("plants: the swords (katanas) are Legendary and only in the Spirit Garden
 	H.ok(swords.Cryonix and swords.Pyronis, "Cryonix and Pyronis are the Spirit Garden swords")
 end)
 
-H.test("plants: Legendaries are the pack's big plants (20+ studs), everything else is small", function()
+H.test("plants: every plant with effects is Epic or Legendary, every plain one Common, Uncommon or Rare (owner 2026-10-20)", function()
 	local seen = {}
 	for k = 1, #Config.ZONES do
 		local legendaries = #variants(k, L)
-		H.ok(legendaries >= 2 and legendaries <= 4, `{Config.ZONES[k].id}: {legendaries} Legendaries`)
+		H.ok(legendaries >= 1 and legendaries <= 4, `{Config.ZONES[k].id}: {legendaries} Legendaries`)
 		for r = 1, #Config.RARITIES do
+			H.ok(#variants(k, r) >= 1, `{Config.ZONES[k].id}: at least one {Config.RARITIES[r].id}`)
 			for _, m in variants(k, r) do
 				local source, tall = m:GetAttribute("Source"), m:GetAttribute("SourceHeight")
 				H.ok(type(source) == "string" and type(tall) == "number", `{m.Name}: Source and SourceHeight`)
 				H.ok(not seen[m.Name], `{m.Name} used once`)
 				seen[m.Name] = true
-				if r == L then
-					H.ok(tall >= 20, `Legendary {m.Name} is big ({tall})`)
+				local vfx = false
+				for _, d in m:GetDescendants() do
+					vfx = vfx or d:IsA("ParticleEmitter") or d:IsA("Beam") or d:IsA("Trail")
+				end
+				if r >= 4 then
+					H.ok(vfx, `{Config.RARITIES[r].id} {m.Name} has effects`)
 				else
-					H.ok(tall < 20 and string.sub(source, 1, 8) ~= "Titanic/", `{Config.RARITIES[r].id} {m.Name} is small ({source}, {tall})`)
+					H.ok(not vfx, `{Config.RARITIES[r].id} {m.Name} is plain (no particles or beams)`)
 				end
 			end
 		end
@@ -255,7 +260,7 @@ H.test("plants: Legendaries are 1.5x bigger at every stage (owner 2026-10-15); E
 			tallest = math.max(tallest, h)
 		end
 		local grown = CreatureModels.scaleFor(k, L, Config.sproutWeight(k, L) * Config.GROW_MAX_FACTOR)
-		H.ok(tallest * grown >= 33 and tallest * grown <= 50, `{Config.ZONES[k].id} tallest Legendary full-grown {tallest * grown} studs`)
+		H.ok(tallest * grown >= 25 and tallest * grown <= 50, `{Config.ZONES[k].id} tallest Legendary full-grown {tallest * grown} studs`) -- (the Meadow's one, Verdantis: ~27)
 	end
 end)
 

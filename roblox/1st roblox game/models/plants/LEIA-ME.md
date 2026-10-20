@@ -6,22 +6,21 @@
 
 ## Regras
 
-- **Pequenas** (a maioria da Normal, 3 a 12 studs) → Common / Uncommon / Rare. As mais leves (menos peças, quase sem partículas) ficam nas raridades comuns: um lote tem até 40 plantas.
-- **Grandes** (20+ studs: toda a Titanic e as grandes da Normal) → **Legendary**.
+- **Com efeitos** (partículas ou beams) → **Epic** ou **Legendary** (dono, 2026-10-20), por isso ficam maiores. As grandes com efeitos são Legendary.
+- **Sem efeitos** → **Common / Uncommon / Rare**, pequenas, mesmo as grandes da Titanic (Sunfloris, Rosaris, Draconyx, Jellythys) e a Mafioso. Algumas zonas ficam com muitas Epic e uma só Rare: as chances e o rendimento de cada raridade não mudam.
 - **Espadas** (katanas): **Cryonix** (gelo) e **Pyronis** (fogo; o mesmo formato e tamanho da Cryonix: cabo com faixas, guarda, lâmina para baixo). Só no **Spirit Garden**, como Legendary. Venomyx, Infernyx e Cybaris **não** são espadas (Infernyx é uma flor grande num caule; Venomyx e Cybaris são largas, sem forma de lâmina).
-- **Meme / com efeitos** (Assassino, Bombardiro, Trallalero, Sahur, LaVaca, Ballerina, Patapim, StrawberryElephant, Mafioso, SixSeven...) → **Epic**.
 
 ## Zona × raridade
 
 | Zona | Common | Uncommon | Rare | Epic | Legendary |
 |---|---|---|---|---|---|
-| 🌼 Meadow | Daisy, Tulip, Sunflower, Lily, Cornflower | Rose, Pansy, Dandelion, Iris, Thistle | Hellebore, Orchid, Pinkbells | Mafioso, Ballerina | Sunfloris, Verdantis, Rosaris |
-| 🦂 Desert | Cactus, Succulent, Nuzwat | DesertWildFlower, KittyTowerFlower, ZebraFlower | Sunpetal, SolarIris, HaloOrchid, RadianceLily | Sahur, MantisReaper | Helios, Aetheris |
-| 🦖 Jungle | BugEater, ZombeeFlower, ShimmeringLichen | SpiderLilly, UnicornPetunia, Beenspector, OceanBloom | Snapdragon, MeanFlower, GlowBerry | Bombardiro, Patapim | Venomyx, Paradoxys |
-| 🌋 Lava Fields | EmberSpark, Pomeflower | DarkflareRose, RedStar | DragonFlower, FrostburnRose | StrawberryElephant, CrimsonWidow | Infernyx, Coreflare, Draconyx |
-| ❄️ Snow Peaks | IcecapBloom, Snowdrop, HollyBloom, Mistletoe | WinterRose, PolarSpire, Snowpuff, FrostLily | Glacierheart, PoinsettiaBlossom, Gingerbread, Elf, CrystalizedPetal, CrystalDaisy | Santa, Reindeer, Trallalero | Frostwyrm, Aracnid, Lunaris |
-| 👽 Deep Space | EclipseBloom, NebulaRose, Lobelia | MeteorFlower, Voidbloom, BorealBell | StarfallFlower, CyberFlower, Starpetal, Gleamblossom | LaVaca, SixSeven, TwilightAmarilis | Stellaris, Cybaris, Jellythys |
-| ⛩️ Spirit Garden | Camellia, MoonlaceOrchid, Lightbloom | Bamboo, Whitenight, Crystalflower | BubbleLotus, IvoryIris, Ghostflower, Ghostleaf | Assassino, DualityFlower, DualityRose | **Cryonix** ⚔️, **Pyronis** ⚔️, Noctyra, Velkrya |
+| 🌼 Meadow | Cornflower, Daisy, Lily, Sunflower, Tulip | Dandelion, Iris, Pansy, Rose, Thistle | Hellebore, Mafioso, Orchid, Pinkbells, Rosaris, Sunfloris | Ballerina | Verdantis |
+| 🦂 Desert | Cactus, Nuzwat, Succulent | DesertWildFlower, KittyTowerFlower, ZebraFlower | HaloOrchid, RadianceLily | MantisReaper, Sahur, SolarIris, Sunpetal | Aetheris, Helios |
+| 🦖 Jungle | BugEater, ShimmeringLichen, ZombeeFlower | Beenspector, UnicornPetunia | OceanBloom, SpiderLilly | Bombardiro, GlowBerry, MeanFlower, Patapim, Snapdragon | Paradoxys, Venomyx |
+| 🌋 Lava Fields | EmberSpark | Pomeflower | Draconyx | CrimsonWidow, DarkflareRose, DragonFlower, FrostburnRose, RedStar, StrawberryElephant | Coreflare, Infernyx |
+| ❄️ Snow Peaks | HollyBloom, IcecapBloom, Snowdrop | FrostLily, PolarSpire, WinterRose | Glacierheart | CrystalDaisy, CrystalizedPetal, Elf, Gingerbread, Mistletoe, PoinsettiaBlossom, Reindeer, Santa, Snowpuff, Trallalero | Aracnid, Frostwyrm, Lunaris |
+| 👽 Deep Space | EclipseBloom, Lobelia, NebulaRose | BorealBell, Voidbloom | Jellythys | CyberFlower, Gleamblossom, LaVaca, MeteorFlower, SixSeven, StarfallFlower, Starpetal, TwilightAmarilis | Cybaris, Stellaris |
+| ⛩️ Spirit Garden | Camellia, Lightbloom, MoonlaceOrchid | Bamboo, Crystalflower, Whitenight | BubbleLotus, IvoryIris | Assassino, DualityFlower, DualityRose, Ghostflower, Ghostleaf | **Cryonix** ⚔️, Noctyra, **Pyronis** ⚔️, Velkrya |
 
 Não usadas: **AdminStarpetal** (está na Titanic, mas tem só ~10 studs: não é grande) e **BellFlower** (larga e baixa: ficava com ~2 studs). O **HollyBloom** aparece nas duas pastas; usamos o da Normal.
 
