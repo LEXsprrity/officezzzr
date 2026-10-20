@@ -229,15 +229,16 @@ local function area(p: any): number
 	return s.X * s.Y + s.Y * s.Z + s.X * s.Z
 end
 
-H.test("haunted set: at least two of every rarity in every zone (14 each, 15 Epics; the Desert one Legendary), the Pyronis first Spirit Legendary", function()
-	local want = { 14, 14, 14, 15, 13 }
+H.test("haunted set: at least two of every rarity in every zone where it has two (since 2026-10-20 some have one), the Pyronis first Spirit Legendary", function()
+	local want = { 13, 13, 13, 28, 12 }
 	local counts = { 0, 0, 0, 0, 0 }
 	local seen = {}
 	for k in Config.ZONES do
 		H.ok(Halloween.SET[k] ~= nil, `{Config.ZONES[k].id} has a set`)
 		for r, rarity in Config.RARITIES do
 			local names = Halloween.setFlowers(k, r)
-			local least = if Config.ZONES[k].id == "Desert" and r == L then 1 else 2 -- (Aetheris would be mush)
+			-- (the zone's own models of that rarity: some have only one; the Desert's Aetheris would be mush)
+			local least = if Config.ZONES[k].id == "Desert" and r == L then 1 else math.min(2, #CreatureModels.variants(k, r))
 			H.ok(#names >= least, `{Config.ZONES[k].id} {rarity.id}: at least {least} Haunted plants (the Shop card turns through them)`)
 			counts[r] += #names
 			for _, name in names do
@@ -245,7 +246,7 @@ H.test("haunted set: at least two of every rarity in every zone (14 each, 15 Epi
 				seen[`{k}:{name}`] = true
 			end
 		end
-		H.eq(#Halloween.setFlowers(k, L), if Config.ZONES[k].id == "Desert" then 1 else 2, `Legendaries in {Config.ZONES[k].id}`)
+		H.eq(#Halloween.setFlowers(k, L), if Config.ZONES[k].id == "Desert" or Config.ZONES[k].id == "Meadow" then 1 else 2, `Legendaries in {Config.ZONES[k].id}`)
 		for key in Halloween.SET[k] do
 			local known = false
 			for _, rarity in Config.RARITIES do
@@ -442,7 +443,7 @@ H.test("haunted look: no set plant turns to mush (some orange, some purple, neve
 		end
 		return out
 	end
-	for _, c in { { 1, 4, "Ballerina" }, { 4, 2, "DarkflareRose" }, { 6, 3, "StarfallFlower" } } do
+	for _, c in { { 1, 4, "Ballerina" }, { 4, 4, "DarkflareRose" }, { 6, 4, "StarfallFlower" } } do
 		local m = rawModel(c[1], c[2], c[3])
 		local x, y = Halloween.orangeColors(partsOf(m, false)), Halloween.orangeColors(partsOf(m, true))
 		local nx = 0
@@ -463,7 +464,7 @@ H.test("haunted look: the HUD's 3D pictures (FlowerView) show a Haunted plant as
 	local before = rs.__children.FlowerPreviews
 	local root = roblox.Instance.new("Folder")
 	root.Name = FlowerPreviews.FOLDER
-	local checks = { { 7, L, "Pyronis" }, { 1, 4, "Ballerina" }, { 4, 2, "DarkflareRose" } }
+	local checks = { { 7, L, "Pyronis" }, { 1, 4, "Ballerina" }, { 4, 4, "DarkflareRose" } }
 	for _, c in checks do
 		local k, r, name = c[1], c[2], c[3]
 		local zf = root:FindFirstChild(tostring(k)) or roblox.Instance.new("Folder")

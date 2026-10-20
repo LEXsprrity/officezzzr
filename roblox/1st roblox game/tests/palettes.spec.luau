@@ -389,7 +389,7 @@ H.test("palettes: every plant in every palette keeps its contrast (hues turned, 
 		end
 	end
 	-- by colour, whatever the parts' order (the HUD's picture is a copy)
-	for _, c in { { SPIRIT, EPIC, "DualityFlower" }, { 1, 1, "Daisy" }, { 5, 3, "CrystalDaisy" } } do
+	for _, c in { { SPIRIT, EPIC, "DualityFlower" }, { 1, 1, "Daisy" }, { 5, 4, "CrystalDaisy" } } do
 		local parts = partsOf(rawModel(c[1], c[2], c[3]))
 		local reversed = {}
 		for i = #parts, 1, -1 do

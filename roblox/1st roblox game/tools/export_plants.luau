@@ -29,56 +29,58 @@ local SOURCE = "models/plants/FlowersByLoxxsy.rbxm"
 -- The sword-shaped plants (katanas): Cryonix (ice) and Pyronis (fire, the same katana shape and size).
 local SWORDS = { Cryonix = true, Pyronis = true }
 
--- Zone id -> rarity -> pack models. Lighter models (fewer parts, few or no particles) for the common
+-- Zone id -> rarity -> pack models. Owner 2026-10-20: every model with effects (particles, beams) is Epic or
+-- Legendary, and so bigger (Config.creatureFootprint / creatureHeight by rarity); the plain ones are Common,
+-- Uncommon or Rare, small (some zones have many Epics and one Rare: the rarity odds and pay don't change). Lighter models (fewer parts) for the common
 -- rarities: a plot holds up to 40 plants.
 local PLANTS = {
 	Meadow = {
 		Common = { "Daisy", "Tulip", "Sunflower", "Lily", "Cornflower" },
 		Uncommon = { "Rose", "Pansy", "Dandelion", "Iris", "Thistle" },
-		Rare = { "Hellebore", "Orchid", "Pinkbells" },
-		Epic = { "Mafioso", "Ballerina" },
-		Legendary = { "Sunfloris", "Verdantis", "Rosaris" },
+		Rare = { "Hellebore", "Orchid", "Pinkbells", "Mafioso", "Sunfloris", "Rosaris" },
+		Epic = { "Ballerina" },
+		Legendary = { "Verdantis" },
 	},
 	Desert = {
 		Common = { "Cactus", "Succulent", "Nuzwat" },
 		Uncommon = { "DesertWildFlower", "KittyTowerFlower", "ZebraFlower" },
-		Rare = { "Sunpetal", "SolarIris", "HaloOrchid", "RadianceLily" },
-		Epic = { "Sahur", "MantisReaper" },
+		Rare = { "HaloOrchid", "RadianceLily" },
+		Epic = { "Sahur", "MantisReaper", "Sunpetal", "SolarIris" },
 		Legendary = { "Helios", "Aetheris" },
 	},
 	Jungle = {
 		Common = { "BugEater", "ZombeeFlower", "ShimmeringLichen" },
-		Uncommon = { "SpiderLilly", "UnicornPetunia", "Beenspector", "OceanBloom" },
-		Rare = { "Snapdragon", "MeanFlower", "GlowBerry" },
-		Epic = { "Bombardiro", "Patapim" },
+		Uncommon = { "UnicornPetunia", "Beenspector" },
+		Rare = { "SpiderLilly", "OceanBloom" },
+		Epic = { "Bombardiro", "Patapim", "Snapdragon", "MeanFlower", "GlowBerry" },
 		Legendary = { "Venomyx", "Paradoxys" },
 	},
 	Lava = {
-		Common = { "EmberSpark", "Pomeflower" },
-		Uncommon = { "DarkflareRose", "RedStar" },
-		Rare = { "DragonFlower", "FrostburnRose" },
-		Epic = { "StrawberryElephant", "CrimsonWidow" },
-		Legendary = { "Infernyx", "Coreflare", "Draconyx" },
+		Common = { "EmberSpark" },
+		Uncommon = { "Pomeflower" },
+		Rare = { "Draconyx" },
+		Epic = { "StrawberryElephant", "CrimsonWidow", "DarkflareRose", "RedStar", "DragonFlower", "FrostburnRose" },
+		Legendary = { "Infernyx", "Coreflare" },
 	},
 	Snow = {
-		Common = { "IcecapBloom", "Snowdrop", "HollyBloom", "Mistletoe" },
-		Uncommon = { "WinterRose", "PolarSpire", "Snowpuff", "FrostLily" },
-		Rare = { "Glacierheart", "PoinsettiaBlossom", "Gingerbread", "Elf", "CrystalizedPetal", "CrystalDaisy" },
-		Epic = { "Santa", "Reindeer", "Trallalero" },
+		Common = { "IcecapBloom", "Snowdrop", "HollyBloom" },
+		Uncommon = { "WinterRose", "PolarSpire", "FrostLily" },
+		Rare = { "Glacierheart" },
+		Epic = { "Santa", "Reindeer", "Trallalero", "Mistletoe", "Snowpuff", "PoinsettiaBlossom", "Gingerbread", "Elf", "CrystalizedPetal", "CrystalDaisy" },
 		Legendary = { "Frostwyrm", "Aracnid", "Lunaris" },
 	},
 	Space = {
 		Common = { "EclipseBloom", "NebulaRose", "Lobelia" },
-		Uncommon = { "MeteorFlower", "Voidbloom", "BorealBell" },
-		Rare = { "StarfallFlower", "CyberFlower", "Starpetal", "Gleamblossom" },
-		Epic = { "LaVaca", "SixSeven", "TwilightAmarilis" },
-		Legendary = { "Stellaris", "Cybaris", "Jellythys" },
+		Uncommon = { "Voidbloom", "BorealBell" },
+		Rare = { "Jellythys" },
+		Epic = { "LaVaca", "SixSeven", "TwilightAmarilis", "MeteorFlower", "StarfallFlower", "CyberFlower", "Starpetal", "Gleamblossom" },
+		Legendary = { "Stellaris", "Cybaris" },
 	},
 	Spirit = {
 		Common = { "Camellia", "MoonlaceOrchid", "Lightbloom" },
 		Uncommon = { "Bamboo", "Whitenight", "Crystalflower" },
-		Rare = { "BubbleLotus", "IvoryIris", "Ghostflower", "Ghostleaf" },
-		Epic = { "Assassino", "DualityFlower", "DualityRose" },
+		Rare = { "BubbleLotus", "IvoryIris" },
+		Epic = { "Assassino", "DualityFlower", "DualityRose", "Ghostflower", "Ghostleaf" },
 		Legendary = { "Cryonix", "Pyronis", "Noctyra", "Velkrya" },
 	},
 }
