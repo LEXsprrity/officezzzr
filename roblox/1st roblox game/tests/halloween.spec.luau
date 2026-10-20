@@ -230,7 +230,7 @@ local function area(p: any): number
 end
 
 H.test("haunted set: at least two of every rarity in every zone where it has two (since 2026-10-20 some have one), the Pyronis first Spirit Legendary", function()
-	local want = { 18, 15, 15, 20, 14 }
+	local want = { 15, 15, 15, 26, 14 }
 	local counts = { 0, 0, 0, 0, 0 }
 	local seen = {}
 	for k in Config.ZONES do

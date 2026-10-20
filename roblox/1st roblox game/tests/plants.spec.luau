@@ -214,6 +214,15 @@ H.test("plants: the big ones and the strongest effects are Epic or Legendary, at
 	end
 end)
 
+H.test("plants: from the Snow Peaks on, at most 2 Commons, 2 Uncommons and 3 Rares, the rest Epic or Legendary (owner 2026-10-20)", function()
+	for k = 5, #Config.ZONES do
+		local zone = Config.ZONES[k].id
+		H.ok(#variants(k, 1) <= 2, `{zone}: {#variants(k, 1)} Commons`)
+		H.ok(#variants(k, 2) <= 2, `{zone}: {#variants(k, 2)} Uncommons`)
+		H.ok(#variants(k, 3) <= 3, `{zone}: {#variants(k, 3)} Rares`)
+	end
+end)
+
 H.test("plants: Legendaries tower over the zone's Commons and grow past 15 studs", function()
 	for k = 1, #Config.ZONES do
 		local tallestCommon = 0
