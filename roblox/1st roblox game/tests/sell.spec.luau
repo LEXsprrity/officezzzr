@@ -363,10 +363,10 @@ H.test("sell spam: what was asked to sell drops out of the window at once; a rep
 	H.eq(asked, 3)
 	-- quick sells count from the pending-adjusted list
 	local quick = SellPick.sale(SellPick.unsold(SellPick.items(stats), pending), { group = "All" })
-	H.deepEq(quick.slots, { 2 }, "the quick sell leaves out the pending plant")
+	H.deepEq(quick.slots, {}, "the quick sell never takes a planted plant")
 	H.deepEq(quick.ids, {}, "and the pending inventory plant")
 	H.deepEq(quick.seeds, { ["2:2"] = 1 }, "and the pending seeds")
-	H.eq(quick.count, 2)
+	H.eq(quick.count, 1)
 	-- the server's push confirms part of it: the seeds still outstanding stay hidden
 	stats.seedBag = { ["1:1#9"] = 1, ["2:2#3"] = 1 } -- two of the three sold so far
 	stats.plants = { { slot = 2, zone = 1, rarity = 2, sell = 20 } } -- the plant is gone

@@ -5,7 +5,9 @@
 -- list and sell as one). A sale is the SellPlants remote's three arguments (plant slots, inventory ids,
 -- { [label]: count }) and what it should pay; the server re-checks all of it (Selling).
 -- The quick sells: one button per rarity, Common to Epic, and "Sell all" (every rarity but Legendary,
--- which is never quick-sold); mutated plants and seeds only with "include mutated" on.
+-- which is never quick-sold); mutated plants and seeds only with "include mutated" on. They only sell what is
+-- in the bag (the seeds and the Inventory's plants), never a planted one (owner 2026-10-20: "dont let the sell
+-- all button sell all the plants in the plot"): those sell one by one from their own card.
 local Config = require(script.Parent:WaitForChild("Config"))
 local SeedPacks = require(script.Parent:WaitForChild("SeedPacks"))
 
@@ -86,7 +88,7 @@ end
 
 -- Whether a quick sell takes this item.
 function SellPick.matches(item: Item, group: Group, includeMutated: boolean): boolean
-	if item.rarity >= Config.LEGENDARY or (item.mutation ~= nil and not includeMutated) then
+	if item.kind == "plant" or item.rarity >= Config.LEGENDARY or (item.mutation ~= nil and not includeMutated) then
 		return false
 	end
 	return group.rarity == nil or item.rarity == group.rarity

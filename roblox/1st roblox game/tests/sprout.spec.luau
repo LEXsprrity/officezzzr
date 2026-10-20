@@ -485,7 +485,7 @@ H.test("sell: seeds from the bag sell at the stall; only what you hold, never mo
 	H.eq(SeedPacks.bagCount(p.seedBag), 0)
 end)
 
-H.test("sell: quick sells per rarity and Sell all count plants, inventory plants and seeds; Legendary and (unless on) mutated kept", function()
+H.test("sell: quick sells per rarity and Sell all count the bag (inventory plants and seeds), never planted ones; Legendary and (unless on) mutated kept", function()
 	local stats = {
 		plotLevel = 1, passes = {},
 		plants = {
@@ -498,22 +498,23 @@ H.test("sell: quick sells per rarity and Sell all count plants, inventory plants
 	local items = SellPick.items(stats)
 	local seedCommon = SellPick.seedPrice(stats, 1, 1, nil)
 	local common = SellPick.sale(items, { group = "Common" })
-	H.deepEq(common.slots, { 1 })
+	H.deepEq(common.slots, {}, "a planted plant is never quick-sold (owner 2026-10-20)")
 	H.deepEq(common.ids, { 1 }, "the inventory plant counts")
 	H.deepEq(common.seeds, { ["1:1"] = 3 }, "seeds of one label sell as one, every gene")
-	H.eq(common.count, 5)
-	H.near(common.total, 10 + 7 + 3 * seedCommon, 1e-9)
+	H.eq(common.count, 4)
+	H.near(common.total, 7 + 3 * seedCommon, 1e-9)
 	H.eq(SellPick.sale(items, { group = "Uncommon" }).count, 0, "the Gold Uncommons are kept...")
 	local mutated = SellPick.sale(items, { group = "Uncommon", mutated = true })
-	H.eq(mutated.count, 2, "...unless mutated are included")
+	H.eq(mutated.count, 1, "...unless mutated are included (the bag's Gold seed)")
 	H.deepEq(mutated.seeds, { ["2:2:Gold"] = 1 })
 	local all = SellPick.sale(items, { group = "All" })
-	H.eq(all.count, 1 + 1 + 3 + 1 + 1, "every non-mutated, non-Legendary thing")
+	H.eq(all.count, 1 + 3 + 1, "every non-mutated, non-Legendary thing in the bag")
+	H.deepEq(all.slots, {}, "no planted plant")
 	for _, slot in all.slots do
 		H.ok(slot ~= 3, "Legendary never quick-sold")
 	end
 	H.eq(all.seeds["1:5"], nil, "a Legendary seed neither")
-	H.eq(SellPick.sale(items, { group = "All", mutated = true }).count, all.count + 2)
+	H.eq(SellPick.sale(items, { group = "All", mutated = true }).count, all.count + 1)
 	H.eq(#SellPick.GROUPS, 5)
 	H.eq(SellPick.GROUPS[5].id, "All")
 	-- one seed card's Sell 1 / Sell all
@@ -563,11 +564,10 @@ H.test("sell: a quick sell goes through the remote and sells (a player at the st
 		table.insert(stats.inventory, { id = e.id, zone = e.zone, rarity = e.rarity, mutation = e.mutation, sell = Selling.price(Inventory.asPlant(e, now), now, 1) })
 	end
 	local sale = SellPick.sale(SellPick.items(stats), { group = "Common" })
-	H.eq(sale.count, 4, "1 plant + 1 inventory plant + 2 seeds")
+	H.eq(sale.count, 3, "1 inventory plant + 2 seeds (the planted one stays)")
 	s.requests = {}
 	Net.SellPlants.OnServerEvent.fn(s.player, sale.slots, sale.ids, sale.seeds)
-	H.eq(#p.plants, 1, "the Common sold, the Gold Uncommon kept")
-	H.eq(p.plants[1].slot, 2)
+	H.eq(#p.plants, 2, "planted plants are never quick-sold")
 	H.eq(#p.inventory, 0)
 	H.eq(SeedPacks.bagCount(p.seedBag), 0)
 	H.near(p.money, sale.total, sale.total * 1e-6, "paid what the window said")
