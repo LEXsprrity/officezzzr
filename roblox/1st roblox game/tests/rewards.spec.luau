@@ -281,7 +281,8 @@ local function checkRewardsCorner(world: any, label: string)
 end
 
 -- Where the owner put the gift in Studio (2026-10-16; it first stood where the free chest was).
-local CHEST_GROUND = Vector3.new(54, Config.GROUND_Y, 101)
+-- (where the owner put the gift in Studio, 2026-10-20; the free chest stood at (54, 101) before)
+local CHEST_GROUND = Vector3.new(53, Config.GROUND_Y, -71.5)
 
 H.test("rewards: the base has the gift's spot (where the free chest stood) and the MOST MONEY/s board, out of everyone's way", function()
 	local plots = WorldBuilder.build()
@@ -359,7 +360,7 @@ local function checkGiftBox(world: any, label: string)
 	local panel = board.status.Parent.Parent
 	local p, r = body.CFrame.Position, GiftBox.CIRCLE / 2
 	H.ok(p.X + r <= Config.CORRIDOR_START_X, "in the base")
-	H.ok(math.abs(p.Z) - r > Config.CORRIDOR_WIDTH / 2, "clear of the walkway and the corridor mouth")
+	H.ok(math.abs(p.Z) - r > Config.WALKWAY_WIDTH / 2, "clear of the walkway (the owner put it by the corridor mouth, 2026-10-20)")
 	local sideWall: any = nil
 	for _, d in world.Base:GetChildren() do -- the base's -Z side wall: the box stays in front of it
 		if d:IsA("BasePart") and d.Name == "Wall" and d.CFrame.Position.Z < -Config.CORRIDOR_WIDTH / 2 and d.Size.Z > 100 then

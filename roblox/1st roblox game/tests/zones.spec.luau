@@ -76,13 +76,14 @@ H.test("zones: every zone has its set pieces, all standing clear of its nest", f
 		end
 		-- and nothing of the zone's own stands in the nest's corner (the walls, the floor and what hangs on
 		-- the walls aside)
-		local x0, x1, _, z1 = ZoneThemes.nestKeepOut(k)
+		local x0, x1, z0, z1 = ZoneThemes.nestKeepOut(k)
+		local right = Config.nestSide(k) > 0 -- (the Meadow's nest is on the right: Config.NEST_RIGHT)
 		for _, child in folder:GetChildren() do
 			if (child:IsA("Model") or child:IsA("BasePart")) and child.Name ~= "Nest_" .. zone.id and child.Name ~= "SpeedSign" and not STRUCTURE[child.Name]
 				and child.Name ~= "Ambience" and child.Name ~= "Vine" and child.Name ~= "VineLeaf" and child.Name ~= "Icicle" then
 				local lo, hi = Assets.bounds(child)
 				if lo and hi and lo.Y < GROUND + Config.WALL_HEIGHT then
-					H.ok(not (lo.X < x1 and hi.X > x0 and lo.Z < z1), `{zone.id}: {child.Name} reaches into the nest's corner`)
+					H.ok(not (lo.X < x1 and hi.X > x0 and (if right then hi.Z > z0 else lo.Z < z1)), `{zone.id}: {child.Name} reaches into the nest's corner`)
 				end
 			end
 		end

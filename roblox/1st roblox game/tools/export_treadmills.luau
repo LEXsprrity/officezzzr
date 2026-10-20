@@ -174,14 +174,14 @@ local function export(spec: any, tier: number, tool: any): (any, string)
 			d.Size = scaleSequence(d.Size, s)
 		end
 	end
-	screen.Name = "ConsoleScreen"
-	if spec.glass then
-		for _, p in (screen.Parent :: any):GetChildren() do
-			if p:IsA("BasePart") and p.Transparency < 1 then
-				p.Transparency = spec.glass
-				p.CastShadow = false
-			end
-		end
+	-- The console screen and the video panel behind it (their folder) go: a black slab hiding the treadmill, and
+	-- the game shows no video on it (owner 2026-10-20: "take this folder out of every single treadmill"). The
+	-- screen still marks where the running surface ends (above).
+	local screenFolder = screen.Parent
+	if screenFolder and screenFolder:IsA("Folder") then
+		screenFolder:Destroy()
+	else
+		screen:Destroy()
 	end
 
 	local marker = roblox.Instance.new("Part")
