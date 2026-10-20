@@ -198,7 +198,7 @@ Config.BOSS_REACH = {
 	Meadow = { side = 7.1, front = 11.3 },
 	Desert = { side = 14.2, front = 16.2 },
 	Jungle = { side = 11, front = 17.8 },
-	Lava = { side = 14.8, front = 18.2 },
+	Lava = { side = 14.8, front = 17.5 },
 	Snow = { side = 11.9, front = 13.2 },
 	Space = { side = 14.3, front = 9.3 },
 	Spirit = { side = 7.1, front = 8.1 },
