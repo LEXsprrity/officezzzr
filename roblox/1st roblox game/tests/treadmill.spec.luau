@@ -787,9 +787,9 @@ local function checkFacing(plots: { any }, label: string)
 				head = d
 			end
 		end
-		H.ok(head ~= nil, `{label}: plot {i} treadmill has a console (or stop)`)
-		local rel = b.CFrame:PointToObjectSpace(head.CFrame.Position)
-		H.ok(rel.Z * Treadmill.FRONT > b.Size.Z / 4, `{label}: plot {i} {head.Name} at the front end ({rel})`)
+		-- (the console screen is gone from the bought models, owner 2026-10-20: then the belt and the lock say it)
+		local rel = if head then b.CFrame:PointToObjectSpace(head.CFrame.Position) else Vector3.new(0, 0, Treadmill.FRONT * b.Size.Z)
+		H.ok(rel.Z * Treadmill.FRONT > b.Size.Z / 4, `{label}: plot {i} {if head then head.Name else "front"} at the front end ({rel})`)
 		local held = Treadmill.lockCFrame(b.CFrame, b.Size, (b.CFrame * CFrame.new(1, 3, -2)).Position)
 		H.ok(held.LookVector.Z * -side > 0.999, `{label}: plot {i} a locked runner faces the walkway and the console`)
 		local board = TreadmillBoard.build(plot.model, b, plot.center)
@@ -848,7 +848,7 @@ H.test("treadmill tiers: each tier has its model file (one Model, no code, tools
 		end
 		H.ok(parts > 3, `{path} has its parts`)
 		H.eq(belts, 1, `{path} marks its running surface with one part named Belt`)
-		H.ok(consoles >= 1, `{path} has its console`)
+		H.eq(consoles, 0, `{path}: no console screen (owner 2026-10-20: the black slab hid the treadmill)`)
 		-- the game (ServerStorage.Assets) loads it as that tier's model
 		local template, matched = Assets.get(slot)
 		H.ok(template ~= nil and template.Name == slot and matched == slot, `the game uses {path} for tier {tier}`)
@@ -1104,6 +1104,10 @@ H.test("treadmill tiers: the runner is locked over the middle of the belt you se
 		H.ok(held.Z - t0 >= 2.5 and t1 - held.Z >= 2.5, `tier {tier}: the runner stands well inside the drawn belt ({t0}..{t1}, at {held.Z})`)
 		-- clear of the console screen and the panel behind it (they stand at the console end, +Z)
 		local screen = tm:FindFirstChild("ConsoleScreen", true)
+		H.eq(screen, nil, `tier {tier}: no console screen (owner 2026-10-20)`)
+		if not screen then
+			continue
+		end
 		for _, p in screen.Parent:GetChildren() do
 			if p:IsA("BasePart") and p.Transparency < 1 then
 				local lo = Assets.bounds(p, b.CFrame, true)

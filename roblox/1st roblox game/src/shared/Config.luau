@@ -160,6 +160,14 @@ Config.NEST_END_CLEARANCE = 12 -- ...but its guard sleeps at least this far befo
 -- GuardAnimator keeps bodies a stud inside the wall's inner face (96), so its root sits at 80. The wall
 -- props there make room for it (ZoneThemes.nestKeepOut).
 Config.NEST_Z = -80
+-- ...except the zones listed here, whose nest is all the way on the RIGHT (+Z), mirrored: the boss against the
+-- right wall, its pods at its left, toward the middle (owner 2026-10-20: "put the 1st boss on the right").
+Config.NEST_RIGHT = { Meadow = true } :: { [string]: boolean }
+
+-- Which wall zone k's nest is against: -1 the left (-Z), 1 the right (+Z).
+function Config.nestSide(k: number): number
+	return if Config.NEST_RIGHT[Config.ZONES[k].id] then 1 else -1
+end
 
 function Config.zoneStartX(k: number): number
 	local x = Config.CORRIDOR_START_X
@@ -177,7 +185,7 @@ end
 -- The nest's centre on the ground (WorldBuilder builds the nest there; the guard's home is GUARD_HOME_OFFSET
 -- further along +X).
 function Config.nestCenter(k: number): Vector3
-	return Vector3.new(Config.nestX(k), Config.GROUND_Y, Config.NEST_Z)
+	return Vector3.new(Config.nestX(k), Config.GROUND_Y, math.abs(Config.NEST_Z) * Config.nestSide(k))
 end
 
 -- How far each zone's sleeping boss reaches from its root (studs; it sleeps facing the base, -X):
@@ -208,8 +216,8 @@ function Config.podOffset(k: number, i: number): Vector3
 	local jx = ((k * 13 + i * 7) % 5 - 2) * 0.3
 	local jz = ((k * 11 + i * 5) % 7 - 3) * 0.2
 	local flank = Config.BOSS_REACH[Config.ZONES[k].id].side
-	-- (the pod, a 3-stud ball, rests on the floor)
-	return Vector3.new(Config.GUARD_HOME_OFFSET + base[1] + jx, 1.5, flank + base[2] + jz)
+	-- (the pod, a 3-stud ball, rests on the floor; toward the middle: +Z from a left nest, -Z from a right one)
+	return Vector3.new(Config.GUARD_HOME_OFFSET + base[1] + jx, 1.5, -Config.nestSide(k) * (flank + base[2] + jz))
 end
 
 Config.END_X = Config.zoneStartX(#Config.ZONES + 1) -- far end of the corridor: the Spirit Garden's back wall (no finish line)

@@ -204,16 +204,18 @@ H.test("bosses: asleep at its nest against the left wall, the body fits without 
 		end
 		local home = Config.nestCenter(k) + Vector3.new(Config.GUARD_HOME_OFFSET, 0, 0)
 		H.eq(BossRigs.wallShift(home, Vector3.new(-1, 0, 0), lo, hi, wall), Vector3.zero, `{zone.id}: no slide needed at home`)
-		closest = math.min(closest, home.Z - math.max(-lo.X, hi.X) + wall) -- how far its flank stays off the wall
+		local side = Config.nestSide(k) -- (-1 left wall, 1 right: the Meadow, owner 2026-10-20)
+		closest = math.min(closest, wall - side * home.Z - math.max(-lo.X, hi.X)) -- how far its flank stays off the wall
 		-- facing -X, its width spans home.Z +- `reach` and its front (model -Z, lo.Z) points at the base
 		local reach = math.max(-lo.X, hi.X)
 		for i = 1, Config.PODS_PER_NEST do
 			local p = Config.nestCenter(k) + Config.podOffset(k, i)
-			local besideIt = p.Z - 1.5 > home.Z + reach
+			local inward = -side * (p.Z - home.Z) -- toward the middle
+			local besideIt = inward - 1.5 > reach
 			H.ok(besideIt, `{zone.id}: pod {i} beside the sleeping body, clear of it`)
-			H.ok(p.Z - 1.5 < home.Z + Config.BOSS_REACH[zone.id].side + 8, `{zone.id}: pod {i} right next to its (sleeping) flank`)
+			H.ok(inward - 1.5 < Config.BOSS_REACH[zone.id].side + 8, `{zone.id}: pod {i} right next to its (sleeping) flank`)
 			H.ok(p.X > home.X + lo.Z - 6 and p.X < home.X + math.max(hi.Z, 6) + 6, `{zone.id}: pod {i} along its body, not in front of it`)
-			H.ok(p.Z > home.Z, `{zone.id}: pod {i} at its right, toward the middle`)
+			H.ok(inward > 0, `{zone.id}: pod {i} on its inner side, toward the middle`)
 		end
 	end
 	-- the line is set by the widest boss: it sleeps right by the wall (narrower ones a little off it)

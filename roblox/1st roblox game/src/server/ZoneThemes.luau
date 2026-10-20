@@ -53,6 +53,9 @@ end
 -- sky's planets) stay.
 function ZoneThemes.nestKeepOut(k: number): (number, number, number, number)
 	local c = Config.nestCenter(k)
+	if Config.nestSide(k) > 0 then -- (a nest against the right wall, Config.NEST_RIGHT: mirrored)
+		return c.X - 28, c.X + Config.GUARD_HOME_OFFSET + 24, c.Z - 36, Kit.HALF_W
+	end
 	return c.X - 28, c.X + Config.GUARD_HOME_OFFSET + 24, -Kit.HALF_W, c.Z + 36
 end
 
@@ -77,6 +80,20 @@ local function pruneNest(c: Kit.Ctx)
 	end
 end
 
+-- A zone whose nest is against the right wall (Config.NEST_RIGHT): its theme lays it out around a left nest,
+-- so the whole zone is mirrored across the corridor's middle (z -> -z, each part's orientation mirrored by
+-- M R M, a proper rotation): props, floor (ponds are cut into it) and walls alike, so it is the same zone
+-- seen in a mirror.
+local MIRROR = CFrame.fromMatrix(Vector3.zero, Vector3.xAxis, Vector3.yAxis, -Vector3.zAxis)
+local function mirrorZone(c: Kit.Ctx)
+	for _, d in c.folder:GetDescendants() do
+		if d:IsA("BasePart") then
+			local p = d.CFrame.Position
+			d.CFrame = CFrame.new(p.X, p.Y, -p.Z) * (MIRROR * (d.CFrame - p) * MIRROR)
+		end
+	end
+end
+
 -- Builds zone k into `folder`. Every zone (and every piece in it, Kit.rand) draws from its own seeded
 -- Random, so the map bakes the same every time and changing one zone never moves another's props.
 function ZoneThemes.build(folder: Folder, k: number)
@@ -87,6 +104,9 @@ function ZoneThemes.build(folder: Folder, k: number)
 		rng = Random.new(20260930 + k * 7919),
 	}
 	ZoneThemes.theme(k).build(ctx)
+	if Config.nestSide(k) > 0 then
+		mirrorZone(ctx)
+	end
 	pruneNest(ctx)
 end
 

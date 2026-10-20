@@ -99,13 +99,15 @@ H.test("world: plot layout contract (two dirt beds, a grass path, origin, spawn,
 	end
 end)
 
-H.test("world: nests against the left wall, pods on the floor right by the boss's right flank, nothing under them (centre, pods, guard home)", function()
+H.test("world: nests against a side wall (the left; the Meadow's the right), pods on the floor by the boss's inner flank, nothing under them (centre, pods, guard home)", function()
 	local halfW = Config.CORRIDOR_WIDTH / 2
 	for k, nest in nests do
 		local center = Config.nestCenter(k)
 		H.ok((nest.center - center).Magnitude < 1e-3, "nest centre")
 		-- all the way on the runner's left (-Z, walking +X from the base), the boss's flank by the wall
-		H.ok(center.Z <= -(halfW - 20) and center.Z >= -(halfW - 15.5), `zone {k}: nest against the left wall ({center.Z})`)
+		local side = Config.nestSide(k) -- (-1 the left wall, 1 the right: Config.NEST_RIGHT)
+		H.ok(side * center.Z >= halfW - 20 and side * center.Z <= halfW - 15.5, `zone {k}: nest against its wall ({center.Z})`)
+		H.eq(side, if Config.ZONES[k].id == "Meadow" then 1 else -1, "the Meadow's on the right (owner 2026-10-20), the rest on the left")
 		H.eq(Config.zoneAtX(center.X), k, `zone {k}: nest inside its zone`)
 		H.eq(Config.zoneAtX(nest.guardHome.X), k, `zone {k}: the boss sleeps inside its zone`)
 		H.eq(#nest.podCFrames, Config.PODS_PER_NEST)
@@ -116,7 +118,7 @@ H.test("world: nests against the left wall, pods on the floor right by the boss'
 			local rel = cf.Position - nest.guardHome
 			-- right next to the boss, at its right (toward the middle): the 3-stud pod a few studs off its flank,
 			-- along its body (its root at rel 0, facing the base)
-			local off = rel.Z - 1.5 - Config.BOSS_REACH[Config.ZONES[k].id].side
+			local off = -side * rel.Z - 1.5 - Config.BOSS_REACH[Config.ZONES[k].id].side
 			H.ok(off >= 0.5 and off <= 7, `zone {k} pod {i}: {off} studs off the boss's right flank ({rel})`)
 			H.ok(rel.X >= -9 and rel.X <= 7, `zone {k} pod {i}: beside the boss, not ahead of it ({rel})`)
 			H.near(cf.Position.Y - Config.GROUND_Y, 1.5, 1e-6, `zone {k} pod {i}: the 3-stud pod rests on the floor`)
@@ -154,10 +156,11 @@ H.test("world: the wall props make room for each nest (nothing stands in the bos
 	for k, zone in Config.ZONES do
 		local x0, x1, z0, z1 = ZoneThemes.nestKeepOut(k)
 		local home = Config.nestCenter(k) + Vector3.new(Config.GUARD_HOME_OFFSET, 0, 0)
-		H.ok(x0 < home.X - 24 and x1 >= home.X + 24 and z0 <= -Config.CORRIDOR_WIDTH / 2, `{zone.id}: the corner holds the boss`)
+		local right = Config.nestSide(k) > 0
+		H.ok(x0 < home.X - 24 and x1 >= home.X + 24 and (if right then z1 >= Config.CORRIDOR_WIDTH / 2 else z0 <= -Config.CORRIDOR_WIDTH / 2), `{zone.id}: the corner holds the boss`)
 		for i = 1, Config.PODS_PER_NEST do
 			local p = Config.nestCenter(k) + Config.podOffset(k, i)
-			H.ok(p.X - 2 > x0 and p.X + 2 < x1 and p.Z + 2 < z1, `{zone.id}: the corner holds pod {i}`)
+			H.ok(p.X - 2 > x0 and p.X + 2 < x1 and (if right then p.Z - 2 > z0 else p.Z + 2 < z1), `{zone.id}: the corner holds pod {i}`)
 		end
 		local folder = world.Corridor:FindFirstChild(string.format("%d_%s", k, zone.id))
 		for _, child in folder:GetChildren() do
@@ -169,7 +172,7 @@ H.test("world: the wall props make room for each nest (nothing stands in the bos
 				continue -- invisible, or up in the sky
 			end
 			local inside = lo.X < x1 and hi.X > x0 and lo.Z < z1 and hi.Z > z0
-			local alongWall = hi.Z <= -(Config.CORRIDOR_WIDTH / 2) + 0.1 -- the wall, its checker, cap and vines
+			local alongWall = if right then lo.Z >= Config.CORRIDOR_WIDTH / 2 - 0.1 else hi.Z <= -(Config.CORRIDOR_WIDTH / 2) + 0.1 -- the wall, its checker, cap and vines
 			local structure = child.Name == "Floor" or child.Name == "FloorTile" or child.Name == "ZoneEdge" or child.Name == "Ambience"
 				or child.Name == "RiverBank" or child.Name == "LavaRiver" or string.find(child.Name, "^Wall") or string.find(child.Name, "^Roof")
 				or child.Name == "Icicle" or string.find(child.Name, "^Vine")
@@ -364,8 +367,9 @@ H.test("world: just in front of each sleeping boss a small wooden plank on a pos
 		local nose = home.X - Config.BOSS_REACH[zone.id].front
 		local flat = Vector3.new(plank.CFrame.Position.X, Config.GROUND_Y, plank.CFrame.Position.Z)
 		H.ok(flat.X < nose - 1 and flat.X > nose - 6, `{zone.id}: a few studs in front of the boss's nose ({nose - flat.X})`)
-		H.ok(flat.Z < home.Z and flat.Z > home.Z - 6, `{zone.id}: a little left of the boss ({flat.Z - home.Z})`)
-		H.ok(math.abs(flat.Z) + plank.Size.X / 2 < Config.CORRIDOR_WIDTH / 2 - 4, `{zone.id}: clear of the left wall`)
+		local toWall = Config.nestSide(k) * (flat.Z - home.Z) -- (toward the nest's wall)
+		H.ok(toWall > 0 and toWall < 6, `{zone.id}: a little toward the wall from the boss ({flat.Z - home.Z})`)
+		H.ok(math.abs(flat.Z) + plank.Size.X / 2 < Config.CORRIDOR_WIDTH / 2 - 4, `{zone.id}: clear of the wall`)
 		H.ok(plank.CFrame.LookVector.X < -0.99, `{zone.id}: faces the base`)
 		local gui = plank:FindFirstChildOfClass("SurfaceGui")
 		H.ok(gui and gui.Face == Enum.NormalId.Front, `{zone.id}: a SurfaceGui on the plank's front`)
