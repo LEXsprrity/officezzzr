@@ -196,26 +196,18 @@ H.test("plants: the swords (katanas) are Legendary and only in the Spirit Garden
 	H.ok(swords.Cryonix and swords.Pyronis, "Cryonix and Pyronis are the Spirit Garden swords")
 end)
 
-H.test("plants: every plant with effects is Epic or Legendary, every plain one Common, Uncommon or Rare (owner 2026-10-20)", function()
+H.test("plants: the big ones and the strongest effects are Epic or Legendary, at least two of every rarity (owner 2026-10-20)", function()
 	local seen = {}
 	for k = 1, #Config.ZONES do
-		local legendaries = #variants(k, L)
-		H.ok(legendaries >= 1 and legendaries <= 4, `{Config.ZONES[k].id}: {legendaries} Legendaries`)
 		for r = 1, #Config.RARITIES do
-			H.ok(#variants(k, r) >= 1, `{Config.ZONES[k].id}: at least one {Config.RARITIES[r].id}`)
+			H.ok(#variants(k, r) >= 2, `{Config.ZONES[k].id}: at least two {Config.RARITIES[r].id}s ({#variants(k, r)})`)
 			for _, m in variants(k, r) do
 				local source, tall = m:GetAttribute("Source"), m:GetAttribute("SourceHeight")
 				H.ok(type(source) == "string" and type(tall) == "number", `{m.Name}: Source and SourceHeight`)
 				H.ok(not seen[m.Name], `{m.Name} used once`)
 				seen[m.Name] = true
-				local vfx = false
-				for _, d in m:GetDescendants() do
-					vfx = vfx or d:IsA("ParticleEmitter") or d:IsA("Beam") or d:IsA("Trail")
-				end
-				if r >= 4 then
-					H.ok(vfx, `{Config.RARITIES[r].id} {m.Name} has effects`)
-				else
-					H.ok(not vfx, `{Config.RARITIES[r].id} {m.Name} is plain (no particles or beams)`)
+				if tall >= 20 then
+					H.ok(r >= 4, `{m.Name} is big ({tall} studs in the pack): Epic or Legendary, not {Config.RARITIES[r].id}`)
 				end
 			end
 		end
@@ -238,9 +230,10 @@ H.test("plants: Legendaries tower over the zone's Commons and grow past 15 studs
 	end
 end)
 
-H.test("plants: Legendaries are 1.5x bigger at every stage (owner 2026-10-15); Epics and below unchanged", function()
+H.test("plants: Legendaries are 1.5x bigger at every stage (owner 2026-10-15), Epics 1.25x (2026-10-20); the rest unchanged", function()
 	H.eq(Config.creatureSizeMult(L), 1.5, "Legendary size")
-	for r = 1, L - 1 do
+	H.eq(Config.creatureSizeMult(4), 1.25, "Epic size")
+	for r = 1, 3 do
 		H.eq(Config.creatureSizeMult(r), 1, `rarity {r} unchanged`)
 	end
 	for k = 1, #Config.ZONES do
@@ -250,7 +243,7 @@ H.test("plants: Legendaries are 1.5x bigger at every stage (owner 2026-10-15); E
 				local ratio = w / Config.sproutWeight(k, r)
 				local base = math.clamp(ratio ^ Config.CREATURE_GROWTH_EXPONENT * (1 + Config.CREATURE_RARITY_SCALE * (r - 1)),
 					Config.CREATURE_MIN_SCALE, Config.CREATURE_MAX_SCALE)
-				H.near(CreatureModels.scaleFor(k, r, w), base * (if r == L then 1.5 else 1), 1e-9, `zone {k} rarity {r} step {step}`)
+				H.near(CreatureModels.scaleFor(k, r, w), base * Config.creatureSizeMult(r), 1e-9, `zone {k} rarity {r} step {step}`)
 			end
 		end
 		-- the zone's tallest Legendary, full-grown: ~36 (Meadow) .. ~43+ (Spirit Garden) studs

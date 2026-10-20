@@ -226,7 +226,7 @@ end)
 -- The makeovers
 ----------------------------------------------------------------------------------------------------
 H.test("makeover: goldify and diamondify are deterministic and don't depend on the parts' order", function()
-	for _, c in { { 7, L, "Pyronis" }, { 1, 4, "Ballerina" }, { 4, 4, "DarkflareRose" }, { 5, 4, "CrystalDaisy" } } do
+	for _, c in { { 7, L, "Pyronis" }, { 1, 4, "Ballerina" }, { 4, 2, "DarkflareRose" }, { 5, 4, "CrystalDaisy" } } do
 		local raw = rawModel(c[1], c[2], c[3])
 		H.ok(raw ~= nil, c[3])
 		for _, id in MAKEOVERS do
@@ -397,7 +397,7 @@ H.test("makeover: the HUD's 3D pictures (FlowerView) show Gold and Diamond plant
 	local before = rs.__children.FlowerPreviews
 	local root = roblox.Instance.new("Folder")
 	root.Name = FlowerPreviews.FOLDER
-	local checks = { { 7, L, "Pyronis" }, { 1, 4, "Ballerina" }, { 5, 3, "CrystalDaisy" }, { 3, 1, "BugEater" } }
+	local checks = { { 7, L, "Pyronis" }, { 1, 4, "Ballerina" }, { 5, 4, "CrystalDaisy" }, { 3, 2, "BugEater" } }
 	for _, c in checks do
 		local k, r, name = c[1], c[2], c[3]
 		local zf = root:FindFirstChild(tostring(k)) or roblox.Instance.new("Folder")

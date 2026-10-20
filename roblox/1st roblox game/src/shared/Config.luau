@@ -607,10 +607,11 @@ Config.CREATURE_MIN_SCALE = 0.85
 Config.CREATURE_MAX_SCALE = 2.6
 -- Per-rarity size on top of that clamp (owner 2026-10-15: Legendaries must be BIGGER): every stage of a plant
 -- (its sprout size, growing, full-grown, its planting ghost) is this many times its clamped scale, and
--- Shared/Planting budgets its reach, core, bed margin and fence overhang by it. Common..Epic x1; a Legendary
+-- Shared/Planting budgets its reach, core, bed margin and fence overhang by it. Common..Rare x1, an Epic x1.25
+-- (owner 2026-10-20: "remember epic flowers gotta be big"), a Legendary
 -- x1.5 (full-grown ~36 studs tall in the Meadow .. ~43 in the Spirit Garden). Index / card pictures fit their
 -- camera to the model (FlowerPreviews), so they are unchanged.
-Config.CREATURE_RARITY_SIZE = { 1, 1, 1, 1, 1.5 }
+Config.CREATURE_RARITY_SIZE = { 1, 1, 1, 1.25, 1.5 }
 
 function Config.creatureSizeMult(rarity: number): number
 	return Config.CREATURE_RARITY_SIZE[rarity] or 1

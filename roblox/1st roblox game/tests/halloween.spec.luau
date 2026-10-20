@@ -230,7 +230,7 @@ local function area(p: any): number
 end
 
 H.test("haunted set: at least two of every rarity in every zone where it has two (since 2026-10-20 some have one), the Pyronis first Spirit Legendary", function()
-	local want = { 13, 13, 13, 28, 12 }
+	local want = { 18, 15, 15, 20, 14 }
 	local counts = { 0, 0, 0, 0, 0 }
 	local seen = {}
 	for k in Config.ZONES do
@@ -246,7 +246,7 @@ H.test("haunted set: at least two of every rarity in every zone where it has two
 				seen[`{k}:{name}`] = true
 			end
 		end
-		H.eq(#Halloween.setFlowers(k, L), if Config.ZONES[k].id == "Desert" or Config.ZONES[k].id == "Meadow" then 1 else 2, `Legendaries in {Config.ZONES[k].id}`)
+		H.eq(#Halloween.setFlowers(k, L), if Config.ZONES[k].id == "Desert" then 1 elseif Config.ZONES[k].id == "Space" then 3 else 2, `Legendaries in {Config.ZONES[k].id}`)
 		for key in Halloween.SET[k] do
 			local known = false
 			for _, rarity in Config.RARITIES do
@@ -342,11 +342,11 @@ H.test("haunted set: a bought Haunted seed plants as a set plant; old Haunted pl
 	end
 	-- a Haunted plant planted before the set keeps its flower (by name), and its save loads as it was
 	local old = ProfileStore.defaultProfile()
-	table.insert(old.plants, { slot = 1, zone = 1, rarity = 2, mutation = HAUNTED, plantedAt = 0, x = 0, z = 0, variant = "Rose" })
+	table.insert(old.plants, { slot = 1, zone = 1, rarity = 2, mutation = HAUNTED, plantedAt = 0, x = 0, z = 0, variant = "Dandelion" })
 	local loaded = ProfileStore.deserialize(ProfileStore.serialize(old))
-	H.eq(loaded.plants[1].variant, "Rose")
+	H.eq(loaded.plants[1].variant, "Dandelion")
 	H.eq(loaded.plants[1].mutation, HAUNTED)
-	H.eq(CreatureModels.flowerOf(1, 2, "Rose", 1), "Rose", "still a Rose")
+	H.eq(CreatureModels.flowerOf(1, 2, "Dandelion", 1), "Dandelion", "still a Dandelion")
 	-- a Haunted bag seed from before genes gets one, and a set plant
 	local bag = { ["3:4:Haunted"] = 1 }
 	local key, zone, rarity, mutation, ghost = PlantGhosts.bagPreview(bag, "3:4:Haunted", seeded(5))
@@ -443,7 +443,7 @@ H.test("haunted look: no set plant turns to mush (some orange, some purple, neve
 		end
 		return out
 	end
-	for _, c in { { 1, 4, "Ballerina" }, { 4, 4, "DarkflareRose" }, { 6, 4, "StarfallFlower" } } do
+	for _, c in { { 1, 4, "Ballerina" }, { 4, 2, "DarkflareRose" }, { 6, 4, "StarfallFlower" } } do
 		local m = rawModel(c[1], c[2], c[3])
 		local x, y = Halloween.orangeColors(partsOf(m, false)), Halloween.orangeColors(partsOf(m, true))
 		local nx = 0
@@ -464,7 +464,7 @@ H.test("haunted look: the HUD's 3D pictures (FlowerView) show a Haunted plant as
 	local before = rs.__children.FlowerPreviews
 	local root = roblox.Instance.new("Folder")
 	root.Name = FlowerPreviews.FOLDER
-	local checks = { { 7, L, "Pyronis" }, { 1, 4, "Ballerina" }, { 4, 4, "DarkflareRose" } }
+	local checks = { { 7, L, "Pyronis" }, { 1, 4, "Ballerina" }, { 4, 2, "DarkflareRose" } }
 	for _, c in checks do
 		local k, r, name = c[1], c[2], c[3]
 		local zf = root:FindFirstChild(tostring(k)) or roblox.Instance.new("Folder")
