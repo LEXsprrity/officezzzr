@@ -29,52 +29,52 @@ local SOURCE = "models/plants/FlowersByLoxxsy.rbxm"
 -- The sword-shaped plants (katanas): Cryonix (ice) and Pyronis (fire, the same katana shape and size).
 local SWORDS = { Cryonix = true, Pyronis = true }
 
--- Zone id -> rarity -> pack models. Owner 2026-10-20: every model with effects (particles, beams) is Epic or
--- Legendary, and so bigger (Config.creatureFootprint / creatureHeight by rarity); the plain ones are Common,
--- Uncommon or Rare, small (some zones have many Epics and one Rare: the rarity odds and pay don't change). Lighter models (fewer parts) for the common
--- rarities: a plot holds up to 40 plants.
+-- Zone id -> rarity -> pack models (owner 2026-10-20): ranked by size and how strong their effects are, the big
+-- ones (20+ studs in the pack) and the strongest effects Epic or Legendary, the plain ones Common to Rare, at least
+-- two of every rarity in every zone, spread like the Spirit Garden's. The rarity odds and pay don't change.
+-- Lighter models (fewer parts) for the common rarities: a plot holds up to 40 plants.
 local PLANTS = {
 	Meadow = {
-		Common = { "Daisy", "Tulip", "Sunflower", "Lily", "Cornflower" },
-		Uncommon = { "Rose", "Pansy", "Dandelion", "Iris", "Thistle" },
-		Rare = { "Hellebore", "Orchid", "Pinkbells", "Mafioso", "Sunfloris", "Rosaris" },
-		Epic = { "Ballerina" },
-		Legendary = { "Verdantis" },
+		Common = { "Cornflower", "Tulip", "Iris", "Daisy", "Pansy" },
+		Uncommon = { "Dandelion", "Lily", "Pinkbells", "Thistle" },
+		Rare = { "Hellebore", "Rose", "Orchid", "Sunflower" },
+		Epic = { "Ballerina", "Mafioso" },
+		Legendary = { "Verdantis", "Rosaris", "Sunfloris" },
 	},
 	Desert = {
-		Common = { "Cactus", "Succulent", "Nuzwat" },
-		Uncommon = { "DesertWildFlower", "KittyTowerFlower", "ZebraFlower" },
-		Rare = { "HaloOrchid", "RadianceLily" },
-		Epic = { "Sahur", "MantisReaper", "Sunpetal", "SolarIris" },
+		Common = { "Nuzwat", "Succulent", "Cactus" },
+		Uncommon = { "RadianceLily", "KittyTowerFlower", "ZebraFlower" },
+		Rare = { "Sunpetal", "HaloOrchid", "DesertWildFlower" },
+		Epic = { "MantisReaper", "SolarIris", "Sahur" },
 		Legendary = { "Helios", "Aetheris" },
 	},
 	Jungle = {
-		Common = { "BugEater", "ZombeeFlower", "ShimmeringLichen" },
-		Uncommon = { "UnicornPetunia", "Beenspector" },
-		Rare = { "SpiderLilly", "OceanBloom" },
-		Epic = { "Bombardiro", "Patapim", "Snapdragon", "MeanFlower", "GlowBerry" },
-		Legendary = { "Venomyx", "Paradoxys" },
+		Common = { "ShimmeringLichen", "Beenspector", "ZombeeFlower" },
+		Uncommon = { "OceanBloom", "BugEater", "UnicornPetunia" },
+		Rare = { "Snapdragon", "MeanFlower", "SpiderLilly" },
+		Epic = { "GlowBerry", "Bombardiro", "Patapim" },
+		Legendary = { "Paradoxys", "Venomyx" },
 	},
 	Lava = {
-		Common = { "EmberSpark" },
-		Uncommon = { "Pomeflower" },
-		Rare = { "Draconyx" },
-		Epic = { "StrawberryElephant", "CrimsonWidow", "DarkflareRose", "RedStar", "DragonFlower", "FrostburnRose" },
+		Common = { "EmberSpark", "Pomeflower" },
+		Uncommon = { "DarkflareRose", "DragonFlower" },
+		Rare = { "CrimsonWidow", "RedStar" },
+		Epic = { "Draconyx", "StrawberryElephant", "FrostburnRose" },
 		Legendary = { "Infernyx", "Coreflare" },
 	},
 	Snow = {
-		Common = { "IcecapBloom", "Snowdrop", "HollyBloom" },
-		Uncommon = { "WinterRose", "PolarSpire", "FrostLily" },
-		Rare = { "Glacierheart" },
-		Epic = { "Santa", "Reindeer", "Trallalero", "Mistletoe", "Snowpuff", "PoinsettiaBlossom", "Gingerbread", "Elf", "CrystalizedPetal", "CrystalDaisy" },
-		Legendary = { "Frostwyrm", "Aracnid", "Lunaris" },
+		Common = { "HollyBloom", "WinterRose", "FrostLily", "IcecapBloom", "Snowdrop" },
+		Uncommon = { "CrystalizedPetal", "Mistletoe", "Glacierheart", "PolarSpire" },
+		Rare = { "Gingerbread", "PoinsettiaBlossom", "Trallalero", "Snowpuff" },
+		Epic = { "Santa", "Reindeer", "CrystalDaisy", "Elf" },
+		Legendary = { "Aracnid", "Lunaris", "Frostwyrm" },
 	},
 	Space = {
-		Common = { "EclipseBloom", "NebulaRose", "Lobelia" },
-		Uncommon = { "Voidbloom", "BorealBell" },
-		Rare = { "Jellythys" },
-		Epic = { "LaVaca", "SixSeven", "TwilightAmarilis", "MeteorFlower", "StarfallFlower", "CyberFlower", "Starpetal", "Gleamblossom" },
-		Legendary = { "Stellaris", "Cybaris" },
+		Common = { "NebulaRose", "EclipseBloom", "Lobelia", "Voidbloom" },
+		Uncommon = { "MeteorFlower", "CyberFlower", "BorealBell" },
+		Rare = { "LaVaca", "SixSeven", "Starpetal" },
+		Epic = { "TwilightAmarilis", "StarfallFlower", "Gleamblossom" },
+		Legendary = { "Stellaris", "Cybaris", "Jellythys" },
 	},
 	Spirit = {
 		Common = { "Camellia", "MoonlaceOrchid", "Lightbloom" },

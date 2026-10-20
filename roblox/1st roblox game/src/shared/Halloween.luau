@@ -55,46 +55,46 @@ Halloween.NEST_CLEARANCE = 36 -- no candy this close to a sleeping boss (flat st
 -- bag would grow into another one).
 Halloween.SET = {
 	[1] = { -- Meadow
-		Common = { "Daisy", "Tulip" },
-		Uncommon = { "Pansy", "Rose" },
-		Rare = { "Hellebore", "Orchid", "Mafioso", "Sunfloris" },
-		Epic = { "Ballerina" }, -- (the Meadow's only Epic)
-		Legendary = { "Verdantis" }, -- (its only Legendary)
+		Common = { "Daisy", "Tulip", "Pansy" },
+		Uncommon = { "Dandelion", "Lily" },
+		Rare = { "Rose", "Hellebore", "Orchid" },
+		Epic = { "Mafioso", "Ballerina" },
+		Legendary = { "Sunfloris", "Verdantis" },
 	},
 	[2] = { -- Desert
 		Common = { "Cactus", "Nuzwat" },
-		Uncommon = { "DesertWildFlower", "ZebraFlower" },
-		Rare = { "HaloOrchid", "RadianceLily" },
+		Uncommon = { "ZebraFlower", "RadianceLily" },
+		Rare = { "DesertWildFlower", "HaloOrchid" },
 		Epic = { "MantisReaper", "Sahur" },
 		Legendary = { "Helios" }, -- (its only other Legendary, Aetheris, turns all orange and green: mush)
 	},
 	[3] = { -- Jungle
-		Common = { "BugEater", "ZombeeFlower" },
-		Uncommon = { "Beenspector", "UnicornPetunia" },
-		Rare = { "SpiderLilly", "OceanBloom" },
-		Epic = { "GlowBerry", "Snapdragon", "Bombardiro", "Patapim" },
+		Common = { "ZombeeFlower", "Beenspector" },
+		Uncommon = { "BugEater", "UnicornPetunia", "OceanBloom" },
+		Rare = { "SpiderLilly", "Snapdragon" },
+		Epic = { "GlowBerry", "Bombardiro", "Patapim" },
 		Legendary = { "Paradoxys", "Venomyx" },
 	},
 	[4] = { -- Lava Fields
-		Common = { "EmberSpark" }, -- (its only Common, Uncommon and Rare)
-		Uncommon = { "Pomeflower" },
-		Rare = { "Draconyx" },
-		Epic = { "DarkflareRose", "RedStar", "FrostburnRose", "DragonFlower", "CrimsonWidow", "StrawberryElephant" },
+		Common = { "EmberSpark", "Pomeflower" },
+		Uncommon = { "DarkflareRose", "DragonFlower" },
+		Rare = { "RedStar", "CrimsonWidow" },
+		Epic = { "Draconyx", "FrostburnRose", "StrawberryElephant" },
 		Legendary = { "Infernyx", "Coreflare" },
 	},
 	[5] = { -- Snow Peaks
-		Common = { "HollyBloom", "IcecapBloom" },
-		Uncommon = { "FrostLily", "WinterRose" },
-		Rare = { "Glacierheart" }, -- (its only Rare)
-		Epic = { "Mistletoe", "Snowpuff", "CrystalDaisy", "Trallalero", "Reindeer" },
+		Common = { "HollyBloom", "IcecapBloom", "FrostLily", "WinterRose" },
+		Uncommon = { "Glacierheart", "Mistletoe" },
+		Rare = { "Snowpuff", "Trallalero" },
+		Epic = { "CrystalDaisy", "Reindeer" },
 		Legendary = { "Aracnid", "Frostwyrm" },
 	},
 	[6] = { -- Deep Space
-		Common = { "NebulaRose", "EclipseBloom" },
-		Uncommon = { "Voidbloom", "BorealBell" },
-		Rare = { "Jellythys" }, -- (its only Rare)
-		Epic = { "MeteorFlower", "Gleamblossom", "StarfallFlower", "TwilightAmarilis", "LaVaca" },
-		Legendary = { "Stellaris", "Cybaris" },
+		Common = { "NebulaRose", "EclipseBloom", "Voidbloom" },
+		Uncommon = { "BorealBell", "MeteorFlower" },
+		Rare = { "LaVaca", "SixSeven" },
+		Epic = { "Gleamblossom", "StarfallFlower", "TwilightAmarilis" },
+		Legendary = { "Jellythys", "Stellaris", "Cybaris" },
 	},
 	[7] = { -- Spirit Garden
 		Common = { "MoonlaceOrchid", "Camellia" },
