@@ -561,4 +561,19 @@ H.test("hotbar bat in 3D: laid diagonally, grip bottom-left, fitted to the slot,
 	H.eq(string.find(read("src/shared/ToolView.luau"), "RenderStepped", 1, true), nil, "a still picture, like the seed slot")
 end)
 
+
+H.test("ui: every button press clicks (owner 2026-10-20): pop and watch hook each button once", function()
+	local UiFx = H.shared("UiFx")
+	local roblox = require("@lune/roblox")
+	local b = roblox.Instance.new("TextButton")
+	UiFx.clicks(b)
+	H.eq(b:GetAttribute("ClickSound"), true, "hooked")
+	UiFx.clicks(b) -- (a second call doesn't hook it twice)
+	H.eq(b:GetAttribute("ClickSound"), true)
+	H.eq(UiFx.CLICK_SOUND, H.shared("Config").SOUNDS.Click, "the game's click sound")
+	local src = require("@lune/fs").readFile("src/shared/UiFx.luau")
+	H.ok(string.find(src, "function UiFx.pop(b: GuiButton)\n\tUiFx.clicks(b)", 1, true) ~= nil or string.find(src, "function UiFx.pop(b: GuiButton)\r\n\tUiFx.clicks(b)", 1, true) ~= nil,
+		"pop (and so watch) hooks it, NoPop buttons too")
+end)
+
 return nil

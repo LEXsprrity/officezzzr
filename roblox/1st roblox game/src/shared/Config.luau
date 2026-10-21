@@ -1267,12 +1267,18 @@ Config.MUSIC = {
 		120231070741138, -- Curious Creatures (Patrick Fletcher)
 		103975484045591, -- Cafe Carousel (Patrick Fletcher)
 		1844071044, -- Summer Fun (a) (David Benjamin Walter)
+		-- Vivaldi, The Four Seasons (owner 2026-10-20), one movement of each season
+		9045766074, -- The Four Seasons - Spring (a)
+		1848052142, -- Four Seasons No.2, the Summer: Presto
+		1848052238, -- Four Seasons No.3, the Autumn: Allegro
+		1836280952, -- Four Seasons: Winter, Movement 1
 	},
 	night = {
 		119436736751365, -- Calm Night (Raphael Olivier)
 		1839777161, -- So Sneaky (Kosinus)
 		9043067401, -- A Curious Case A (Sonoton Vanguard)
 		1837629548, -- Corona (Richard Brown)
+		1848052268, -- Four Seasons No.4, the Winter: Largo (Vivaldi, calm for the night)
 	},
 }
 Config.MUSIC_AMBIENCE = {

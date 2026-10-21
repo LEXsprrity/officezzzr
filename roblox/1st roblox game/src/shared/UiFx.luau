@@ -9,6 +9,7 @@
 --     cards are rebuilt on every render). A button with the attribute NoPop, or its own UIScale, is skipped.
 --     A button with the number attribute PopScale inflates to that instead of HOVER: a long button beside
 --     another one (the Shop's R$ button next to its gift button) pops less, so it never grows over it.
+--   * UiFx.click / UiFx.clicks(button): a soft click sound on every button press (pop and watch hook it).
 --   * UiFx.relief(label): text with relief instead of flat 2D: a bevel gradient (lighter top, darker
 --     bottom), a thick round dark outline and a dark copy dropped behind it, like a raised sticker.
 local RunService = game:GetService("RunService")
@@ -29,6 +30,40 @@ local CENTRE = Vector2.new(0.5, 0.5)
 local INK = Color3.fromRGB(25, 25, 35)
 local SHADOW = Color3.fromRGB(10, 10, 18)
 local BEVEL = Color3.fromRGB(185, 188, 205) -- multiplies the text colour at the bottom
+
+-- A soft click on every UI button press (owner 2026-10-20: "a sound every time you click ... shop, index,
+-- ui stuff"): UiFx.pop and UiFx.watch hook each button once (attribute ClickSound), NoPop ones too. The
+-- sound is Config.SOUNDS.Click's.
+UiFx.CLICK_SOUND = "rbxasset://sounds/button.wav"
+UiFx.CLICK_VOLUME = 0.5
+local clickSound: Sound? = nil
+function UiFx.click()
+	local ok = pcall(function()
+		local sound = clickSound
+		if not sound then
+			local s = Instance.new("Sound")
+			s.Name = "UiClick"
+			s.SoundId = UiFx.CLICK_SOUND
+			s.Volume = UiFx.CLICK_VOLUME
+			s.Parent = game:GetService("SoundService")
+			clickSound = s
+			sound = s
+		end
+		game:GetService("SoundService"):PlayLocalSound(sound :: Sound)
+	end)
+	return ok
+end
+function UiFx.clicks(b: GuiButton)
+	if typeof(b) ~= "Instance" or b:GetAttribute("ClickSound") then -- (tests pop stand-in tables)
+		return
+	end
+	b:SetAttribute("ClickSound", true)
+	pcall(function() -- (Lune, in the tests, has no events)
+		b.Activated:Connect(function()
+			UiFx.click()
+		end)
+	end)
+end
 
 -- Whether a layout places `g` (it ignores Position, so it can't be re-anchored to scale about its centre).
 local function inLayout(g: GuiObject): boolean
@@ -57,6 +92,7 @@ local function touching(): boolean
 end
 
 function UiFx.pop(b: GuiButton)
+	UiFx.clicks(b)
 	if b:GetAttribute("NoPop") or b:FindFirstChildWhichIsA("UIScale") then
 		return
 	end
