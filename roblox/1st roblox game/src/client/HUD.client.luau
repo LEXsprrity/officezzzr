@@ -18,6 +18,7 @@ local Treadmill = require(Shared:WaitForChild("Treadmill"))
 local UiFx = require(Shared:WaitForChild("UiFx"))
 local ShopLayout = require(Shared:WaitForChild("ShopLayout"))
 local ShopUi = require(Shared:WaitForChild("ShopUi"))
+local Premium = require(Shared:WaitForChild("Premium"))
 local Toast = require(Shared:WaitForChild("Toast"))
 local Halloween = require(Shared:WaitForChild("Halloween"))
 local ToolView = require(Shared:WaitForChild("ToolView"))
@@ -111,8 +112,8 @@ local function button(parent: Instance, label: string, color: Color3, size: UDim
 		Text = "",
 		AutoButtonColor = true,
 		Parent = parent,
-	}, deco(10))
-	ShopUi.studs(b, color) -- studded plastic, under the words
+	})
+	Premium.button(b, color) -- glossy, rounded, a darker lip (Shared/Premium)
 	local l = text(b, { Name = "Label", Text = label, Size = UDim2.new(1, -10, 1, -6), Position = UDim2.fromOffset(5, 3) })
 	if icon then
 		Icons.set(l, icon, label, iconSize or ICON.medium)
@@ -285,9 +286,8 @@ local function sideButton(order: number, label: string, icon: string, emoji: str
 	local b = new("TextButton", {
 		Name = "Button", AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.5), Size = UDim2.fromScale(1, 1),
 		BackgroundColor3 = color, Text = "", AutoButtonColor = true, Parent = holder,
-	}, deco(4, 4))
-	ShopUi.studs(b, color) -- the reference's studded plastic, under the bevel and the words
-	ShopUi.bevel(b)
+	})
+	Premium.button(b, color) -- glossy, rounded, a darker lip (Shared/Premium)
 	iconLabel(b, icon, emoji, { Size = UDim2.fromOffset(54, 54), AnchorPoint = Vector2.new(0, 0.5), Position = UDim2.new(0, 8, 0.5, -1) })
 	UiFx.relief(bold(b, 4, { Text = label, Size = UDim2.new(1, -78, 0, 42), Position = UDim2.new(0, 68, 0.5, -23), TextXAlignment = Enum.TextXAlignment.Left }), 3, 4)
 	b.Activated:Connect(onClick)
@@ -676,12 +676,11 @@ local function bigIcon(parent: Instance, key: string, props: { [string]: any }):
 	return iconLabel(parent, key, if tokens then tokens[1] else "", props)
 end
 
--- A chunky button: square, a dark outline, studs, a lighter top (ShopUi.bevel; no dark bottom band), an
--- outlined caption (with `icon` key(s) in place of emoji/"R$").
+-- A chunky button: glossy and rounded with a darker lip (Premium.button: its colour may change later: tabs,
+-- Remove / Sure?), an outlined caption (with `icon` key(s) in place of emoji/"R$").
 local function chunky(parent: Instance, label: string, color: Color3, size: UDim2, onClick: () -> (), icon: (string | { string })?, iconSize: number?): TextButton
-	local b = new("TextButton", { Size = size, BackgroundColor3 = color, BorderSizePixel = 0, Text = "", AutoButtonColor = true, Parent = parent }, { outline() })
-	ShopUi.studs(b, nil) -- white-tinted: these buttons change colour (tabs, Remove / Sure?)
-	ShopUi.bevel(b)
+	local b = new("TextButton", { Size = size, Text = "", AutoButtonColor = true, Parent = parent })
+	Premium.button(b, color)
 	local l = bold(b, 3, { Name = "Label", Text = label, Size = UDim2.new(1, -12, 1, -12), Position = UDim2.fromOffset(6, 6) })
 	if icon then
 		Icons.set(l, icon, label, iconSize or ICON.medium)
@@ -693,14 +692,9 @@ end
 local modal = new("Frame", {
 	AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.5), Size = UDim2.fromOffset(MODAL_W, MODAL_H),
 	BackgroundColor3 = WINDOW_BODY, BorderSizePixel = 0, Active = true, Visible = false, ZIndex = 10, Parent = gui, -- sized per window (openModal)
-}, { outline(4) })
-local modalScale = new("UIScale", { Parent = modal })
-
--- Studs over the body, like the reference's plate: the title bar's studs exactly, tinted charcoal
-local studs = new("Frame", {
-	BackgroundTransparency = 1, Position = UDim2.fromOffset(0, TITLE_H), Size = UDim2.new(1, 0, 1, -TITLE_H), ClipsDescendants = true, Parent = modal,
 })
-ShopUi.studs(studs, WINDOW_BODY, nil, 1) -- the same studs as the title bar (ShopUi.STUD_CELL), tinted charcoal
+Premium.window(modal, TITLE_H) -- the premium navy body, rounded, faint studs under the title bar
+local modalScale = new("UIScale", { Parent = modal })
 
 -- The Candy window's body: the owner's Halloween picture (Icons.TEXTURES HalloweenBg), darkened so the card
 -- stands out; openModal shows it only there, once uploaded
@@ -709,11 +703,12 @@ local candyBackdrop = new("ImageLabel", {
 	ScaleType = Enum.ScaleType.Crop, Image = Icons.image("HalloweenBg") or "", ImageColor3 = Color3.fromRGB(150, 140, 175), Visible = false,
 	ZIndex = 1, Parent = modal,
 })
--- Title bar: one flat colour (openModal), studs, three light diagonal bands on its right half, a shine
+-- Title bar: one flat colour (openModal), rounded like the window on top and square at the bottom (its
+-- "Square"), three light diagonal bands on its right half, a gloss
 local titleBar = new("Frame", {
 	Size = UDim2.new(1, 0, 0, TITLE_H), BackgroundColor3 = WHITE, BorderSizePixel = 0, ClipsDescendants = true, ZIndex = 2, Parent = modal,
-})
-ShopUi.studs(titleBar, nil, nil, 2) -- tinted to the window's bar colour by openModal (ShopUi.paintStuds)
+}, { new("UICorner", { CornerRadius = UDim.new(0, Premium.RADIUS - 4) }) })
+new("Frame", { Name = "Square", Position = UDim2.fromScale(0, 0.5), Size = UDim2.fromScale(1, 0.5), BackgroundColor3 = WHITE, BorderSizePixel = 0, ZIndex = 2, Parent = titleBar })
 -- Diagonal bands: a square (so the gradient's 45° is a true 45°) seen through the bar, clipped to it
 local stripeKeys = { NumberSequenceKeypoint.new(0, 1) }
 for _, band in { { 0.6, 0.645 }, { 0.665, 0.68 }, { 0.705, 0.76 } } do
@@ -728,6 +723,7 @@ new("Frame", {
 	BorderSizePixel = 0, ZIndex = 2, Parent = titleBar,
 }, { new("UIGradient", { Rotation = 45, Transparency = NumberSequence.new(stripeKeys) }) })
 new("Frame", { Size = UDim2.fromScale(1, 1), BackgroundColor3 = WHITE, BorderSizePixel = 0, ZIndex = 2, Parent = titleBar }, {
+	new("UICorner", { CornerRadius = UDim.new(0, Premium.RADIUS - 4) }),
 	new("UIGradient", { Rotation = 90, Transparency = NumberSequence.new({
 		NumberSequenceKeypoint.new(0, 0.75), NumberSequenceKeypoint.new(0.45, 1), NumberSequenceKeypoint.new(0.8, 1), NumberSequenceKeypoint.new(1, 0.82),
 	}), Color = ColorSequence.new(WHITE, Color3.new(0, 0, 0)) }),
@@ -746,13 +742,12 @@ local modalSubtitle = bold(titleBar, 3, {
 	TextXAlignment = Enum.TextXAlignment.Right, TextColor3 = WHITE, ZIndex = 3,
 })
 
--- The square red X: a dark red border, a bevel, a white X in relief
+-- The red X: a glossy red button (Premium.button), a white X in relief
 local modalClose = new("TextButton", {
-	AnchorPoint = Vector2.new(1, 0.5), Position = UDim2.new(1, -12, 0.5, 0), Size = UDim2.fromOffset(62, 62), BackgroundColor3 = WHITE, BorderSizePixel = 0,
+	AnchorPoint = Vector2.new(1, 0.5), Position = UDim2.new(1, -12, 0.5, 0), Size = UDim2.fromOffset(62, 62), BorderSizePixel = 0,
 	Text = "", AutoButtonColor = true, ZIndex = 3, Parent = titleBar,
-}, { outline(4, Color3.fromRGB(95, 6, 12)) })
-new("UIGradient", { Rotation = 90, Color = ColorSequence.new(Color3.fromRGB(255, 50, 50), Color3.fromRGB(210, 10, 20)), Parent = modalClose })
-ShopUi.bevel(modalClose)
+})
+Premium.button(modalClose, Premium.RED, 12)
 UiFx.relief(bold(modalClose, 4, { Name = "X", Text = "X", Size = UDim2.new(1, -18, 1, -16), Position = UDim2.fromOffset(9, 6), ZIndex = 4 }), 3, 4)
 
 local bodyHolder = new("Frame", {
@@ -1293,7 +1288,8 @@ openModal = function(name: string)
 	modal.Size = UDim2.fromOffset(w, h)
 	fitModal()
 	titleBar.BackgroundColor3 = window.bar
-	ShopUi.paintStuds(titleBar, window.bar)
+	local square = titleBar:FindFirstChild("Square") :: Frame
+	square.BackgroundColor3 = window.bar
 	modalTitle.Text = window.title -- words only, in relief
 	Icons.set(modalSubtitle, {}, "") -- the window's render may fill it
 	modal.Visible = true

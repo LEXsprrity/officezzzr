@@ -24,6 +24,11 @@
     "assetType": "Image",
     "imageId": "74001403380769"
   },
+  "GlowRays": {
+    "assetId": "131008849961601",
+    "assetType": "Image",
+    "imageId": "131008849961601"
+  },
   "HalloweenBg": {
     "assetId": "96329767383559",
     "assetType": "Image",
@@ -98,6 +103,11 @@
     "assetId": "132529696666459",
     "assetType": "Image",
     "imageId": "132529696666459"
+  },
+  "SpeedBag": {
+    "assetId": "128067263062856",
+    "assetType": "Image",
+    "imageId": "128067263062856"
   },
   "Star": {
     "assetId": "82950881757837",
