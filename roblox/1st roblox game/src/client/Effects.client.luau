@@ -112,10 +112,21 @@ RunService:BindToRenderStep("SeedShake", Enum.RenderPriority.Camera.Value + 1, f
 end)
 
 local SOUND_FOR = {
-	Pickup = "Pickup", Planted = "Plant", Stored = "Pickup", Caught = "Caught", GuardWake = "Wake",
-	Bat = "Bat", Bought = "Buy", End = "Pickup", PackRoll = "Buy", Announce = "Pickup", SoldPlants = "Buy",
+	Pickup = "Steal", Planted = "Plant", Stored = "Pickup", Caught = "Caught", GuardWake = "Wake",
+	Bat = "Bat", Bought = "Buy", End = "Pickup", PackRoll = "Buy", Announce = "Pickup", SoldPlants = "Sell",
 	Candy = "Pickup", -- (Halloween candy walked over: CandyService)
+	Equipped = "Equip",
 }
+
+-- What a "Bought" sounds like: an upgrade (the plot or the treadmill, for money or Robux) powers up, anything
+-- else is a purchase.
+local function boughtSound(data: any): string
+	local id = if type(data) == "table" then data.itemId else nil
+	if type(id) == "string" and (string.find(id, "Upgrade") or string.find(id, "^Product:Treadmill")) then
+		return "Upgrade"
+	end
+	return "Buy"
+end
 
 -- 2x Luck raised a seed as it was stolen (the server's Pickup says what the pod showed: `shown`): "Lucky!
 -- Rare > Epic" rises over the thief's head on a purple announcement plate with the star (Shared/Toast, the
@@ -150,7 +161,7 @@ local function luckyPopup(shown: number, rarity: number)
 end
 
 LootEvent.OnClientEvent:Connect(function(kind: string, data: any)
-	local sound = SOUND_FOR[kind]
+	local sound = if kind == "Bought" then boughtSound(data) else SOUND_FOR[kind]
 	if sound then
 		play(sound)
 	end
@@ -853,6 +864,10 @@ player.CharacterAdded:Connect(function()
 	jumpQueued = false
 end)
 
+local SPEED_POP_GAP = 0.18 -- seconds between the Speed popups' pops
+local lastSpeedPop = 0
+local lastX: number? = nil -- our root's X last frame (the safe base is X < CORRIDOR_START_X)
+
 RunService.Heartbeat:Connect(function(dt: number)
 	local now = os.clock()
 	local char = player.Character
@@ -936,7 +951,22 @@ RunService.Heartbeat:Connect(function(dt: number)
 		local amount = Treadmill.stepPopups(popups, now, perStep, speedPopupsLive)
 		if amount then
 			speedPopup(root, amount)
+			if now - lastSpeedPop >= SPEED_POP_GAP then -- a soft pop with them (not one per popup: a stream)
+				lastSpeedPop = now
+				play("SpeedPop", 0.25)
+			end
 		end
+	end
+
+	-- Walked back into the safe base from the corridor: a soft chime (not on a teleport: a respawn, a catch).
+	if root and alive then
+		local inBase = root.Position.X < Config.CORRIDOR_START_X
+		if inBase and lastX and lastX >= Config.CORRIDOR_START_X and math.abs(root.Position.X - lastX) < 20 then
+			play("SafeZone", 0.5)
+		end
+		lastX = root.Position.X
+	else
+		lastX = nil
 	end
 	stepLean(char, want, dt)
 	stepWind(root, want)

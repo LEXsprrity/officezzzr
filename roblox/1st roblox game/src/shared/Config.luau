@@ -1244,15 +1244,28 @@ for key, id in require(script.Parent:WaitForChild("IconIds")) :: any do
 	Config.ICONS[key] = if type(id) == "number" then id else 0
 end
 
--- Sounds (P3). Built-in client sounds so nothing needs uploading; swap for asset ids freely.
+-- Sounds. The built-in client sounds, and the owner's list (2026-10-22: upgrade, Speed training popup, plant
+-- seed, seed steal, enter safe zone, UI click and hover, sell, purchase, equip trail): Creator Store sound
+-- effects by Roblox and ProSoundEffects, licensed and free in every experience. Swap any id freely.
+local function sfx(id: number): string -- (an audio asset id as a SoundId)
+	return "rbxassetid://" .. id
+end
 Config.SOUNDS = {
-	Pickup = "rbxasset://sounds/electronicpingshort.wav",
-	Plant = "rbxasset://sounds/snap.mp3",
+	Pickup = "rbxasset://sounds/electronicpingshort.wav", -- a seed stored at home, live events
+	Grown = "rbxasset://sounds/snap.mp3", -- a seedling popped into its flower
 	Caught = "rbxasset://sounds/uuhhh.mp3",
 	Wake = "rbxasset://sounds/swordlunge.wav",
 	Bat = "rbxasset://sounds/swordslash.wav",
-	Buy = "rbxasset://sounds/electronicpingshort.wav",
-	Click = "rbxasset://sounds/button.wav",
+	Buy = sfx(10066947742), -- RBLX UI Purchase: anything bought (a trail, a Robux product, a pack)
+	Upgrade = sfx(9117886786), -- Power Up Sweeteners 17: the plot or the treadmill upgraded
+	SpeedPop = sfx(15675055424), -- Roblox_UI_Cute_Pop: the "+Speed" popups over a treadmill runner
+	Plant = sfx(9114083746), -- Dirt Dig Dirt Throws From Shovel 12: a seed planted
+	Steal = sfx(9125648149), -- Magic Zoom Up Sharp Tubular Whoosh: a seed grabbed from its pod
+	SafeZone = sfx(9116394545), -- Magic Glows Soft Clusters Of Chiming Hits 1: back in the safe base
+	Click = sfx(15675059323), -- Roblox_UI_Bright_Click: every UI button press (UiFx.CLICK_SOUND)
+	Hover = sfx(10066931761), -- RBLX UI Hover 01: the mouse onto a UI button (UiFx.HOVER_SOUND)
+	Sell = sfx(9113728625), -- Cash Register 1: plants sold
+	Equip = sfx(9126072453), -- Synth Sparkle Tone High Pitch Bell Tone Burst: a trail equipped
 }
 
 -- Background music (a player's suggestion, owner 2026-10-16; Client/Music). Licensed APM tracks from the
