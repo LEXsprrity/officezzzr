@@ -1,11 +1,12 @@
--- Exports the owner's bought seed models (models/seeds/PlantsByLoxsy.rbxm, PlantsByLoxxsy > Tools > Seeds:
--- one Tool per seed) into assets/Seed_<ZoneId>.rbxm: a Folder per zone holding its 2 designs, Models named
+-- Exports the seed models into assets/Seed_<ZoneId>.rbxm: a Folder per zone holding its 2 designs, Models named
 -- "Design1" and "Design2" (never the fruit's name: a seed is only ever "Rare Seed"). Every design is used
--- by one zone only, picked for the zone's colours. A seed's gene picks its design (Config.geneDesign),
--- whatever its rarity, so a pod, the seed carried from it and the same seed in the bag look alike.
+-- by one zone only, themed for its biome (owner 2026-10-22): our own designs (tools/seed_designs.luau) and
+-- the three bought ones the owner likes (models/seeds/PlantsByLoxsy.rbxm, PlantsByLoxxsy > Tools > Seeds:
+-- one Tool per seed, "... Seed"). A seed's gene picks its design (Config.geneDesign), whatever its rarity,
+-- so a pod, the seed carried from it and the same seed in the bag look alike.
 -- Each design keeps only the seed's visible parts and its packet art (Decals): the Tool's invisible
--- Handle, every weld, script, light, particle and Neon part is dropped (owner: no brightness around the
--- seed). Anchored, non-colliding, bottom centre at the origin; the game fits it to the pod (3 studs) or the
+-- Handle, every weld, script, light, particle and see-through Neon glow is dropped, and a solid Neon part
+-- turns Plastic (owner: no brightness around the seed; the Dawnfruit keeps its orange sun). Anchored, non-colliding, bottom centre at the origin; the game fits it to the pod (3 studs) or the
 -- carried seed (2.4) and welds it for carrying (SeedService.seedLook). Run from the game folder:
 --   lune run tools/export_seeds.luau
 local fs = require("@lune/fs")
@@ -14,17 +15,20 @@ local roblox = require("@lune/roblox")
 local Vector3, CFrame = roblox.Vector3, roblox.CFrame
 local Enum = roblox.Enum
 
+local SeedDesigns = require("./seed_designs")
+
 local SOURCE = "models/seeds/PlantsByLoxsy.rbxm"
 
--- Config.ZONES order (id) and the two Tools each zone's seeds look like.
+-- Config.ZONES order (id) and the two designs each zone's seeds look like: a SeedDesigns name, or a bought
+-- Tool's name ("... Seed").
 local ZONES = {
-	{ id = "Meadow", tools = { "Dandelion Seed", "Cabbage Seed" } }, -- green / yellow
-	{ id = "Desert", tools = { "Wheat Seed", "Corn Seed" } }, -- sand / yellow
-	{ id = "Jungle", tools = { "Dawnfruit Seed", "Onion Seed" } }, -- green / brown
-	{ id = "Lava", tools = { "Amberpine Seed", "Emberwood Seed" } }, -- orange / dark brown
-	{ id = "Snow", tools = { "Birch Seed", "Mushroom Seed" } }, -- grey-white birch, cream-spotted cap
-	{ id = "Space", tools = { "Plum Seed", "Beetroot Seed" } }, -- deep purple / magenta
-	{ id = "Spirit", tools = { "Cherry Seed", "Rose Seed" } }, -- dusty pink / red and white
+	{ id = "Meadow", tools = { "Clover", "Daisy" } },
+	{ id = "Desert", tools = { "Sunpetal Seed", "Cactus" } },
+	{ id = "Jungle", tools = { "Dawnfruit Seed", "Pitcher" } },
+	{ id = "Lava", tools = { "Amberpine Seed", "Obsidian" } },
+	{ id = "Snow", tools = { "FrostPine", "IceCrystal" } },
+	{ id = "Space", tools = { "Planet", "Alien" } },
+	{ id = "Spirit", tools = { "Sakura", "Lotus" } },
 }
 
 -- World-axis box of one part.
@@ -61,8 +65,14 @@ local function export(tool: any, design: number): any
 		end
 		if not keeps(d) then
 			d:Destroy()
-		elseif d:IsA("BasePart") and (d.Name == "Handle" or d.Transparency >= 1 or d.Material == Enum.Material.Neon) then
+		elseif d:IsA("BasePart") and (d.Name == "Handle" or d.Transparency >= 1) then
 			d:Destroy()
+		elseif d:IsA("BasePart") and d.Material == Enum.Material.Neon then
+			if d.Transparency > 0 then
+				d:Destroy()
+			else
+				d.Material = Enum.Material.Plastic
+			end
 		end
 	end
 	for _, d in model:GetDescendants() do -- (a sub-model left without parts: the Dawnfruit's glowing sun)
@@ -116,8 +126,8 @@ for _, zone in ZONES do
 	for i, name in zone.tools do
 		assert(not used[name], `{name} is used by two zones`)
 		used[name] = true
-		local tool = seeds:FindFirstChild(name)
-		assert(tool, `no Tool named {name}`)
+		local tool = SeedDesigns.build(name) or seeds:FindFirstChild(name)
+		assert(tool, `no design or Tool named {name}`)
 		export(tool, i).Parent = folder
 	end
 	local out = `assets/Seed_{zone.id}.rbxm`
