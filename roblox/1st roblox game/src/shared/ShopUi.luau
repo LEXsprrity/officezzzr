@@ -177,6 +177,7 @@ end
 -- from frames instead. The studs take `f`'s rounded corners (a UICorner of the same radius) and sit at `z`
 -- (default `f`'s ZIndex): make them before the frame's words so they stay under them. `fade` (default
 -- STUD_FADE): fainter, only behind small words that need it.
+ShopUi.STUDS_ON = false -- (owner 2026-10-23: the UI goes plain like Steal an Egg's; true brings the studs back)
 ShopUi.STUD_CELL = 18 -- px between studs (the windows' title bar size), everywhere
 ShopUi.STUD_FADE = 0.62 -- the texture's transparency
 ShopUi.STUD_TINT = 0.55 -- how far the studs' tint is lightened from the frame's colour toward white
@@ -186,6 +187,9 @@ function ShopUi.studTint(color: Color3?): Color3
 end
 
 function ShopUi.studs(f: GuiObject, color: Color3?, fade: number?, z: number?): GuiObject
+	if not ShopUi.STUDS_ON then -- an empty layer: the callers keep working (owner 2026-10-23: no studs, like Steal an Egg)
+		return new("Frame", { Name = "Studs", BackgroundTransparency = 1, Size = UDim2.fromScale(1, 1), Parent = f })
+	end
 	local cell = ShopUi.STUD_CELL
 	local transparency = fade or ShopUi.STUD_FADE
 	local zi = z or f.ZIndex

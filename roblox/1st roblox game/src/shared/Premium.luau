@@ -20,14 +20,14 @@ local WHITE = Color3.new(1, 1, 1)
 local new = ShopUi.new
 
 Premium.INK = Color3.fromRGB(11, 14, 28)
-Premium.BODY = Color3.fromRGB(38, 46, 90) -- the windows' navy (darker toward the bottom)
+Premium.BODY = Color3.fromRGB(34, 34, 40) -- the windows' dark charcoal (Steal an Egg's, owner 2026-10-23)
 Premium.CARD = Color3.fromRGB(50, 60, 112)
 Premium.HINT = Color3.fromRGB(205, 225, 255) -- small words on the body
 Premium.RED = Color3.fromRGB(240, 45, 55)
 Premium.RADIUS = 18
-Premium.BUTTON_RADIUS = 14
+Premium.BUTTON_RADIUS = 4
 Premium.OUTLINE = 6 -- a window's outline
-Premium.BUTTON_OUTLINE = 4
+Premium.BUTTON_OUTLINE = 2
 Premium.STUD_FADE = 0.88 -- the body's studs: only just there
 
 local function corner(f: Instance, r: number)
@@ -60,21 +60,6 @@ local function shading(f: Instance, low: number, lip: boolean?)
 			ColorSequenceKeypoint.new(1, grey(low * 0.72)),
 		})
 		else ColorSequence.new(WHITE, grey(low))
-end
-
--- A soft white gloss over the top of `f` (rounded like it), `share` of its height.
-local function gloss(f: GuiObject, share: number, transparency: number, inset: number)
-	local g = new("Frame", {
-		Name = "Gloss", BackgroundColor3 = WHITE, BackgroundTransparency = transparency, BorderSizePixel = 0,
-		Position = UDim2.fromOffset(inset, inset), Size = UDim2.new(1, -2 * inset, share, -inset), ZIndex = f.ZIndex, Parent = f,
-	}, {
-		new("UIGradient", { Rotation = 90, Transparency = NumberSequence.new(0, 0.6) }),
-	})
-	local c = f:FindFirstChildOfClass("UICorner")
-	if c then
-		new("UICorner", { CornerRadius = UDim.new(0, math.max(0, c.CornerRadius.Offset - inset)), Parent = g })
-	end
-	return g
 end
 
 -- The navy body of a window `f` (any size), rounded, outlined, with faint studs under its title bar
@@ -136,8 +121,9 @@ function Premium.titleBar(window: GuiObject, h: number, from: Color3, to: Color3
 	return bar
 end
 
--- A glossy button: rounded, outlined, a lit top, a darker lip along the bottom. Colour it with
--- BackgroundColor3 (now or later). The caller adds its words (ShopUi.label) and connects it.
+-- A button like Steal an Egg's (owner 2026-10-23): a flat vivid colour going a little darker toward the
+-- bottom, a thin dark outline, barely rounded. Colour it with BackgroundColor3 (now or later). The caller adds
+-- its words (ShopUi.label) and connects it.
 function Premium.button(b: GuiObject, color: Color3?, radius: number?)
 	if color then
 		b.BackgroundColor3 = color
@@ -145,8 +131,7 @@ function Premium.button(b: GuiObject, color: Color3?, radius: number?)
 	b.BorderSizePixel = 0
 	corner(b, radius or Premium.BUTTON_RADIUS)
 	outline(b, Premium.BUTTON_OUTLINE)
-	shading(b, 0.86, true)
-	gloss(b, 0.42, 0.62, 3)
+	shading(b, 0.8)
 end
 
 -- A dark inset card on the body (the Free Gift's steps, a shop item).

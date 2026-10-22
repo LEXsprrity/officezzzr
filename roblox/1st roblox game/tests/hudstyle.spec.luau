@@ -26,11 +26,14 @@ local function block(source: string, from: string, to: string): string
 end
 
 -- Runs fn with Config.ICONS.Studs = id, then puts it back.
+-- (the studs are off since 2026-10-23, the owner's Steal an Egg look; these tests switch them on to check the helper)
 local function withStuds(id: number, fn: () -> ())
-	local saved = Config.ICONS.Studs
+	local saved, on = Config.ICONS.Studs, ShopUi.STUDS_ON
 	Config.ICONS.Studs = id
+	ShopUi.STUDS_ON = true
 	local ok, err = pcall(fn)
 	Config.ICONS.Studs = saved
+	ShopUi.STUDS_ON = on
 	if not ok then
 		error(err, 0)
 	end
@@ -112,17 +115,14 @@ H.test("studs: on every HUD surface (Plants panel, readout, windows, cards, time
 	H.ok(string.find(HUD, "ShopUi.studs(plusBadge,", 1, true) ~= nil, "the Speed's + badge")
 	-- the Plants panel: its side button (button()), the panel, its tabs (chunky), its cards
 	has(HUD, "local function button(", "\nend\n", "Premium.button(b, color)", "the Plants side button")
-	H.ok(string.find(HUD, "ShopUi.studs(sidePanel, COLORS.panel)", 1, true) ~= nil, "the Plants panel")
+	H.ok(string.find(HUD, "BackgroundColor3 = Premium.BODY, BackgroundTransparency = 0.04, Visible = false, Parent = gui,", 1, true) ~= nil, "the Plants panel: dark like the windows")
+	H.eq(ShopUi.STUDS_ON, false, "the studs are off (owner 2026-10-23: Steal an Egg's plain look)")
 	has(HUD, "local function chunky(", "\nend\n", "Premium.button(b, color)", "chunky buttons (tabs, Remove, Plant, Sell, Equip)")
-	has(HUD, "local function card(", "\nend\n", "ShopUi.studs(f, color)", "the Plants list's cards")
-	has(HUD, "local function plantCard(", "\n\tend\n", "ShopUi.studs(f, accent)", "plant cards")
-	has(HUD, "local function itemCard(", "\n\tend\n", "ShopUi.studs(f, accent)", "Inventory cards")
 	-- the windows: frame, Shop cards (packs, passes, banners, Speed / Money / upgrades), Trail, Index, Sell, reveal
 	has(HUD, "local function cardFrame(", "\n\tend\n", "ShopUi.studs(c, if rainbow then nil else color, nil, 1)", "every Shop card")
 	H.ok(string.find(HUD, "studLayer.ZIndex = 2 -- the studs over the picture too", 1, true) ~= nil, "pack cards with a picture")
 	has(HUD, "local function trailCard(", "\n\tend\n", "ShopUi.studs(c, if t.rainbow then nil else t.color)", "Trail cards")
-	has(HUD, "local function renderIndex()", "\nend\n", "ShopUi.studs(row, zone.ui)", "Index rows")
-	has(HUD, "local function renderIndex()", "\nend\n", "ShopUi.studs(cell, if got then rarity.color else zone.ui)", "Index cells")
+	-- (the Index is Steal an Egg's now: flat tiles, no studs: owner 2026-10-23)
 	has(HUD, "local function cardBase(", "\n\tend\n", "ShopUi.studs(c, body)", "Sell cards (their rarity's colour)")
 	has(HUD, "local function cardBase(", "\n\tend\n", "ShopUi.studs(band, rarity.color)", "Sell cards' bands")
 	H.ok(string.find(HUD, "ShopUi.studs(panel, Color3.fromRGB(75, 40, 140), nil, 1)", 1, true) ~= nil, "the pack reveal's panel")
@@ -205,6 +205,7 @@ H.test("toasts: one announcement look (studded plate, bevel, icon, chunky relief
 	end
 	local ok, err = pcall(function()
 		local Toast = H.shared("Toast")
+		ShopUi.STUDS_ON = true -- (off in the game since 2026-10-23; this checks the plate with them)
 		local savedIds = table.clone(Config.ICONS)
 		Config.ICONS.Lock, Config.ICONS.Star, Config.ICONS.Studs = 11, 22, 33
 		local holder = roblox.Instance.new("Frame")
@@ -256,6 +257,7 @@ H.test("toasts: one announcement look (studded plate, bevel, icon, chunky relief
 		end
 	end)
 	UiFx.relief = relief
+	ShopUi.STUDS_ON = false
 	for k, v in saved do
 		H.services[k] = v
 	end
