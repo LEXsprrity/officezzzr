@@ -386,7 +386,7 @@ end)
 H.test("grow now: the seedling model, its countdown and the Grow now button (source)", function()
 	local plot = fs.readFile("src/server/PlotService.luau")
 	for _, needle in {
-		"Seedling.build(plant.zone, plant.rarity, plant.mutation)",
+		"Seedling.build(plant.zone, plant.rarity, plant.mutation, plant.seedDesign)",
 		"model:SetAttribute(\"SproutUntil\", plant.sproutUntil)",
 		"local sprout = LiveEventService.sproutSeconds(zone, rarity, Sessions.growMult(s))", -- (Config.sproutTime x a live Grow event)
 		"plant.sproutUntil = if sprout > 0 then now + sprout else nil",
@@ -405,17 +405,23 @@ H.test("grow now: the seedling model, its countdown and the Grow now button (sou
 	H.ok(string.find(hud, "income.Text = `Sprouting {Format.clock(math.ceil(left))}`", 1, true) ~= nil, "the Plants card's countdown")
 	local ui = fs.readFile("src/shared/GrowNowUi.luau")
 	H.ok(string.find(ui, "FireServer(`GrowNow:{slot}`)", 1, true) ~= nil, "asks the server, which picks the product")
-	-- the seedling builds (studded blocks, an InfoAnchor up top, pivot on the ground)
+	-- the seedling builds (a studded mound with the seed on it, an InfoAnchor up top, pivot on the ground)
 	local Seedling = H.server("Seedling")
-	local m = Seedling.build(2, 5, "Gold")
+	local m = Seedling.build(2, 5, "Gold", 2)
 	H.ok(m.PrimaryPart ~= nil and m.PrimaryPart:FindFirstChild("InfoAnchor") ~= nil)
+	local seed = m:FindFirstChild("SeedModel") :: any
+	H.ok(seed ~= nil and seed:GetAttribute("Design") == 2, "the seed itself sits on the mound, the design it was")
+	H.ok(m:FindFirstChild("Bud") == nil and m:FindFirstChild("Stem") == nil, "no sprout flower any more")
+	H.eq(m:GetAttribute("Mutation"), "Gold")
 	for _, d in m:GetDescendants() do
 		if d:IsA("BasePart") then
-			H.eq(d.TopSurface, roblox.Enum.SurfaceType.Studs, `{d.Name} studded`)
+			if not d:IsDescendantOf(seed) then
+				H.eq(d.TopSurface, roblox.Enum.SurfaceType.Studs, `{d.Name} studded`)
+			end
 			H.ok(not d.CanCollide and d.Anchored, `{d.Name} decoration`)
 		end
 	end
-	H.eq((m:FindFirstChild("Bud") :: any).Color, Config.mutationById("Gold").color, "the bud in its mutation's colour")
+	H.eq(Seedling.designOf(2, 77), H.server("SeedService").designOf(2, 77), "the seedling's pick is the pod's")
 	local body = m.PrimaryPart :: any
 	H.ok(math.abs((body.CFrame * body.PivotOffset).Position.Y) < 1e-6, "pivot on the ground")
 end)

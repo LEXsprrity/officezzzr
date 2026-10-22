@@ -159,7 +159,7 @@ local function buildPlantModel(state: PlotState, plant: ProfileStore.Plant, weig
 	-- built at the origin; it is pivoted onto the slot below. While it sprouts: the seedling instead, with
 	-- its end time and owner as attributes (Client/Sprouts shows the countdown and the owner's Grow now).
 	local sprouting = Config.isSprouting(plant, os.time())
-	local model = if sprouting then Seedling.build(plant.zone, plant.rarity, plant.mutation)
+	local model = if sprouting then Seedling.build(plant.zone, plant.rarity, plant.mutation, plant.seedDesign)
 		else CreatureModels.build(plant.zone, plant.rarity, plant.mutation, CreatureModels.pickOf(plant.zone, plant.rarity, plant.variant, plant.slot), plant.palette)
 	model.Name = "Plant_" .. plant.slot
 	if sprouting then
@@ -360,6 +360,7 @@ local function plantSeed(player: Player, s: Sessions.Session, state: PlotState, 
 		-- A fresh seed sprouts first (Config.sproutTime; Fast Grow halves it), earning nothing; its growth
 		-- starts when it is done. Its variance is fixed now, so moving plantedAt never changes its size.
 		plant.variance = Config.varianceOf(plant)
+		plant.seedDesign = Seedling.designOf(zone, gene) -- (the seed it was: the seedling shows it)
 		-- A live Grow event (LiveEventService) divides the time, or skips it (Instant: a flower at once).
 		local sprout = LiveEventService.sproutSeconds(zone, rarity, Sessions.growMult(s))
 		plant.sproutUntil = if sprout > 0 then now + sprout else nil

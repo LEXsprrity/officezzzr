@@ -106,6 +106,26 @@ function designs.Clover()
 	ball(0.16, top + V(0, 0.03, 0), LEAF_D)
 	for side = -1, 1, 2 do
 		egg(V(0.42, 0.08, 0.2), at(side * 0.38, 0.72, 0.05, 0, 0, side * 25), LEAF)
+		egg(V(0.2, 0.06, 0.06), at(side * 0.38, 0.75, 0.05, 0, 0, side * 25), LEAF_D) -- (its vein)
+	end
+	-- the seed's grooves and a shine
+	for i = 0, 3 do
+		local cf = around(V(0, 0.38, 0), i * 90 + 20, 0) * CFrame.new(0, 0, -0.44)
+		block(V(0.05, 0.42, 0.04), cf, SEED_D)
+	end
+	egg(V(0.16, 0.12, 0.06), at(-0.2, 0.55, -0.36, -20, -25, 0), rgb(196, 140, 92))
+	-- a ladybug on a leaf, dew drops, crumbs of soil
+	local bug = (around(top, 225, -14) * CFrame.new(0, 0.07, -0.34)).Position
+	ball(0.16, bug, rgb(230, 40, 40))
+	ball(0.09, bug + V(0.06, 0.02, -0.06), rgb(25, 25, 25))
+	block(V(0.015, 0.04, 0.15), CFrame.new(bug + V(0, 0.06, 0)) * CFrame.fromEulerAnglesYXZ(0, rad(45), 0), rgb(25, 25, 25))
+	for _, d in { V(-0.05, 0.08, 0.04), V(0.04, 0.08, -0.03) } do
+		ball(0.035, bug + d, rgb(25, 25, 25))
+	end
+	ball(0.07, (around(top, 135, -14) * CFrame.new(0.1, 0.06, -0.3)).Position, rgb(200, 240, 255))
+	ball(0.05, (around(top, 315, -14) * CFrame.new(-0.1, 0.06, -0.36)).Position, rgb(200, 240, 255))
+	for _, p in { V(0.4, 0.05, -0.3), V(-0.42, 0.04, -0.2), V(0.1, 0.04, -0.46) } do
+		block(V(0.1, 0.08, 0.1), CFrame.new(p) * CFrame.fromEulerAnglesYXZ(0, rad(p.X * 90), 0), SEED_D)
 	end
 end
 
@@ -130,6 +150,26 @@ function designs.Daisy()
 	end
 	cyl(0.14, 0.44, head * CFrame.new(0, 0.04, 0), YELLOW)
 	ball(0.3, (head * CFrame.new(0, 0.08, 0)).Position, rgb(255, 176, 30))
+	for i = 0, 5 do -- (pollen dots on the middle)
+		local a = i * pi / 3
+		ball(0.06, (head * CFrame.new(cos(a) * 0.15, 0.13, sin(a) * 0.15)).Position, rgb(230, 140, 20))
+	end
+	-- a second, closed bud on its own stalk, and a bee
+	cyl(0.5, 0.07, at(0.3, 0.95, 0.08, 0, 0, -18), GRASS_D)
+	egg(V(0.16, 0.24, 0.16), at(0.39, 1.24, 0.08, 0, 0, -18), GRASS)
+	egg(V(0.11, 0.14, 0.11), at(0.41, 1.36, 0.08, 0, 0, -18), WHITE)
+	local bee = at(-0.46, 1.62, -0.16, 0, 30, 0)
+	egg(V(0.14, 0.13, 0.2), bee, rgb(255, 205, 40))
+	block(V(0.15, 0.135, 0.04), bee * CFrame.new(0, 0, 0.02), rgb(35, 30, 30))
+	ball(0.1, (bee * CFrame.new(0, 0.01, -0.11)).Position, rgb(35, 30, 30))
+	for side = -1, 1, 2 do
+		egg(V(0.14, 0.03, 0.1), bee * CFrame.new(side * 0.09, 0.08, 0.02) * CFrame.Angles(0, 0, rad(side * 30)), rgb(225, 245, 255))
+	end
+	-- the seed's stripes
+	for i = 0, 2 do
+		local cf = around(V(0, 0.36, 0), i * 120 - 30, 0) * CFrame.new(0, 0, -0.39)
+		block(V(0.05, 0.4, 0.04), cf, rgb(130, 82, 46))
+	end
 end
 
 ----------------------------------------------------------------------------------------------------
@@ -160,6 +200,28 @@ function designs.Cactus()
 	petals(5, V(0, 1.7, 0), 0.12, V(0.16, 0.08, 0.24), 30, PINK)
 	petals(5, V(0, 1.74, 0), 0.07, V(0.11, 0.07, 0.16), 45, PINK_D, 36)
 	ball(0.12, V(0, 1.76, 0), YELLOW)
+	-- white spines all over the trunk and arms
+	local SPINE = rgb(250, 248, 230)
+	for i = 0, 11 do
+		local yaw = i * 75
+		local y = 0.6 + (i % 6) * 0.15
+		local cf = around(V(0, y, 0), yaw, 0) * CFrame.new(0, 0, -0.24)
+		block(V(0.025, 0.025, 0.1), cf, SPINE)
+	end
+	for _, p in { V(-0.42, 1.12, -0.11), V(-0.53, 1.0, 0), V(0.42, 1.24, -0.11), V(0.53, 1.14, 0), V(0, 1.6, -0.2) } do
+		block(V(0.025, 0.025, 0.09), CFrame.lookAt(p, p * V(2, 1, 2) + V(0, 0, -0.1)), SPINE)
+	end
+	-- a baby cactus, pebbles and a bleached bone in the sand
+	block(V(0.18, 0.26, 0.18), at(0.3, 0.62, 0.22), GREEN_D)
+	ball(0.18, V(0.3, 0.75, 0.22), GREEN_D)
+	ball(0.07, V(0.3, 0.86, 0.22), PINK)
+	for _, p in { V(-0.36, 0.5, -0.24), V(0.42, 0.42, -0.1), V(-0.12, 0.5, -0.4) } do
+		egg(V(0.12, 0.08, 0.1), CFrame.new(p), rgb(170, 140, 110))
+	end
+	block(V(0.3, 0.05, 0.05), at(-0.16, 0.6, 0.36, 0, 30, 0), rgb(245, 240, 225))
+	for side = -1, 1, 2 do
+		ball(0.08, (at(-0.16, 0.6, 0.36, 0, 30, 0) * CFrame.new(side * 0.15, 0, 0)).Position, rgb(245, 240, 225))
+	end
 end
 
 ----------------------------------------------------------------------------------------------------
@@ -182,13 +244,30 @@ function designs.Pitcher()
 		cyl(0.08, 0.42, base * CFrame.new(0, h, 0), RIM)
 		cyl(0.03, 0.3, base * CFrame.new(0, h + 0.03, 0), rgb(70, 20, 30))
 		egg(V(0.34, 0.06, 0.3), base * CFrame.new(0, h + 0.2, 0.14) * CFrame.Angles(rad(-35), 0, 0), RIM)
-		for i = 0, 3 do
+		for i = 0, 5 do
 			local a = i * 1.7
-			block(V(0.06, 0.06, 0.03), base * CFrame.new(sin(a) * 0.17, 0.2 + i * h / 5, -cos(a) * 0.17) * CFrame.fromEulerAnglesYXZ(0, a, 0), SPOT)
+			block(V(0.07, 0.07, 0.03), base * CFrame.new(sin(a) * 0.18, 0.15 + i * h / 7, -cos(a) * 0.18) * CFrame.fromEulerAnglesYXZ(0, a, 0), SPOT)
 		end
+		cyl(h * 0.6, 0.04, base * CFrame.new(0, h * 0.45, -0.18), CUP_D) -- (its front wing)
+		cyl(0.05, 0.38, base * CFrame.new(0, h * 0.82, 0), RIM) -- (a red band under the mouth)
 	end
 	pitcher(-0.17, 0.02, 0.85, 8)
 	pitcher(0.22, -0.08, 0.55, -10)
+	-- leaf midribs, a tendril with a baby pitcher, a fly on the big one's lid
+	for i = 0, 3 do
+		local cf = around(V(0, 0.46, 0), 45 + i * 90, -62) * CFrame.new(0, 0.03, -0.42)
+		block(V(0.04, 0.03, 0.5), cf, rgb(120, 200, 110))
+	end
+	block(V(0.04, 0.3, 0.04), at(0.4, 0.62, 0.18, 0, 0, -40), LEAF_D)
+	block(V(0.04, 0.2, 0.04), at(0.52, 0.8, 0.18, 0, 0, 10), LEAF_D)
+	egg(V(0.14, 0.2, 0.14), at(0.52, 0.94, 0.18), CUP)
+	cyl(0.03, 0.15, at(0.52, 1.04, 0.18), RIM)
+	local fly = (at(-0.17, 0.55, 0.02, 0, 0, 8) * CFrame.new(0, 1.12, 0.1)).Position
+	egg(V(0.12, 0.08, 0.16), CFrame.new(fly), rgb(30, 50, 40))
+	for side = -1, 1, 2 do
+		egg(V(0.12, 0.02, 0.07), CFrame.new(fly + V(side * 0.07, 0.04, 0.03)) * CFrame.Angles(0, 0, rad(side * 25)), rgb(220, 240, 250))
+	end
+	ball(0.05, fly + V(0.03, 0.02, -0.07), rgb(200, 30, 30))
 end
 
 ----------------------------------------------------------------------------------------------------
@@ -224,6 +303,20 @@ function designs.Obsidian()
 	end
 	flame(0, 0, 0.8, 0.26, FIRE_Y)
 	flame(90, 0, 0.8, 0.26, FIRE_Y)
+	-- branching cracks, embers flying up, little cooled rocks round the foot
+	for _, k in { { 20, 0.3, 0.16, 40 }, { -35, 0.55, 0.14, 140 }, { 80, 0.3, 0.14, 60 }, { -95, 0.62, 0.16, 120 }, { 160, 0.4, 0.2, 90 } } do
+		local yaw, y, len, roll = k[1], k[2], k[3], k[4]
+		local dir = V(sin(rad(yaw)), 0, -cos(rad(yaw)))
+		local onRock = c + dir * 0.5 + V(0, y - c.Y, 0) * 0.9 - dir * (y - c.Y) ^ 2 * 0.6
+		block(V(0.05, len, 0.05), CFrame.lookAt(onRock, onRock + dir) * CFrame.Angles(0, 0, rad(roll - 90)), LAVA_L)
+	end
+	for _, e in { V(0.3, 1.5, -0.1), V(-0.26, 1.62, 0.08), V(0.12, 1.86, -0.04), V(-0.12, 1.38, -0.24), V(0.22, 1.28, 0.2) } do
+		block(V(0.07, 0.07, 0.07), CFrame.new(e) * CFrame.fromEulerAnglesYXZ(rad(45), rad(45), 0), if e.Y > 1.6 then FIRE_Y else LAVA_L)
+	end
+	for _, p in { V(0.46, 0.08, -0.26), V(-0.48, 0.07, -0.18), V(0.1, 0.06, -0.52), V(-0.2, 0.07, 0.46) } do
+		block(V(0.16, 0.12, 0.14), CFrame.new(p) * CFrame.fromEulerAnglesYXZ(rad(20), rad(p.X * 100), rad(15)), ROCK_D)
+		block(V(0.06, 0.02, 0.06), CFrame.new(p + V(0, 0.065, 0)), LAVA)
+	end
 end
 
 ----------------------------------------------------------------------------------------------------
@@ -254,6 +347,25 @@ function designs.FrostPine()
 		skirt(y + h * 0.55, r * 0.5, h * 0.45, yaw, SNOW)
 	end
 	ball(0.16, V(0, 1.78, 0), SNOW)
+	-- icicles hanging off the snow cap, frost on the seed, snowflakes in the air
+	for i = 0, 7 do
+		local cf = around(V(0, 0.6, 0), i * 45 + 10, 0) * CFrame.new(0, -0.06 - (i % 3) * 0.03, -0.35)
+		wedge(V(0.06, 0.12 + (i % 3) * 0.05, 0.06), cf * CFrame.Angles(pi, 0, 0), rgb(220, 242, 255))
+	end
+	for i = 0, 4 do
+		local cf = around(V(0, 0.28, 0), i * 72 + 36, 0) * CFrame.new(0, (i % 2) * 0.08, -0.43)
+		block(V(0.1, 0.1, 0.03), cf * CFrame.Angles(0, 0, rad(45)), rgb(236, 248, 255))
+	end
+	for _, f in { V(0.44, 1.5, -0.2), V(-0.46, 1.24, -0.1), V(0.36, 0.98, 0.3), V(-0.3, 1.72, 0.1) } do
+		local cf = CFrame.lookAt(f, f + V(0, 0, -1))
+		for k = 0, 2 do
+			block(V(0.02, 0.16, 0.02), cf * CFrame.Angles(0, 0, rad(k * 60)), SNOW)
+		end
+	end
+	-- red berries peeking out of the branches
+	for _, b in { V(0.22, 0.9, -0.3), V(-0.26, 1.18, -0.2), V(0.12, 1.42, -0.2) } do
+		ball(0.08, b, rgb(220, 40, 50))
+	end
 end
 
 -- A cluster of ice crystals out of a snow mound.
@@ -276,6 +388,17 @@ function designs.IceCrystal()
 	shard(0.26, -0.02, 0.6, 0.24, -8, -28, C1)
 	shard(0.06, 0.26, 0.5, 0.22, 28, 6, C2)
 	shard(-0.06, -0.26, 0.42, 0.2, -30, 0, C3)
+	-- small shards poking out of the snow, snow lumps, sparkles
+	shard(0.4, -0.22, 0.22, 0.12, -20, -40, C2)
+	shard(-0.42, -0.16, 0.2, 0.11, -15, 40, C1)
+	shard(-0.3, 0.34, 0.24, 0.12, 30, 20, C3)
+	for _, p in { V(0.3, 0.36, -0.36), V(-0.18, 0.4, -0.42), V(0.46, 0.3, 0.2) } do
+		egg(V(0.2, 0.12, 0.18), CFrame.new(p), SNOW_D)
+	end
+	for _, s in { V(0.24, 1.2, -0.2), V(-0.34, 0.98, -0.18), V(0.38, 0.7, -0.3) } do
+		block(V(0.04, 0.16, 0.04), CFrame.new(s), rgb(255, 255, 255))
+		block(V(0.16, 0.04, 0.04), CFrame.new(s), rgb(255, 255, 255))
+	end
 end
 
 ----------------------------------------------------------------------------------------------------
@@ -302,6 +425,18 @@ function designs.Planet()
 		wedge(V(0.1, 0.24, 0.08), cf * CFrame.new(-0.05, 0, 0) * CFrame.Angles(0, pi / 2, 0), STAR)
 	end
 	cyl(0.1, 0.18, star * CFrame.Angles(pi / 2, 0, 0), STAR)
+	-- more craters, a swirl band, a little moon, twinkles
+	for _, k in { { 0.28, 0.2, -0.38, 0.12 }, { -0.1, -0.12, -0.48, 0.1 }, { 0.42, -0.1, -0.2, 0.09 } } do
+		local p = c + V(k[1], k[2], k[3])
+		egg(V(k[4], k[4], 0.04), CFrame.lookAt(p, c), BAND_D)
+	end
+	egg(V(0.99, 0.08, 0.99), CFrame.new(c + V(0, 0.16, 0)), rgb(176, 120, 250))
+	ball(0.22, (tilt * CFrame.new(-0.86, 0.14, 0.2)).Position, rgb(220, 220, 235))
+	ball(0.07, (tilt * CFrame.new(-0.82, 0.2, 0.12)).Position, rgb(170, 170, 190))
+	for _, s in { V(0.6, 1.3, -0.1), V(-0.62, 1.08, 0.1), V(0.5, 0.2, -0.4) } do
+		block(V(0.035, 0.14, 0.035), CFrame.new(s), STAR)
+		block(V(0.14, 0.035, 0.035), CFrame.new(s), STAR)
+	end
 end
 
 -- A green alien bulb with purple spots and two eyes on stalks.
@@ -324,6 +459,18 @@ function designs.Alien()
 	for side = -1, 1, 2 do -- (stubby feet)
 		egg(V(0.22, 0.12, 0.3), at(side * 0.24, 0.06, -0.24, 0, side * 15, 0), SKIN_D)
 	end
+	-- eye shines, blushing cheeks, little arms waving, a tooth, a glowing-green tummy patch
+	for side = -1, 1, 2 do
+		local stalk = at(side * 0.16, 0.96, 0, 0, 0, -side * 22)
+		local eye = (stalk * CFrame.new(0, 0.5, 0)).Position
+		ball(0.05, eye + V(0.03, 0.06, -0.17), WHITE)
+		ball(0.05, (stalk * CFrame.new(0, 0.3, 0)).Position, SPOT) -- (a ring on the stalk)
+		egg(V(0.12, 0.07, 0.03), CFrame.lookAt(V(side * 0.24, 0.5, -0.4), V(side * 0.24, 0.5, -1)), rgb(255, 140, 170))
+		egg(V(0.12, 0.3, 0.12), at(side * 0.46, 0.5, -0.06, 0, 0, side * 50), SKIN)
+		ball(0.11, V(side * 0.6, 0.62, -0.06), SKIN)
+	end
+	block(V(0.05, 0.05, 0.02), at(0.05, 0.4, -0.45), WHITE)
+	egg(V(0.38, 0.4, 0.06), CFrame.lookAt(V(0, 0.26, -0.39), V(0, 0.4, -1)), rgb(170, 255, 190))
 end
 
 ----------------------------------------------------------------------------------------------------
@@ -352,6 +499,25 @@ function designs.Sakura()
 	ball(0.12, V(0.02, 1.42, -0.02), PINK_L) -- (a bud)
 	egg(V(0.14, 0.05, 0.18), at(0.36, 0.82, -0.3, 20, 30, 10), PINK) -- (fallen petals)
 	egg(V(0.14, 0.05, 0.18), at(-0.4, 0.68, -0.18, -15, 70, -20), PINK_L)
+	-- two more blossoms, buds, young leaves, a tiny paper lantern hanging off a twig
+	block(V(0.08, 0.3, 0.08), at(0.3, 1.46, 0.02, 0, 0, -20), BARK_D)
+	blossom(V(0.36, 1.62, -0.02), 0.9, V(0.4, 1, -0.5))
+	blossom(V(-0.02, 1.02, -0.16), 0.75, V(0, 0.2, -1))
+	for _, b in { V(-0.36, 1.86, 0.02), V(0.48, 1.4, 0), V(-0.12, 1.66, 0.12) } do
+		egg(V(0.09, 0.12, 0.09), CFrame.new(b), PINK)
+	end
+	for _, l in { { 0.2, 1.34, 0.12, 40 }, { -0.36, 1.5, 0.1, -50 } } do
+		egg(V(0.16, 0.04, 0.09), at(l[1], l[2], l[3], 0, l[4], 20), rgb(130, 200, 110))
+	end
+	block(V(0.02, 0.16, 0.02), at(0.18, 1.06, -0.04), rgb(60, 40, 40))
+	egg(V(0.16, 0.2, 0.16), at(0.18, 0.92, -0.04), rgb(240, 70, 70))
+	cyl(0.03, 0.1, at(0.18, 1.02, -0.04), rgb(60, 40, 40))
+	cyl(0.03, 0.1, at(0.18, 0.82, -0.04), rgb(60, 40, 40))
+	-- the seed's pale stripes
+	for i = 0, 2 do
+		local cf = around(V(0, 0.34, 0), i * 120 - 20, 0) * CFrame.new(0, 0, -0.39)
+		block(V(0.05, 0.38, 0.04), cf, rgb(176, 112, 100))
+	end
 end
 
 -- A lotus on a lily pad: two rings of pink-white petals round a seed pod.
@@ -372,6 +538,30 @@ function designs.Lotus()
 		cyl(0.03, 0.05, CFrame.new(cos(a) * 0.09, 0.66, sin(a) * 0.09), POD_D)
 	end
 	cyl(0.03, 0.05, CFrame.new(0, 0.66, 0), POD_D)
+	-- pink tips on the outer petals, golden stamens, the pad's veins, dew, a baby pad and a dragonfly
+	for i = 0, 7 do
+		local cf = around(V(0, 0.3, 0), i * 45, 30) * CFrame.new(0, 0.02, -0.66)
+		egg(V(0.14, 0.08, 0.14), cf, rgb(225, 70, 140))
+	end
+	for i = 0, 9 do
+		local a = i * pi / 5
+		cyl(0.12, 0.025, CFrame.new(cos(a) * 0.19, 0.6, sin(a) * 0.19) * CFrame.Angles(sin(a) * 0.4, 0, -cos(a) * 0.4), rgb(255, 210, 60))
+	end
+	for i = 0, 5 do
+		local cf = at(0, 0.14, 0, 0, i * 60 + 15, 0) * CFrame.new(0, 0, -0.42)
+		block(V(0.03, 0.02, 0.52), cf, rgb(108, 196, 120))
+	end
+	ball(0.07, V(-0.5, 0.17, -0.3), rgb(210, 240, 255))
+	ball(0.05, V(0.46, 0.16, 0.34), rgb(210, 240, 255))
+	cyl(0.06, 0.5, at(-0.6, 0.03, 0.42), PAD_D)
+	local fly = at(0.5, 0.95, -0.2, 0, 35, -10)
+	cyl(0.34, 0.05, fly * CFrame.Angles(pi / 2, 0, 0) * CFrame.new(0, 0.06, 0), rgb(60, 170, 220))
+	ball(0.08, (fly * CFrame.new(0, 0, -0.12)).Position, rgb(40, 120, 190))
+	for side = -1, 1, 2 do
+		for k = 0, 1 do
+			egg(V(0.24, 0.02, 0.07), fly * CFrame.new(side * 0.13, 0.03, -0.06 + k * 0.08) * CFrame.Angles(0, rad(side * (10 - k * 20)), 0), rgb(220, 245, 255))
+		end
+	end
 end
 
 local SeedDesigns = {}
