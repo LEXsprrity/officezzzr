@@ -55,6 +55,7 @@ function Inventory.take(profile: ProfileStore.Profile, slot: any, now: number, g
 				variance = Config.varianceOf(plant),
 				palette = plant.palette, -- its colours too
 				yaw = plant.yaw, -- planted again, it starts facing the same way
+				seedDesign = plant.seedDesign,
 			}
 			local sprout = Config.sproutLeft(plant, now) -- a seedling keeps the sprouting it had left
 			entry.sprout = if sprout > 0 then sprout else nil
@@ -77,6 +78,7 @@ function Inventory.toPlant(entry: ProfileStore.InvPlant, slot: number, now: numb
 		slot = slot, zone = entry.zone, rarity = entry.rarity, mutation = entry.mutation, plantedAt = (sproutUntil or now) - entry.age / (growMult or 1),
 		x = x, z = z, variant = entry.variant, variance = entry.variance, palette = entry.palette, yaw = if yaw ~= nil then yaw else entry.yaw,
 		sproutUntil = sproutUntil,
+		seedDesign = entry.seedDesign,
 	}
 end
 

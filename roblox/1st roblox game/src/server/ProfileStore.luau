@@ -92,6 +92,7 @@ export type Plant = {
 	palette: string?, -- v13: its colour variant (Shared/Palettes id); nil = Natural (older saves)
 	yaw: number?, -- v11: degrees it is turned from facing the entrance (Planting.facing); nil = 0 (older saves)
 	sproutUntil: number?, -- v12: a seedling (no income) until then (unix seconds); nil = sprouted (Config.sproutLeft)
+	seedDesign: number?, -- which of its zone's seed designs the seedling shows (Seedling.designOf its gene; `sd`); nil = the first
 }
 
 -- A plant in the inventory (v9): taken off the plot as it was, its growth stopped. Planted again it keeps
@@ -107,6 +108,7 @@ export type InvPlant = {
 	palette: string?, -- v13
 	yaw: number?, -- v11: the way it faced on the plot
 	sprout: number?, -- v12: seconds of sprouting it still had when it left the plot (nil = none)
+	seedDesign: number?, -- the seedling's seed design (Plant.seedDesign)
 }
 
 export type Profile = {
@@ -177,6 +179,12 @@ end
 -- A saved flower (v8): a plant model's name, or nil (junk is never trusted as a name).
 local function variantOf(v: any): string?
 	return if type(v) == "string" and #v > 0 and #v <= 40 and not string.find(v, "[^%w _%-]") then v else nil
+end
+
+
+-- A saved seed design (`sd`): a small whole number, or nil (the first design).
+local function designOf(v: any): number?
+	return if type(v) == "number" and v == math.floor(v) and v >= 1 and v <= 16 then v else nil
 end
 
 -- A saved weight variance (v9): Config.plantVariance's range, or nil.
@@ -260,11 +268,11 @@ end
 function ProfileStore.serialize(p: Profile): { [string]: any }
 	local plants = {}
 	for _, pl in p.plants do
-		table.insert(plants, { s = pl.slot, z = pl.zone, r = pl.rarity, m = pl.mutation, t = pl.plantedAt, px = pl.x, pz = pl.z, vr = pl.variant, va = pl.variance, pa = pl.palette, yw = pl.yaw, su = pl.sproutUntil })
+		table.insert(plants, { s = pl.slot, z = pl.zone, r = pl.rarity, m = pl.mutation, t = pl.plantedAt, px = pl.x, pz = pl.z, vr = pl.variant, va = pl.variance, pa = pl.palette, yw = pl.yaw, su = pl.sproutUntil, sd = pl.seedDesign })
 	end
 	local inventory = {}
 	for _, it in p.inventory do
-		table.insert(inventory, { i = it.id, z = it.zone, r = it.rarity, m = it.mutation, vr = it.variant, a = it.age, va = it.variance, pa = it.palette, yw = it.yaw, sp = it.sprout })
+		table.insert(inventory, { i = it.id, z = it.zone, r = it.rarity, m = it.mutation, vr = it.variant, a = it.age, va = it.variance, pa = it.palette, yw = it.yaw, sp = it.sprout, sd = it.seedDesign })
 	end
 	local index = {}
 	for key, v in p.index do
@@ -379,6 +387,7 @@ function ProfileStore.deserialize(data: any): Profile
 						palette = Palettes.byId(raw.pa) and raw.pa or nil, -- v13 (nil before, or junk: Natural)
 						yaw = Planting.normalizeYaw(raw.yw), -- v11 (nil before: facing the entrance)
 						sproutUntil = sproutUntil,
+						seedDesign = designOf(raw.sd),
 					})
 				end
 			end
@@ -406,6 +415,7 @@ function ProfileStore.deserialize(data: any): Profile
 						palette = Palettes.byId(raw.pa) and raw.pa or nil, -- v13
 						yaw = Planting.normalizeYaw(raw.yw),
 						sprout = if sprout > 0 then sprout else nil, -- v12
+						seedDesign = designOf(raw.sd),
 					})
 				end
 			end

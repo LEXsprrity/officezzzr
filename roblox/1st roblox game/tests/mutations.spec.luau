@@ -175,9 +175,8 @@ H.test("diamond: names, odds, the reel, the bud, Sell, the Index and the cards' 
 	local z, r, mut, gene = SeedPacks.parseBagKey(key)
 	H.ok(z == 4 and r == 2 and mut == "Diamond" and gene == 123, "a Diamond bag key round-trips")
 	H.ok(Selling.MAX_SEED_LABELS >= #Config.ZONES * #Config.RARITIES * 7, "room for every label")
-	-- the bud and the pod's colour
-	local bud = Seedling.build(2, 3, "Diamond"):FindFirstChild("Bud") :: any
-	H.eq(bud.Color, diamond.color, "the seedling's bud in Diamond's colour")
+	-- the seedling knows its mutation
+	H.eq(Seedling.build(2, 3, "Diamond"):GetAttribute("Mutation"), "Diamond", "the seedling is a Diamond one")
 	-- income and the stall
 	H.near(Config.plantIncome(1, 1, Config.sproutWeight(1, 1), "Diamond"), Config.plantIncome(1, 1, Config.sproutWeight(1, 1)) * 4, 1e-9)
 	local p = { slot = 1, zone = 3, rarity = 2, mutation = "Diamond", plantedAt = NOW - 600, x = 0, z = 0, variance = 1 }

@@ -89,7 +89,7 @@ co = bpy.data.objects.new('cam', cam); scene.collection.objects.link(co); scene.
 co.location = (0, 30, 17); co.rotation_euler = (math.radians(62), 0, math.radians(180))
 co.location.y += 1.7; so.rotation_euler = (math.radians(50), 0, math.radians(145))
 scene.render.engine = 'CYCLES'; scene.cycles.samples = 48; scene.cycles.device = 'CPU'
-scene.render.resolution_x = 2400; scene.render.resolution_y = 900
+scene.render.resolution_x = 3200; scene.render.resolution_y = 1200
 scene.view_settings.view_transform = 'Standard'
 scene.render.filepath = out
 bpy.ops.render.render(write_still=True)
