@@ -222,9 +222,9 @@ H.test("Shop window: wider than the other windows, still fits a phone (modalScal
 	H.ok(ShopLayout.CARD_W >= 330, "the three-a-row cards got roomier")
 end)
 
-H.test("Premium windows (owner 2026-10-22): a rounded navy frame and glossy rounded buttons; the cards inside stay square", function()
-	H.ok(string.find(WINDOW_KIT, "Premium.window(modal, TITLE_H)", 1, true) ~= nil, "the window frame: Premium.window")
-	for name, source in { Shop = SHOP, ["Trail Shop"] = TRAILS, Index = INDEX, Sell = SELL } do
+H.test("Windows like Steal an Egg's (owner 2026-10-23): a dark barely rounded frame, flat buttons; the Shop, Trail and Sell cards stay square", function()
+	H.ok(string.find(WINDOW_KIT, "modal.BackgroundColor3 = Premium.BODY", 1, true) ~= nil, "the window frame: the dark charcoal body")
+	for name, source in { Shop = SHOP, ["Trail Shop"] = TRAILS, Sell = SELL } do
 		H.ok(source ~= "", `{name}: its block`)
 		for line in string.gmatch(source, "[^\n]+") do
 			if string.find(line, "UICorner", 1, true) then
@@ -246,20 +246,12 @@ H.test("Shop window frame: flat green bar with three light bands, big relief tit
 	H.ok(string.find(HUD, "titleBar.BackgroundColor3 = window.bar", 1, true) ~= nil, "one flat colour per window")
 	-- one studs style for the bar and the body (owner: the body's studs must match the bar's), the bar's tinted per window
 	H.ok(not string.find(WINDOW_KIT, "ShopUi.studs(titleBar", 1, true), "a clean bar (no studs)")
-	H.ok(string.find(WINDOW_KIT, "Premium.window(modal, TITLE_H)", 1, true) ~= nil, "the premium body (faint studs under the bar)")
-	H.ok(string.find(HUD, "square.BackgroundColor3 = window.bar", 1, true) ~= nil, "the bar's square bottom takes the window's colour")
-	local bands = string.match(WINDOW_KIT, "for _, band in (%b{}) do")
-	local n = 0
-	for a in string.gmatch(bands or "", "{ ([%d%.]+), [%d%.]+ }") do
-		n += 1
-		H.ok(tonumber(a) >= 0.5, "on the bar's right half")
-	end
-	H.eq(n, 3, "three diagonal bands")
-	H.ok(string.find(WINDOW_KIT, "UiFx.relief(modalTitle, 4, 5)", 1, true) ~= nil, "the title in relief")
+	H.ok(string.find(WINDOW_KIT, "BackgroundTransparency = 1, BorderSizePixel = 0, ZIndex = 2, Parent = modal", 1, true) ~= nil, "a clear title strip")
+	H.ok(string.find(WINDOW_KIT, "Position = UDim2.fromOffset(14, -30)", 1, true) ~= nil, "the title floats over the top edge")
 	H.ok(string.find(HUD, "modalTitle.Text = window.title -- words only, in relief", 1, true) ~= nil, "words only")
-	H.ok(string.find(WINDOW_KIT, "Text = \"X\"", 1, true) and string.find(WINDOW_KIT, "Premium.button(modalClose, Premium.RED, 12)", 1, true), "a white X on a glossy red button")
+	H.ok(string.find(WINDOW_KIT, "Text = \"X\"", 1, true) and string.find(WINDOW_KIT, "Premium.button(modalClose, Premium.RED)", 1, true), "a white X on a red button on the corner")
 	H.ok(not string.find(WINDOW_KIT, "Icons.image(\"Close\")", 1, true), "no round Close icon in the X")
-	H.ok(string.find(fs.readFile("src/shared/Premium.luau"), "Premium.BODY = Color3.fromRGB(38, 46, 90)", 1, true) ~= nil, "the navy body (every window, Premium.window)")
+	H.ok(string.find(fs.readFile("src/shared/Premium.luau"), "Premium.BODY = Color3.fromRGB(34, 34, 40)", 1, true) ~= nil, "the dark charcoal body (every window)")
 	H.ok(not string.find(HUD, "moneySubtitle", 1, true) and not string.find(HUD, "Format.money(stats.money)}`, ICON.big", 1, true), "no money counter in a title bar")
 	local studs = block(fs.readFile("src/shared/ShopUi.luau"), "function ShopUi.studs(", "\nend")
 	H.ok(string.find(studs, "ScaleType = Enum.ScaleType.Tile", 1, true) and string.find(studs, "Icons.image(\"Studs\")", 1, true), "the tiled studs texture once uploaded")
@@ -589,8 +581,8 @@ H.test("HUD left column: wide Shop / Index buttons (icon left, word right in rel
 	local side = block(HUD, "local function sideButton(", "\nend\n")
 	H.ok(string.find(side, "Premium.button(b, color)", 1, true) ~= nil, "glossy, rounded, a darker lip (Premium.button)")
 	H.ok(string.find(side, "BackgroundColor3 = color", 1, true) ~= nil and not string.find(side, "UIGradient", 1, true), "a vivid colour (Premium shades it)")
-	H.ok(string.find(side, "AnchorPoint = Vector2.new(0, 0.5), Position = UDim2.new(0, 8, 0.5, -1)", 1, true) ~= nil, "the icon on the left")
-	H.ok(string.find(side, "UiFx.relief(bold(b, 4, { Text = label", 1, true) and string.find(side, "TextXAlignment = Enum.TextXAlignment.Left", 1, true), "the word on its right, in relief")
+	H.ok(string.find(side, "AnchorPoint = Vector2.new(0, 0.5), Position = UDim2.new(0, 7, 0.5, 0)", 1, true) ~= nil, "the icon on the left")
+	H.ok(string.find(side, "bold(b, 2, { Text = label", 1, true) and string.find(side, "TextXAlignment = Enum.TextXAlignment.Left", 1, true), "the word on its right, a thin outline")
 	H.ok(string.find(HUD, "sideButton(1, \"Shop\", \"Shop\", \"🛒\", Color3.fromRGB(95, 230, 45)", 1, true) ~= nil, "Shop bright green")
 	H.ok(string.find(HUD, "sideButton(2, \"Index\", \"Index\", \"📖\", Color3.fromRGB(35, 195, 255)", 1, true) ~= nil, "Index bright cyan")
 	-- the pop (UiFx.HOVER, about its centre, outline 4 included) stays in the column's gap and on screen
