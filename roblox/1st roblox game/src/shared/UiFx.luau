@@ -34,24 +34,40 @@ local BEVEL = Color3.fromRGB(185, 188, 205) -- multiplies the text colour at the
 -- A soft click on every UI button press (owner 2026-10-20: "a sound every time you click ... shop, index,
 -- ui stuff"): UiFx.pop and UiFx.watch hook each button once (attribute ClickSound), NoPop ones too. The
 -- sound is Config.SOUNDS.Click's.
-UiFx.CLICK_SOUND = "rbxasset://sounds/button.wav"
+UiFx.CLICK_SOUND = "rbxassetid://" .. 15675059323 -- Roblox_UI_Bright_Click
 UiFx.CLICK_VOLUME = 0.5
-local clickSound: Sound? = nil
-function UiFx.click()
-	local ok = pcall(function()
-		local sound = clickSound
+-- And a soft tick when the mouse moves onto a button (owner 2026-10-22: "Ui Hover"); Config.SOUNDS.Hover.
+UiFx.HOVER_SOUND = "rbxassetid://" .. 10066931761 -- RBLX UI Hover 01
+UiFx.HOVER_VOLUME = 0.3
+UiFx.HOVER_GAP = 0.06 -- seconds: sweeping over a row of buttons doesn't rattle
+
+local sounds: { [string]: Sound } = {}
+local function playUi(name: string, id: string, volume: number): boolean
+	return (pcall(function()
+		local sound = sounds[name]
 		if not sound then
 			local s = Instance.new("Sound")
-			s.Name = "UiClick"
-			s.SoundId = UiFx.CLICK_SOUND
-			s.Volume = UiFx.CLICK_VOLUME
+			s.Name = name
+			s.SoundId = id
+			s.Volume = volume
 			s.Parent = game:GetService("SoundService")
-			clickSound = s
+			sounds[name] = s
 			sound = s
 		end
 		game:GetService("SoundService"):PlayLocalSound(sound :: Sound)
-	end)
-	return ok
+	end))
+end
+function UiFx.click()
+	return playUi("UiClick", UiFx.CLICK_SOUND, UiFx.CLICK_VOLUME)
+end
+local lastHover = 0
+function UiFx.hover()
+	local now = os.clock()
+	if now - lastHover < UiFx.HOVER_GAP then
+		return false
+	end
+	lastHover = now
+	return playUi("UiHover", UiFx.HOVER_SOUND, UiFx.HOVER_VOLUME)
 end
 function UiFx.clicks(b: GuiButton)
 	if typeof(b) ~= "Instance" or b:GetAttribute("ClickSound") then -- (tests pop stand-in tables)
@@ -191,6 +207,7 @@ function UiFx.pop(b: GuiButton)
 	b.MouseEnter:Connect(function()
 		if not touching() then -- a tap sends MouseEnter but no MouseLeave
 			hovered = true
+			UiFx.hover()
 			update()
 		end
 	end)
@@ -231,6 +248,9 @@ end
 local worldBase: { [GuiObject]: UDim2 } = setmetatable({}, { __mode = "k" }) :: any
 local worldTween: { [GuiObject]: Tween } = setmetatable({}, { __mode = "k" }) :: any
 function UiFx.worldPop(g: GuiObject, how: "hover" | "rest" | "press")
+	if how == "hover" then
+		UiFx.hover()
+	end
 	local base = worldBase[g] or g.Size
 	worldBase[g] = base
 	local function sized(k: number): UDim2

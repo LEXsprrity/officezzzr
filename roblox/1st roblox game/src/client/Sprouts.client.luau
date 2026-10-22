@@ -143,7 +143,7 @@ LootEvent.OnClientEvent:Connect(function(kind: string, data: any)
 	attachment.WorldPosition = data.pos
 	attachment.Parent = workspace.Terrain
 	local sound = Instance.new("Sound")
-	sound.SoundId = Config.SOUNDS.Plant
+	sound.SoundId = Config.SOUNDS.Grown
 	sound.Parent = attachment
 	sound:Play()
 	local gui = ShopUi.new("BillboardGui", {

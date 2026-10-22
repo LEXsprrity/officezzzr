@@ -221,6 +221,7 @@ local function onUse(player: Player, itemId: any)
 			return
 		end
 		trailChanged(s)
+		Net.LootEvent:FireClient(player, "Equipped", { trail = string.sub(itemId, 7) }) -- (its sparkle sound: Effects.client)
 		Net.toast(player, `{msg} equipped: x{Sessions.speedMult(s)} Speed gain`, "blue", "Speed")
 	end
 end

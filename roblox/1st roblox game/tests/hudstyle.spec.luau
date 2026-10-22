@@ -571,9 +571,22 @@ H.test("ui: every button press clicks (owner 2026-10-20): pop and watch hook eac
 	UiFx.clicks(b) -- (a second call doesn't hook it twice)
 	H.eq(b:GetAttribute("ClickSound"), true)
 	H.eq(UiFx.CLICK_SOUND, H.shared("Config").SOUNDS.Click, "the game's click sound")
+	H.eq(UiFx.HOVER_SOUND, H.shared("Config").SOUNDS.Hover, "the game's hover sound")
 	local src = require("@lune/fs").readFile("src/shared/UiFx.luau")
 	H.ok(string.find(src, "function UiFx.pop(b: GuiButton)\n\tUiFx.clicks(b)", 1, true) ~= nil or string.find(src, "function UiFx.pop(b: GuiButton)\r\n\tUiFx.clicks(b)", 1, true) ~= nil,
 		"pop (and so watch) hooks it, NoPop buttons too")
+end)
+
+H.test("sounds: every event on the owner's list has its own sound (2026-10-22)", function()
+	local SOUNDS = H.shared("Config").SOUNDS
+	for _, key in { "Upgrade", "SpeedPop", "Plant", "Steal", "SafeZone", "Click", "Hover", "Sell", "Buy", "Equip" } do
+		H.ok(type(SOUNDS[key]) == "string" and string.find(SOUNDS[key], "^rbxassetid://%d+$") ~= nil, key)
+	end
+	local fx = require("@lune/fs").readFile("src/client/Effects.client.luau")
+	for _, needle in { "Pickup = \"Steal\"", "Planted = \"Plant\"", "SoldPlants = \"Sell\"", "Equipped = \"Equip\"", "\"Upgrade\"", "play(\"SpeedPop\"", "play(\"SafeZone\"" } do
+		H.ok(string.find(fx, needle, 1, true) ~= nil, needle)
+	end
+	H.ok(string.find(require("@lune/fs").readFile("src/server/ShopService.luau"), "\"Equipped\"", 1, true) ~= nil, "equipping a trail tells the client")
 end)
 
 return nil
