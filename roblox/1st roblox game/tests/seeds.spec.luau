@@ -530,7 +530,7 @@ H.test("2x Luck: the pickup says when the thief's luck raised the seed (the clie
 	H.eq(SeedService.luckRoll(77, 4242), SeedService.luckRoll(77, 4242))
 end)
 
--- The bought seeds each zone uses (tools/export_seeds.luau's list): "Apple Seed", ...
+-- The seed designs each zone uses (tools/export_seeds.luau's list): "Clover", "Sunpetal Seed", ...
 local function exportedTools(): { { string } }
 	local source = fs.readFile("tools/export_seeds.luau")
 	local zones = {}
@@ -544,7 +544,7 @@ local function exportedTools(): { { string } }
 	return zones
 end
 
-H.test("seed designs: every zone has 2 of the owner's seeds, with no scripts or glow, and no design is used by two zones", function()
+H.test("seed designs: every zone has 2 biome seeds, with no scripts or glow, and no design is used by two zones", function()
 	local Assets = H.server("Assets")
 	local tools = exportedTools()
 	H.eq(#tools, #Config.ZONES, "a pair for every zone")
@@ -592,6 +592,15 @@ H.test("seed designs: every zone has 2 of the owner's seeds, with no scripts or 
 	end
 	H.eq(n, 2 * #Config.ZONES, "14 different designs")
 	H.ok(fs.isFile("models/seeds/PlantsByLoxsy.rbxm"), "the bought file is kept in the repo")
+	-- owner 2026-10-22: only these three bought seeds stay, every other design is our own (tools/seed_designs)
+	local bought = {}
+	for name in usedBy do
+		if string.find(name, " Seed$") then
+			table.insert(bought, name)
+		end
+	end
+	table.sort(bought)
+	H.eq(table.concat(bought, ", "), "Amberpine Seed, Dawnfruit Seed, Sunpetal Seed")
 end)
 
 H.test("seed designs: the gene picks one of the zone's 2, whatever the rarity; the ball when a zone has none", function()
