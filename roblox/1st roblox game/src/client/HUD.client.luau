@@ -188,8 +188,8 @@ end
 ----------------------------------------------------------------------------------------------------
 local SPEED_PINK = Color3.fromRGB(255, 70, 150)
 local MONEY_GREEN = Color3.fromRGB(85, 240, 70)
-local LEFT_GAP = 8 -- between Shop, Index and Slow Mode
-local SIDE_W, SIDE_H = 132, 50 -- the Shop / Index buttons (small and wide, like Steal an Egg's: owner 2026-10-23)
+local LEFT_GAP = 18 -- between Shop, Index and Slow Mode
+local SIDE_W, SIDE_H = 176, 68 -- the Shop / Index buttons (wide, like the reference)
 -- The Halloween event (Shared/Halloween) adds a third side button, Candy, while it runs (from joining).
 local HALLOWEEN = Halloween.active(workspace:GetServerTimeNow())
 local SIDE_BUTTONS = if HALLOWEEN then 3 else 2
@@ -277,9 +277,9 @@ local leftColumn = new("Frame", {
 })
 local leftScale = new("UIScale", { Parent = leftColumn })
 
--- Small wide flat buttons like Steal an Egg's (owner 2026-10-23: "check steal a egg ui"): about 2.6:1, a
--- flat vivid colour (Premium.button: a thin dark outline, barely rounded), the icon on the left and the word
--- in white with a thin outline on its right.
+-- Wide vivid buttons (owner reference 2026-10-15): about 2.6:1, near-square corners, a thick dark outline,
+-- a flat colour, studded, with a lighter top (ShopUi.bevel; no dark bottom band), the icon on the left and the
+-- word in big white relief on its right.
 local function sideButton(order: number, label: string, icon: string, emoji: string, color: Color3, onClick: () -> ()): TextButton
 	-- The column lays out the holder; the button sits centred in it so its hover pop grows from the middle.
 	local holder = new("Frame", { Name = label, Size = UDim2.fromOffset(SIDE_W, SIDE_H), BackgroundTransparency = 1, LayoutOrder = order, Parent = leftColumn })
@@ -287,9 +287,9 @@ local function sideButton(order: number, label: string, icon: string, emoji: str
 		Name = "Button", AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.5), Size = UDim2.fromScale(1, 1),
 		BackgroundColor3 = color, Text = "", AutoButtonColor = true, Parent = holder,
 	})
-	Premium.button(b, color) -- flat, a thin dark outline (Shared/Premium)
-	iconLabel(b, icon, emoji, { Size = UDim2.fromOffset(36, 36), AnchorPoint = Vector2.new(0, 0.5), Position = UDim2.new(0, 7, 0.5, 0) })
-	bold(b, 2, { Text = label, Size = UDim2.new(1, -56, 0, 28), Position = UDim2.new(0, 48, 0.5, -14), TextXAlignment = Enum.TextXAlignment.Left })
+	Premium.button(b, color) -- glossy, rounded, a darker lip (Shared/Premium)
+	iconLabel(b, icon, emoji, { Size = UDim2.fromOffset(54, 54), AnchorPoint = Vector2.new(0, 0.5), Position = UDim2.new(0, 8, 0.5, -1) })
+	UiFx.relief(bold(b, 4, { Text = label, Size = UDim2.new(1, -78, 0, 42), Position = UDim2.new(0, 68, 0.5, -23), TextXAlignment = Enum.TextXAlignment.Left }), 3, 4)
 	b.Activated:Connect(onClick)
 	return b
 end
@@ -546,9 +546,11 @@ local rightTabs = new("Frame", {
 
 local sidePanel = new("Frame", {
 	AnchorPoint = Vector2.new(1, 0.5), Position = UDim2.new(1, -96, 0.45, 0), Size = UDim2.fromOffset(380, 440),
-	BackgroundColor3 = Premium.BODY, BackgroundTransparency = 0.04, Visible = false, Parent = gui,
-}, deco(8, 3)) -- dark like the windows (Steal an Egg's look, owner 2026-10-23)
-local sideTitle = text(sidePanel, { Text = "", Size = UDim2.new(1, -20, 0, 32), Position = UDim2.fromOffset(10, 10), TextColor3 = WHITE })
+	BackgroundColor3 = COLORS.panel, Visible = false, Parent = gui,
+}, deco(4, 4))
+ShopUi.studs(sidePanel, COLORS.panel) -- studded like every HUD element (under its title, tabs and list)
+local sideTitle = text(sidePanel, { Text = "", Size = UDim2.new(1, -20, 0, 36), Position = UDim2.fromOffset(10, 8), TextColor3 = INK })
+sideTitle:FindFirstChildOfClass("UIStroke"):Destroy()
 local sideList = new("ScrollingFrame", {
 	BackgroundTransparency = 1, Position = UDim2.fromOffset(10, 50), Size = UDim2.new(1, -20, 1, -60),
 	CanvasSize = UDim2.new(), AutomaticCanvasSize = Enum.AutomaticSize.Y, ScrollBarThickness = 6, BorderSizePixel = 0,
@@ -559,7 +561,8 @@ local sideTab: string? = nil -- "Plants" or "Inventory" (the Plants panel's tabs
 local renderSide: () -> ()
 
 local function card(order: number, color: Color3, height: number?): Frame
-	local f = new("Frame", { Size = UDim2.new(1, -8, 0, height or 54), BackgroundColor3 = color:Lerp(Premium.BODY, 0.75), LayoutOrder = order, Parent = sideList }, deco(6, 2))
+	local f = new("Frame", { Size = UDim2.new(1, -8, 0, height or 54), BackgroundColor3 = color, LayoutOrder = order, Parent = sideList }, deco(4, 2))
+	ShopUi.studs(f, color)
 	return f
 end
 
@@ -616,7 +619,7 @@ button(rightTabs, "🪴", Color3.fromRGB(110, 235, 80), UDim2.fromOffset(70, 70)
 	sidePanel.Visible = not sidePanel.Visible
 	sideTab = sideTab or "Plants"
 	renderSide()
-end, "Plants").Name = "PlantsToggle"
+end, "Plants")
 
 ----------------------------------------------------------------------------------------------------
 -- Modals: Shop, Trail Shop, Index and Sell share one window, like the reference (owner 2026-10-15, round
@@ -690,12 +693,7 @@ local modal = new("Frame", {
 	AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.5), Size = UDim2.fromOffset(MODAL_W, MODAL_H),
 	BackgroundColor3 = WINDOW_BODY, BorderSizePixel = 0, Active = true, Visible = false, ZIndex = 10, Parent = gui, -- sized per window (openModal)
 })
--- Steal an Egg's window (owner 2026-10-23): a dark charcoal body, barely rounded, a thin dark outline, no
--- studs; the title floats over its top-left edge and the red X sits on its top-right corner.
-modal.BackgroundColor3 = Premium.BODY
-modal.BackgroundTransparency = 0.04
-new("UICorner", { CornerRadius = UDim.new(0, 8), Parent = modal })
-new("UIStroke", { Thickness = 3, Color = Premium.INK, ApplyStrokeMode = Enum.ApplyStrokeMode.Border, Parent = modal })
+Premium.window(modal, TITLE_H) -- the premium navy body, rounded, faint studs under the title bar
 local modalScale = new("UIScale", { Parent = modal })
 
 -- The Candy window's body: the owner's Halloween picture (Icons.TEXTURES HalloweenBg), darkened so the card
@@ -705,28 +703,52 @@ local candyBackdrop = new("ImageLabel", {
 	ScaleType = Enum.ScaleType.Crop, Image = Icons.image("HalloweenBg") or "", ImageColor3 = Color3.fromRGB(150, 140, 175), Visible = false,
 	ZIndex = 1, Parent = modal,
 })
--- The title strip: clear (the body shows through); the window's colour is only its title's (openModal)
+-- Title bar: one flat colour (openModal), rounded like the window on top and square at the bottom (its
+-- "Square"), three light diagonal bands on its right half, a gloss
 local titleBar = new("Frame", {
-	Size = UDim2.new(1, 0, 0, TITLE_H), BackgroundTransparency = 1, BorderSizePixel = 0, ZIndex = 2, Parent = modal,
+	Size = UDim2.new(1, 0, 0, TITLE_H), BackgroundColor3 = WHITE, BorderSizePixel = 0, ClipsDescendants = true, ZIndex = 2, Parent = modal,
+}, { new("UICorner", { CornerRadius = UDim.new(0, Premium.RADIUS - 4) }) })
+new("Frame", { Name = "Square", Position = UDim2.fromScale(0, 0.5), Size = UDim2.fromScale(1, 0.5), BackgroundColor3 = WHITE, BorderSizePixel = 0, ZIndex = 2, Parent = titleBar })
+-- Diagonal bands: a square (so the gradient's 45° is a true 45°) seen through the bar, clipped to it
+local stripeKeys = { NumberSequenceKeypoint.new(0, 1) }
+for _, band in { { 0.6, 0.645 }, { 0.665, 0.68 }, { 0.705, 0.76 } } do
+	table.insert(stripeKeys, NumberSequenceKeypoint.new(band[1] - 0.001, 1))
+	table.insert(stripeKeys, NumberSequenceKeypoint.new(band[1], 0.7))
+	table.insert(stripeKeys, NumberSequenceKeypoint.new(band[2], 0.7))
+	table.insert(stripeKeys, NumberSequenceKeypoint.new(band[2] + 0.001, 1))
+end
+table.insert(stripeKeys, NumberSequenceKeypoint.new(1, 1))
+new("Frame", {
+	Name = "Bands", AnchorPoint = Vector2.new(0, 0.5), Position = UDim2.fromScale(0, 0.5), Size = UDim2.fromOffset(MODAL_W, MODAL_W), BackgroundColor3 = WHITE,
+	BorderSizePixel = 0, ZIndex = 2, Parent = titleBar,
+}, { new("UIGradient", { Rotation = 45, Transparency = NumberSequence.new(stripeKeys) }) })
+new("Frame", { Size = UDim2.fromScale(1, 1), BackgroundColor3 = WHITE, BorderSizePixel = 0, ZIndex = 2, Parent = titleBar }, {
+	new("UICorner", { CornerRadius = UDim.new(0, Premium.RADIUS - 4) }),
+	new("UIGradient", { Rotation = 90, Transparency = NumberSequence.new({
+		NumberSequenceKeypoint.new(0, 0.75), NumberSequenceKeypoint.new(0.45, 1), NumberSequenceKeypoint.new(0.8, 1), NumberSequenceKeypoint.new(1, 0.82),
+	}), Color = ColorSequence.new(WHITE, Color3.new(0, 0, 0)) }),
 })
+-- The dark line between the bar and the body
+new("Frame", { Position = UDim2.fromOffset(0, TITLE_H - 2), Size = UDim2.new(1, 0, 0, 4), BackgroundColor3 = FRAME_INK, BorderSizePixel = 0, ZIndex = 3, Parent = modal })
 
-local modalTitle = bold(titleBar, 3, {
-	Text = "", Size = UDim2.new(1, -460, 0, 56), Position = UDim2.fromOffset(14, -30), TextXAlignment = Enum.TextXAlignment.Left, ZIndex = 3,
+local modalTitle = bold(titleBar, 5, {
+	Text = "", Size = UDim2.new(1, -460, 0, 64), Position = UDim2.fromOffset(22, 8), TextXAlignment = Enum.TextXAlignment.Left, ZIndex = 3,
 })
+UiFx.relief(modalTitle, 4, 5)
 -- Right of the title: what the window counts (the Index's discoveries, the Trail Shop's Speed a step);
 -- no money (the HUD shows it)
-local modalSubtitle = bold(titleBar, 2, {
-	Text = "", AnchorPoint = Vector2.new(1, 0.5), Position = UDim2.new(1, -60, 0.5, 2), Size = UDim2.fromOffset(340, 28),
+local modalSubtitle = bold(titleBar, 3, {
+	Text = "", AnchorPoint = Vector2.new(1, 0.5), Position = UDim2.new(1, -94, 0.5, 0), Size = UDim2.fromOffset(340, 34),
 	TextXAlignment = Enum.TextXAlignment.Right, TextColor3 = WHITE, ZIndex = 3,
 })
 
--- The red X on the window's top-right corner
+-- The red X: a glossy red button (Premium.button), a white X in relief
 local modalClose = new("TextButton", {
-	AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.new(1, -8, 0, 8), Size = UDim2.fromOffset(54, 54), BorderSizePixel = 0,
-	Text = "", AutoButtonColor = true, ZIndex = 4, Parent = titleBar,
+	AnchorPoint = Vector2.new(1, 0.5), Position = UDim2.new(1, -12, 0.5, 0), Size = UDim2.fromOffset(62, 62), BorderSizePixel = 0,
+	Text = "", AutoButtonColor = true, ZIndex = 3, Parent = titleBar,
 })
-Premium.button(modalClose, Premium.RED)
-bold(modalClose, 3, { Name = "X", Text = "X", Size = UDim2.new(1, -16, 1, -14), Position = UDim2.fromOffset(8, 7), ZIndex = 4 })
+Premium.button(modalClose, Premium.RED, 12)
+UiFx.relief(bold(modalClose, 4, { Name = "X", Text = "X", Size = UDim2.new(1, -18, 1, -16), Position = UDim2.fromOffset(9, 6), ZIndex = 4 }), 3, 4)
 
 local bodyHolder = new("Frame", {
 	BackgroundTransparency = 1, Position = UDim2.fromOffset(MODAL_PAD, TITLE_H + 10), Size = UDim2.new(1, -2 * MODAL_PAD, 1, -TITLE_H - 10 - MODAL_PAD),
@@ -943,8 +965,7 @@ do
 	local VIEW = 62 -- the card's 3D picture, left of its words
 	local TEXT_X, TEXT_W = 22 + VIEW + 4, -(118 + VIEW + 4)
 	local SURE_SECONDS = 2
-	local GREEN_INK, MUTED_INK = Color3.fromRGB(95, 235, 105), Color3.fromRGB(170, 174, 190)
-	local CARD_DARK = Color3.fromRGB(48, 48, 57) -- the cards on the dark panel
+	local GREEN_INK, MUTED_INK = Color3.fromRGB(30, 160, 55), Color3.fromRGB(120, 124, 140)
 	local shown = "" -- which plants the list shows, in order
 	local updaters: { () -> () } = {}
 	local sure: { [number]: number } = {} -- slot -> when its Remove was first clicked
@@ -958,10 +979,11 @@ do
 		return nil
 	end
 
-	-- Light text with a thin outline, for the dark cards
+	-- Dark text with no outline, for the white cards
 	local function ink(parent: Instance, props: { [string]: any }): TextLabel
 		local label = text(parent, props)
-		label.TextColor3 = props.TextColor3 or WHITE
+		label:FindFirstChildOfClass("UIStroke"):Destroy()
+		label.TextColor3 = props.TextColor3 or INK
 		label.TextXAlignment = Enum.TextXAlignment.Left
 		return label
 	end
@@ -974,15 +996,16 @@ do
 		local f = new("Frame", { Name = "Plant_" .. p.slot, Size = UDim2.new(1, -8, 0, CARD_H + (if sprouting then 52 else 0)), BackgroundColor3 = WHITE, LayoutOrder = order, Parent = sideList }, {
 			new("UICorner", { CornerRadius = UDim.new(0, 4) }),
 			new("UIStroke", { Thickness = 2, Color = accent:Lerp(INK, 0.3), ApplyStrokeMode = Enum.ApplyStrokeMode.Border }),
-			new("UIGradient", { Rotation = 90, Color = ColorSequence.new(CARD_DARK:Lerp(accent, 0.12), CARD_DARK) }),
+			new("UIGradient", { Rotation = 90, Color = ColorSequence.new(WHITE, accent:Lerp(WHITE, 0.8)) }),
 		})
+		ShopUi.studs(f, accent) -- studded, under the strip, the 3D view and the words
 		new("Frame", { Size = UDim2.new(0, 8, 1, -14), Position = UDim2.fromOffset(7, 7), BackgroundColor3 = accent, BorderSizePixel = 0, Parent = f },
 			{ new("UICorner", { CornerRadius = UDim.new(1, 0) }) })
 		FlowerView.show(f, FlowerView.flower(p.zone, p.rarity, p.flower, p.mutation, p.palette), {
 			size = UDim2.fromOffset(VIEW, VIEW), position = UDim2.new(0, 20, 0, CARD_H / 2), anchor = Vector2.new(0, 0.5), spin = true,
 		})
 		ink(f, { Text = p.name or SeedPacks.seedName(p.zone, p.rarity, p.mutation), Size = UDim2.new(1, TEXT_W, 0, 24), Position = UDim2.fromOffset(TEXT_X, 7) })
-		local info = ink(f, { RichText = true, Size = UDim2.new(1, TEXT_W, 0, 16), Position = UDim2.fromOffset(TEXT_X, 31), TextColor3 = rarity.color })
+		local info = ink(f, { RichText = true, Size = UDim2.new(1, TEXT_W, 0, 16), Position = UDim2.fromOffset(TEXT_X, 31), TextColor3 = rarity.color:Lerp(INK, 0.45) })
 		local income = ink(f, { RichText = true, Size = UDim2.new(1, TEXT_W, 0, 16), Position = UDim2.fromOffset(TEXT_X, 48), TextColor3 = GREEN_INK })
 
 		local slot = p.slot
@@ -1063,8 +1086,9 @@ do
 		local f = new("Frame", { Name = "Item_" .. key, Size = UDim2.new(1, -8, 0, CARD_H), BackgroundColor3 = WHITE, LayoutOrder = order, Parent = sideList }, {
 			new("UICorner", { CornerRadius = UDim.new(0, 4) }),
 			new("UIStroke", { Thickness = 2, Color = accent:Lerp(INK, 0.3), ApplyStrokeMode = Enum.ApplyStrokeMode.Border }),
-			new("UIGradient", { Rotation = 90, Color = ColorSequence.new(CARD_DARK:Lerp(accent, 0.12), CARD_DARK) }),
+			new("UIGradient", { Rotation = 90, Color = ColorSequence.new(WHITE, accent:Lerp(WHITE, 0.8)) }),
 		})
+		ShopUi.studs(f, accent) -- studded, under the strip, the 3D view and the words
 		new("Frame", { Size = UDim2.new(0, 8, 1, -14), Position = UDim2.fromOffset(7, 7), BackgroundColor3 = accent, BorderSizePixel = 0, Parent = f },
 			{ new("UICorner", { CornerRadius = UDim.new(1, 0) }) })
 		FlowerView.show(f, look, { size = UDim2.fromOffset(VIEW, VIEW), position = UDim2.new(0, 20, 0.5, 0), anchor = Vector2.new(0, 0.5), spin = true })
@@ -1263,7 +1287,9 @@ openModal = function(name: string)
 	local w, h = ShopLayout.window(name) -- the Shop is wider
 	modal.Size = UDim2.fromOffset(w, h)
 	fitModal()
-	titleBar.BackgroundColor3 = window.bar -- (the strip is clear: kept for the window's colour)
+	titleBar.BackgroundColor3 = window.bar
+	local square = titleBar:FindFirstChild("Square") :: Frame
+	square.BackgroundColor3 = window.bar
 	modalTitle.Text = window.title -- words only, in relief
 	Icons.set(modalSubtitle, {}, "") -- the window's render may fill it
 	modal.Visible = true
@@ -2156,154 +2182,98 @@ do
 end
 
 ----------------------------------------------------------------------------------------------------
--- Index, like Steal an Egg's (owner 2026-10-23): one zone a page (the arrows turn them): the zone's banner on
--- the left, its flowers as bright tiles in a grid (the rarity's colour; a dark silhouette over "???" until
--- grown), a card on the right with the picked tile's flower, name, rarity and palettes, the zone's progress
--- over the grid and the whole Index's under it. The flowers come from the server (stats.catalog[zone][rarity],
--- the plant models' names); a rarity without plant models has one tile for the rarity itself. A found
--- flower's palettes (Shared/Palettes) light as studs in the card once grown in them (the Index key
--- "zone:rarity:Daisy:Azure"); the discovered count stays one per flower. The page and the pick are the
--- window's attributes IndexZone / IndexPick.
+-- Index: one row per zone in the zone's colour (its name), then a column per
+-- rarity listing that rarity's flowers: lit with the flower's name once you've grown it, "???" until then.
+-- The flowers come from the server (stats.catalog[zone][rarity], the plant models' names); a zone or
+-- rarity without plant models shows one cell for the rarity itself.
+-- Each cell shows its flower in 3D over its name (Shared/FlowerView): turning slowly once found, a black
+-- silhouette over "???" until then (the shape may show, the name and colours are the surprise). A found
+-- flower's corner holds a stud per palette (Shared/Palettes), lit in its colour once grown in it (the Index
+-- key "zone:rarity:Daisy:Azure"); the discovered count stays one per flower.
 ----------------------------------------------------------------------------------------------------
 local function renderIndex()
 	local FlowerView = require(Shared:WaitForChild("FlowerView"))
 	local Palettes = require(Shared:WaitForChild("Palettes"))
+	local PIP = 13 -- a palette stud
 	local catalog = stats.catalog or {}
-	-- Each tile: { key = the Index key that lights it, name = what it says once lit, model = its flower model, r = its rarity }
-	local function tilesOf(k: number): { { key: string, name: string, model: string?, r: number } }
+	-- Each cell: { key = the Index key that lights it, name = what it says once lit, model = its flower model }
+	local function cellsOf(k: number, r: number): { { key: string, name: string, model: string? } }
 		local out = {}
-		for r = 1, #Config.RARITIES do
-			local any = false
-			for _, model in (catalog[k] and catalog[k][r]) or {} do
-				any = true
-				table.insert(out, { key = `{k}:{r}:{model}`, name = Format.plantName(model), model = model, r = r })
-			end
-			if not any then
-				table.insert(out, { key = `{k}:{r}`, name = Config.RARITIES[r].id, model = nil, r = r })
-			end
+		for _, model in (catalog[k] and catalog[k][r]) or {} do
+			table.insert(out, { key = `{k}:{r}:{model}`, name = Format.plantName(model), model = model })
+		end
+		if #out == 0 then
+			table.insert(out, { key = `{k}:{r}`, name = Config.RARITIES[r].id, model = nil })
 		end
 		return out
 	end
 	local total, found = 0, 0
 	for k = 1, #Config.ZONES do
-		for _, t in tilesOf(k) do
-			total += 1
-			found += if stats.index[t.key] then 1 else 0
+		for r = 1, #Config.RARITIES do
+			for _, c in cellsOf(k, r) do
+				total += 1
+				found += if stats.index[c.key] then 1 else 0
+			end
 		end
 	end
 	modalSubtitle.TextColor3 = WHITE
-	Icons.set(modalSubtitle, {}, "") -- (the count is the bar under the page)
-	clearModal(0)
-
-	local k = math.clamp(tonumber(modal:GetAttribute("IndexZone")) or 1, 1, #Config.ZONES)
-	local zone = Config.ZONES[k]
-	local tiles = tilesOf(k)
-	local zoneFound = 0
-	local pick = tiles[1]
-	for _, t in tiles do
-		zoneFound += if stats.index[t.key] then 1 else 0
-		if t.key == modal:GetAttribute("IndexPick") then
-			pick = t
+	Icons.set(modalSubtitle, "Star", `✨ {found}/{total} discovered`, ICON.big, 30)
+	clearModal(10)
+	local rarities = #Config.RARITIES
+	local CELL_H, CELL_GAP, NAME_H = 104, 5, 24
+	for k, zone in Config.ZONES do
+		local tallest = 1
+		for r = 1, rarities do
+			tallest = math.max(tallest, #cellsOf(k, r))
+		end
+		local row = new("Frame", { Size = UDim2.new(1, -12, 0, 76 + tallest * (CELL_H + CELL_GAP)), LayoutOrder = k, Parent = modalBody }, {
+			new("UIStroke", { Thickness = 4, Color = FRAME_INK, ApplyStrokeMode = Enum.ApplyStrokeMode.Border }),
+		})
+		shade(row, zone.ui, 0.25, 0.3)
+		ShopUi.studs(row, zone.ui)
+		shine(row)
+		-- The zone's name only (owner 2026-10-16: no mutation words next to it)
+		bold(row, 3, { Text = zone.name, Size = UDim2.new(1, -20, 0, 32), Position = UDim2.fromOffset(12, 6), TextXAlignment = Enum.TextXAlignment.Left })
+		local columns = new("Frame", { BackgroundTransparency = 1, Position = UDim2.fromOffset(12, 42), Size = UDim2.new(1, -24, 1, -50), Parent = row },
+			{ new("UIListLayout", { FillDirection = Enum.FillDirection.Horizontal, Padding = UDim.new(0, 8), SortOrder = Enum.SortOrder.LayoutOrder }) })
+		for r, rarity in Config.RARITIES do
+			local column = new("Frame", {
+				BackgroundTransparency = 1, Size = UDim2.new(1 / rarities, -8 * (rarities - 1) / rarities, 1, 0), LayoutOrder = r, Parent = columns,
+			}, { new("UIListLayout", { Padding = UDim.new(0, CELL_GAP), SortOrder = Enum.SortOrder.LayoutOrder }) })
+			bold(column, 2, { Text = rarity.id, Size = UDim2.new(1, 0, 0, 20), TextColor3 = rarity.color:Lerp(WHITE, 0.35), LayoutOrder = 0 })
+			for i, c in cellsOf(k, r) do
+				local got = stats.index[c.key] == true
+				local cell = new("Frame", {
+					Size = UDim2.new(1, 0, 0, CELL_H), BackgroundColor3 = zone.ui:Lerp(WHITE, 0.5), LayoutOrder = i, Parent = column,
+				}, { outline(2) })
+				if got then
+					shade(cell, rarity.color, 0.3, 0.2)
+				end
+				ShopUi.studs(cell, if got then rarity.color else zone.ui)
+				FlowerView.show(cell, FlowerView.flower(k, r, c.model), {
+					size = UDim2.new(1, -8, 1, -(NAME_H + 8)), position = UDim2.fromOffset(4, 4), spin = got, silhouette = not got,
+				})
+				if got and c.model then
+					-- its palettes (Shared/Palettes) as little studs in the corner: lit in their colour once grown
+					local pips = new("Frame", {
+						Name = "Palettes", BackgroundTransparency = 1, Position = UDim2.fromOffset(6, 6),
+						Size = UDim2.fromOffset(#Palettes.LIST * (PIP + 3), PIP), ZIndex = 3, Parent = cell,
+					}, { new("UIListLayout", { FillDirection = Enum.FillDirection.Horizontal, Padding = UDim.new(0, 3), SortOrder = Enum.SortOrder.LayoutOrder }) })
+					for i, p in Palettes.LIST do
+						local lit = stats.index[`{c.key}:{p.id}`] == true
+						local pip = new("Frame", {
+							Name = p.id, Size = UDim2.fromOffset(PIP, PIP), LayoutOrder = i, BackgroundTransparency = if lit then 0 else 0.55, ZIndex = 3, Parent = pips,
+						}, { outline(2) })
+						shade(pip, if lit then p.swatch else FRAME_INK, 0.35, 0.2)
+					end
+				end
+				bold(cell, 2, {
+					Text = if got then c.name else "???", Size = UDim2.new(1, -8, 0, NAME_H), Position = UDim2.new(0, 4, 1, -(NAME_H + 4)),
+					TextColor3 = WHITE, TextTransparency = if got then 0 else 0.15,
+				})
+			end
 		end
 	end
-	local DARK = Color3.fromRGB(22, 22, 27)
-	local page = new("Frame", { Name = "IndexPage", BackgroundTransparency = 1, Size = UDim2.new(1, -8, 0, 520), Parent = modalBody })
-
-	-- A dark rounded bar `share` full (green), its words over it.
-	local function bar(parent: Instance, pos: UDim2, size: UDim2, share: number, words: string)
-		local b = new("Frame", { Position = pos, Size = size, BackgroundColor3 = DARK, Parent = parent }, {
-			new("UICorner", { CornerRadius = UDim.new(1, 0) }), outline(2, Premium.INK),
-		})
-		new("Frame", { Size = UDim2.fromScale(math.clamp(share, 0, 1), 1), BackgroundColor3 = Color3.fromRGB(60, 210, 80), Visible = share > 0, Parent = b }, {
-			new("UICorner", { CornerRadius = UDim.new(1, 0) }),
-		})
-		bold(b, 2, { Text = words, Size = UDim2.new(1, -20, 1, -8), Position = UDim2.fromOffset(10, 4), ZIndex = 2 })
-	end
-	local function turn(by: number)
-		modal:SetAttribute("IndexZone", (k - 1 + by) % #Config.ZONES + 1)
-		modal:SetAttribute("IndexPick", nil)
-		renderIndex()
-	end
-
-	-- the zone's progress over the grid, between the arrows
-	local GRID_X, GRID_W = 166, 444
-	chunky(page, "<", Color3.fromRGB(90, 92, 105), UDim2.fromOffset(42, 38), function()
-		turn(-1)
-	end).Position = UDim2.fromOffset(GRID_X, 0)
-	chunky(page, ">", Color3.fromRGB(90, 92, 105), UDim2.fromOffset(42, 38), function()
-		turn(1)
-	end).Position = UDim2.fromOffset(GRID_X + GRID_W - 42, 0)
-	bar(page, UDim2.fromOffset(GRID_X + 52, 2), UDim2.fromOffset(GRID_W - 104, 34), zoneFound / #tiles, `{zoneFound}/{#tiles}`)
-
-	-- the zone's banner: its colour, its name, its Legendary flower (a silhouette until grown)
-	local banner = new("Frame", { Name = "Banner", Size = UDim2.fromOffset(154, 392), Parent = page }, {
-		new("UICorner", { CornerRadius = UDim.new(0, 8) }), outline(3, Premium.INK),
-	})
-	shade(banner, zone.ui, 0.35, 0.25)
-	bold(banner, 3, { Text = zone.name, Size = UDim2.new(1, -16, 0, 44), Position = UDim2.fromOffset(8, 10), TextWrapped = true })
-	local top = tiles[#tiles]
-	FlowerView.show(banner, FlowerView.flower(k, top.r, top.model), {
-		size = UDim2.new(1, -12, 0, 220), position = UDim2.fromOffset(6, 120), spin = stats.index[top.key] == true, silhouette = not stats.index[top.key],
-	})
-
-	-- the tiles
-	local grid = new("ScrollingFrame", {
-		Name = "Tiles", Position = UDim2.fromOffset(GRID_X, 48), Size = UDim2.fromOffset(GRID_W + 10, 344), BackgroundColor3 = DARK,
-		BackgroundTransparency = 0.2, BorderSizePixel = 0, CanvasSize = UDim2.new(), AutomaticCanvasSize = Enum.AutomaticSize.Y,
-		ScrollBarThickness = 6, ScrollingDirection = Enum.ScrollingDirection.Y, Parent = page,
-	}, {
-		new("UICorner", { CornerRadius = UDim.new(0, 8) }),
-		new("UIGridLayout", { CellSize = UDim2.fromOffset(100, 100), CellPadding = UDim2.fromOffset(8, 8), SortOrder = Enum.SortOrder.LayoutOrder }),
-		new("UIPadding", { PaddingLeft = UDim.new(0, 8), PaddingTop = UDim.new(0, 8), PaddingBottom = UDim.new(0, 8) }),
-	})
-	for i, t in tiles do
-		local got = stats.index[t.key] == true
-		local color = Config.RARITIES[t.r].color
-		local tile = new("TextButton", {
-			Name = t.key, Text = "", AutoButtonColor = true, LayoutOrder = i, BackgroundColor3 = if got then color else color:Lerp(DARK, 0.55), Parent = grid,
-		}, {
-			new("UICorner", { CornerRadius = UDim.new(0, 6) }),
-			outline(if t == pick then 3 else 2, if t == pick then WHITE else Premium.INK),
-			new("UIGradient", { Rotation = 90, Color = ColorSequence.new(WHITE, Color3.fromRGB(190, 190, 190)) }),
-		})
-		FlowerView.show(tile, FlowerView.flower(k, t.r, t.model), {
-			size = UDim2.new(1, -10, 1, -26), position = UDim2.fromOffset(5, 20), spin = false, silhouette = not got,
-		})
-		bold(tile, 2, { Text = if got then t.name else "???", Size = UDim2.new(1, -8, 0, 18), Position = UDim2.fromOffset(4, 3), ZIndex = 2 })
-		tile.Activated:Connect(function()
-			modal:SetAttribute("IndexPick", t.key)
-			renderIndex()
-		end)
-	end
-
-	-- the picked flower's card
-	local pickGot = stats.index[pick.key] == true
-	local card = new("Frame", { Name = "Card", Position = UDim2.fromOffset(624, 0), Size = UDim2.new(1, -624, 0, 392), BackgroundColor3 = DARK, Parent = page }, {
-		new("UICorner", { CornerRadius = UDim.new(0, 8) }), outline(3, Color3.fromRGB(150, 152, 165)),
-	})
-	FlowerView.show(card, FlowerView.flower(k, pick.r, pick.model), {
-		size = UDim2.new(1, -20, 0, 190), position = UDim2.fromOffset(10, 10), spin = pickGot, silhouette = not pickGot,
-	})
-	bold(card, 2, { Text = if pickGot then pick.name else "???", Size = UDim2.new(1, -20, 0, 32), Position = UDim2.fromOffset(10, 210) })
-	bold(card, 2, { Text = Config.RARITIES[pick.r].id, Size = UDim2.new(1, -20, 0, 26), Position = UDim2.fromOffset(10, 246), TextColor3 = Config.RARITIES[pick.r].color })
-	if pick.model then
-		-- its palettes: a stud each, lit in its colour once grown in it
-		local pips = new("Frame", {
-			Name = "Palettes", BackgroundTransparency = 1, Position = UDim2.fromOffset(10, 290), Size = UDim2.new(1, -20, 0, 26), Parent = card,
-		}, { new("UIListLayout", { FillDirection = Enum.FillDirection.Horizontal, HorizontalAlignment = Enum.HorizontalAlignment.Center, Padding = UDim.new(0, 6), SortOrder = Enum.SortOrder.LayoutOrder }) })
-		for i, p in Palettes.LIST do
-			local lit = stats.index[`{pick.key}:{p.id}`] == true
-			new("Frame", {
-				Name = p.id, Size = UDim2.fromOffset(22, 22), LayoutOrder = i, BackgroundColor3 = if lit then p.swatch else Color3.fromRGB(60, 60, 68), Parent = pips,
-			}, { new("UICorner", { CornerRadius = UDim.new(1, 0) }), outline(2, Premium.INK) })
-		end
-		bold(card, 2, { Text = "Colours grown", Size = UDim2.new(1, -20, 0, 20), Position = UDim2.fromOffset(10, 322), TextColor3 = Color3.fromRGB(180, 182, 195) })
-	end
-
-	-- the whole Index's progress under it all
-	bold(page, 2, { Text = "Unlocked:", Size = UDim2.fromOffset(150, 26), Position = UDim2.fromOffset(60, 404), TextXAlignment = Enum.TextXAlignment.Left })
-	bigIcon(page, "Index", { Size = UDim2.fromOffset(52, 52), Position = UDim2.fromOffset(0, 428), ZIndex = 2 })
-	bar(page, UDim2.fromOffset(40, 436), UDim2.fromOffset(570, 40), found / total, `{found}/{total}`)
 end
 
 ----------------------------------------------------------------------------------------------------

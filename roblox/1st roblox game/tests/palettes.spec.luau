@@ -314,7 +314,7 @@ H.test("palettes: named before the flower, after the mutation (\"Night Azure Dua
 	local HUD = fs.readFile("src/client/HUD.client.luau")
 	local _, n = string.gsub(HUD, "FlowerView%.flower%(p%.zone, p%.rarity, p%.flower, p%.mutation, p%.palette%)", "")
 	H.eq(n, 3, "Plants, Inventory and Sell cards")
-	H.ok(string.find(HUD, "local lit = stats.index[`{pick.key}:{p.id}`] == true", 1, true) ~= nil, "the Index card's palette studs")
+	H.ok(string.find(HUD, "local lit = stats.index[`{c.key}:{p.id}`] == true", 1, true) ~= nil, "the Index cell's palette studs")
 	local plot = fs.readFile("src/server/PlotService.luau")
 	local _, sent = string.gsub(plot, "palette = Palettes%.shown%(plant%.palette, plant%.mutation%),", "")
 	H.eq(sent, 2, "the plants and the inventory tell the HUD their palette")

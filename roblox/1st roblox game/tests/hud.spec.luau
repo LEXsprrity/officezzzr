@@ -185,9 +185,9 @@ H.test("HUD Plants panel: a card per plant (flower name, rarity, $/s, day/night 
 	H.ok(not string.find(HUD, "R on a plant", 1, true), "no mention of the old R-key remove")
 end)
 
-H.test("HUD: a small gap between Shop, Index and Slow Mode (Steal an Egg's look, owner 2026-10-23)", function()
+H.test("HUD: more room between Shop, Index and Slow Mode", function()
 	local gap = tonumber(string.match(HUD, "local LEFT_GAP = (%d+)"))
-	H.ok(gap and gap >= 6 and gap <= 12, "a gap of 6 to 12 design pixels")
+	H.ok(gap and gap >= 16, "a gap of 16+ design pixels")
 	local column = string.match(HUD, "local leftColumn = new%(\"Frame\", %b{}, (%b{})")
 	H.ok(column and string.find(column, "Padding = UDim.new(0, LEFT_GAP)", 1, true), "the column's layout uses it")
 	H.ok(string.find(HUD, "LEFT_H = 176, SIDE_H * SIDE_BUTTONS + 30 * 2 + (SIDE_BUTTONS + 1) * LEFT_GAP", 1, true), "and the column's height counts it")
