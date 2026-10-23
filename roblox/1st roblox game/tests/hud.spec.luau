@@ -201,8 +201,8 @@ H.test("HUD Sell window: mutation only on mutated plants, no \"no mutation\", no
 	H.ok(block ~= "", "the Sell block")
 	H.ok(not string.find(block, "\"no mutation\"", 1, true), "nothing on a plant without a mutation")
 	H.ok(string.find(block, "if mut then\n\t\t\tbold(c, 2, { Text = mut.id", 1, true), "the mutation's name in its colour on a mutated one")
-	H.ok(string.find(block, "\"Quick sells keep mutated plants and seeds.\"", 1, true), "the short quick-sell note (Include mutated off)")
-	H.ok(string.find(block, "\"nothing to sell\"", 1, true) and string.find(block, "UiFx.relief(caption, 2, 2)", 1, true), "a greyed quick sell says why, in relief")
+	H.ok(not string.find(block, "Quick sells keep mutated", 1, true) and not string.find(block, "Plants sell for", 1, true), "no explaining notes (owner 2026-10-23: fewer words)")
+	H.ok(string.find(block, "else \"-\",", 1, true) and string.find(block, "UiFx.relief(caption, 2, 2)", 1, true), "a greyed quick sell shows a dash, in relief")
 	H.ok(string.find(block, "for _, group in SellPick.GROUPS do", 1, true), "a quick sell per rarity and Sell all (Shared/SellPick)")
 	H.ok(string.find(block, "SellPlants:FireServer(sale.slots, sale.ids, sale.seeds)", 1, true), "plants, inventory plants and seeds")
 	H.ok(string.find(block, "local body = rarity.color:Lerp(Color3.new(0, 0, 0), BODY_SHADE)", 1, true) and string.find(block, "ShopUi.studs(c, body)", 1, true),

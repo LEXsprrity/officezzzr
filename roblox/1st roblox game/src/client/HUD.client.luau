@@ -52,6 +52,7 @@ local COLORS = {
 	index = Color3.fromRGB(170, 100, 255),
 	slow = Color3.fromRGB(150, 150, 160),
 	panel = Color3.fromRGB(255, 250, 235),
+	panelDark = Color3.fromRGB(34, 34, 40), -- the Plants panel (owner 2026-10-23: dark, like Steal an Egg's pet panel)
 	red = Color3.fromRGB(240, 70, 70),
 	gold = Color3.fromRGB(255, 205, 50),
 	disabled = Color3.fromRGB(170, 170, 170),
@@ -127,7 +128,8 @@ UiFx.watch(gui) -- every button in the HUD (and the Rewards window in it) pops w
 local function rescale()
 	local cam = workspace.CurrentCamera
 	local y = if cam then cam.ViewportSize.Y else 900
-	uiScale.Scale = math.clamp(y / 900, 0.55, 1.25)
+	-- 0.72: the HUD about Steal an Egg's size (owner 2026-10-23: everything was too big); phones keep their floor
+	uiScale.Scale = math.clamp(y / 900 * 0.72, 0.55, 1)
 end
 
 ----------------------------------------------------------------------------------------------------
@@ -215,7 +217,7 @@ local function bold(parent: Instance, thickness: number, props: { [string]: any 
 	local label = text(parent, props)
 	local stroke = label:FindFirstChildOfClass("UIStroke")
 	if stroke then
-		stroke.Thickness = thickness
+		stroke.Thickness = math.max(1.5, thickness * UiFx.OUTLINE) -- toned down (owner 2026-10-23)
 	end
 	return label
 end
@@ -311,7 +313,7 @@ if HALLOWEEN then
 		openModal("Candy")
 	end)
 	local bubble = new("Frame", {
-		Name = "CandyCount", AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.new(1, -6, 0, 4), Size = UDim2.fromOffset(62, 34),
+		Name = "CandyCount", AnchorPoint = Vector2.new(0, 0.5), Position = UDim2.new(1, 6, 0.5, 0), Size = UDim2.fromOffset(52, 34), -- past the button's end, clear of its word
 		BackgroundColor3 = HALLOWEEN_PURPLE, ZIndex = 4, Parent = b,
 	}, deco(4, 3))
 	ShopUi.studs(bubble, HALLOWEEN_PURPLE)
@@ -387,7 +389,7 @@ local function fitLeftColumn()
 	local height = gui.AbsoluteSize.Y / uiScale.Scale
 	-- the readout first: left of the hotbar (centred, under 200 wide), never over it
 	local fit = statsFrame:FindFirstChild("Fit") :: UIScale
-	fit.Scale = math.clamp((gui.AbsoluteSize.X / uiScale.Scale / 2 - 110 - 14) / 470, 0.5, 1)
+	fit.Scale = math.clamp((gui.AbsoluteSize.X / uiScale.Scale / 2 - 110 - 14) / 470, 0.5, 0.7) -- at most 0.7: smaller (owner 2026-10-23)
 	-- from the middle of the screen down to the readout
 	local room = height / 2 - STATS_BOTTOM - STATS_H * fit.Scale - 10
 	leftScale.Scale = math.clamp(room / (LEFT_H / 2), 0.5, 1)
@@ -541,16 +543,15 @@ end)
 ----------------------------------------------------------------------------------------------------
 local rightTabs = new("Frame", {
 	BackgroundTransparency = 1, AnchorPoint = Vector2.new(1, 0.5), Position = UDim2.new(1, -14, 0.45, 0),
-	Size = UDim2.fromOffset(70, 150), Parent = gui,
+	Name = "RightTabs", Size = UDim2.fromOffset(70, 150), Parent = gui,
 }, { new("UIListLayout", { Padding = UDim.new(0, 8), VerticalAlignment = Enum.VerticalAlignment.Center }) })
 
 local sidePanel = new("Frame", {
 	AnchorPoint = Vector2.new(1, 0.5), Position = UDim2.new(1, -96, 0.45, 0), Size = UDim2.fromOffset(380, 440),
-	BackgroundColor3 = COLORS.panel, Visible = false, Parent = gui,
-}, deco(4, 4))
-ShopUi.studs(sidePanel, COLORS.panel) -- studded like every HUD element (under its title, tabs and list)
-local sideTitle = text(sidePanel, { Text = "", Size = UDim2.new(1, -20, 0, 36), Position = UDim2.fromOffset(10, 8), TextColor3 = INK })
-sideTitle:FindFirstChildOfClass("UIStroke"):Destroy()
+	BackgroundColor3 = COLORS.panelDark, BackgroundTransparency = 0.08, Visible = false, Parent = gui,
+}, deco(4, 4)) -- dark like Steal an Egg's pet panel (owner 2026-10-23)
+ShopUi.studs(sidePanel, COLORS.panelDark, 0.82) -- studded like every HUD element, faint on the dark (under its title, tabs and list)
+local sideTitle = text(sidePanel, { Text = "", Size = UDim2.new(1, -20, 0, 36), Position = UDim2.fromOffset(10, 8) })
 local sideList = new("ScrollingFrame", {
 	BackgroundTransparency = 1, Position = UDim2.fromOffset(10, 50), Size = UDim2.new(1, -20, 1, -60),
 	CanvasSize = UDim2.new(), AutomaticCanvasSize = Enum.AutomaticSize.Y, ScrollBarThickness = 6, BorderSizePixel = 0,
@@ -561,8 +562,8 @@ local sideTab: string? = nil -- "Plants" or "Inventory" (the Plants panel's tabs
 local renderSide: () -> ()
 
 local function card(order: number, color: Color3, height: number?): Frame
-	local f = new("Frame", { Size = UDim2.new(1, -8, 0, height or 54), BackgroundColor3 = color, LayoutOrder = order, Parent = sideList }, deco(4, 2))
-	ShopUi.studs(f, color)
+	local f = new("Frame", { Size = UDim2.new(1, -8, 0, height or 54), BackgroundColor3 = color:Lerp(COLORS.panelDark, 0.7), LayoutOrder = order, Parent = sideList }, deco(4, 2))
+	ShopUi.studs(f, f.BackgroundColor3, 0.82)
 	return f
 end
 
@@ -970,7 +971,8 @@ do
 	local VIEW = 62 -- the card's 3D picture, left of its words
 	local TEXT_X, TEXT_W = 22 + VIEW + 4, -(118 + VIEW + 4)
 	local SURE_SECONDS = 2
-	local GREEN_INK, MUTED_INK = Color3.fromRGB(30, 160, 55), Color3.fromRGB(120, 124, 140)
+	local GREEN_INK, MUTED_INK = Color3.fromRGB(95, 235, 105), Color3.fromRGB(175, 178, 195)
+	local CARD_DARK = Color3.fromRGB(52, 52, 62) -- the cards on the dark panel
 	local shown = "" -- which plants the list shows, in order
 	local updaters: { () -> () } = {}
 	local sure: { [number]: number } = {} -- slot -> when its Remove was first clicked
@@ -986,9 +988,9 @@ do
 
 	-- Dark text with no outline, for the white cards
 	local function ink(parent: Instance, props: { [string]: any }): TextLabel
-		local label = text(parent, props)
-		label:FindFirstChildOfClass("UIStroke"):Destroy()
-		label.TextColor3 = props.TextColor3 or INK
+		local label = text(parent, props) -- light words, a thin outline (the cards are dark)
+		label:FindFirstChildOfClass("UIStroke").Thickness = 1.5
+		label.TextColor3 = props.TextColor3 or WHITE
 		label.TextXAlignment = Enum.TextXAlignment.Left
 		return label
 	end
@@ -1001,16 +1003,16 @@ do
 		local f = new("Frame", { Name = "Plant_" .. p.slot, Size = UDim2.new(1, -8, 0, CARD_H + (if sprouting then 52 else 0)), BackgroundColor3 = WHITE, LayoutOrder = order, Parent = sideList }, {
 			new("UICorner", { CornerRadius = UDim.new(0, 4) }),
 			new("UIStroke", { Thickness = 2, Color = accent:Lerp(INK, 0.3), ApplyStrokeMode = Enum.ApplyStrokeMode.Border }),
-			new("UIGradient", { Rotation = 90, Color = ColorSequence.new(WHITE, accent:Lerp(WHITE, 0.8)) }),
+			new("UIGradient", { Rotation = 90, Color = ColorSequence.new(CARD_DARK:Lerp(accent, 0.15), CARD_DARK) }),
 		})
-		ShopUi.studs(f, accent) -- studded, under the strip, the 3D view and the words
+		ShopUi.studs(f, CARD_DARK, 0.82) -- studded, under the strip, the 3D view and the words
 		new("Frame", { Size = UDim2.new(0, 8, 1, -14), Position = UDim2.fromOffset(7, 7), BackgroundColor3 = accent, BorderSizePixel = 0, Parent = f },
 			{ new("UICorner", { CornerRadius = UDim.new(1, 0) }) })
 		FlowerView.show(f, FlowerView.flower(p.zone, p.rarity, p.flower, p.mutation, p.palette), {
 			size = UDim2.fromOffset(VIEW, VIEW), position = UDim2.new(0, 20, 0, CARD_H / 2), anchor = Vector2.new(0, 0.5), spin = true,
 		})
 		ink(f, { Text = p.name or SeedPacks.seedName(p.zone, p.rarity, p.mutation), Size = UDim2.new(1, TEXT_W, 0, 24), Position = UDim2.fromOffset(TEXT_X, 7) })
-		local info = ink(f, { RichText = true, Size = UDim2.new(1, TEXT_W, 0, 16), Position = UDim2.fromOffset(TEXT_X, 31), TextColor3 = rarity.color:Lerp(INK, 0.45) })
+		local info = ink(f, { RichText = true, Size = UDim2.new(1, TEXT_W, 0, 16), Position = UDim2.fromOffset(TEXT_X, 31), TextColor3 = rarity.color })
 		local income = ink(f, { RichText = true, Size = UDim2.new(1, TEXT_W, 0, 16), Position = UDim2.fromOffset(TEXT_X, 48), TextColor3 = GREEN_INK })
 
 		local slot = p.slot
@@ -1091,9 +1093,9 @@ do
 		local f = new("Frame", { Name = "Item_" .. key, Size = UDim2.new(1, -8, 0, CARD_H), BackgroundColor3 = WHITE, LayoutOrder = order, Parent = sideList }, {
 			new("UICorner", { CornerRadius = UDim.new(0, 4) }),
 			new("UIStroke", { Thickness = 2, Color = accent:Lerp(INK, 0.3), ApplyStrokeMode = Enum.ApplyStrokeMode.Border }),
-			new("UIGradient", { Rotation = 90, Color = ColorSequence.new(WHITE, accent:Lerp(WHITE, 0.8)) }),
+			new("UIGradient", { Rotation = 90, Color = ColorSequence.new(CARD_DARK:Lerp(accent, 0.15), CARD_DARK) }),
 		})
-		ShopUi.studs(f, accent) -- studded, under the strip, the 3D view and the words
+		ShopUi.studs(f, CARD_DARK, 0.82) -- studded, under the strip, the 3D view and the words
 		new("Frame", { Size = UDim2.new(0, 8, 1, -14), Position = UDim2.fromOffset(7, 7), BackgroundColor3 = accent, BorderSizePixel = 0, Parent = f },
 			{ new("UICorner", { CornerRadius = UDim.new(1, 0) }) })
 		FlowerView.show(f, look, { size = UDim2.fromOffset(VIEW, VIEW), position = UDim2.new(0, 20, 0.5, 0), anchor = Vector2.new(0, 0.5), spin = true })
@@ -1712,7 +1714,7 @@ do
 
 		-- Mutations and income, then the gift + R$ buttons straight on the art. Robux only: with id = 0 the
 		-- server answers "coming soon"; with a full bag it won't prompt.
-		bold(c, 2, { RichText = true, Text = mutationLine(pack), Size = UDim2.new(1, -36, 0, 22), Position = UDim2.fromOffset(18, bottom + 8), ZIndex = 3 })
+		bold(c, 2, { RichText = true, Text = mutationLine(pack), Size = UDim2.new(1, -36, 0, 22), Position = UDim2.fromOffset(18, bottom + 8), ZIndex = 3, Visible = false }) -- (fewer words: owner 2026-10-23)
 		local exclusive = Config.mutationById(pack.exclusive)
 		bold(c, 2, {
 			Text = `{Format.money(Config.seedIncome(pack.zone))}/s per Common sprout`
@@ -1989,7 +1991,7 @@ do
 		for _, offer in SeedPacks.offers() do
 			packCard(nextOrder(), offer, Config.SEED_BAG_MAX - bagCount)
 		end
-		note(`Seed bag {bagCount}/{Config.SEED_BAG_MAX}{if bagFull then " (full: plant some first!)" else ""} · plant them from the Inventory in the Plants panel`, nextOrder())
+		note(`Seed bag {bagCount}/{Config.SEED_BAG_MAX}{if bagFull then " (full!)" else ""}`, nextOrder())
 
 		-- Gamepasses (Robux): a wide card per pass (Shared/PassCards decides what's on them), "Owned" once the
 		-- server says so
@@ -2075,7 +2077,7 @@ do
 		cardSeed = 0
 		local bagCount = SeedPacks.bagCount(stats.seedBag or {})
 		hauntedCard(1, Config.SEED_BAG_MAX - bagCount)
-		note(`Seed bag {bagCount}/{Config.SEED_BAG_MAX}{if bagCount >= Config.SEED_BAG_MAX then " (full: plant some first!)" else ""} · plant them from the Inventory in the Plants panel`, 2)
+		note(`Seed bag {bagCount}/{Config.SEED_BAG_MAX}{if bagCount >= Config.SEED_BAG_MAX then " (full!)" else ""}`, 2)
 	end
 end
 
@@ -2462,7 +2464,7 @@ do
 		local label = b:FindFirstChild("Label") :: TextLabel
 		label.Size = UDim2.new(1, -12, 0, 34)
 		local caption = bold(b, 2, {
-			Text = if sale.count > 0 then `{sale.count} · {Format.money(sale.total)}` else "nothing to sell",
+			Text = if sale.count > 0 then `{sale.count} · {Format.money(sale.total)}` else "-",
 			Size = UDim2.new(1, -16, 0, 22), Position = UDim2.fromOffset(8, 42), TextColor3 = if sale.count > 0 then WHITE else NOTE_COLOR,
 		})
 		UiFx.relief(caption, 2, 2)
@@ -2479,7 +2481,6 @@ do
 			end
 			return a.key < b.key
 		end)
-		note(`Plants sell for {Config.SELL_STALL_SECONDS}x their $/s. Plants in your Inventory and seeds in your bag sell here too.`, 1)
 		if #list == 0 then
 			note("Nothing to sell yet: steal a seed and plant it on your dirt!", 2)
 			return
@@ -2504,8 +2505,8 @@ do
 			renderModal()
 		end)
 		local why = bold(toggleRow, 2, {
-			Text = if sellMutated then "Quick sells take mutated plants and seeds too." else "Quick sells keep mutated plants and seeds.",
-			Size = UDim2.fromOffset(420, 30), TextColor3 = NOTE_COLOR,
+			Text = "",
+			Size = UDim2.fromOffset(0, 30), TextColor3 = NOTE_COLOR, Visible = false, -- (fewer words: owner 2026-10-23)
 		})
 		why.TextXAlignment = Enum.TextXAlignment.Left
 
