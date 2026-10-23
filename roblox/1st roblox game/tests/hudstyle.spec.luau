@@ -306,7 +306,7 @@ end)
 ----------------------------------------------------------------------------------------------------
 -- Readout, VIP badge, pass Owned, plot sign, Robux
 ----------------------------------------------------------------------------------------------------
-H.test("readout: Speed and money in chunky italic, smaller again (owner 2026-10-22: 0.62), no VIP badge, the + clear of the digits, clear of the column and the hotbar", function()
+H.test("readout: Speed and money about 2x bigger in chunky italic, no VIP badge, the + clear of the digits, clear of the column and the hotbar", function()
 	local stats = block(HUD, "local statsFrame = new(\"Frame\", {", "plusBadge.Activated")
 	H.ok(string.find(stats, "Name = \"Stats\"", 1, true) and string.find(stats, "Size = UDim2.fromOffset(470, STATS_H)", 1, true), "a wider readout")
 	H.eq(tonumber(string.match(HUD, "local STATS_H, LEFT_H = (%d+),")), 176, "about twice as tall (was 100)")
@@ -324,9 +324,9 @@ H.test("readout: Speed and money in chunky italic, smaller again (owner 2026-10-
 	H.ok(42 - 22 >= 2 and 42 + 22 <= 94, "on the Speed row, clear of the money")
 	H.ok(not string.find(stats, "Position = UDim2.fromOffset(54, 50)", 1, true), "the old corner spot is gone")
 	H.ok(select(2, string.gsub(stats, "Enum.FontStyle.Italic", "")) == 2, "italic")
-	H.ok(string.find(stats, "UiFx.relief(speedValue, 6, 4)", 1, true) and string.find(stats, "UiFx.relief(moneyValue, 6, 4)", 1, true), "dark outlines, thinner (owner 2026-10-22)")
+	H.ok(string.find(stats, "UiFx.relief(speedValue, 6, 6)", 1, true) and string.find(stats, "UiFx.relief(moneyValue, 6, 6)", 1, true), "thick dark outlines")
 	local fit = block(HUD, "local function fitLeftColumn()", "\nend\n")
-	H.ok(string.find(fit, "fit.Scale = math.clamp((gui.AbsoluteSize.X / uiScale.Scale / 2 - 110 - 14) / 470, 0.4, 0.62)", 1, true) ~= nil,
+	H.ok(string.find(fit, "fit.Scale = math.clamp((gui.AbsoluteSize.X / uiScale.Scale / 2 - 110 - 14) / 470, 0.5, 1)", 1, true) ~= nil,
 		"shrinks on narrow screens so it never reaches the hotbar")
 	H.ok(string.find(fit, "height / 2 - STATS_BOTTOM - STATS_H * fit.Scale - 10", 1, true) ~= nil,
 		"the left column stops above the readout")

@@ -239,8 +239,8 @@ local moneyValue = bold(statsFrame, 6, {
 	Text = "$0", Size = UDim2.new(1, -100, 0, 80), Position = UDim2.fromOffset(98, 94), TextXAlignment = Enum.TextXAlignment.Left, TextColor3 = MONEY_GREEN,
 	FontFace = Font.new("rbxasset://fonts/families/Montserrat.json", Enum.FontWeight.Heavy, Enum.FontStyle.Italic),
 })
-UiFx.relief(speedValue, 6, 4) -- raised, not flat: a bevel and a dark outline
-UiFx.relief(moneyValue, 6, 4)
+UiFx.relief(speedValue, 6, 6) -- raised, not flat: a dropped dark copy behind, a bevel, a thick outline
+UiFx.relief(moneyValue, 6, 6)
 -- The Speed icon and its yellow "+" badge both open the Shop on the Speed section. The "+" sits just past the
 -- Speed number's right end (owner 2026-10-15: on the sneaker's corner it covered the digits), following it as
 -- the number grows; the number is 52 narrower than the money (1, -152) so the badge always fits beside it.
@@ -387,7 +387,7 @@ local function fitLeftColumn()
 	local height = gui.AbsoluteSize.Y / uiScale.Scale
 	-- the readout first: left of the hotbar (centred, under 200 wide), never over it
 	local fit = statsFrame:FindFirstChild("Fit") :: UIScale
-	fit.Scale = math.clamp((gui.AbsoluteSize.X / uiScale.Scale / 2 - 110 - 14) / 470, 0.4, 0.62) -- (0.62: owner 2026-10-22, smaller)
+	fit.Scale = math.clamp((gui.AbsoluteSize.X / uiScale.Scale / 2 - 110 - 14) / 470, 0.5, 1)
 	-- from the middle of the screen down to the readout
 	local room = height / 2 - STATS_BOTTOM - STATS_H * fit.Scale - 10
 	leftScale.Scale = math.clamp(room / (LEFT_H / 2), 0.5, 1)

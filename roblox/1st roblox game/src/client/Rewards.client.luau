@@ -122,44 +122,31 @@ local function setHint(text: string)
 	hint.Text = text
 end
 
--- The Speed bag as it was (owner 2026-10-22: keep it, not the rendered one), like the reference's sack of shoes: light rays, a blue sack with a tied neck, the Speed
--- icon on it and more Speed spilling out of the top.
+-- The Speed bag: the rendered picture (tools/blender/icon_speedbag.py, Icons.TEXTURES SpeedBag) on a blue
+-- glow with rays; until it is uploaded, a sack drawn from frames with the Speed icon on it.
 local art = new("Frame", {
 	BackgroundTransparency = 1, Position = UDim2.fromOffset(R.art.x, R.art.y), Size = UDim2.fromOffset(R.art.w, R.art.h), ZIndex = 2,
 	Parent = window,
 })
-for i = 0, 5 do
-	new("Frame", {
-		AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.48), Size = UDim2.fromOffset(300, 22), Rotation = i * 30,
-		BackgroundColor3 = WHITE, BackgroundTransparency = 0.88, BorderSizePixel = 0, ZIndex = 2, Parent = art,
-	}, { new("UIGradient", { Transparency = NumberSequence.new({
-		NumberSequenceKeypoint.new(0, 1), NumberSequenceKeypoint.new(0.5, 0), NumberSequenceKeypoint.new(1, 1),
-	}) }) })
-end
-for i, spill in { { x = 0.33, r = -25 }, { x = 0.5, r = 8 }, { x = 0.67, r = 30 } } do
-	iconLabel(art, "Speed", "⚡", {
-		AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(spill.x, if i == 2 then 0.14 else 0.2), Size = UDim2.fromOffset(70, 70), Rotation = spill.r, ZIndex = 3,
+Premium.glow(art, Color3.fromRGB(110, 200, 255), {
+	AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.5), Size = UDim2.fromOffset(R.art.h * 1.5, R.art.h * 1.5), ZIndex = 2,
+})
+local bagImage = Icons.image("SpeedBag")
+if bagImage then
+	new("ImageLabel", {
+		Name = "SpeedBag", BackgroundTransparency = 1, Image = bagImage, ScaleType = Enum.ScaleType.Fit, AnchorPoint = Vector2.new(0.5, 0.5),
+		Position = UDim2.fromScale(0.5, 0.5), Size = UDim2.fromOffset(R.art.h * 1.3, R.art.h * 1.3), ZIndex = 3, Parent = art,
 	})
+else
+	local sack = new("Frame", {
+		AnchorPoint = Vector2.new(0.5, 1), Position = UDim2.fromScale(0.5, 1), Size = UDim2.fromOffset(200, 150), BackgroundColor3 = WHITE, ZIndex = 4, Parent = art,
+	}, {
+		new("UICorner", { CornerRadius = UDim.new(0, 64) }),
+		new("UIStroke", { Thickness = 5, Color = INK }),
+		new("UIGradient", { Rotation = 90, Color = ColorSequence.new(Color3.fromRGB(110, 200, 255), Color3.fromRGB(25, 95, 220)) }),
+	})
+	iconLabel(sack, "Speed", "⚡", { AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.56), Size = UDim2.fromOffset(104, 104), ZIndex = 5 })
 end
-local sack = new("Frame", {
-	AnchorPoint = Vector2.new(0.5, 1), Position = UDim2.fromScale(0.5, 1), Size = UDim2.fromOffset(200, 150), BackgroundColor3 = WHITE, ZIndex = 4, Parent = art,
-}, {
-	new("UICorner", { CornerRadius = UDim.new(0, 64) }),
-	new("UIStroke", { Thickness = 5, Color = INK }),
-	new("UIGradient", { Rotation = 90, Color = ColorSequence.new(Color3.fromRGB(110, 200, 255), Color3.fromRGB(25, 95, 220)) }),
-})
-new("Frame", { -- the white swoosh across the sack
-	AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.62), Size = UDim2.new(1, -10, 0, 26), Rotation = -8,
-	BackgroundColor3 = WHITE, BackgroundTransparency = 0.35, BorderSizePixel = 0, ZIndex = 4, Parent = sack,
-}, { new("UICorner", { CornerRadius = UDim.new(1, 0) }) })
-iconLabel(sack, "Speed", "⚡", { AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.56), Size = UDim2.fromOffset(104, 104), ZIndex = 5 })
-new("Frame", { -- the tied neck
-	AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.new(0.5, 0, 1, -150), Size = UDim2.fromOffset(150, 30), BackgroundColor3 = Color3.fromRGB(30, 80, 190),
-	ZIndex = 5, Parent = art,
-}, {
-	new("UICorner", { CornerRadius = UDim.new(0, 14) }),
-	new("UIStroke", { Thickness = 4, Color = INK, ApplyStrokeMode = Enum.ApplyStrokeMode.Border }),
-})
 
 -- "~ LIMITED TIME! ~" in red, "25,000 SPEED!" in cyan to green, both in relief
 local limited = bold(window, 5, {
