@@ -26,14 +26,11 @@ local function block(source: string, from: string, to: string): string
 end
 
 -- Runs fn with Config.ICONS.Studs = id, then puts it back.
--- (the studs are off since 2026-10-23, the owner's Steal an Egg look; these tests switch them on to check the helper)
 local function withStuds(id: number, fn: () -> ())
-	local saved, on = Config.ICONS.Studs, ShopUi.STUDS_ON
+	local saved = Config.ICONS.Studs
 	Config.ICONS.Studs = id
-	ShopUi.STUDS_ON = true
 	local ok, err = pcall(fn)
 	Config.ICONS.Studs = saved
-	ShopUi.STUDS_ON = on
 	if not ok then
 		error(err, 0)
 	end
@@ -103,34 +100,37 @@ H.test("studs: the uploaded Studs texture, tiled at one size everywhere, tinted 
 	end
 end)
 
-H.test("studs: on every HUD surface (Plants panel, readout, windows, cards, timer, banner, VIP, toasts); buttons glossy instead", function()
+H.test("studs: on every HUD element (left column, Plants panel, readout, windows, cards, timer, banner, VIP, toasts)", function()
 	local function has(source: string, from: string, to: string, needle: string, what: string)
 		local b = block(source, from, to)
 		H.ok(b ~= "", `{what}: its block`)
 		H.ok(string.find(b, needle, 1, true) ~= nil, `{what}: {needle}`)
 	end
 	-- the left column and the Speed readout's "+"
-	has(HUD, "local function sideButton(", "\nend\n", "Premium.button(b, color)", "Shop / Index buttons (glossy, owner 2026-10-22)")
+	has(HUD, "local function sideButton(", "\nend\n", "ShopUi.studs(b, color)", "Shop / Index buttons")
 	H.ok(string.find(HUD, "ShopUi.studs(track, nil)", 1, true) ~= nil, "Slow Mode switch")
 	H.ok(string.find(HUD, "ShopUi.studs(plusBadge,", 1, true) ~= nil, "the Speed's + badge")
 	-- the Plants panel: its side button (button()), the panel, its tabs (chunky), its cards
-	has(HUD, "local function button(", "\nend\n", "Premium.button(b, color)", "the Plants side button")
-	H.ok(string.find(HUD, "BackgroundColor3 = Premium.BODY, BackgroundTransparency = 0.04, Visible = false, Parent = gui,", 1, true) ~= nil, "the Plants panel: dark like the windows")
-	H.eq(ShopUi.STUDS_ON, false, "the studs are off (owner 2026-10-23: Steal an Egg's plain look)")
-	has(HUD, "local function chunky(", "\nend\n", "Premium.button(b, color)", "chunky buttons (tabs, Remove, Plant, Sell, Equip)")
+	has(HUD, "local function button(", "\nend\n", "ShopUi.studs(b, color)", "the Plants side button")
+	H.ok(string.find(HUD, "ShopUi.studs(sidePanel, COLORS.panel)", 1, true) ~= nil, "the Plants panel")
+	has(HUD, "local function chunky(", "\nend\n", "ShopUi.studs(b, nil)", "chunky buttons (tabs, Remove, Plant, Sell, Equip)")
+	has(HUD, "local function card(", "\nend\n", "ShopUi.studs(f, color)", "the Plants list's cards")
+	has(HUD, "local function plantCard(", "\n\tend\n", "ShopUi.studs(f, accent)", "plant cards")
+	has(HUD, "local function itemCard(", "\n\tend\n", "ShopUi.studs(f, accent)", "Inventory cards")
 	-- the windows: frame, Shop cards (packs, passes, banners, Speed / Money / upgrades), Trail, Index, Sell, reveal
 	has(HUD, "local function cardFrame(", "\n\tend\n", "ShopUi.studs(c, if rainbow then nil else color, nil, 1)", "every Shop card")
 	H.ok(string.find(HUD, "studLayer.ZIndex = 2 -- the studs over the picture too", 1, true) ~= nil, "pack cards with a picture")
 	has(HUD, "local function trailCard(", "\n\tend\n", "ShopUi.studs(c, if t.rainbow then nil else t.color)", "Trail cards")
-	-- (the Index is Steal an Egg's now: flat tiles, no studs: owner 2026-10-23)
+	has(HUD, "local function renderIndex()", "\nend\n", "ShopUi.studs(row, zone.ui)", "Index rows")
+	has(HUD, "local function renderIndex()", "\nend\n", "ShopUi.studs(cell, if got then rarity.color else zone.ui)", "Index cells")
 	has(HUD, "local function cardBase(", "\n\tend\n", "ShopUi.studs(c, body)", "Sell cards (their rarity's colour)")
 	has(HUD, "local function cardBase(", "\n\tend\n", "ShopUi.studs(band, rarity.color)", "Sell cards' bands")
 	H.ok(string.find(HUD, "ShopUi.studs(panel, Color3.fromRGB(75, 40, 140), nil, 1)", 1, true) ~= nil, "the pack reveal's panel")
 	H.ok(string.find(HUD, "ShopUi.studs(f, r.color, nil, 3)", 1, true) ~= nil, "the reveal's seed cards")
-	-- the Free Gift window: the premium body (its faint studs), glossy title bar and buttons
-	H.ok(string.find(REWARDS, "Premium.window(window, TITLE_H)", 1, true) and string.find(REWARDS, "Premium.titleBar(window, TITLE_H,", 1, true),
+	-- the Free Gift window: body and title bar in the same studs, its buttons too
+	H.ok(string.find(REWARDS, "ShopUi.studs(studs, BODY_COLOR, nil, 1)", 1, true) and string.find(REWARDS, "ShopUi.studs(titleBar, CYAN_TO, nil, 2)", 1, true),
 		"Free Gift body and title bar")
-	H.ok(string.find(REWARDS, "Premium.button(b, color)", 1, true) ~= nil, "Free Gift buttons")
+	H.ok(string.find(REWARDS, "ShopUi.studs(b, nil, nil, 3)", 1, true) ~= nil, "Free Gift buttons")
 	H.ok(not string.find(REWARDS, "BackgroundTransparency = 0.955", 1, true), "its own drawn studs are gone")
 	-- the day/night timer, the zone banner, the VIP badge, the toasts
 	H.ok(string.find(read("src/client/DayTimer.client.luau"), "ShopUi.studs(strip,", 1, true) ~= nil, "day/night timer strip")
@@ -205,7 +205,6 @@ H.test("toasts: one announcement look (studded plate, bevel, icon, chunky relief
 	end
 	local ok, err = pcall(function()
 		local Toast = H.shared("Toast")
-		ShopUi.STUDS_ON = true -- (off in the game since 2026-10-23; this checks the plate with them)
 		local savedIds = table.clone(Config.ICONS)
 		Config.ICONS.Lock, Config.ICONS.Star, Config.ICONS.Studs = 11, 22, 33
 		local holder = roblox.Instance.new("Frame")
@@ -257,7 +256,6 @@ H.test("toasts: one announcement look (studded plate, bevel, icon, chunky relief
 		end
 	end)
 	UiFx.relief = relief
-	ShopUi.STUDS_ON = false
 	for k, v in saved do
 		H.services[k] = v
 	end
@@ -308,7 +306,7 @@ end)
 ----------------------------------------------------------------------------------------------------
 -- Readout, VIP badge, pass Owned, plot sign, Robux
 ----------------------------------------------------------------------------------------------------
-H.test("readout: Speed and money in chunky italic, smaller again (owner 2026-10-22: 0.62), no VIP badge, the + clear of the digits, clear of the column and the hotbar", function()
+H.test("readout: Speed and money about 2x bigger in chunky italic, no VIP badge, the + clear of the digits, clear of the column and the hotbar", function()
 	local stats = block(HUD, "local statsFrame = new(\"Frame\", {", "plusBadge.Activated")
 	H.ok(string.find(stats, "Name = \"Stats\"", 1, true) and string.find(stats, "Size = UDim2.fromOffset(470, STATS_H)", 1, true), "a wider readout")
 	H.eq(tonumber(string.match(HUD, "local STATS_H, LEFT_H = (%d+),")), 176, "about twice as tall (was 100)")
@@ -326,9 +324,9 @@ H.test("readout: Speed and money in chunky italic, smaller again (owner 2026-10-
 	H.ok(42 - 22 >= 2 and 42 + 22 <= 94, "on the Speed row, clear of the money")
 	H.ok(not string.find(stats, "Position = UDim2.fromOffset(54, 50)", 1, true), "the old corner spot is gone")
 	H.ok(select(2, string.gsub(stats, "Enum.FontStyle.Italic", "")) == 2, "italic")
-	H.ok(string.find(stats, "UiFx.relief(speedValue, 6, 4)", 1, true) and string.find(stats, "UiFx.relief(moneyValue, 6, 4)", 1, true), "dark outlines, thinner (owner 2026-10-22)")
+	H.ok(string.find(stats, "UiFx.relief(speedValue, 6, 6)", 1, true) and string.find(stats, "UiFx.relief(moneyValue, 6, 6)", 1, true), "thick dark outlines")
 	local fit = block(HUD, "local function fitLeftColumn()", "\nend\n")
-	H.ok(string.find(fit, "fit.Scale = math.clamp((gui.AbsoluteSize.X / uiScale.Scale / 2 - 110 - 14) / 470, 0.4, 0.62)", 1, true) ~= nil,
+	H.ok(string.find(fit, "fit.Scale = math.clamp((gui.AbsoluteSize.X / uiScale.Scale / 2 - 110 - 14) / 470, 0.5, 1)", 1, true) ~= nil,
 		"shrinks on narrow screens so it never reaches the hotbar")
 	H.ok(string.find(fit, "height / 2 - STATS_BOTTOM - STATS_H * fit.Scale - 10", 1, true) ~= nil,
 		"the left column stops above the readout")

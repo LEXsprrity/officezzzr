@@ -16,10 +16,9 @@ ShopLayout.HOVER = 1.1 -- UiFx.HOVER: what a button pops to when nothing limits 
 -- The window (HUD modal): design pixels.
 ShopLayout.PAD = 14 -- the body's inset from the window's edges
 ShopLayout.SCROLLBAR = 14
-ShopLayout.TITLE_H = 40 -- the title floats over the window's top edge (Steal an Egg's look)
+ShopLayout.TITLE_H = 84
 local WINDOWS = {
 	Shop = { w = 1120, h = 640 },
-	Index = { w = 860, h = 560 }, -- one zone a page (Steal an Egg's look)
 	Candy = { w = 1120, h = 580 }, -- the Haunted seed's card (as wide as a pack's) and a line
 }
 ShopLayout.DEFAULT_W, ShopLayout.DEFAULT_H = 860, 600

@@ -11,7 +11,7 @@
 --     another one (the Shop's R$ button next to its gift button) pops less, so it never grows over it.
 --   * UiFx.click / UiFx.clicks(button): a soft click sound on every button press (pop and watch hook it).
 --   * UiFx.relief(label): text with relief instead of flat 2D: a bevel gradient (lighter top, darker
---     bottom) and a thick round dark outline (no dropped shadow copy: owner 2026-10-22).
+--     bottom), a thick round dark outline and a dark copy dropped behind it, like a raised sticker.
 local RunService = game:GetService("RunService")
 local TweenService = game:GetService("TweenService")
 local UserInputService = game:GetService("UserInputService")
@@ -295,10 +295,11 @@ function UiFx.watch(root: Instance)
 	end)
 end
 
--- Relief for `label`: a thick round dark outline and a bevel (lighter top, darker bottom). No dropped dark
--- copy behind it any more (owner 2026-10-22: "I don't like the shadows ... the black around the letters looks
--- bugged"). `depth` is kept for the callers but unused. Returns the label.
+-- Relief for `label` (free-positioned, not in a layout): returns the shadow copy, which follows the
+-- label's text, visibility and placement. `depth`: how far the shadow drops, in pixels (default 3).
+local MIRRORED = { "Text", "Visible", "TextTransparency", "Size", "AnchorPoint", "TextXAlignment", "TextYAlignment", "Rotation" }
 function UiFx.relief(label: TextLabel, depth: number?, outline: number?): TextLabel
+	local d = depth or 3
 	local stroke = label:FindFirstChildWhichIsA("UIStroke")
 	if not stroke then
 		stroke = Instance.new("UIStroke")
@@ -308,6 +309,36 @@ function UiFx.relief(label: TextLabel, depth: number?, outline: number?): TextLa
 	assert(stroke)
 	stroke.Thickness = outline or math.max(stroke.Thickness, 3)
 	stroke.LineJoinMode = Enum.LineJoinMode.Round
+
+	local shadow = label:Clone()
+	shadow.Name = label.Name .. "Shadow"
+	for _, c in shadow:GetChildren() do
+		if not c:IsA("UIStroke") then
+			c:Destroy()
+		end
+	end
+	shadow.TextColor3 = SHADOW
+	local shadowStroke = shadow:FindFirstChildWhichIsA("UIStroke")
+	if shadowStroke then
+		shadowStroke.Color = SHADOW
+	end
+	local offset = UDim2.fromOffset(math.ceil(d / 3), d)
+	shadow.Position = label.Position + offset
+	shadow.ZIndex = label.ZIndex
+	label.ZIndex += 1 -- in front of its shadow
+	shadow.Parent = label.Parent
+
+	for _, prop in MIRRORED do
+		label:GetPropertyChangedSignal(prop):Connect(function()
+			(shadow :: any)[prop] = (label :: any)[prop]
+		end)
+	end
+	label:GetPropertyChangedSignal("Position"):Connect(function()
+		shadow.Position = label.Position + offset
+	end)
+	label.Destroying:Connect(function()
+		shadow:Destroy()
+	end)
 
 	-- the bevel: full colour on top, a shade darker at the bottom
 	local bevel = Instance.new("UIGradient")
@@ -319,7 +350,7 @@ function UiFx.relief(label: TextLabel, depth: number?, outline: number?): TextLa
 		ColorSequenceKeypoint.new(1, BEVEL),
 	})
 	bevel.Parent = label
-	return label
+	return shadow
 end
 
 return UiFx

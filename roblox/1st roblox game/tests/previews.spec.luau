@@ -189,10 +189,10 @@ H.test("HUD: the Index, Plants, Inventory and Sell cards show the flowers in 3D 
 	local b = string.find(HUD, "-- SELL window", 1, true)
 	local index = a and b and string.sub(HUD, a, b) or ""
 	H.ok(string.find(index, "local FlowerView = require(Shared:WaitForChild(\"FlowerView\"))", 1, true), "the Index uses FlowerView")
-	H.ok(string.find(index, "table.insert(out, { key = `{k}:{r}:{model}`, name = Format.plantName(model), model = model, r = r })", 1, true), "each tile knows its model")
-	H.ok(string.find(index, "FlowerView.show(tile, FlowerView.flower(k, t.r, t.model), {", 1, true), "the tile's own flower")
-	H.ok(string.find(index, "silhouette = not got", 1, true) and string.find(index, "spin = pickGot, silhouette = not pickGot", 1, true), "a silhouette until found; the picked one turns once found")
-	H.ok(string.find(index, "Text = if got then t.name else \"???\"", 1, true), "names stay a surprise")
+	H.ok(string.find(index, "table.insert(out, { key = `{k}:{r}:{model}`, name = Format.plantName(model), model = model })", 1, true), "each cell knows its model")
+	H.ok(string.find(index, "FlowerView.show(cell, FlowerView.flower(k, r, c.model), {", 1, true), "the cell's own flower")
+	H.ok(string.find(index, "spin = got, silhouette = not got", 1, true), "turning once found, a silhouette until then")
+	H.ok(string.find(index, "Text = if got then c.name else \"???\"", 1, true), "names stay a surprise")
 	-- The Plants panel: plants and removed plants their own flower, bag seeds their seed design
 	a = string.find(HUD, "-- Plants panel (right side)", 1, true)
 	b = string.find(HUD, "-- Trail Shop strip scrolling", 1, true)
