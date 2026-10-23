@@ -41,8 +41,6 @@ Icons.TEXTURES = {
 	Studs = true,
 	PackSpaceBg = true, -- Starpetal Pack: a deep-space landscape, a ringed planet (owner's starpetal.jpg)
 	PackSpiritBg = true, -- Lotus Wyrm Pack: cherry blossoms, Mt Fuji, a temple (owner's sakura.jpg)
-	SpeedBag = true, -- the Free Gift's Speed bag (tools/blender/icon_speedbag.py)
-	GlowRays = true, -- the glow with rays behind a picture (tools/textures/make_glow.mjs; Shared/Premium.glow)
 	HalloweenBg = true, -- the Candy window and its Haunted seed card: a haunted forest, a jack-o'-lantern (owner's "halloween background.png")
 } :: { [string]: boolean }
 

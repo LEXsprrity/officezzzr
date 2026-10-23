@@ -137,9 +137,7 @@ H.test("Free Gift: Rewards.client places everything from GiftLayout; no flat dar
 		"Position = UDim2.fromOffset(R.amount.x, R.amount.y)",
 		"local r = R[\"step\" .. i]",
 		"UDim2.fromOffset(R.claim.w, R.claim.h), UDim2.fromOffset(R.claim.x, R.claim.y)",
-		"chunky(like, \"Like\"",
-		"Premium.window(window, TITLE_H)",
-		"Premium.card(f)",
+		"UiFx.relief(bold(like, 3, {",
 	} do
 		H.ok(string.find(REWARDS, needle, 1, true) ~= nil, needle)
 	end
@@ -222,9 +220,8 @@ H.test("Shop window: wider than the other windows, still fits a phone (modalScal
 	H.ok(ShopLayout.CARD_W >= 330, "the three-a-row cards got roomier")
 end)
 
-H.test("Premium windows (owner 2026-10-22): a rounded navy frame and glossy rounded buttons; the cards inside stay square", function()
-	H.ok(string.find(WINDOW_KIT, "Premium.window(modal, TITLE_H)", 1, true) ~= nil, "the window frame: Premium.window")
-	for name, source in { Shop = SHOP, ["Trail Shop"] = TRAILS, Index = INDEX, Sell = SELL } do
+H.test("Shop windows are square: no rounded corners in the window frame, the Shop, Trail Shop, Index and Sell", function()
+	for name, source in { ["window frame"] = WINDOW_KIT, Shop = SHOP, ["Trail Shop"] = TRAILS, Index = INDEX, Sell = SELL } do
 		H.ok(source ~= "", `{name}: its block`)
 		for line in string.gmatch(source, "[^\n]+") do
 			if string.find(line, "UICorner", 1, true) then
@@ -237,17 +234,17 @@ H.test("Premium windows (owner 2026-10-22): a rounded navy frame and glossy roun
 	H.ok(not string.find(SHOP_UI, "new(\"UICorner\"", 1, true) and not string.find(SHOP_UI, "Instance.new(\"UICorner\")", 1, true),
 		"ShopUi's buttons, tags and studs are square (the studs only copy a rounded frame's own corner)")
 	local chunky = block(HUD, "local function chunky(", "\nend\n")
-	H.ok(string.find(chunky, "Premium.button(b, color)", 1, true) ~= nil, "chunky buttons: glossy and rounded (Premium.button)")
-	H.ok(not string.find(chunky, "ShopUi.studs", 1, true), "no studs on the buttons")
+	H.ok(string.find(chunky, "{ outline() }", 1, true) and string.find(chunky, "ShopUi.bevel(b)", 1, true), "chunky buttons: square, bevelled")
+	H.ok(not string.find(chunky, "UICorner", 1, true) and not string.find(chunky, "deco(", 1, true), "no rounded chunky buttons")
 end)
 
-H.test("Shop window frame: flat green bar with three light bands, big relief title, glossy red X, the premium navy body, no money", function()
+H.test("Shop window frame: flat green bar with studs and three light bands, big relief title, square red X, charcoal studded body, no money", function()
 	H.ok(string.find(WINDOW_KIT, "Shop = { title = \"Shop\", bar = Color3.fromRGB(59, 227, 59) }", 1, true) ~= nil, "the Shop's flat bright green bar")
 	H.ok(string.find(HUD, "titleBar.BackgroundColor3 = window.bar", 1, true) ~= nil, "one flat colour per window")
 	-- one studs style for the bar and the body (owner: the body's studs must match the bar's), the bar's tinted per window
-	H.ok(not string.find(WINDOW_KIT, "ShopUi.studs(titleBar", 1, true), "a clean bar (no studs)")
-	H.ok(string.find(WINDOW_KIT, "Premium.window(modal, TITLE_H)", 1, true) ~= nil, "the premium body (faint studs under the bar)")
-	H.ok(string.find(HUD, "square.BackgroundColor3 = window.bar", 1, true) ~= nil, "the bar's square bottom takes the window's colour")
+	H.ok(string.find(WINDOW_KIT, "ShopUi.studs(titleBar, nil, nil, 2)", 1, true) ~= nil, "studs over the bar")
+	H.ok(string.find(WINDOW_KIT, "ShopUi.studs(studs, WINDOW_BODY, nil, 1)", 1, true) ~= nil, "the same studs over the body, tinted charcoal")
+	H.ok(string.find(HUD, "ShopUi.paintStuds(titleBar, window.bar)", 1, true) ~= nil, "the bar's studs take the window's colour")
 	local bands = string.match(WINDOW_KIT, "for _, band in (%b{}) do")
 	local n = 0
 	for a in string.gmatch(bands or "", "{ ([%d%.]+), [%d%.]+ }") do
@@ -257,9 +254,10 @@ H.test("Shop window frame: flat green bar with three light bands, big relief tit
 	H.eq(n, 3, "three diagonal bands")
 	H.ok(string.find(WINDOW_KIT, "UiFx.relief(modalTitle, 4, 5)", 1, true) ~= nil, "the title in relief")
 	H.ok(string.find(HUD, "modalTitle.Text = window.title -- words only, in relief", 1, true) ~= nil, "words only")
-	H.ok(string.find(WINDOW_KIT, "Text = \"X\"", 1, true) and string.find(WINDOW_KIT, "Premium.button(modalClose, Premium.RED, 12)", 1, true), "a white X on a glossy red button")
+	H.ok(string.find(WINDOW_KIT, "Text = \"X\"", 1, true) and string.find(WINDOW_KIT, "outline(4, Color3.fromRGB(95, 6, 12))", 1, true), "a white X in a dark red border")
 	H.ok(not string.find(WINDOW_KIT, "Icons.image(\"Close\")", 1, true), "no round Close icon in the X")
-	H.ok(string.find(fs.readFile("src/shared/Premium.luau"), "Premium.BODY = Color3.fromRGB(38, 46, 90)", 1, true) ~= nil, "the navy body (every window, Premium.window)")
+	H.ok(string.find(WINDOW_KIT, "BackgroundColor3 = WINDOW_BODY", 1, true) and string.find(WINDOW_KIT, "local WINDOW_BODY = Color3.fromRGB(48, 50, 58)", 1, true),
+		"the charcoal body (every window)")
 	H.ok(not string.find(HUD, "moneySubtitle", 1, true) and not string.find(HUD, "Format.money(stats.money)}`, ICON.big", 1, true), "no money counter in a title bar")
 	local studs = block(fs.readFile("src/shared/ShopUi.luau"), "function ShopUi.studs(", "\nend")
 	H.ok(string.find(studs, "ScaleType = Enum.ScaleType.Tile", 1, true) and string.find(studs, "Icons.image(\"Studs\")", 1, true), "the tiled studs texture once uploaded")
@@ -587,8 +585,8 @@ H.test("HUD left column: wide Shop / Index buttons (icon left, word right in rel
 	w, h = tonumber(w), tonumber(h)
 	H.ok(w and h and w / h >= 2.4 and w / h <= 2.8, "about 2.6:1")
 	local side = block(HUD, "local function sideButton(", "\nend\n")
-	H.ok(string.find(side, "Premium.button(b, color)", 1, true) ~= nil, "glossy, rounded, a darker lip (Premium.button)")
-	H.ok(string.find(side, "BackgroundColor3 = color", 1, true) ~= nil and not string.find(side, "UIGradient", 1, true), "a vivid colour (Premium shades it)")
+	H.ok(string.find(side, "deco(4, 4)", 1, true) and string.find(side, "ShopUi.bevel(b)", 1, true), "square-ish, thick outline, lit top")
+	H.ok(string.find(side, "BackgroundColor3 = color", 1, true) ~= nil and not string.find(side, "UIGradient", 1, true), "a flat vivid colour")
 	H.ok(string.find(side, "AnchorPoint = Vector2.new(0, 0.5), Position = UDim2.new(0, 8, 0.5, -1)", 1, true) ~= nil, "the icon on the left")
 	H.ok(string.find(side, "UiFx.relief(bold(b, 4, { Text = label", 1, true) and string.find(side, "TextXAlignment = Enum.TextXAlignment.Left", 1, true), "the word on its right, in relief")
 	H.ok(string.find(HUD, "sideButton(1, \"Shop\", \"Shop\", \"🛒\", Color3.fromRGB(95, 230, 45)", 1, true) ~= nil, "Shop bright green")

@@ -100,20 +100,20 @@ H.test("studs: the uploaded Studs texture, tiled at one size everywhere, tinted 
 	end
 end)
 
-H.test("studs: on every HUD surface (Plants panel, readout, windows, cards, timer, banner, VIP, toasts); buttons glossy instead", function()
+H.test("studs: on every HUD element (left column, Plants panel, readout, windows, cards, timer, banner, VIP, toasts)", function()
 	local function has(source: string, from: string, to: string, needle: string, what: string)
 		local b = block(source, from, to)
 		H.ok(b ~= "", `{what}: its block`)
 		H.ok(string.find(b, needle, 1, true) ~= nil, `{what}: {needle}`)
 	end
 	-- the left column and the Speed readout's "+"
-	has(HUD, "local function sideButton(", "\nend\n", "Premium.button(b, color)", "Shop / Index buttons (glossy, owner 2026-10-22)")
+	has(HUD, "local function sideButton(", "\nend\n", "ShopUi.studs(b, color)", "Shop / Index buttons")
 	H.ok(string.find(HUD, "ShopUi.studs(track, nil)", 1, true) ~= nil, "Slow Mode switch")
 	H.ok(string.find(HUD, "ShopUi.studs(plusBadge,", 1, true) ~= nil, "the Speed's + badge")
 	-- the Plants panel: its side button (button()), the panel, its tabs (chunky), its cards
-	has(HUD, "local function button(", "\nend\n", "Premium.button(b, color)", "the Plants side button")
+	has(HUD, "local function button(", "\nend\n", "ShopUi.studs(b, color)", "the Plants side button")
 	H.ok(string.find(HUD, "ShopUi.studs(sidePanel, COLORS.panel)", 1, true) ~= nil, "the Plants panel")
-	has(HUD, "local function chunky(", "\nend\n", "Premium.button(b, color)", "chunky buttons (tabs, Remove, Plant, Sell, Equip)")
+	has(HUD, "local function chunky(", "\nend\n", "ShopUi.studs(b, nil)", "chunky buttons (tabs, Remove, Plant, Sell, Equip)")
 	has(HUD, "local function card(", "\nend\n", "ShopUi.studs(f, color)", "the Plants list's cards")
 	has(HUD, "local function plantCard(", "\n\tend\n", "ShopUi.studs(f, accent)", "plant cards")
 	has(HUD, "local function itemCard(", "\n\tend\n", "ShopUi.studs(f, accent)", "Inventory cards")
@@ -127,10 +127,10 @@ H.test("studs: on every HUD surface (Plants panel, readout, windows, cards, time
 	has(HUD, "local function cardBase(", "\n\tend\n", "ShopUi.studs(band, rarity.color)", "Sell cards' bands")
 	H.ok(string.find(HUD, "ShopUi.studs(panel, Color3.fromRGB(75, 40, 140), nil, 1)", 1, true) ~= nil, "the pack reveal's panel")
 	H.ok(string.find(HUD, "ShopUi.studs(f, r.color, nil, 3)", 1, true) ~= nil, "the reveal's seed cards")
-	-- the Free Gift window: the premium body (its faint studs), glossy title bar and buttons
-	H.ok(string.find(REWARDS, "Premium.window(window, TITLE_H)", 1, true) and string.find(REWARDS, "Premium.titleBar(window, TITLE_H,", 1, true),
+	-- the Free Gift window: body and title bar in the same studs, its buttons too
+	H.ok(string.find(REWARDS, "ShopUi.studs(studs, BODY_COLOR, nil, 1)", 1, true) and string.find(REWARDS, "ShopUi.studs(titleBar, CYAN_TO, nil, 2)", 1, true),
 		"Free Gift body and title bar")
-	H.ok(string.find(REWARDS, "Premium.button(b, color)", 1, true) ~= nil, "Free Gift buttons")
+	H.ok(string.find(REWARDS, "ShopUi.studs(b, nil, nil, 3)", 1, true) ~= nil, "Free Gift buttons")
 	H.ok(not string.find(REWARDS, "BackgroundTransparency = 0.955", 1, true), "its own drawn studs are gone")
 	-- the day/night timer, the zone banner, the VIP badge, the toasts
 	H.ok(string.find(read("src/client/DayTimer.client.luau"), "ShopUi.studs(strip,", 1, true) ~= nil, "day/night timer strip")
