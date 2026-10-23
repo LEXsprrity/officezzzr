@@ -298,8 +298,13 @@ end
 -- Relief for `label` (free-positioned, not in a layout): returns the shadow copy, which follows the
 -- label's text, visibility and placement. `depth`: how far the shadow drops, in pixels (default 3).
 local MIRRORED = { "Text", "Visible", "TextTransparency", "Size", "AnchorPoint", "TextXAlignment", "TextYAlignment", "Rotation" }
+-- Outlines and shadows are toned down (owner 2026-10-23: "the black around the words is too intense, and the
+-- menu titles' shadow"): every outline at UiFx.OUTLINE of its asked thickness, the shadow half as deep and see-through.
+UiFx.OUTLINE = 0.6
+UiFx.SHADOW_FADE = 0.55
+
 function UiFx.relief(label: TextLabel, depth: number?, outline: number?): TextLabel
-	local d = depth or 3
+	local d = math.max(1, math.ceil((depth or 3) / 2))
 	local stroke = label:FindFirstChildWhichIsA("UIStroke")
 	if not stroke then
 		stroke = Instance.new("UIStroke")
@@ -307,7 +312,7 @@ function UiFx.relief(label: TextLabel, depth: number?, outline: number?): TextLa
 		stroke.Parent = label
 	end
 	assert(stroke)
-	stroke.Thickness = outline or math.max(stroke.Thickness, 3)
+	stroke.Thickness = if outline then math.max(1.5, outline * UiFx.OUTLINE) else math.max(stroke.Thickness, 1.5)
 	stroke.LineJoinMode = Enum.LineJoinMode.Round
 
 	local shadow = label:Clone()
@@ -318,9 +323,11 @@ function UiFx.relief(label: TextLabel, depth: number?, outline: number?): TextLa
 		end
 	end
 	shadow.TextColor3 = SHADOW
+	shadow.TextTransparency = UiFx.SHADOW_FADE
 	local shadowStroke = shadow:FindFirstChildWhichIsA("UIStroke")
 	if shadowStroke then
 		shadowStroke.Color = SHADOW
+		shadowStroke.Transparency = UiFx.SHADOW_FADE
 	end
 	local offset = UDim2.fromOffset(math.ceil(d / 3), d)
 	shadow.Position = label.Position + offset

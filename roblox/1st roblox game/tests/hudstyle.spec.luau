@@ -112,11 +112,11 @@ H.test("studs: on every HUD element (left column, Plants panel, readout, windows
 	H.ok(string.find(HUD, "ShopUi.studs(plusBadge,", 1, true) ~= nil, "the Speed's + badge")
 	-- the Plants panel: its side button (button()), the panel, its tabs (chunky), its cards
 	has(HUD, "local function button(", "\nend\n", "ShopUi.studs(b, color)", "the Plants side button")
-	H.ok(string.find(HUD, "ShopUi.studs(sidePanel, COLORS.panel)", 1, true) ~= nil, "the Plants panel")
+	H.ok(string.find(HUD, "ShopUi.studs(sidePanel, COLORS.panelDark, 0.82)", 1, true) ~= nil, "the Plants panel (dark: owner 2026-10-23)")
 	has(HUD, "local function chunky(", "\nend\n", "ShopUi.studs(b, nil)", "chunky buttons (tabs, Remove, Plant, Sell, Equip)")
-	has(HUD, "local function card(", "\nend\n", "ShopUi.studs(f, color)", "the Plants list's cards")
-	has(HUD, "local function plantCard(", "\n\tend\n", "ShopUi.studs(f, accent)", "plant cards")
-	has(HUD, "local function itemCard(", "\n\tend\n", "ShopUi.studs(f, accent)", "Inventory cards")
+	has(HUD, "local function card(", "\nend\n", "ShopUi.studs(f, f.BackgroundColor3, 0.82)", "the Plants list's cards")
+	has(HUD, "local function plantCard(", "\n\tend\n", "ShopUi.studs(f, CARD_DARK, 0.82)", "plant cards")
+	has(HUD, "local function itemCard(", "\n\tend\n", "ShopUi.studs(f, CARD_DARK, 0.82)", "Inventory cards")
 	-- the windows: frame, Shop cards (packs, passes, banners, Speed / Money / upgrades), Trail, Index, Sell, reveal
 	has(HUD, "local function cardFrame(", "\n\tend\n", "ShopUi.studs(c, if rainbow then nil else color, nil, 1)", "every Shop card")
 	H.ok(string.find(HUD, "studLayer.ZIndex = 2 -- the studs over the picture too", 1, true) ~= nil, "pack cards with a picture")
@@ -326,7 +326,7 @@ H.test("readout: Speed and money about 2x bigger in chunky italic, no VIP badge,
 	H.ok(select(2, string.gsub(stats, "Enum.FontStyle.Italic", "")) == 2, "italic")
 	H.ok(string.find(stats, "UiFx.relief(speedValue, 6, 6)", 1, true) and string.find(stats, "UiFx.relief(moneyValue, 6, 6)", 1, true), "thick dark outlines")
 	local fit = block(HUD, "local function fitLeftColumn()", "\nend\n")
-	H.ok(string.find(fit, "fit.Scale = math.clamp((gui.AbsoluteSize.X / uiScale.Scale / 2 - 110 - 14) / 470, 0.5, 1)", 1, true) ~= nil,
+	H.ok(string.find(fit, "fit.Scale = math.clamp((gui.AbsoluteSize.X / uiScale.Scale / 2 - 110 - 14) / 470, 0.5, 0.7)", 1, true) ~= nil,
 		"shrinks on narrow screens so it never reaches the hotbar")
 	H.ok(string.find(fit, "height / 2 - STATS_BOTTOM - STATS_H * fit.Scale - 10", 1, true) ~= nil,
 		"the left column stops above the readout")
