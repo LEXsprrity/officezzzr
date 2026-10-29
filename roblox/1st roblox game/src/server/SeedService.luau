@@ -18,6 +18,7 @@ local Assets = require(script.Parent:WaitForChild("Assets"))
 local PlantGhosts = require(script.Parent:WaitForChild("PlantGhosts"))
 local SpeedService = require(script.Parent:WaitForChild("SpeedService"))
 local LiveEventService = require(script.Parent:WaitForChild("LiveEventService"))
+local Funnel = require(script.Parent:WaitForChild("Funnel"))
 
 local SeedService = {}
 
@@ -350,6 +351,7 @@ local function steal(player: Player, zone: number, podIndex: number)
 	carry.model = makeCarryModel(char, carry)
 	s.carry = carry
 	Sessions.pushCarry(s)
+	Funnel.mark(player, "Stole a seed")
 	-- `shown`: what the pod said; above it, the thief's 2x Luck raised it (Effects.client: "Lucky! Rare > Epic")
 	Net.LootEvent:FireClient(player, "Pickup", { zone = zone, rarity = rarity, shown = pod.rarity, mutation = mutation,
 		name = SeedService.seedName(zone, rarity, mutation) })
@@ -502,6 +504,7 @@ function SeedService.storeCarried(player: Player): boolean
 	SeedPacks.addToBag(s.profile.seedBag, carry.zone, carry.rarity, carry.mutation, carry.gene)
 	Sessions.pushFull(s)
 	Net.LootEvent:FireClient(player, "Stored", { zone = carry.zone, rarity = carry.rarity, mutation = carry.mutation })
+	Funnel.mark(player, "Brought it home")
 	if Config.announcesLegendary(carry.zone, carry.rarity, false) then
 		Net.announce(Config.legendaryAnnouncement(player.DisplayName, carry.zone, carry.mutation), "gold")
 	end

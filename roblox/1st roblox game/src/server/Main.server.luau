@@ -25,6 +25,7 @@ local RewardService = require(Server:WaitForChild("RewardService"))
 local PlantGhosts = require(Server:WaitForChild("PlantGhosts"))
 local FlowerPreviews = require(Server:WaitForChild("FlowerPreviews"))
 local AdminService = require(Server:WaitForChild("AdminService"))
+local Funnel = require(Server:WaitForChild("Funnel"))
 
 -- Guards pass through players (the catch is a distance check) and each other.
 PhysicsService:RegisterCollisionGroup("Guards")
@@ -50,6 +51,7 @@ task.spawn(FlowerPreviews.publish) -- every flower's 3D picture, for the HUD's I
 AmbientService.start()
 RewardService.start()
 require(Server:WaitForChild("TutorialService")).init() -- the first-time tutorial's done flag
+Funnel.init() -- the onboarding funnel's Speed step
 require(Server:WaitForChild("CandyService")).init() -- the Halloween event's candy on the map (while it runs)
 task.spawn(require(Server:WaitForChild("LiveEventService")).init) -- the admin's live events, in every server (after CandyService: its Candy rain)
 
@@ -140,6 +142,7 @@ local function onPlayerAdded(player: Player)
 	end
 
 	local s = Sessions.create(player, profile, canSave)
+	Funnel.start(player, not profile.tutorialDone) -- new players' first steps (Creator Hub > Analytics > Funnels)
 	ShopService.checkPasses(s)
 	if not player.Parent or Sessions.get(player) ~= s then
 		return -- left while the passes were checked (onPlayerRemoving saved; a plot now would never be freed)
@@ -177,6 +180,7 @@ local function onPlayerRemoving(player: Player)
 	end
 	SeedService.returnCarry(player)
 	PlotService.release(player)
+	Funnel.stop(player)
 	save(s, true)
 	Sessions.remove(player)
 end

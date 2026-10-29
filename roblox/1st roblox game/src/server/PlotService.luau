@@ -14,6 +14,7 @@ local Planting = require(Shared:WaitForChild("Planting"))
 local Net = require(script.Parent:WaitForChild("Net"))
 local Sessions = require(script.Parent:WaitForChild("Sessions"))
 local SeedService = require(script.Parent:WaitForChild("SeedService"))
+local Funnel = require(script.Parent:WaitForChild("Funnel"))
 local WorldBuilder = require(script.Parent:WaitForChild("WorldBuilder"))
 local ProfileStore = require(script.Parent:WaitForChild("ProfileStore"))
 local CreatureModels = require(script.Parent:WaitForChild("CreatureModels"))
@@ -380,6 +381,7 @@ local function plantSeed(player: Player, s: Sessions.Session, state: PlotState, 
 		local cf, size = model:GetBoundingBox()
 		top = cf.Position + Vector3.new(0, size.Y / 2, 0)
 	end
+	Funnel.mark(player, "Planted")
 	Net.LootEvent:FireClient(player, "Planted", {
 		name = PlotService.plantName(plant),
 		weight = weight,
@@ -596,6 +598,7 @@ function PlotService.sellPlants(player: Player, slots: any, ids: any?, seeds: an
 	end
 	local count = #sale.slots + #sale.ids + sale.seedCount
 	Net.LootEvent:FireClient(player, "SoldPlants", { amount = sale.total, count = count })
+	Funnel.mark(player, "First sale")
 	if stall then
 		Net.IncomePopup:FireClient(player, sale.total, stall.Position + Vector3.new(0, 6, 0))
 	end
