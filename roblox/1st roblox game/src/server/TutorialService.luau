@@ -4,6 +4,7 @@
 -- trusts the client here: the flag only hides a tutorial.
 local Net = require(script.Parent:WaitForChild("Net"))
 local Sessions = require(script.Parent:WaitForChild("Sessions"))
+local Funnel = require(script.Parent:WaitForChild("Funnel"))
 
 local TutorialService = {}
 
@@ -15,6 +16,9 @@ function TutorialService.finish(s: Sessions.Session, kind: any): boolean
 		return false
 	end
 	s.profile.tutorialDone = true
+	if kind == "done" then
+		Funnel.mark(s.player, "Finished tutorial") -- (a skip isn't a finish)
+	end
 	Sessions.push(s.player, { tutorialDone = true })
 	return true
 end
